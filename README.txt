@@ -37,6 +37,6 @@ Bấm nút  ☀️ Sáng / 🌙 Tối  ở thanh công cụ.
 LƯU Ý
 -----
 - Dữ liệu nhập được lưu trong trình duyệt (localStorage) của MÁY đang mở.
-  Gửi folder sang máy khác thì máy đó bắt đầu từ dữ liệu mẫu tháng 7.
+  Gửi folder sang máy khác thì máy đó bắt đầu từ dữ liệu Excel tháng 6 và tháng 7.
 - Cột Users / Chat để 0: Google chỉ nhận diện theo API key, không quy ra
   người dùng thật, nên số này phải nhập tay nếu có nguồn khác.

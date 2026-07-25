@@ -19,6 +19,7 @@
 - [ ] 2.5 Đổi cột `Success Rate` thành `Tỷ lệ thành công`
 - [ ] 2.6 Kiểm tra insight/delta không đưa baseline giả trở lại
 - [x] 2.7 Đổi heatmap theo giờ thành ma trận Agent × 7 ngày gần nhất theo request
+- [x] 2.8 Thay dữ liệu demo tháng 7 bằng dữ liệu Excel thật của đủ 4 tuần
 
 ## 3. Department and User Workspace
 

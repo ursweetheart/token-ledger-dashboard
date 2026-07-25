@@ -8,7 +8,7 @@
 "use strict";
 
 /* ─── Hằng số ─── */
-var STORE = "agent-dash-state-v10-june-excel-july-demo"; // v10: Excel tháng 6 + demo tháng 7/2026
+var STORE = "agent-dash-state-v11-june-july-excel"; // v11: dữ liệu Excel thật tháng 6 + tháng 7/2026
 var TAB_STORE = "agent-dash-tab";
 var THEME_STORE = "agent-dash-theme";
 var RANGE_PRESETS = [["7 ngày",7],["30 ngày",30],["90 ngày",90],["Tất cả",null]]; // preset time-range (kiểu Open WebUI)
@@ -143,10 +143,9 @@ function stableHash(str){
 function unitAgentProfiles(){
   // Ưu tiên dữ liệu đang nạp trong state; khi chưa có state thì dựng từ nguồn seed.
   var byUnit={}, sources=[];
-  // Lưu ý: SEED_DAYS là dữ liệu chết, defaultState() không dùng tới. Nguồn thật là
-  // buildJuneExcelWeeks() + buildJulyDemoDays().
+  // Khi chưa có state, dựng danh mục từ hai bộ dữ liệu Excel tháng 6 và tháng 7.
   if(typeof state!=="undefined" && state && state.days) sources.push(state.days);
-  else sources.push(buildJuneExcelWeeks(), buildJulyDemoDays());
+  else sources.push(buildJuneExcelWeeks(), SEED_DAYS);
   sources.forEach(function(src){
     if(!src) return;
     Object.keys(src).forEach(function(day){
@@ -259,16 +258,16 @@ var basePricing = {
   "Gemini 2.5 Pro":   {i:1.25, o:3.75},
   "Gemini 3.1 Flash Lite": {i:0.25, o:1.50},
   "Gemini 3.5 Flash": {i:0, o:0},          // đã khai báo, chưa dùng
-  "GPT-4o mini":      {i:0.15, o:0.60},    // OpenAI — Tool Dịch đang dùng
+  "GPT-4o mini":      {i:0.15, o:0.60},    // OpenAI — giữ sẵn cho nhập thủ công
   "GPT-4o":           {i:2.50, o:10.00}    // OpenAI — đã khai báo, chưa dùng
 };
 
-/* ─── Dữ liệu THẬT tháng 7/2026 — nạp từ "Bảng tổng hợp chi phí token AI agent tháng 7" (2)(2).xlsx
-       Tuần 1 (01–07.07) → ngày 2026-07-01 · Tuần 2 (08–14.07) → ngày 2026-07-08.
-       (Tuần 3–4 trong file không phát sinh hoạt động ⇒ bỏ qua.)
+/* ─── Dữ liệu THẬT tháng 7/2026 — nạp từ
+       data/Bảng tổng hợp chi phí AI Agent tháng 7.xlsx.
+       Bốn sheet tuần được gắn lần lượt vào 01, 08, 15 và 22/07.
        Số người dùng (u) là số ĐÃ CẤP theo phòng (snapshot) ⇒ chỉ gắn vào Tuần 1 để tránh
        cộng trùng khi time-range trải nhiều tuần. Chi phí do dashboard tự tính theo bảng giá.
-       Kèm 1 agent test "Tool Dịch" (OpenAI GPT-4o mini) để giữ demo provider OpenAI. ─── */
+       Phòng ban "Đang trong quá trình thử nghiệm" bị loại theo cấu hình EXCLUDED_DEPARTMENTS. ─── */
 var SEED_DAYS = {
   "2026-07-01": [
     {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:5,c:0,ti:4910,to:1147,r:9,er:0.0,lat:0,cached:0,think:0},
@@ -295,8 +294,7 @@ var SEED_DAYS = {
     {a:"Trợ lý ảo Ralli",d:"Nghiên cứu thị trường",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
     {a:"Trợ lý ảo Ralli",d:"Kế hoạch",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
     {a:"Trợ lý ảo Ralli",d:"Trung tâm R&D",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:20,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:18,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Tool Dịch",d:"P.NCTT , TTDL&ĐHS",m:"GPT-4o mini",ug:"Nhóm Nội bộ",u:0,c:0,ti:1240000,to:868000,r:642,er:0.5,lat:0,cached:0,think:0}
+    {a:"Trợ lý ảo Ralli",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:18,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0}
   ],
   "2026-07-08": [
     {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2053010,to:454260,r:450,er:0.0,lat:0,cached:0,think:0},
@@ -304,59 +302,27 @@ var SEED_DAYS = {
     {a:"Chatbot Contact Center",d:"Thương mại điện tử",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:5540000,to:108600,r:0,er:0.0,lat:0,cached:0,think:0},
     {a:"Chatbot Contact Center",d:"Thương mại điện tử",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:530,to:1150,r:0,er:1.0,lat:0,cached:0,think:0},
     {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:3030700,r:0,er:0.0,lat:0,cached:0,think:0}
+  ],
+  "2026-07-15": [
+    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:934255,to:169112,r:48,er:0.0,lat:0,cached:0,think:0},
+    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5948151,to:1260234,r:1182,er:0.0034,lat:0,cached:0,think:0},
+    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:15414,to:48065,r:17,er:0.0,lat:0,cached:0,think:0},
+    {a:"Chatbot Contact Center",d:"Thương mại điện tử",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:16444458,to:190589,r:520,er:0.0,lat:0,cached:0,think:0},
+    {a:"Chatbot Contact Center",d:"Thương mại điện tử",m:"Gemini 3.1 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:987,to:0,r:515,er:0.0,lat:0,cached:0,think:0},
+    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:751650,to:902779,r:148,er:0.0,lat:4.5,cached:0,think:0},
+    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:194002,to:238589,r:36,er:0.0,lat:4.5,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1427755,to:92769,r:294,er:0.0,lat:0,cached:0,think:0}
+  ],
+  "2026-07-22": [
+    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:694811,to:224300,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1076850,to:181373,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:44993,to:133567,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Chatbot Contact Center",d:"Thương mại điện tử",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3788140,to:84372,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:183805,to:234887,r:0,er:0.0,lat:4.5,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1096933,to:70685,r:207,er:0.0,lat:0,cached:0,think:0}
   ]
 };
 
-/* ─── Dữ liệu DEMO đủ tháng 7/2026 ───
-   Bộ dữ liệu này được tạo có tính lặp lại để kiểm tra trực quan, không phải số liệu vận hành.
-   Sáu agent có request/token trong cả tháng; hai agent còn lại được giữ ở trạng thái chưa hoạt động.
-   Ngày cuối tuần có lưu lượng thấp hơn và một số ngày có spike lỗi/token/độ trễ để kiểm tra insight. ─── */
-var JULY_DEMO_PROFILES = [
-  {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:180,r:88,ti:600000,to:50000,er:0.5,lat:1.15,cache:0.18,think:0.08,active:true},
-  {a:"Chatbot Contact Center",d:"Thương mại điện tử",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:220,r:145,ti:850000,to:25000,er:0.8,lat:1.45,cache:0.24,think:0.05,active:true},
-  {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng Bán hàng 1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:120,r:36,ti:100000,to:10000,er:0.4,lat:1.85,cache:0.12,think:0.18,active:true},
-  {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:65,r:62,ti:100000,to:80000,er:0.7,lat:1.25,cache:0.10,think:0.06,active:true},
-  {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:90,r:78,ti:120000,to:100000,er:0.9,lat:1.35,cache:0.08,think:0.10,active:true},
-  {a:"Tool Dịch",d:"P.NCTT , TTDL&ĐHS",m:"GPT-4o mini",ug:"Nhóm Nội bộ",u:47,r:49,ti:180000,to:45000,er:0.6,lat:1.05,cache:0.06,think:0.04,active:true},
-  {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:80,r:0,ti:0,to:0,er:0,lat:0,cache:0,think:0,active:false}
-];
-function buildJulyDemoDays(){
-  var days={};
-  for(var day=1;day<=31;day++){
-    var iso="2026-07-"+pad2(day);
-    var weekday=new Date(Date.UTC(2026,6,day)).getUTCDay();
-    var weekend=weekday===0||weekday===6;
-    var dailyWave=0.92+((day*7)%9)/20;
-    var factor=(weekend?0.48:dailyWave)*(1+day*0.006);
-    days[iso]=JULY_DEMO_PROFILES.map(function(p){
-      if(!p.active){
-        return {a:p.a,d:p.d,m:p.m,ug:p.ug,u:day===1?p.u:0,c:0,ti:0,to:0,r:0,er:0,lat:0,cached:0,think:0};
-      }
-      var requestFactor=factor, inputFactor=factor, outputFactor=factor;
-      // Các spike có chủ đích giúp kiểm tra cảnh báo và hình dạng biểu đồ.
-      if(day===9&&p.a==="Sale Agent"){ requestFactor*=1.35; inputFactor*=2.15; outputFactor*=1.55; }
-      if(day===18&&p.a==="Chatbot Contact Center"){ requestFactor*=1.45; inputFactor*=1.35; outputFactor*=1.40; }
-      if(day===23&&p.a==="Phân Loại Dữ Liệu CRM"){ requestFactor*=1.25; inputFactor*=1.30; outputFactor*=2.35; }
-      if(day===27&&p.a==="Trợ Lý Ảo Hợp Đồng"){ inputFactor*=1.55; outputFactor*=1.80; }
-      var r=Math.max(1,Math.round(p.r*requestFactor));
-      var ti=Math.max(1,Math.round(p.ti*inputFactor));
-      var to=Math.max(1,Math.round(p.to*outputFactor));
-      var er=Math.max(0,+(p.er+((day*3)%5-2)*0.12).toFixed(1));
-      var lat=+(p.lat*(0.92+((day*5)%7)/35)).toFixed(2);
-      if(day===18&&p.a==="Chatbot Contact Center") er=4.8;
-      if(day===26&&p.a==="Tool Dịch") er=3.4;
-      if(day===27&&p.a==="Trợ Lý Ảo Hợp Đồng") lat=4.6;
-      return {
-        a:p.a,d:p.d,m:p.m,ug:p.ug,u:day===1?p.u:0,
-        c:Math.round(r*(0.68+((day+p.a.length)%5)*0.04)),
-        ti:ti,to:to,r:r,er:er,lat:lat,
-        cached:Math.min(ti,Math.round(ti*p.cache*(0.90+(day%4)*0.05))),
-        think:Math.min(to,Math.round(to*p.think*(0.90+(day%3)*0.08)))
-      };
-    });
-  }
-  return days;
-}
 function juneExcelRow(a,d,m,ug,ti,to,r,er,lat,u){
   return {a:a,d:d,m:m,ug:ug,u:u||0,c:0,ti:ti||0,to:to||0,r:r||0,er:er||0,lat:lat||0,cached:0,think:0};
 }
@@ -544,9 +510,9 @@ function provisionedOf(unitId){
 /* ─── State (day-based) ─── */
 var state;
 function defaultState(){
-  // Seed dữ liệu Excel tháng 6 làm kỳ so sánh và demo tháng 7 làm kỳ hiện tại.
-  var demoDays=Object.assign({},buildJuneExcelWeeks(),buildJulyDemoDays()), days={}, order=Object.keys(demoDays).sort();
-  order.forEach(function(d){ days[d] = sanitizeUsageRows(demoDays[d]).map(function(r){ return Object.assign({}, r, { id:rid() }); }); });
+  // Seed dữ liệu Excel thật tháng 6 làm kỳ so sánh và tháng 7 làm kỳ hiện tại.
+  var sourceDays=Object.assign({},buildJuneExcelWeeks(),SEED_DAYS), days={}, order=Object.keys(sourceDays).sort();
+  order.forEach(function(d){ days[d] = sanitizeUsageRows(sourceDays[d]).map(function(r){ return Object.assign({}, r, { id:rid() }); }); });
   return { days:days, dayOrder:order, activeDay:order[order.length-1],
     range:{ start:"2026-07-01", end:"2026-07-31" },
     filters:{dept:"",user:"",provider:"",model:"",agent:""}, matrixUser:"",
@@ -1804,7 +1770,7 @@ function renderRange(){
   });
   [
     ["Tháng 6 · Excel","2026-06-01","2026-06-30"],
-    ["Tháng 7 · Demo","2026-07-01","2026-07-31"]
+    ["Tháng 7 · Excel","2026-07-01","2026-07-31"]
   ].forEach(function(p){
     var active=p[1]===state.range.start&&p[2]===state.range.end;
     var b=document.createElement("button"); b.className="time-btn month-preset"+(active?" active":""); b.textContent=p[0];
