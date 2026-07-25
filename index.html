@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Analytics — Token Ledger</title>
+<!-- Tái dùng 100% design system production của công ty -->
+<link rel="stylesheet" href="dashboard.css">
+<!-- Engine biểu đồ thật, kế thừa từ token-dashboard -->
+<script src="chart.umd.min.js"></script>
+<style>
+  /* ═══════════════════════════════════════════════════════════════
+     Bổ sung phần dashboard.css chưa có: thanh filter, khối chart,
+     heatmap, pill MỚI, panel bảng giá + bảng nhập liệu (data-driven).
+     Mọi màu/spacing kế thừa token dashboard.css.
+     ═══════════════════════════════════════════════════════════════ */
+
+  .proto-note{
+    display:flex; align-items:center; gap:8px;
+    background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.28);
+    color:#6ee7b7; font-size:12px; padding:8px 14px; border-radius:8px; margin-bottom:16px;
+  }
+
+  /* ─── Toolbar (global time range + hành động) ─── */
+  .toolbar{ display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
+  .period-stack{ display:flex; flex-direction:column; gap:8px; }
+  .period-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .toolbar-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .range-label{ font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:#64748b; font-weight:600; margin-right:2px; }
+  .range-sep{ color:#475569; }
+  .date-input{ background:#0a0f1e; border:1px solid #334155; color:#e2e8f0; border-radius:6px;
+    padding:7px 10px; font-size:12px; font-family:'Inter',sans-serif; color-scheme:dark; }
+  .date-input:focus{ outline:none; border-color:#667eea; }
+
+  /* ─── Thanh filter chung ─── */
+  .filter-bar{
+    background:#111827; border:1px solid #1e293b; border-radius:8px;
+    padding:14px 16px; margin-bottom:20px;
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px 16px; align-items:end;
+  }
+  .filter-field{ display:flex; flex-direction:column; gap:5px; }
+  .filter-field > label{ font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:#64748b; font-weight:600; }
+
+  .metric-def{ font-size:11px; color:#475569; margin-top:6px; line-height:1.45; }
+  .metric-def b{ color:#94a3b8; font-weight:600; }
+
+  .pill-new{
+    display:inline-block; vertical-align:middle; margin-left:8px;
+    background:rgba(102,126,234,.18); color:#a5b4fc;
+    font-size:10px; font-weight:700; letter-spacing:.4px; padding:2px 7px; border-radius:10px;
+  }
+
+  /* ─── Chart card (canvas thật) ─── */
+  .wf-chart{
+    background:#111827; border:1px solid #1e293b; border-radius:8px;
+    padding:16px; display:flex; flex-direction:column; position:relative;
+  }
+  .wf-type{
+    position:absolute; top:12px; right:14px; font-size:10px; font-weight:700; letter-spacing:.5px;
+    text-transform:uppercase; color:#475569; border:1px solid #1e293b; padding:2px 8px; border-radius:6px;
+  }
+  .wf-chart .wf-title{ font-size:13px; font-weight:600; color:#cbd5e1; margin-bottom:2px; padding-right:70px; }
+  .wf-chart .wf-q{ font-size:11px; font-style:italic; color:#64748b; margin-bottom:12px; }
+  .canvas-box{ position:relative; height:210px; }
+  .canvas-box canvas{ max-height:210px; }
+
+  /* Donut + legend cạnh nhau */
+  .wf-donut-wrap{ display:flex; align-items:center; gap:18px; width:100%; }
+  .wf-donut-wrap .canvas-box{ flex:0 0 168px; width:168px; height:168px; }
+  .wf-legend{ display:flex; flex-direction:column; gap:7px; font-size:12px; color:#cbd5e1; }
+  .wf-legend .li{ display:flex; align-items:center; gap:8px; }
+  .wf-legend .dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
+  /* ─── Heatmap ─── */
+  .heatmap-wrap{ overflow-x:auto; }
+  .heatmap{ border-collapse:separate; border-spacing:3px; font-size:11.5px; min-width:640px; }
+  .heatmap th{ background:transparent; color:#94a3b8; font-weight:600; text-transform:none; letter-spacing:0; padding:4px 6px; }
+  .heatmap th.col-h{ font-size:11px; text-align:center; white-space:normal; max-width:90px; }
+  .heatmap th.row-h{ text-align:left; color:#cbd5e1; white-space:nowrap; padding-right:10px; }
+  .hm-cell{ width:64px; height:34px; border-radius:5px; text-align:center; color:#e2e8f0;
+    font-family:'JetBrains Mono',monospace; font-size:11px; vertical-align:middle; }
+  .hm-scale{ display:flex; align-items:center; gap:8px; margin-top:12px; font-size:11px; color:#64748b; }
+  .hm-scale .bar{ width:120px; height:8px; border-radius:4px; background:linear-gradient(90deg,#1e293b,#3b3f8f,#667eea); }
+
+  .legend-inline{ display:flex; gap:16px; flex-wrap:wrap; font-size:11.5px; color:#64748b; margin:-6px 0 16px; }
+  .legend-inline span{ display:inline-flex; align-items:center; gap:6px; }
+  .legend-inline i{ width:9px; height:9px; border-radius:2px; display:inline-block; }
+
+  td.num{ font-family:'JetBrains Mono',monospace; text-align:right; }
+  th.num{ text-align:right; }
+  .subtle{ color:#64748b; font-size:11px; }
+
+  .metric-src{ display:flex; align-items:center; gap:5px; font-size:10.5px; color:#475569; margin-top:7px; }
+  .metric-src .src-dot{ width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+  .src-rt{ background:#10b981; } .src-near{ background:#f59e0b; } .src-batch{ background:#3b82f6; }
+  .source-panel{ background:#111827; border:1px solid #1e293b; border-radius:8px; padding:14px 16px; margin-bottom:20px; }
+  .source-panel h3{ font-size:13px; color:#cbd5e1; margin:0 0 12px; font-weight:600; }
+  .source-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:12px 18px; }
+  .source-item{ display:flex; gap:9px; font-size:12px; color:#94a3b8; line-height:1.45; }
+  .source-item .src-dot{ margin-top:5px; }
+  .source-item b{ color:#e2e8f0; font-weight:600; }
+  .src-tag{ display:inline-block; font-size:10px; font-family:'JetBrains Mono',monospace; color:#a5b4fc; background:rgba(102,126,234,.12); padding:1px 6px; border-radius:5px; }
+
+  /* Token modality mini-bars + stacked composition */
+  .mod-row{ display:flex; flex-direction:column; gap:10px; width:100%; }
+  .mod-item{ display:grid; grid-template-columns:64px 1fr 42px; align-items:center; gap:10px; font-size:12px; color:#cbd5e1; }
+  .mod-track{ height:12px; background:#1e293b; border-radius:6px; overflow:hidden; }
+  .mod-fill{ height:100%; border-radius:6px; }
+  .stack-bar{ display:flex; height:26px; border-radius:6px; overflow:hidden; gap:2px; width:100%; }
+
+  /* ─── Panel bảng giá + bảng nhập liệu ─── */
+  .config-panel{ background:#111827; border:1px solid #1e293b; border-radius:8px; padding:16px 18px; margin-bottom:20px; display:none; }
+  .config-panel.open{ display:block; }
+  .config-panel .panel-title{ font-size:13px; color:#cbd5e1; margin-bottom:12px; font-weight:600; }
+  .price-grid{ display:grid; grid-template-columns:1.6fr 1fr 1fr auto; gap:8px 14px; align-items:center; font-size:13px; max-width:560px; }
+  .price-grid .ph{ font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.4px; }
+  .price-grid input{ width:100%; background:#0a0f1e; border:1px solid #334155; border-radius:5px; padding:5px 8px; text-align:right;
+    font-family:'JetBrains Mono',monospace; font-size:13px; color:#e2e8f0; }
+  .price-grid input:focus{ outline:none; border-color:#667eea; }
+  .add-model-row{ display:flex; gap:8px; align-items:center; margin-top:14px; flex-wrap:wrap; }
+  .add-model-row select, .add-model-row input[type=text]{ background:#0a0f1e; border:1px solid #334155; color:#e2e8f0;
+    font-size:13px; padding:7px 10px; border-radius:6px; }
+  .add-model-row select{ min-width:210px; }
+  .config-msg{ font-size:12.5px; color:#6ee7b7; margin-top:8px; min-height:16px; }
+  .config-msg.error{ color:#f87171; }
+  .cell-input, .text-input{ width:100%; background:transparent; border:1px solid transparent; border-radius:5px; padding:4px 6px;
+    color:#e2e8f0; font-size:12.5px; font-family:'JetBrains Mono',monospace; text-align:right; }
+  .text-input{ text-align:left; font-family:'Inter',sans-serif; }
+  td select.cell-select{ width:100%; background:transparent; border:1px solid transparent; border-radius:5px; padding:4px 6px; color:#e2e8f0; font-size:12.5px; }
+  .cell-input:hover, .text-input:hover, .cell-select:hover{ border-color:#334155; }
+  .cell-input:focus, .text-input:focus, .cell-select:focus{ outline:none; border-color:#667eea; background:#0a0f1e; }
+  .add-row-btn{ margin:10px 0 0; border:1px dashed #334155; background:transparent; color:#94a3b8; font-size:12.5px;
+    padding:6px 12px; border-radius:6px; cursor:pointer; }
+  .add-row-btn:hover{ border-color:#667eea; color:#cbd5e1; }
+  .icon-x{ background:none; border:none; color:#64748b; cursor:pointer; font-size:14px; padding:2px 6px; }
+  .icon-x:hover{ color:#f87171; }
+
+  /* Dòng Tổng của bảng nhập liệu */
+  #data-tbody tr.data-total-row td{ border-top:2px solid #334155; font-weight:700; color:#e2e8f0; padding-top:11px; }
+  #data-tbody tr.data-total-row:hover{ background:transparent; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     LIGHT THEME — bật bằng nút ☀️/🌙 (thêm class .light-theme vào <body>).
+     dashboard.css hardcode màu tối nên phải override các bề mặt chính ở đây.
+     ═══════════════════════════════════════════════════════════════ */
+  body.light-theme{ background:#f1f5f9; color:#1e293b; }
+  body.light-theme .status-bar,
+  body.light-theme .source-panel,
+  body.light-theme .config-panel,
+  body.light-theme .filter-bar,
+  body.light-theme .wf-chart,
+  body.light-theme .metric-card,
+  body.light-theme .section,
+  body.light-theme .table-container{ background:#ffffff; border-color:#e2e8f0; }
+  body.light-theme th{ background:#f8fafc; color:#64748b; }
+  /* header dính (sticky) của bảng — dashboard.css set nền tối #1e293b, phải ép sáng */
+  body.light-theme .table-container thead th{ background-color:#f1f5f9; }
+  body.light-theme td{ border-bottom-color:#e8edf3; }
+  body.light-theme tr:hover{ background:rgba(102,126,234,.05); }
+  body.light-theme .tab:hover{ color:#0f172a; }
+  /* section title + tabs viền tối → sáng */
+  body.light-theme .section-title{ color:#1e293b; border-bottom-color:#e2e8f0; }
+  body.light-theme .section-controls .section-title{ color:#1e293b; }
+  body.light-theme .tabs{ border-bottom-color:#e2e8f0; }
+  /* filter dropdown + control-group select + range preset chips */
+  body.light-theme .filter-select,
+  body.light-theme .control-group select{ background:#f8fafc; color:#0f172a; border-color:#cbd5e1; }
+  body.light-theme .time-btn{ background:#eef2f7; color:#334155; border-color:#cbd5e1; }
+  body.light-theme .time-btn:hover{ background:#e2e8f0; color:#0f172a; }
+  body.light-theme .time-btn.active{ background:#667eea; color:#fff; border-color:#667eea; }
+  /* heatmap: viền/nền ô rỗng do JS set sáng theo theme; đảm bảo chữ tiêu đề đọc được */
+  body.light-theme .hm-cell{ box-shadow:inset 0 0 0 1px #e8edf3; }
+  body.light-theme .subtle,
+  body.light-theme .metric-def,
+  body.light-theme .wf-chart .wf-q,
+  body.light-theme .legend-inline,
+  body.light-theme .hm-scale,
+  body.light-theme .metric-src{ color:#64748b; }
+  body.light-theme .wf-title,
+  body.light-theme .source-panel h3,
+  body.light-theme .config-panel .panel-title,
+  body.light-theme .heatmap th.row-h,
+  body.light-theme .wf-legend,
+  body.light-theme .mod-item,
+  body.light-theme .source-item b{ color:#1e293b; }
+  body.light-theme .source-item,
+  body.light-theme .heatmap th{ color:#475569; }
+  body.light-theme .metric-def b{ color:#334155; }
+  /* input / select trong panel */
+  body.light-theme .price-grid input,
+  body.light-theme .add-model-row select,
+  body.light-theme .add-model-row input[type=text],
+  body.light-theme .cell-input, body.light-theme .text-input,
+  body.light-theme td select.cell-select{ background:#f8fafc; color:#0f172a; }
+  body.light-theme .price-grid input,
+  body.light-theme .add-model-row select,
+  body.light-theme .add-model-row input[type=text]{ border-color:#cbd5e1; }
+  body.light-theme .cell-input:focus, body.light-theme .text-input:focus,
+  body.light-theme .cell-select:focus{ background:#eef2f7; }
+  body.light-theme .cell-input:hover, body.light-theme .text-input:hover,
+  body.light-theme .cell-select:hover{ border-color:#cbd5e1; }
+  body.light-theme .date-input{ background:#f8fafc; color:#0f172a; border-color:#cbd5e1; color-scheme:light; }
+  body.light-theme .mod-track,
+  body.light-theme .progress-bar{ background:#e2e8f0; }
+  body.light-theme .wf-type{ color:#94a3b8; border-color:#e2e8f0; }
+  body.light-theme #data-tbody tr.data-total-row td{ border-top-color:#cbd5e1; color:#0f172a; }
+  body.light-theme .status-message b{ color:#334155 !important; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<div class="header" data-od-id="app-header">
+  <div class="header-brand">
+    <img src="assets/rang-dong-logo.png" alt="Rạng Đông">
+  </div>
+  <div>
+    <h1>AI OPERATIONS CENTER</h1>
+    <p>Dashboard theo dõi &amp; quản trị AI Agent · Token Ledger</p>
+  </div>
+</div>
+
+<div class="proto-note">
+  <span>⚙️</span>
+  <span><b>Nhập liệu thủ công theo ngày.</b> Bấm <b>✎ Dữ liệu nguồn</b> → chọn ngày → nhập token/request theo agent → bấm <b>💾 Lưu ngày này</b>. Sửa <b>⚙ Cấu hình giá</b> thì bấm <b>💾 Lưu bảng giá</b>. Sau khi Lưu, dashboard tính lại. <b>Tháng 6/2026 lấy từ file Excel 4 tuần; tháng 7 là dữ liệu demo</b> để kiểm tra trực quan và insight so sánh. Dữ liệu lưu trong trình duyệt.</span>
+</div>
+
+<!-- ═══════════════ NGUỒN DỮ LIỆU ═══════════════ -->
+<details class="source-panel">
+  <summary>🔌 Nguồn dữ liệu Google AI Studio &amp; độ trễ — bấm để xem chi tiết</summary>
+  <div class="source-grid">
+    <div class="source-item"><span class="src-dot src-rt"></span><div><b>Token / call</b> — <span class="src-tag">usageMetadata</span> realtime. Tách prompt · cached · output · tool-use · thinking, kèm modality TEXT/IMG/AUDIO/VIDEO.</div></div>
+    <div class="source-item"><span class="src-dot src-near"></span><div><b>Error &amp; latency</b> — <span class="src-tag">Cloud Monitoring</span> ≈30 phút. request_count theo 2xx/4xx/5xx, latency backend/overhead.</div></div>
+    <div class="source-item"><span class="src-dot src-near"></span><div><b>Rate limit</b> — <span class="src-tag">Cloud Quotas</span> gần realtime. RPM/TPM/RPD &amp; quota/exceeded (bắt 429).</div></div>
+    <div class="source-item"><span class="src-dot src-batch"></span><div><b>Chi phí chuẩn</b> — <span class="src-tag">BigQuery Billing</span> trễ ≈1 ngày. Mỗi agent = 1 project, net sau credits, quy đổi VND.</div></div>
+  </div>
+</details>
+
+<!-- ═══════════════ STATUS BAR ═══════════════ -->
+<div class="status-bar">
+  <div class="status-indicator"><span class="status-dot"></span><span class="status-message">Gateway hoạt động</span></div>
+  <div class="status-indicator"><span class="pulse-dot"></span><span class="status-message">Cập nhật realtime · lần cuối 2 phút trước</span></div>
+  <div style="margin-left:auto" class="status-message">Kỳ dữ liệu: <b style="color:#cbd5e1" id="status-period">—</b></div>
+</div>
+
+<!-- ═══════════════ TOOLBAR: kỳ dữ liệu + hành động ═══════════════ -->
+<div class="toolbar">
+  <div class="period-stack">
+    <div class="period-row">
+      <span class="range-label">Khoảng thời gian</span>
+      <input type="date" id="range-start" class="date-input">
+      <span class="range-sep">→</span>
+      <input type="date" id="range-end" class="date-input">
+    </div>
+    <div class="period-row" id="range-presets"></div>
+  </div>
+  <div class="toolbar-actions">
+    <button class="btn btn-secondary" id="btn-config">⚙ Cấu hình giá</button>
+    <button class="btn btn-secondary" id="btn-data">✎ Dữ liệu nguồn</button>
+    <button class="btn btn-secondary" id="btn-theme">☀️ Sáng</button>
+    <button class="btn btn-export" id="btn-export">⬇ Xuất CSV</button>
+  </div>
+</div>
+
+<!-- ═══════════════ PANEL: BẢNG GIÁ ═══════════════ -->
+<div class="config-panel" id="pricing-panel">
+  <div class="panel-title">💲 Giá theo model (USD / 1 triệu token) — không chỉ Gemini, thêm model provider khác nếu agent dùng</div>
+  <div class="price-grid" id="price-grid"></div>
+  <div class="add-model-row">
+    <select id="preset-model">
+      <option value="">— Chọn model có sẵn —</option>
+      <optgroup label="OpenAI">
+        <option value="GPT-4o">GPT-4o</option><option value="GPT-4o mini">GPT-4o mini</option>
+        <option value="GPT-4.1">GPT-4.1</option><option value="o3">o3</option><option value="o4-mini">o4-mini</option>
+      </optgroup>
+      <optgroup label="Anthropic">
+        <option value="Claude Opus 4.5">Claude Opus 4.5</option><option value="Claude Sonnet 4.5">Claude Sonnet 4.5</option>
+        <option value="Claude Haiku 4.5">Claude Haiku 4.5</option>
+      </optgroup>
+      <optgroup label="Google Gemini">
+        <option value="Gemini 2.5 Pro">Gemini 2.5 Pro</option><option value="Gemini 2.5 Flash">Gemini 2.5 Flash</option>
+        <option value="Gemini 3.0 Flash">Gemini 3.0 Flash</option><option value="Gemini 3.0 Pro">Gemini 3.0 Pro</option>
+        <option value="Gemini 3.1 Flash Lite">Gemini 3.1 Flash Lite</option>
+      </optgroup>
+      <optgroup label="Khác">
+        <option value="Llama 3.3 70B">Llama 3.3 70B</option><option value="DeepSeek V3">DeepSeek V3</option>
+        <option value="__custom__">Model khác (tự nhập tên)…</option>
+      </optgroup>
+    </select>
+    <input type="text" id="custom-model" placeholder="Nhập tên model" style="display:none;">
+    <button class="btn btn-secondary" id="add-model-btn">+ Thêm vào bảng giá</button>
+  </div>
+  <div class="add-model-row" style="margin-top:14px">
+    <button class="btn btn-export" id="save-price-btn">💾 Lưu bảng giá</button>
+    <span class="subtle" style="align-self:center">Sửa giá xong bấm Lưu ⇒ toàn bộ chi phí trên dashboard tính lại.</span>
+  </div>
+  <div class="config-msg" id="config-msg"></div>
+</div>
+
+<!-- ═══════════════ PANEL: DỮ LIỆU NGUỒN (nhập theo NGÀY) ═══════════════ -->
+<div class="config-panel" id="data-panel">
+  <div class="panel-title">✎ Dữ liệu nguồn — nhập theo ngày, xong bấm 💾 Lưu</div>
+  <div class="add-model-row" style="margin-top:0;margin-bottom:12px">
+    <label class="subtle" style="align-self:center">Ngày nhập liệu</label>
+    <input type="date" id="data-date" class="date-input">
+    <button class="btn btn-secondary" id="del-day-btn">🗑 Xoá ngày</button>
+    <span class="subtle" id="data-days-hint" style="align-self:center"></span>
+  </div>
+  <div class="table-container" style="max-height:none">
+    <table>
+      <thead><tr>
+        <th>Agent</th><th>Phòng ban</th><th>Model</th>
+        <th class="num">Users</th><th class="num">Chat</th><th class="num">Token in</th><th class="num">Token out</th>
+        <th class="num">Request</th><th class="num">Lỗi %</th><th class="num">Chi phí</th><th></th>
+      </tr></thead>
+      <tbody id="data-tbody"></tbody>
+    </table>
+  </div>
+  <button class="add-row-btn" id="add-row-btn">+ Thêm dòng</button>
+  <div class="add-model-row" style="margin-top:14px">
+    <button class="btn btn-export" id="save-day-btn">💾 Lưu ngày này</button>
+    <span class="config-msg" id="data-msg" style="margin-top:0;align-self:center"></span>
+  </div>
+  <div class="subtle" style="margin-top:8px">Chọn ngày ⇒ nhập dữ liệu từng agent cho ngày đó ⇒ bấm <b>💾 Lưu ngày này</b>. Chi phí = token in ÷ 1M × giá in + token out ÷ 1M × giá out. Dashboard cộng dữ liệu mọi ngày nằm trong <b>Khoảng thời gian</b> ở trên.</div>
+</div>
+
+<!-- ═══════════════ FILTER BAR ═══════════════ -->
+<div class="filter-bar">
+  <div class="filter-field">
+    <label>Phòng ban</label>
+    <select class="filter-select" id="f-dept"></select>
+  </div>
+  <div class="filter-field">
+    <label>User</label>
+    <select class="filter-select" id="f-user"></select>
+  </div>
+  <div class="filter-field">
+    <label>Provider</label>
+    <select class="filter-select" id="f-provider"></select>
+  </div>
+  <div class="filter-field">
+    <label>Model</label>
+    <select class="filter-select" id="f-model"></select>
+  </div>
+  <div class="filter-field">
+    <label>Agent</label>
+    <select class="filter-select" id="f-agent"></select>
+  </div>
+  <div class="filter-field" style="justify-content:flex-end">
+    <button class="btn btn-secondary" id="f-reset">↺ Xoá lọc</button>
+  </div>
+</div>
+
+<!-- ═══════════════ TABS ═══════════════ -->
+<div class="tabs">
+  <button class="tab active" data-tab="overview">📊 Tổng quan</button>
+  <button class="tab" data-tab="departments">🏢 Phòng ban &amp; User</button>
+  <button class="tab" data-tab="agents">🤖 Agents</button>
+  <button class="tab" data-tab="providers">🏭 Providers</button>
+  <button class="tab" data-tab="models">🧩 Model</button>
+  <button class="tab" data-tab="cost">💸 Chi phí</button>
+  <button class="tab" data-tab="performance">⚡ Hiệu năng</button>
+</div>
+
+<div class="delta-legend">Chú giải so sánh trên scorecard: <b>KT</b> = kỳ trước · <b>CK</b> = cùng kỳ (năm trước) — theo danh mục viết tắt chuẩn của công ty</div>
+
+<!-- ═══════════════ TAB 1 — TỔNG QUAN ═══════════════ -->
+<div class="tab-content active" id="overview">
+  <div class="insight-banner">
+    <span class="insight-icon">❓</span>
+    <span class="insight-text">Bức tranh tổng thể: hệ thống đang phục vụ <b>bao nhiêu agent</b>, tiêu tốn <b>bao nhiêu token &amp; tiền</b>, có <b>bao nhiêu người thật sự dùng</b>, và <b>chạy có ổn không</b>?</span>
+  </div>
+
+  <div class="metrics overview-kpis">
+    <div class="metric-card">
+      <div class="metric-label">🤖 AI Agent</div>
+      <div class="metric-value" id="m-ov-agents">—</div>
+      <div class="delta-badge" id="d-ov-agents"></div>
+      <div class="overview-kpi-insight" id="i-ov-agents">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🏢 Đơn vị</div>
+      <div class="metric-value" id="m-ov-units">—</div>
+      <div class="delta-badge" id="d-ov-units"></div>
+      <div class="overview-kpi-insight" id="i-ov-units">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">👤 User hoạt động</div>
+      <div class="metric-value" id="m-ov-users">—</div>
+      <div class="delta-badge" id="d-ov-users"></div>
+      <div class="overview-kpi-insight" id="i-ov-users">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">💬 Tổng request</div>
+      <div class="metric-value" id="m-ov-requests">—</div>
+      <div class="delta-badge" id="d-ov-requests"></div>
+      <div class="overview-kpi-insight" id="i-ov-requests">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🪙 Tổng token</div>
+      <div class="metric-value" id="m-ov-tokens">—</div>
+      <div class="delta-badge" id="d-ov-tokens"></div>
+      <div class="overview-kpi-insight" id="i-ov-tokens">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">💰 Chi phí (VNĐ)</div>
+      <div class="metric-value" id="m-ov-cost">—</div>
+      <div class="delta-badge" id="d-ov-cost"></div>
+      <div class="overview-kpi-insight" id="i-ov-cost">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🧮 Chi phí / User</div>
+      <div class="metric-value" id="m-ov-costuser">—</div>
+      <div class="delta-badge" id="d-ov-costuser"></div>
+      <div class="overview-kpi-insight" id="i-ov-costuser">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">⚠️ Tỷ lệ lỗi</div>
+      <div class="metric-value" id="m-ov-error">—</div>
+      <div class="delta-badge" id="d-ov-error"></div>
+      <div class="overview-kpi-insight" id="i-ov-error">—</div>
+    </div>
+  </div>
+
+  <div class="overview-trend-grid">
+    <div class="wf-chart">
+      <div class="wf-title">Xu hướng chi phí (VNĐ)</div>
+      <div class="chart-total" id="ov-cost-total">—</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-cost-trend"></canvas></div>
+    </div>
+    <div class="wf-chart">
+      <div class="wf-title">Xu hướng Token</div>
+      <div class="chart-total" id="ov-token-total">—</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-token-trend"></canvas></div>
+    </div>
+    <div class="wf-chart">
+      <div class="wf-title">Xu hướng Request</div>
+      <div class="chart-total" id="ov-request-total">—</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-request-trend"></canvas></div>
+    </div>
+    <div class="wf-chart overview-success-card">
+      <div class="wf-title">Tỷ lệ thành công</div>
+      <div class="overview-donut">
+        <canvas id="c-ov-success"></canvas>
+        <div class="overview-donut-center"><b id="ov-success-value">—</b><span>Thành công</span></div>
+      </div>
+      <div class="success-legend"><span><i class="success-dot ok"></i>Thành công</span><span><i class="success-dot err"></i>Lỗi</span></div>
+    </div>
+  </div>
+
+  <div class="overview-breakdown-grid">
+    <div class="wf-chart">
+      <div class="wf-title">Top AI Agent theo chi phí (VNĐ)</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-agent-cost"></canvas></div>
+    </div>
+    <div class="wf-chart">
+      <div class="wf-title">Phân bổ chi phí theo AI Agent</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-ov-agent-share"></canvas></div>
+        <div class="wf-legend" id="lg-ov-agent-share"></div>
+      </div>
+    </div>
+    <div class="wf-chart">
+      <div class="wf-title">Top đơn vị theo chi phí (VNĐ)</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-unit-cost"></canvas></div>
+    </div>
+    <div class="wf-chart">
+      <div class="wf-title">Heatmap request 7 ngày gần nhất</div>
+      <div class="wf-q">Agent nào được sử dụng nhiều theo từng ngày?</div>
+      <div class="heatmap-wrap overview-week-wrap"><table class="heatmap weekly-usage-heatmap" id="heatmap-ov-week"></table></div>
+      <div class="usage-scale"><span>Ít</span><i></i><span>Nhiều</span></div>
+    </div>
+  </div>
+
+  <div class="overview-lower-grid">
+    <div class="user-section-card overview-detail-card">
+      <div class="user-section-title">Bảng chi tiết sử dụng AI Agent</div>
+      <div class="table-container">
+        <table>
+          <thead><tr><th>AI Agent</th><th>Đơn vị</th><th class="num">User</th><th class="num">Request</th><th class="num">Token</th><th class="num">Chi phí</th><th class="num">Tỷ lệ lỗi</th><th>Success Rate</th></tr></thead>
+          <tbody id="ov-detail-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="user-section-card overview-alert-card">
+      <div class="user-section-title">Cảnh báo &amp; sự kiện</div>
+      <div class="overview-alerts" id="ov-alerts"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 2 — PHÒNG BAN & USER ═══════════════ -->
+<div class="tab-content" id="departments">
+  <div class="insight-banner">
+    <span class="insight-icon">❓</span>
+    <span class="insight-text">Phòng ban nào <b>tiêu nhiều nhất</b>, đã <b>dùng đúng mức</b> chưa, chi phí có <b>dồn vào một phòng</b> không, và <b>ai trong phòng</b> đang thực sự dùng?</span>
+  </div>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">🏢 Số phòng ban</div>
+      <div class="metric-q">Có bao nhiêu phòng ban đang dùng?</div>
+      <div class="metric-value" id="m-dep-count">—</div>
+      <div class="metric-def"><b>= số phòng ban có agent phát sinh sử dụng.</b></div>
+    </div>
+    <div class="metric-card danger">
+      <div class="metric-label">🔥 Phòng sử dụng nhiều nhất</div>
+      <div class="metric-q">Phòng nào đang sử dụng nhiều nhất</div>
+      <div class="metric-value" id="m-dep-top" style="font-size:22px">—</div>
+      <div class="metric-def" id="m-dep-top-def">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🧮 Chi phí TB / phòng</div>
+      <div class="metric-q">Bình quân mỗi phòng tốn bao nhiêu?</div>
+      <div class="metric-value" id="m-dep-avg">—</div>
+      <div class="metric-def"><b>= tổng chi phí ÷ số phòng ban.</b></div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">🎯 Mức độ tập trung chi phí</div>
+      <div class="metric-q">Chi phí có bị dồn vào ít phòng không?</div>
+      <div class="metric-value" id="m-dep-conc">—</div>
+      <div class="metric-def"><b>= tỷ trọng chi phí của Top-2 phòng.</b> Cao ⇒ rủi ro phụ thuộc.</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="wf-chart">
+      <span class="wf-type">Tròn</span>
+      <div class="wf-title">Chi phí theo phòng ban</div>
+      <div class="wf-q">Tiền phân bổ về các phòng thế nào?</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-dep-cost"></canvas></div>
+        <div class="wf-legend" id="lg-dep-cost"></div>
+      </div>
+    </div>
+    <div class="wf-chart">
+      <span class="wf-type">Tròn</span>
+      <div class="wf-title">Tỷ lệ sử dụng theo phòng ban <span class="pill-new">MỚI</span></div>
+      <div class="wf-q">Phòng nào cấp tài khoản nhưng ít dùng?</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-dep-adopt"></canvas></div>
+        <div class="wf-legend" id="lg-dep-adopt"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-controls">
+    <div class="section-title">Chi tiết theo phòng ban</div>
+    <span class="allocated-note" id="dep-alloc-note"></span>
+  </div>
+  <div class="table-container">
+    <table class="dept-drill-table">
+      <thead><tr>
+        <th>Phòng ban</th><th class="num">Agents</th><th class="num">Tổng Users</th>
+        <th class="num">Users active</th><th class="num">Tỷ lệ active/tổng</th>
+        <th class="num">Tokens</th><th class="num">Requests</th><th class="num">Error %</th>
+      </tr></thead>
+      <tbody id="dep-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- ─── Phần User (gộp từ tab User cũ) ─── -->
+  <div class="section-controls"><div class="section-title">Tài khoản người dùng</div></div>
+
+  <div class="metrics user-kpi-grid">
+    <div class="metric-card">
+      <div class="metric-label">👥 Tổng số tài khoản</div>
+      <div class="metric-value" id="m-us-total">—</div>
+      <div class="metric-def" id="m-us-total-def">—</div>
+      <div class="metric-note">Chỉ tính tài khoản còn tồn tại; tài khoản đã xoá được giữ trong lịch sử.</div>
+    </div>
+    <div class="metric-card ok">
+      <div class="metric-label">📈 Tài khoản hoạt động</div>
+      <div class="metric-value" id="m-us-adoption">—</div>
+      <div class="metric-def" id="m-us-adoption-def">—</div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">😴 Tài khoản không hoạt động</div>
+      <div class="metric-value" id="m-us-inactive">—</div>
+      <div class="metric-def" id="m-us-inactive-def">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🆕 Cấp mới trong kỳ</div>
+      <div class="metric-value" id="m-us-new">—</div>
+      <div class="metric-def">Tài khoản được tạo trong khoảng thời gian đang chọn.</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🏢 Số đơn vị</div>
+      <div class="metric-value" id="m-us-units">—</div>
+      <div class="metric-def">Phòng ban có tài khoản được cấp.</div>
+    </div>
+  </div>
+
+  <div class="user-section-card">
+    <div class="user-section-head">
+      <div class="user-section-title">👥 Users</div>
+      <div class="user-summary-chips">
+        <span class="summary-chip active" id="user-active-chip">Đã dùng: —</span>
+        <span class="summary-chip" id="user-total-chip">Tổng: —</span>
+      </div>
+    </div>
+    <div class="table-container user-main-table">
+      <table>
+        <thead><tr>
+          <th>#</th><th>User</th><th>Role</th><th>Status</th>
+          <th class="num">Reqs</th><th class="num">Chi phí</th><th>Quota kỳ hiện tại</th>
+        </tr></thead>
+        <tbody id="user-acct-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="user-bottom-grid">
+    <div class="wf-chart">
+      <span class="wf-type">Line</span>
+      <div class="wf-title">Người dùng hoạt động theo ngày (DAU, 30d)</div>
+      <div class="wf-q">Khoảng cách giữa tài khoản được cấp và số người dùng thực tế.</div>
+      <div class="canvas-box user-dau-canvas"><canvas id="c-us-dau"></canvas></div>
+    </div>
+    <div class="user-section-card inactive-list-card">
+      <div class="user-section-title">😴 Tài khoản không hoạt động</div>
+      <div class="table-container">
+        <table>
+          <thead><tr><th>User</th><th>Phòng ban</th><th>Lần cuối dùng</th></tr></thead>
+          <tbody id="user-inactive-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 3 — AGENTS ═══════════════ -->
+<div class="tab-content" id="agents">
+  <div class="insight-banner">
+    <span class="insight-icon">❓</span>
+    <span class="insight-text">Agent nào <b>được dùng nhiều</b>, agent nào <b>tốn kém</b>, và agent nào <b>đã tạo mà bỏ không</b>?</span>
+  </div>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">🤖 Agent đang hoạt động</div>
+      <div class="metric-q">Bao nhiêu agent đang thực sự chạy?</div>
+      <div class="metric-value" id="m-ag-active">—</div>
+      <div class="metric-def"><b>= agent có ≥1 request</b> trong kỳ.</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">📨 Tổng lượt request</div>
+      <div class="metric-q">Tổng số lượt gọi agent là bao nhiêu?</div>
+      <div class="metric-value" id="m-ag-req">—</div>
+      <div class="metric-def"><b>= Σ request</b> của mọi agent trong kỳ.</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🧮 Chi phí TB / agent</div>
+      <div class="metric-q">Bình quân mỗi agent tốn bao nhiêu?</div>
+      <div class="metric-value" id="m-ag-cost">—</div>
+      <div class="metric-def"><b>= tổng chi phí ÷ số agent active.</b></div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">💤 Agent không dùng</div>
+      <div class="metric-q">Có agent nào tạo ra mà không ai dùng?</div>
+      <div class="metric-value" id="m-ag-idle">—</div>
+      <div class="metric-def"><b>= agent 0 request trong kỳ.</b> Cân nhắc gỡ hoặc truyền thông lại.</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="wf-chart">
+      <span class="wf-type">Tròn</span>
+      <div class="wf-title">Mức độ sử dụng các agent</div>
+      <div class="wf-q">Agent nào bận rộn nhất?</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-ag-usage"></canvas></div>
+        <div class="wf-legend" id="lg-ag-usage"></div>
+      </div>
+    </div>
+    <div class="wf-chart">
+      <span class="wf-type">Table</span>
+      <div class="wf-title">Top agent theo token</div>
+      <div class="wf-q">Agent nào tiêu nhiều token nhất?</div>
+      <table style="margin-top:2px"><tbody id="ag-top"></tbody></table>
+    </div>
+  </div>
+
+  <div class="section-controls">
+    <div class="section-title">Ma trận Project × Phòng ban</div>
+    <div class="matrix-toolbar">
+      <label for="matrix-user-filter">User</label>
+      <select id="matrix-user-filter" class="filter-select">
+        <option value="">Tất cả user</option>
+      </select>
+      <span class="subtle" id="matrix-user-summary">Ô càng đậm = càng nhiều request</span>
+    </div>
+  </div>
+  <div class="section">
+    <div class="matrix-breadcrumb" id="matrix-breadcrumb"></div>
+    <div class="heatmap-wrap"><table class="heatmap matrix-drill" id="heatmap-agent-dept"></table></div>
+    <div class="hm-scale">Ít <span class="bar"></span> Nhiều · hàng = project, cột = phòng ban · <i>bấm tiêu đề cột để xem theo Vùng rồi tới từng tài khoản.</i></div>
+  </div>
+
+  <div class="section-controls"><div class="section-title">Chi tiết theo agent</div></div>
+  <div class="table-container">
+    <table>
+      <thead><tr>
+        <th>Agent</th><th>Phòng ban chính</th><th>Model</th><th class="num">Users</th>
+        <th class="num">Requests</th><th class="num">Tokens</th><th class="num">Error %</th><th class="num">p95 (s)</th><th>Trạng thái</th>
+      </tr></thead>
+      <tbody id="ag-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 4 — PROVIDERS ═══════════════ -->
+<div class="tab-content" id="providers">
+  <div class="insight-banner">
+    <span class="insight-icon">❓</span>
+    <span class="insight-text">Mỗi <b>nhà cung cấp</b> đang gánh <b>bao nhiêu tải &amp; chi phí</b>, độ <b>ổn định</b> ra sao — ta có phụ thuộc 1 provider không?</span>
+  </div>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">🏭 Số provider</div>
+      <div class="metric-q">Ta đang kết nối bao nhiêu provider?</div>
+      <div class="metric-value" id="m-pv-count">—</div>
+      <div class="metric-def"><b>= provider có traffic</b> trong kỳ.</div>
+    </div>
+    <div class="metric-card danger">
+      <div class="metric-label">🎯 Tỉ trọng provider lớn nhất</div>
+      <div class="metric-q">Tải có dồn vào 1 provider không?</div>
+      <div class="metric-value" id="m-pv-share">—</div>
+      <div class="metric-def" id="m-pv-share-def">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">💰 Chi phí (provider lớn nhất)</div>
+      <div class="metric-q">Provider chính tốn bao nhiêu?</div>
+      <div class="metric-value" id="m-pv-cost">—</div>
+      <div class="metric-def"><b>= chi phí quy đổi từ token</b> theo bảng giá.</div>
+    </div>
+    <div class="metric-card ok">
+      <div class="metric-label">⚡ Độ trễ trung bình</div>
+      <div class="metric-q">Provider trả lời nhanh không?</div>
+      <div class="metric-value" id="m-pv-latency">—</div>
+      <div class="metric-def"><b>= p95 latency</b> bình quân theo request.</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="wf-chart">
+      <span class="wf-type">Donut</span>
+      <div class="wf-title">Phân bổ token theo Provider</div>
+      <div class="wf-q">Token đang đi qua provider nào?</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-pv-share"></canvas></div>
+        <div class="wf-legend" id="lg-pv-share"></div>
+      </div>
+    </div>
+    <div class="wf-chart">
+      <span class="wf-type">Bar</span>
+      <div class="wf-title">Chi phí theo provider</div>
+      <div class="wf-q">Provider nào tốn tiền nhất?</div>
+      <div class="canvas-box"><canvas id="c-pv-cost"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-controls"><div class="section-title">Chi tiết theo provider</div></div>
+  <div class="table-container">
+    <table>
+      <thead><tr>
+        <th>Provider</th><th class="num">Models</th><th class="num">Agents</th><th class="num">Requests</th>
+        <th class="num">Tokens</th><th class="num">Error %</th><th class="num">p95 (s)</th><th>Trạng thái</th>
+      </tr></thead>
+      <tbody id="pv-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 5 — MODEL ═══════════════ -->
+<div class="tab-content" id="models">
+  <div class="insight-banner">
+    <span class="insight-icon">❓</span>
+    <span class="insight-text">Model đã khai báo có <b>được dùng hết</b> không, model nào <b>đắt / rẻ</b>, và ta có đang dùng <b>đúng model cho đúng việc</b>?</span>
+  </div>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">🧩 Tổng số model</div>
+      <div class="metric-q">Có bao nhiêu model đã khai báo?</div>
+      <div class="metric-value" id="m-md-total">—</div>
+      <div class="metric-def"><b>= số model trong bảng giá.</b> <span id="m-md-total-def">—</span></div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">🚫 Model chưa dùng</div>
+      <div class="metric-q">Model nào khai báo mà không ai dùng?</div>
+      <div class="metric-value" id="m-md-unused">—</div>
+      <div class="metric-def" id="m-md-unused-def">—</div>
+    </div>
+    <div class="metric-card accent-green">
+      <div class="metric-label">💚 Rẻ nhất / token</div>
+      <div class="metric-q">Model nào rẻ nhất / token?</div>
+      <div class="metric-value" id="m-md-cheap" style="font-size:20px">—</div>
+      <div class="metric-def" id="m-md-cheap-def">—</div>
+    </div>
+    <div class="metric-card danger">
+      <div class="metric-label">💸 Đắt nhất / token</div>
+      <div class="metric-q">Model nào đắt nhất / token?</div>
+      <div class="metric-value" id="m-md-exp" style="font-size:20px">—</div>
+      <div class="metric-def" id="m-md-exp-def">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🧠 Token suy luận <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Bao nhiêu token đốt cho reasoning nội bộ?</div>
+      <div class="metric-value" id="m-md-think">—</div>
+      <div class="metric-def"><b>= Σ thoughtsTokenCount.</b> Chỉ model có extended thinking; ảnh hưởng chi phí output.</div>
+      <div class="metric-src"><span class="src-dot src-rt"></span>usageMetadata · realtime</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="wf-chart">
+      <span class="wf-type">Bar</span>
+      <div class="wf-title">Token theo model</div>
+      <div class="wf-q">Model nào tiêu token nhiều nhất?</div>
+      <div class="canvas-box"><canvas id="c-md-token"></canvas></div>
+    </div>
+    <div class="wf-chart">
+      <span class="wf-type">Bar</span>
+      <div class="wf-title">Chi phí theo model</div>
+      <div class="wf-q">Tiền dồn về model nào?</div>
+      <div class="canvas-box"><canvas id="c-md-cost"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-controls"><div class="section-title">Chi tiết theo model</div></div>
+  <div class="table-container">
+    <table>
+      <thead><tr>
+        <th>Model</th><th>Provider</th><th class="num">Agents dùng</th><th class="num">Token in</th><th class="num">Token out</th>
+        <th class="num">Giá in/out</th><th class="num">Error %</th>
+      </tr></thead>
+      <tbody id="md-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 6 — CHI PHÍ ═══════════════ -->
+<div class="tab-content" id="cost">
+  <div class="insight-banner">
+    <span class="insight-icon">❓</span>
+    <span class="insight-text">Tiền đang <b>chảy về đâu</b> — theo <b>agent, phòng ban hay model</b> — và tháng này có <b>vượt ngân sách</b> không?</span>
+  </div>
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">💰 Tổng chi phí (net)</div>
+      <div class="metric-q">Kỳ này tốn tổng bao nhiêu?</div>
+      <div class="metric-value" id="m-co-total">—</div>
+      <div class="metric-def"><b>= Σ (token × đơn giá)</b> theo bảng giá. <span id="m-co-vnd">—</span></div>
+      <div class="metric-src"><span class="src-dot src-batch"></span>BigQuery Billing · ≈1 ngày</div>
+      <div class="delta-badge" id="d-co-total"></div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">🧾 Đã dùng ngân sách</div>
+      <div class="metric-q">Đã tiêu bao nhiêu % ngân sách?</div>
+      <div class="metric-value" id="m-co-budget">—</div>
+      <div class="metric-def" id="m-co-budget-def">—</div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">🎯 Mức độ tập trung chi phí</div>
+      <div class="metric-q">Chi phí có dồn vào ít agent không?</div>
+      <div class="metric-value" id="m-co-conc">—</div>
+      <div class="metric-def"><b>= tỷ trọng chi phí Top-2 agent.</b></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🧮 Chi phí / 1K request</div>
+      <div class="metric-q">Bình quân 1.000 request tốn bao nhiêu?</div>
+      <div class="metric-value" id="m-co-perk">—</div>
+      <div class="metric-def"><b>= tổng chi phí ÷ (tổng request / 1000).</b></div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="wf-chart">
+      <span class="wf-type">Tròn</span>
+      <div class="wf-title" id="co-dim-title">Chi phí theo Agent</div>
+      <div class="wf-q">Cắt theo chiều nào cũng thấy tiền đi đâu?</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-co-dim"></canvas></div>
+        <div class="wf-legend" id="lg-co-dim"></div>
+      </div>
+    </div>
+    <div class="wf-chart">
+      <span class="wf-type">Line</span>
+      <div class="wf-title">Chi phí theo kỳ vs ngân sách</div>
+      <div class="wf-q">Có đang đi nhanh hơn ngân sách không?</div>
+      <div class="canvas-box"><canvas id="c-co-trend"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section-controls">
+    <div class="section-title">Bảng chi phí</div>
+    <div class="control-group"><label>Nhóm theo</label>
+      <select id="co-groupby"><option value="agent">Agent</option><option value="dept">Phòng ban</option><option value="model">Model</option></select></div>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead><tr>
+        <th id="co-col1">Agent</th><th class="num">Tokens</th><th class="num">Requests</th><th class="num">Chi phí / 1K req</th><th class="num">Chi phí (VNĐ)</th><th style="width:150px">Tỷ trọng</th>
+      </tr></thead>
+      <tbody id="co-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB 7 — HIỆU NĂNG ═══════════════ -->
+<div class="tab-content" id="performance">
+  <div class="insight-banner">
+    <span class="insight-icon">❓</span>
+    <span class="insight-text">Hệ thống trả lời có <b>nhanh &amp; ổn định</b> không — <b>tỉ lệ lỗi, độ trễ, throughput</b> đang ở mức nào so với ngưỡng?</span>
+  </div>
+  <div class="metrics">
+    <div class="metric-card ok">
+      <div class="metric-label">✅ Tỉ lệ thành công</div>
+      <div class="metric-q">Bao nhiêu % request thành công?</div>
+      <div class="metric-value" id="m-pf-success">—</div>
+      <div class="metric-def"><b>= request thành công ÷ tổng request.</b></div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">🙋 Lỗi client (4xx) <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Lỗi do phía gọi?</div>
+      <div class="metric-value" id="m-pf-4xx">—</div>
+      <div class="metric-def"><b>≈ 64% lỗi</b> (400/401/403); xử lý phía tích hợp agent.</div>
+    </div>
+    <div class="metric-card danger">
+      <div class="metric-label">💥 Lỗi server (5xx) <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Lỗi do phía Google?</div>
+      <div class="metric-value" id="m-pf-5xx">—</div>
+      <div class="metric-def"><b>≈ 21% lỗi.</b> Cần retry/backoff.</div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">🚧 Chạm rate limit (429) <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Bao nhiêu request chạm rate limit?</div>
+      <div class="metric-value" id="m-pf-429">—</div>
+      <div class="metric-def"><b>≈ 15% lỗi</b> (quota/exceeded). Cao ⇒ nâng RPM/TPM.</div>
+    </div>
+    <div class="metric-card ok">
+      <div class="metric-label">⚡ Độ trễ p95</div>
+      <div class="metric-q">95% request nhanh hơn bao lâu?</div>
+      <div class="metric-value" id="m-pf-p95">—</div>
+      <div class="metric-def"><b>= mốc trễ 95% request nằm dưới</b> (bình quân theo request).</div>
+    </div>
+    <div class="metric-card warn">
+      <div class="metric-label">🐢 Độ trễ p99</div>
+      <div class="metric-q">Trường hợp chậm nhất tệ tới đâu?</div>
+      <div class="metric-value" id="m-pf-p99">—</div>
+      <div class="metric-def"><b>≈ p95 × 2.1</b> — đuôi chậm cần theo dõi.</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">📨 Tổng lượt request</div>
+      <div class="metric-q">Tổng lượt gọi trong kỳ?</div>
+      <div class="metric-value" id="m-pf-req">—</div>
+      <div class="metric-def"><b>= Σ request</b> mọi agent.</div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="wf-chart">
+      <span class="wf-type">Bar</span>
+      <div class="wf-title">Tỉ lệ lỗi theo agent</div>
+      <div class="wf-q">Agent nào hay lỗi nhất?</div>
+      <div class="canvas-box"><canvas id="c-pf-err"></canvas></div>
+    </div>
+    <div class="wf-chart">
+      <span class="wf-type">Donut</span>
+      <div class="wf-title">Request theo response code <span class="pill-new">MỚI</span></div>
+      <div class="wf-q">Lỗi rơi vào nhóm nào — client, server hay rate-limit?</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-pf-code"></canvas></div>
+        <div class="wf-legend" id="lg-pf-code"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-controls"><div class="section-title">Hiệu năng theo agent</div></div>
+  <div class="table-container">
+    <table>
+      <thead><tr>
+        <th>Agent</th><th>Model</th><th class="num">Requests</th><th class="num">Success %</th>
+        <th class="num">Error %</th><th class="num">p95 (s)</th><th class="num">p99 (s)</th>
+      </tr></thead>
+      <tbody id="pf-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

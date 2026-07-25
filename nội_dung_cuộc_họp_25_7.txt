@@ -1,0 +1,24 @@
+ghi rõ % tăng giảm là so với cùng kỳ, kỳ trước ví dụ: tăng 30% so với KT
+logic sắp xếp thứ tự các biểu đồ cần phải có ý nghĩa, (cần thay đổi thứ tự trong tổng quan: chi phí -> xu hướng token -> request)
+bỏ top đơn vị theo chi phí (trong tab tổng quan), thay top đơn vị theo request
+cần % hoạt động User (số lượng user sử dụng / tổng user)
+mong muốn track được số lượng user đang hoạt động đối với các Agent cần đăng nhập (chỉ cần có request trong khoảng đang xét thì tính là đang hoạt động)
+đổi cột tên success rate thành tiếng việt (Bảng chi tiết sử dụng Ai Agent)
+trong tab phòng ban, thay đổi Phòng tốn nhiều nhất thành Mức độ sử dụng, trong phòng ban cũng muốn xem được các user trong phòng ban đó sử dụng như thế nào (gộp 2 tab phongfban và User lại)
+trong tab user, đổi tên thẻ Tỷ lệ áp dụng thành tài khoản hoạt động, Thừa trạng thái đồng bộ trong tab User, bỏ nút nhắc đào tạo (trong tab user đi)
+sửa ma trân agent x phòng ban  trong tab Agents cần căn lề lại, chuyển phòng ban thành cột, ngoài ra thêm drilldown theo cấp
+thêm bộ lọc theo User, khi lọc chọn user nào thì dữ liệu dashboard sẽ thay đổi theo user đó
+phần cảnh báo trong tab chi phí có thể sử dụng logic (cao hơn 30% trung bình thì lấy cảnh báo),hiển thị dữ liệu cảnh báo, bảng chi phí theo kỳ và ngân sách muốn xem được theo từng agents, chuyển thi phí theo agents thành biều đồ tròn
+trong tab hiệu năng chỉ dữ lại tỉ lệ thành công, thêm chú giải cho lỗi 429, bỏ tổng lượt request theo agents, đổi tỉ lệ lỗi theo agents thành biểu đồ trọng, bỏ badge "mới" đi
+vẫn phải nhập số thủ công trên file excel
+
+
+
+
+
+
+
+
+
+
+
