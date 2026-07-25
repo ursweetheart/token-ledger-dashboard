@@ -687,6 +687,18 @@ td.cost {
     padding-left: 44px;
 }
 
+.dept-drill-table .drill-l4 {
+    padding-left: 66px;
+}
+
+.dept-drill-table .drill-l5 {
+    padding-left: 88px;
+}
+
+.dept-drill-table .drill-l6 {
+    padding-left: 110px;
+}
+
 .dept-drill-table .drill-clickable {
     cursor: pointer;
 }
@@ -2866,6 +2878,18 @@ body.light-theme #heatmap-agent-dept th.row-h {
 
     .dept-drill-table .drill-l3 {
         padding-left: 26px;
+    }
+
+    .dept-drill-table .drill-l4 {
+        padding-left: 38px;
+    }
+
+    .dept-drill-table .drill-l5 {
+        padding-left: 50px;
+    }
+
+    .dept-drill-table .drill-l6 {
+        padding-left: 62px;
     }
 
     /* Cột tên phòng ban dính bên trái khi bảng phải cuộn ngang. */

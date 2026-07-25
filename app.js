@@ -8,7 +8,7 @@
 "use strict";
 
 /* ─── Hằng số ─── */
-var STORE = "agent-dash-state-v11-june-july-excel"; // v11: dữ liệu Excel thật tháng 6 + tháng 7/2026
+var STORE = "agent-dash-state-v12-ralli-permissions"; // v12: Excel tháng 6/7 + cây phân quyền Ralli
 var TAB_STORE = "agent-dash-tab";
 var THEME_STORE = "agent-dash-theme";
 var RANGE_PRESETS = [["7 ngày",7],["30 ngày",30],["90 ngày",90],["Tất cả",null]]; // preset time-range (kiểu Open WebUI)
@@ -41,47 +41,124 @@ var SEED_DAY = "2026-07-01";                   // ngày gắn dữ liệu tổng
    dưới nhiều tên (PBH1 / Phòng Bán hàng 1, TMĐT / Thương mại điện tử, C4LED / TT C4LED).
    ORG_UNITS + UNIT_ALIASES là nguồn sự thật duy nhất để mỗi đơn vị chỉ xuất hiện MỘT lần.
 
-   Alias chỉ gom khi có bằng chứng. Bằng chứng dùng ở đây là danh mục viết tắt chuẩn của
-   công ty — sheet "06.08 DM viết tắt" trong
-   data/20240806 Chuẩn hóa định dạng dashboard_RD Revised.xlsx:
-     BH1 = Phòng Bán hàng 1 · BH2 = Phòng Bán hàng 2 · TMDT = Phòng Thương mại điện tử
-     PXK = Phòng Xuất khẩu  · TMDT MR/GT/TT = TMĐT mở rộng/gián tiếp/trực tiếp
-
-   Cấp "Vùng" là cấp THẬT: cùng danh mục đó có chart "TX theo Kênh/Vùng/Tỉnh" phạm vi
-   phòng bán hàng 1. Nhưng KHÔNG file nào chứa danh sách vùng cụ thể ⇒ tên vùng bên dưới
-   là metadata DEMO để chốt trải nghiệm, thay bằng cây thật khi có backend.
+   Cây Ralli và số user phân quyền lấy trực tiếp từ data/phong_ban_phan_quyen.xlsx,
+   theo mức thụt lề trong sheet "Cơ cấu Tổ chức". Alias tiếp tục chuẩn hóa tên viết tắt
+   giữa file usage và file phân quyền: PBH1 / Phòng Bán hàng 1, TMĐT / Thương mại điện tử,
+   C4LED / TT C4LED.
    ═══════════════════════════════════════════ */
 var ORG_UNITS = [
-  {id:"pbh1",  name:"Phòng Bán hàng 1",       parent:null, level:1},
-  {id:"pbh2",  name:"Phòng Bán hàng 2",       parent:null, level:1},
-  {id:"pbh3",  name:"Phòng Bán hàng 3",       parent:null, level:1},
-  {id:"aemkt", name:"Anh Em tiếp thị",        parent:null, level:1},
-  {id:"ecom",  name:"Thương mại điện tử",     parent:null, level:1},
-  {id:"cskh",  name:"Chăm sóc khách hàng",    parent:null, level:1},
-  {id:"nctt",  name:"P.NCTT , TTDL&ĐHS",      parent:null, level:1},
-  {id:"cpbd",  name:"Công ty CPBĐ PN Rạng Đông", parent:null, level:1},
-  {id:"c4led", name:"TT C4LED",               parent:null, level:1},
-  {id:"ttdl",  name:"TTDL&DHS",               parent:null, level:1},
-  {id:"tttmdt",name:"TT&TMĐT",                parent:null, level:1},
-  {id:"pxk",   name:"Xuất khẩu",              parent:null, level:1},
-  {id:"truyenthong", name:"Truyền thông",     parent:null, level:1},
-  {id:"ketoan",name:"Kế toán",                parent:null, level:1},
-  {id:"kehoach",name:"Kế hoạch",              parent:null, level:1},
-  {id:"nctt2", name:"Nghiên cứu thị trường",  parent:null, level:1},
-  {id:"rnd",   name:"Trung tâm R&D",          parent:null, level:1},
-  {id:"qths",  name:"Quản trị hệ thống",      parent:null, level:1},
-  // ─── Cấp 2 (Vùng) — tên demo, chỉ sinh cho phòng đủ lớn để chia vùng có nghĩa ───
-  {id:"pbh1-v1", name:"Vùng 1", parent:"pbh1", level:2},
-  {id:"pbh1-v2", name:"Vùng 2", parent:"pbh1", level:2},
-  {id:"pbh1-v3", name:"Vùng 3", parent:"pbh1", level:2},
-  {id:"pbh2-v1", name:"Vùng 1", parent:"pbh2", level:2},
-  {id:"pbh2-v2", name:"Vùng 2", parent:"pbh2", level:2},
-  {id:"pbh3-v1", name:"Vùng 1", parent:"pbh3", level:2},
-  {id:"pbh3-v2", name:"Vùng 2", parent:"pbh3", level:2},
-  {id:"ecom-v1", name:"Vùng 1", parent:"ecom", level:2},
-  {id:"ecom-v2", name:"Vùng 2", parent:"ecom", level:2}
+  {id:"company",name:"Toàn công ty",parent:null,level:1,provisioned:887},
+  {id:"rd-corp",name:"Tổng công ty Rạng Đông",parent:"company",level:2,provisioned:807},
+  {id:"pbh1",name:"PBH1",parent:"rd-corp",level:3,provisioned:262},
+  {id:"perm-004",name:"Vùng 1",parent:"pbh1",level:4,provisioned:58},
+  {id:"perm-005",name:"Đội chuyên trách - Vùng 1",parent:"perm-004",level:5,provisioned:7},
+  {id:"perm-006",name:"Đội 1 - Nam Định",parent:"perm-004",level:5,provisioned:6},
+  {id:"perm-007",name:"Đội 2 - Thái Bình",parent:"perm-004",level:5,provisioned:6},
+  {id:"perm-008",name:"Đội 3 - Hà Nam - Ninh Bình",parent:"perm-004",level:5,provisioned:5},
+  {id:"perm-009",name:"Đội 4 - Thanh Hoá",parent:"perm-004",level:5,provisioned:13},
+  {id:"perm-010",name:"Đội 5 - Nghệ An - Hà Tĩnh",parent:"perm-004",level:5,provisioned:11},
+  {id:"perm-011",name:"Vùng 2",parent:"pbh1",level:4,provisioned:87},
+  {id:"perm-012",name:"Đội chuyên trách - Vùng 2",parent:"perm-011",level:5,provisioned:4},
+  {id:"perm-013",name:"Đội 1 - Hà Nội",parent:"perm-011",level:5,provisioned:10},
+  {id:"perm-014",name:"Đội 2 - Hà Nội",parent:"perm-011",level:5,provisioned:8},
+  {id:"perm-015",name:"Đội 3 - Hà Nội",parent:"perm-011",level:5,provisioned:10},
+  {id:"perm-016",name:"Đội 4 - Bắc Ninh",parent:"perm-011",level:5,provisioned:8},
+  {id:"perm-017",name:"Đội 5 - Bắc Giang - Lạng Sơn",parent:"perm-011",level:5,provisioned:10},
+  {id:"perm-018",name:"Đội 6 - Hưng Yên",parent:"perm-011",level:5,provisioned:6},
+  {id:"perm-019",name:"Đội 7 - Hải Dương - Hải Phòng",parent:"perm-011",level:5,provisioned:12},
+  {id:"perm-020",name:"Đội 8 - Quảng Ninh",parent:"perm-011",level:5,provisioned:6},
+  {id:"perm-021",name:"Vùng 3",parent:"pbh1",level:4,provisioned:73},
+  {id:"perm-022",name:"Đội chuyên trách - Vùng 3",parent:"perm-021",level:5,provisioned:3},
+  {id:"perm-023",name:"Đội 1 - HN2 - Sơn La - Điện Biên",parent:"perm-021",level:5,provisioned:18},
+  {id:"perm-024",name:"Đội 2 - HN2 - Hoà Bình",parent:"perm-021",level:5,provisioned:8},
+  {id:"perm-025",name:"Đội 3 - Vĩnh Phúc",parent:"perm-021",level:5,provisioned:5},
+  {id:"perm-026",name:"Đội 4 - Thái Nguyên - Cao Bằng",parent:"perm-021",level:5,provisioned:5},
+  {id:"perm-027",name:"Đội 5 - Phú Thọ",parent:"perm-021",level:5,provisioned:5},
+  {id:"perm-028",name:"Đội 6 - Yên Bái - Tuyên Quang - Hà Giang - Lào Cai - Lai Châu",parent:"perm-021",level:5,provisioned:19},
+  {id:"perm-029",name:"TT1",parent:"pbh1",level:4,provisioned:15},
+  {id:"perm-030",name:"TT1",parent:"perm-029",level:5,provisioned:0},
+  {id:"perm-031",name:"Đội chuyên trách 1 - trung tâm 1",parent:"perm-029",level:5,provisioned:4},
+  {id:"perm-032",name:"Đội Chuyên Trách 2",parent:"perm-029",level:5,provisioned:0},
+  {id:"pbh2",name:"PBH2",parent:"rd-corp",level:3,provisioned:155},
+  {id:"perm-034",name:"CN Đà Nẵng",parent:"pbh2",level:4,provisioned:51},
+  {id:"perm-035",name:"Đội Bình Định",parent:"perm-034",level:5,provisioned:6},
+  {id:"perm-036",name:"Đội Đà Nẵng",parent:"perm-034",level:5,provisioned:6},
+  {id:"perm-037",name:"Đội Huế",parent:"perm-034",level:5,provisioned:3},
+  {id:"perm-038",name:"Đội Quảng Bình",parent:"perm-034",level:5,provisioned:5},
+  {id:"perm-039",name:"Đội Quảng Nam",parent:"perm-034",level:5,provisioned:4},
+  {id:"perm-040",name:"Đội Quảng Trị",parent:"perm-034",level:5,provisioned:5},
+  {id:"perm-041",name:"Đội chuyên trách - CN Đà Nẵng",parent:"perm-034",level:5,provisioned:6},
+  {id:"perm-042",name:"CN Nha Trang",parent:"pbh2",level:4,provisioned:41},
+  {id:"perm-043",name:"Đội Khánh Hòa",parent:"perm-042",level:5,provisioned:11},
+  {id:"perm-044",name:"Đội Lâm Đồng",parent:"perm-042",level:5,provisioned:7},
+  {id:"perm-045",name:"Đội Ninh Thuận",parent:"perm-042",level:5,provisioned:4},
+  {id:"perm-046",name:"Đội Phú Yên",parent:"perm-042",level:5,provisioned:3},
+  {id:"perm-047",name:"Đội chuyên trách - CN Nha Trang",parent:"perm-042",level:5,provisioned:4},
+  {id:"perm-048",name:"Tây Nguyên",parent:"pbh2",level:4,provisioned:39},
+  {id:"perm-049",name:"Đội Đắk Lắk",parent:"perm-048",level:5,provisioned:8},
+  {id:"perm-050",name:"Đội Đắk Nông",parent:"perm-048",level:5,provisioned:4},
+  {id:"perm-051",name:"Đội Gia Lai",parent:"perm-048",level:5,provisioned:9},
+  {id:"perm-052",name:"Đội Kon Tum",parent:"perm-048",level:5,provisioned:4},
+  {id:"perm-053",name:"Đội chuyên trách - Tây Nguyên",parent:"perm-048",level:5,provisioned:0},
+  {id:"perm-054",name:"TT2",parent:"pbh2",level:4,provisioned:12},
+  {id:"perm-055",name:"TT2",parent:"perm-054",level:5,provisioned:0},
+  {id:"perm-056",name:"Đội 1 - TT2",parent:"perm-054",level:5,provisioned:2},
+  {id:"perm-057",name:"Đội 2 - TT2",parent:"perm-054",level:5,provisioned:2},
+  {id:"perm-058",name:"Đội 3 - TT2",parent:"perm-054",level:5,provisioned:1},
+  {id:"perm-059",name:"Đội 4 - TT2",parent:"perm-054",level:5,provisioned:2},
+  {id:"perm-060",name:"Đội 5 - TT2",parent:"perm-054",level:5,provisioned:1},
+  {id:"perm-061",name:"Đội 6 - TT2",parent:"perm-054",level:5,provisioned:1},
+  {id:"pbh3",name:"PBH3",parent:"rd-corp",level:3,provisioned:257},
+  {id:"perm-063",name:"CN Hồ Chí Minh",parent:"pbh3",level:4,provisioned:74},
+  {id:"perm-064",name:"Đội 1",parent:"perm-063",level:5,provisioned:9},
+  {id:"perm-065",name:"Đội 2",parent:"perm-063",level:5,provisioned:7},
+  {id:"perm-066",name:"Đội 3",parent:"perm-063",level:5,provisioned:8},
+  {id:"perm-067",name:"Đội 4",parent:"perm-063",level:5,provisioned:8},
+  {id:"perm-068",name:"Đội 5",parent:"perm-063",level:5,provisioned:11},
+  {id:"perm-069",name:"Đội Siêu Thị",parent:"perm-063",level:5,provisioned:2},
+  {id:"perm-070",name:"Đội chuyên trách - CN Hồ Chí Minh",parent:"perm-063",level:5,provisioned:10},
+  {id:"perm-071",name:"CN Biên Hòa",parent:"pbh3",level:4,provisioned:54},
+  {id:"perm-072",name:"Đội Bình Dương",parent:"perm-071",level:5,provisioned:6},
+  {id:"perm-073",name:"Đội Bình Phước",parent:"perm-071",level:5,provisioned:8},
+  {id:"perm-074",name:"Đội Bình Thuận",parent:"perm-071",level:5,provisioned:6},
+  {id:"perm-075",name:"Đội Đồng Nai",parent:"perm-071",level:5,provisioned:9},
+  {id:"perm-076",name:"Đội Vũng Tàu",parent:"perm-071",level:5,provisioned:9},
+  {id:"perm-077",name:"Đội chuyên trách - CN Biên Hòa",parent:"perm-071",level:5,provisioned:4},
+  {id:"perm-078",name:"CN Cần Thơ",parent:"pbh3",level:4,provisioned:67},
+  {id:"perm-079",name:"Đội An Giang",parent:"perm-078",level:5,provisioned:5},
+  {id:"perm-080",name:"Đội Kiên Giang",parent:"perm-078",level:5,provisioned:13},
+  {id:"perm-081",name:"Đội Cần Thơ",parent:"perm-078",level:5,provisioned:11},
+  {id:"perm-082",name:"Đội Sóc Trăng",parent:"perm-078",level:5,provisioned:7},
+  {id:"perm-083",name:"Đội Cà Mau",parent:"perm-078",level:5,provisioned:7},
+  {id:"perm-084",name:"Đội Bạc Liêu",parent:"perm-078",level:5,provisioned:6},
+  {id:"perm-085",name:"Đội Campuchia",parent:"perm-078",level:5,provisioned:0},
+  {id:"perm-086",name:"Đội chuyên trách - CN Cần Thơ",parent:"perm-078",level:5,provisioned:7},
+  {id:"perm-087",name:"CN Tiền Giang",parent:"pbh3",level:4,provisioned:39},
+  {id:"perm-088",name:"Đội Vĩnh Long",parent:"perm-087",level:5,provisioned:11},
+  {id:"perm-089",name:"Đội Đồng Tháp",parent:"perm-087",level:5,provisioned:8},
+  {id:"perm-090",name:"Đội Long An",parent:"perm-087",level:5,provisioned:5},
+  {id:"perm-091",name:"Đội chuyên trách - CN Tiền Giang",parent:"perm-087",level:5,provisioned:4},
+  {id:"perm-092",name:"TT3",parent:"pbh3",level:4,provisioned:14},
+  {id:"perm-093",name:"TT4",parent:"pbh3",level:4,provisioned:5},
+  {id:"pxk",name:"Xuất khẩu",parent:"rd-corp",level:3,provisioned:25},
+  {id:"truyenthong",name:"Truyền thông",parent:"rd-corp",level:3,provisioned:7},
+  {id:"ketoan",name:"Kế toán",parent:"rd-corp",level:3,provisioned:1},
+  {id:"ecom",name:"TMĐT",parent:"rd-corp",level:3,provisioned:27},
+  {id:"c4led",name:"C4LED",parent:"company",level:2,provisioned:13},
+  {id:"nctt2",name:"Nghiên cứu thị trường",parent:"company",level:2,provisioned:12},
+  {id:"kehoach",name:"Kế hoạch",parent:"company",level:2,provisioned:7},
+  {id:"rnd",name:"Trung tâm R&D",parent:"company",level:2,provisioned:20},
+  {id:"qths",name:"Quản trị hệ thống",parent:"company",level:2,provisioned:18},
+  /* Đơn vị của các agent khác không nằm trong workbook phân quyền Ralli. */
+  {id:"aemkt",name:"Anh Em tiếp thị",parent:null,level:1,provisioned:40},
+  {id:"cskh",name:"Chăm sóc khách hàng",parent:null,level:1,provisioned:28},
+  {id:"nctt",name:"P.NCTT , TTDL&ĐHS",parent:null,level:1,provisioned:30},
+  {id:"cpbd",name:"Công ty CPBĐ PN Rạng Đông",parent:null,level:1,provisioned:18},
+  {id:"ttdl",name:"TTDL&DHS",parent:null,level:1,provisioned:6},
+  {id:"tttmdt",name:"TT&TMĐT",parent:null,level:1,provisioned:3}
 ];
 var UNIT_ALIASES = {
+  "Toàn công ty":"company", "Tổng công ty Rạng Đông":"rd-corp",
   "PBH1":"pbh1", "Phòng Bán hàng 1":"pbh1",              // danh mục chuẩn: BH1
   "PBH2":"pbh2", "Phòng Bán hàng 2":"pbh2",              // danh mục chuẩn: BH2
   "PBH3":"pbh3", "Phòng Bán hàng 3":"pbh3",
@@ -94,19 +171,11 @@ var UNIT_ALIASES = {
   "Truyền thông":"truyenthong", "Kế toán":"ketoan", "Kế hoạch":"kehoach",
   "Nghiên cứu thị trường":"nctt2", "Trung tâm R&D":"rnd", "Quản trị hệ thống":"qths"
 };
-/* Số tài khoản được CẤP, khoá theo unitId (không khoá theo chuỗi tên nữa — trước đây
-   2/5 khoá không bao giờ khớp dữ liệu do lệch dấu cách/viết tắt, khiến mẫu số fallback
-   về số user active và tỷ lệ áp dụng luôn hiện 100%). Chỉ khai báo ở cấp lá; cấp cha
-   được cộng dồn bởi provisionedOf(). */
-var DEPT_PROVISIONED = {
-  aemkt:40, cskh:28, nctt:30, cpbd:18,
-  "pbh1-v1":12, "pbh1-v2":12, "pbh1-v3":10,
-  "pbh2-v1":8,  "pbh2-v2":7,
-  "pbh3-v1":6,  "pbh3-v2":4,
-  "ecom-v1":15, "ecom-v2":13,
-  c4led:15, ttdl:6, tttmdt:3, pxk:25, truyenthong:7, ketoan:1,
-  kehoach:8, nctt2:11, rnd:20, qths:18
-};
+/* Snapshot phân quyền Ralli đọc từ data/phong_ban_phan_quyen.xlsx.
+   Mỗi cấp giữ số Excel khai báo trực tiếp; không tự cộng lại từ cấp con vì số cấp cha
+   gồm cả user chưa được gán xuống đội/vùng. */
+var DEPT_PROVISIONED = {};
+ORG_UNITS.forEach(function(unit){ DEPT_PROVISIONED[unit.id]=unit.provisioned; });
 var MODALITY = [["TEXT",86,"#667eea"],["IMAGE",9,"#10b981"],["AUDIO",4,"#f59e0b"],["VIDEO",1,"#8b5cf6"]];
 var USER_HEAT = {
   cols: ["Sale Agent","Chatbot CC","CRM","Phản Hồi TT","Ralli","Hợp Đồng"],
@@ -166,34 +235,37 @@ var GIVEN_NAMES=["An","Bình","Chi","Dũng","Giang","Hà","Hải","Hương","Kh�
 function adoptionRatio(unitId){ return 0.55 + (stableHash("adopt:"+unitId)%36)/100; }
 function buildAccountCatalogue(){
   var profiles=unitAgentProfiles(), out=[], seq=0;
-  unitRoots().forEach(function(root){
-    if(isExcludedUnit(root)) return;
-    unitLeaves(root.id).forEach(function(leaf){
-      var total=provisionedOf(leaf.id);
-      if(total==null||total<=0) return;
-      // Profile lấy theo đơn vị lá, không có thì thừa kế từ cấp cha.
-      var prof=null, path=unitPath(leaf.id);
+  ORG_UNITS.forEach(function(unit){
+    if(isExcludedUnit(unit)) return;
+    // Chỉ sinh phần user thuộc trực tiếp đơn vị này. Phần đã phân xuống cấp con
+    // được sinh tại chính cấp con, nhờ đó tổng của mọi nút khớp workbook.
+    var total=directProvisionedOf(unit.id);
+    if(total==null||total<=0) return;
+    var path=unitPath(unit.id), root=path[0]||unit, prof=null;
+    // Toàn bộ cây từ workbook phong_ban_phan_quyen.xlsx là quyền của Ralli.
+    if(root.id==="company") prof=[{a:"Trợ lý ảo Ralli",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh"}];
+    else {
       for(var k=path.length-1;k>=0&&!prof;k--) if(profiles[path[k].id]) prof=profiles[path[k].id];
-      if(!prof||!prof.length) prof=[{a:"—",m:"—",ug:"—"}];
-      var eligible=Math.max(1, Math.round(total*adoptionRatio(leaf.id)));
-      for(var i=0;i<total;i++){
-        seq++;
-        var p=prof[i%prof.length], h=stableHash(leaf.id+":"+i);
-        out.push({
-          user:"user."+("000"+seq).slice(-3)+"@corp.vn",
-          // Dùng >>> để giữ số không dấu: h>>3 có thể âm khi h > 2^31 ⇒ index âm ⇒ undefined.
-          n:FAMILY_NAMES[h%FAMILY_NAMES.length]+" "+GIVEN_NAMES[(h>>>3)%GIVEN_NAMES.length],
-          unitId:leaf.id, d:root.name,
-          a:p.a, m:p.m, ug:p.ug,
-          // weight > 0 ⇒ tài khoản có thể nhận phân bổ; = 0 ⇒ luôn là tài khoản chưa dùng.
-          weight: i<eligible ? 1+(h%9) : 0,
-          role: seq%31===0 ? "Admin" : "User",
-          created: (h%9===0) ? "2026-07-"+("0"+(1+h%27)).slice(-2) : "2026-03-"+("0"+(1+h%27)).slice(-2),
-          disabled: (h%97===0),
-          req:0, ti:0, to:0, last:"", active:false, quotaPct:0
-        });
-      }
-    });
+    }
+    if(!prof||!prof.length) prof=[{a:"—",m:"—",ug:"—"}];
+    var eligible=Math.max(1, Math.round(total*adoptionRatio(unit.id)));
+    for(var i=0;i<total;i++){
+      seq++;
+      var p=prof[i%prof.length], h=stableHash(unit.id+":"+i);
+      out.push({
+        user:"user."+("0000"+seq).slice(-4)+"@corp.vn",
+        // Dùng >>> để giữ số không dấu: h>>3 có thể âm khi h > 2^31 ⇒ index âm ⇒ undefined.
+        n:FAMILY_NAMES[h%FAMILY_NAMES.length]+" "+GIVEN_NAMES[(h>>>3)%GIVEN_NAMES.length],
+        unitId:unit.id, d:unit.name,
+        a:p.a, m:p.m, ug:p.ug,
+        // weight > 0 ⇒ tài khoản có thể nhận phân bổ; = 0 ⇒ luôn là tài khoản chưa dùng.
+        weight: i<eligible ? 1+(h%9) : 0,
+        role: seq%31===0 ? "Admin" : "User",
+        created: (h%9===0) ? "2026-07-"+("0"+(1+h%27)).slice(-2) : "2026-03-"+("0"+(1+h%27)).slice(-2),
+        disabled: (h%97===0),
+        req:0, ti:0, to:0, last:"", active:false, quotaPct:0
+      });
+    }
   });
   return out;
 }
@@ -283,18 +355,19 @@ var SEED_DAYS = {
     {a:"Chatbot Contact Center",d:"Thương mại điện tử",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4350,to:13190,r:0,er:0.0,lat:0,cached:0,think:0},
     {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:3,c:0,ti:60523,to:578430,r:93,er:0.0,lat:0,cached:0,think:0},
     {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:3,c:0,ti:85641,to:2135755,r:324,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:257,c:0,ti:0,to:2838200,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"PBH2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:155,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"PBH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:247,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"Xuất khẩu",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:25,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"Truyền thông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"Kế toán",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:1,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"TMĐT",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:27,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"C4LED",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:15,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"Nghiên cứu thị trường",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"Kế hoạch",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"Trung tâm R&D",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:20,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
-    {a:"Trợ lý ảo Ralli",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:18,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0}
+    {a:"Trợ lý ảo Ralli",d:"Toàn công ty",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:887,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:2838200,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"PBH2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"PBH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"Xuất khẩu",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"Truyền thông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"Kế toán",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"TMĐT",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"C4LED",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"Nghiên cứu thị trường",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"Kế hoạch",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"Trung tâm R&D",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0},
+    {a:"Trợ lý ảo Ralli",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:0,cached:0,think:0}
   ],
   "2026-07-08": [
     {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2053010,to:454260,r:450,er:0.0,lat:0,cached:0,think:0},
@@ -476,6 +549,21 @@ function unitById(id){ return unitIndex[id] || null; }
 function unitName(id){ var u=unitIndex[id]; return u?u.name:"—"; }
 function unitChildren(unitId){ return (unitChildIndex[unitId||""] || []).slice(); }
 function unitRoots(){ return unitChildren(""); }
+/* Các phòng/đơn vị hiển thị ở cấp đầu của dashboard. Hai dòng tổng hợp
+   "Toàn công ty" và "Tổng công ty Rạng Đông" vẫn giữ trong cây để tính đúng 887/807,
+   nhưng không chiếm hai cấp drilldown trước khi người dùng thấy phòng ban thực tế. */
+function reportingRoots(){
+  var companyChildren=unitChildren("company"), corpChildren=unitChildren("rd-corp");
+  var companyDirect=companyChildren.filter(function(u){return u.id!=="rd-corp";});
+  var outsideCompany=unitRoots().filter(function(u){return u.id!=="company";});
+  return corpChildren.concat(companyDirect,outsideCompany);
+}
+function reportingRootOf(unitId){
+  var ids={}; reportingRoots().forEach(function(u){ids[u.id]=true;});
+  var path=unitPath(unitId);
+  for(var i=0;i<path.length;i++) if(ids[path[i].id]) return path[i];
+  return path[path.length-1]||unitById(unitId);
+}
 /* Đường đi từ gốc tới đơn vị, dùng cho breadcrumb và thụt lề bảng. */
 function unitPath(unitId){
   var out=[], cur=unitIndex[unitId], guard=0;
@@ -487,24 +575,28 @@ function unitDescendants(unitId){
   while(stack.length){ var u=stack.shift(); out.push(u); stack=stack.concat(unitChildren(u.id)); }
   return out;
 }
-/* Đơn vị lá = nơi tài khoản được gắn vào. */
-function unitLeaves(unitId){
-  var kids=unitChildren(unitId);
-  if(!kids.length) return [unitIndex[unitId]].filter(Boolean);
-  return kids.reduce(function(acc,k){ return acc.concat(unitLeaves(k.id)); },[]);
-}
 function isExcludedUnit(unit){ return !unit || isExcludedDepartment(unit.name); }
 /* Số tài khoản được cấp: khai báo ở cấp lá, cấp cha cộng dồn từ con.
    Trả về null khi không có dữ liệu — KHÔNG suy ra từ số user active. */
 function provisionedOf(unitId){
   if(!unitId) return null;
+  if(Object.prototype.hasOwnProperty.call(DEPT_PROVISIONED,unitId)) return DEPT_PROVISIONED[unitId];
   var kids=unitChildren(unitId);
   if(kids.length){
     var sum=0, any=false;
     kids.forEach(function(k){ var v=provisionedOf(k.id); if(v!=null){ sum+=v; any=true; } });
-    return any?sum:(DEPT_PROVISIONED[unitId]!=null?DEPT_PROVISIONED[unitId]:null);
+    return any?sum:null;
   }
-  return DEPT_PROVISIONED[unitId]!=null ? DEPT_PROVISIONED[unitId] : null;
+  return null;
+}
+function directProvisionedOf(unitId){
+  var total=provisionedOf(unitId);
+  if(total==null) return null;
+  var assigned=unitChildren(unitId).reduce(function(sum,k){
+    var childTotal=provisionedOf(k.id);
+    return sum+(childTotal==null?0:childTotal);
+  },0);
+  return Math.max(0,total-assigned);
 }
 
 /* ─── State (day-based) ─── */
@@ -1109,26 +1201,6 @@ function deptToggleCell(label, level, expandable, expanded){
                       :"<span class='drill-caret drill-leaf'>·</span>";
   return "<td class='drill-name drill-l"+level+"'>"+caret+"<span>"+esc(label)+"</span></td>";
 }
-/* Hàng đơn vị cấp 2 (Vùng) và hàng tài khoản lấy số từ tầng PHÂN BỔ, nên tổng của
-   chúng luôn khớp hàng cha; error% không phân bổ được về user nên để trạng thái n/a. */
-function deptUnitRow(unit, level, expandable, expanded, accounts, clickable){
-  var agents={}, req=0, tokens=0, active=0, prov=provisionedOf(unit.id);
-  accounts.forEach(function(u){
-    if(u.a&&u.a!=="—") agents[u.a]=1;
-    req+=num(u.req); tokens+=num(u.ti)+num(u.to);
-    if(u.active) active++;
-  });
-  return "<tr class='drill-row drill-unit"+(clickable?" drill-clickable":"")+"' data-unit='"+esc(unit.id)+"'>"+
-    deptToggleCell(unit.name, level, expandable, expanded)+
-    "<td class='num'>"+Object.keys(agents).length+"</td>"+
-    "<td class='num'>"+(prov==null?"<span class='metric-na'>—</span>":fmt(prov))+"</td>"+
-    "<td class='num'>"+fmt(active)+"</td>"+
-    adoptionCell(active, prov)+
-    "<td class='num' title='"+esc(fmtTokFull(tokens))+"'>"+fmtTok(tokens)+"</td>"+
-    "<td class='num'>"+fmt(req)+"</td>"+
-    naCell()+
-    "</tr>";
-}
 function deptAccountRow(u, level){
   var tokens=num(u.ti)+num(u.to);
   var status=u.disabled?"user-status-disabled":(u.active?"user-status-active":"user-status-inactive");
@@ -1147,6 +1219,56 @@ function deptAccountRow(u, level){
 function sortAccounts(list){
   return list.slice().sort(function(a,b){ return num(b.req)-num(a.req)||a.user.localeCompare(b.user); });
 }
+function usageUnderUnit(unitId, rows){
+  var ids={};
+  [unitId].concat(unitDescendants(unitId).map(function(u){return u.id;})).forEach(function(id){ids[id]=true;});
+  var scoped=(rows||[]).filter(function(r){var u=unitOf(r.d);return u&&ids[u.id];});
+  var agents={}; scoped.forEach(function(r){if(r.a)agents[r.a]=1;});
+  return {agg:aggregate(scoped),agents:Object.keys(agents),hasRows:scoped.length>0};
+}
+function renderDepartmentBranch(unit, level, rows, pool, expanded){
+  var usage=usageUnderUnit(unit.id,rows), accounts=accountsUnderUnit(unit.id,pool);
+  var directAccounts=(pool||[]).filter(function(u){return u.unitId===unit.id;});
+  var kids=unitChildren(unit.id).filter(function(k){return !isExcludedUnit(k);});
+  var isOpen=!!expanded[unit.id], canOpen=kids.length>0||directAccounts.length>0;
+  var activeCount=accounts.filter(function(u){return u.active;}).length;
+  var prov=provisionedOf(unit.id), g=usage.agg, agents=usage.agents;
+  // File usage chỉ có số ở PBH; các vùng/đội lấy phần đã phân bổ xuống tài khoản
+  // để tổng cấp con khớp cấp cha mà không giả rằng Excel có usage chi tiết theo đội.
+  if(!usage.hasRows&&accounts.length){
+    var allocated={r:0,ti:0,to:0,tokens:0,cost:0,er:0};
+    var agentMap={};
+    accounts.forEach(function(u){
+      allocated.r+=num(u.req); allocated.ti+=num(u.ti); allocated.to+=num(u.to);
+      allocated.cost+=accountCost(u);
+      if(u.a&&u.a!=="—") agentMap[u.a]=1;
+    });
+    allocated.tokens=allocated.ti+allocated.to;
+    g=allocated; agents=Object.keys(agentMap);
+  }
+  var html="<tr class='drill-row drill-unit"+(level===1?" drill-root":"")+(canOpen?" drill-clickable":"")+
+    "' data-unit='"+esc(unit.id)+"'>"+
+    deptToggleCell(unit.name,level,canOpen,isOpen)+
+    "<td class='num'>"+agents.length+"</td>"+
+    "<td class='num'>"+(prov==null?"<span class='metric-na'>—</span>":fmt(prov))+"</td>"+
+    "<td class='num'>"+fmt(activeCount)+"</td>"+
+    adoptionCell(activeCount,prov)+
+    "<td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td>"+
+    "<td class='num'>"+fmt(g.r)+"</td>"+
+    "<td class='num"+(g.er>2?" text-red":"")+"'>"+g.er.toFixed(1)+"</td></tr>";
+  var anyAccountRow=false;
+  if(isOpen){
+    kids.forEach(function(kid){
+      var branch=renderDepartmentBranch(kid,level+1,rows,pool,expanded);
+      html+=branch.html; anyAccountRow=anyAccountRow||branch.anyAccountRow;
+    });
+    if(directAccounts.length){
+      anyAccountRow=true;
+      sortAccounts(directAccounts).forEach(function(u){html+=deptAccountRow(u,level+1);});
+    }
+  }
+  return {html:html,anyAccountRow:anyAccountRow};
+}
 function renderDepartments(rows){
   var byUnitId=groupRowsByUnit(rows), total=aggregate(rows).cost;
   var groups=Object.keys(byUnitId).map(function(id){
@@ -1164,50 +1286,10 @@ function renderDepartments(rows){
   var top2=groups.slice(0,2).reduce(function(s,g){return s+g.agg.cost;},0);
   set("m-dep-conc", pct(top2,total).toFixed(0)+"%");
 
-  // Đơn vị không phát sinh usage trong kỳ vẫn hiển thị, để lộ ra
-  // "đã cấp tài khoản mà không ai dùng" thay vì im lặng bỏ khỏi bảng.
-  var seen={}; groups.forEach(function(g){ seen[g.unit.id]=true; });
-  unitRoots().forEach(function(u){
-    if(seen[u.id]||isExcludedUnit(u)||provisionedOf(u.id)==null) return;
-    groups.push({unit:u, agents:[], agg:aggregate([])});
-  });
-
   var pool=filterAccounts(), expanded=state.deptExpanded||{}, html="", anyAccountRow=false;
-  groups.forEach(function(g){
-    var unit=g.unit;
-    var kids=unitChildren(unit.id).filter(function(k){ return !isExcludedUnit(k); });
-    var accounts=accountsUnderUnit(unit.id, pool);
-    var isOpen=!!expanded[unit.id];
-    var canOpen=kids.length>0||accounts.length>0;
-    var activeCount=accounts.filter(function(u){return u.active;}).length;
-    var prov=provisionedOf(unit.id);
-    html+="<tr class='drill-row drill-unit drill-root"+(canOpen?" drill-clickable":"")+"' data-unit='"+esc(unit.id)+"'>"+
-      deptToggleCell(unit.name, 1, canOpen, isOpen)+
-      "<td class='num'>"+g.agents.length+"</td>"+
-      "<td class='num'>"+(prov==null?"<span class='metric-na'>—</span>":fmt(prov))+"</td>"+
-      "<td class='num'>"+fmt(activeCount)+"</td>"+
-      adoptionCell(activeCount, prov)+
-      "<td class='num' title='"+esc(fmtTokFull(g.agg.tokens))+"'>"+fmtTok(g.agg.tokens)+"</td>"+
-      "<td class='num'>"+fmt(g.agg.r)+"</td>"+
-      "<td class='num"+(g.agg.er>2?" text-red":"")+"'>"+g.agg.er.toFixed(1)+"</td>"+
-      "</tr>";
-    if(!isOpen) return;
-    if(kids.length){
-      // Có cấp con: mở ra Vùng trước, tài khoản nằm ở cấp sâu hơn.
-      kids.forEach(function(kid){
-        var kidAccounts=accountsUnderUnit(kid.id, pool);
-        var kidOpen=!!expanded[kid.id];
-        html+=deptUnitRow(kid, 2, kidAccounts.length>0, kidOpen, kidAccounts, kidAccounts.length>0);
-        if(kidOpen&&kidAccounts.length){
-          anyAccountRow=true;
-          sortAccounts(kidAccounts).forEach(function(u){ html+=deptAccountRow(u,3); });
-        }
-      });
-    } else if(accounts.length){
-      // Đơn vị một cấp: mở trực tiếp ra tài khoản, không chèn cấp trung gian rỗng.
-      anyAccountRow=true;
-      sortAccounts(accounts).forEach(function(u){ html+=deptAccountRow(u,2); });
-    }
+  unitRoots().filter(function(u){return !isExcludedUnit(u)&&provisionedOf(u.id)!=null;}).forEach(function(unit){
+    var branch=renderDepartmentBranch(unit,1,rows,pool,expanded);
+    html+=branch.html; anyAccountRow=anyAccountRow||branch.anyAccountRow;
   });
   set("dep-tbody", html || emptyRow(8));
   set("dep-alloc-note", anyAccountRow
@@ -1313,11 +1395,10 @@ function matrixLevelColumns(rows, pool){
   // Cấp 0: cột là các phòng ban gốc có mặt trong phạm vi đang xem.
   if(!path.length){
     var seen={}, cols=[];
-    rows.forEach(function(r){
-      var unit=unitOf(r.d);
-      if(!unit||isExcludedUnit(unit)) return;
-      var root=unitPath(unit.id)[0]||unit;
-      if(!seen[root.id]){ seen[root.id]=true; cols.push({id:root.id,label:root.name,kind:"unit"}); }
+    reportingRoots().forEach(function(root){
+      var ids={}; [root.id].concat(unitDescendants(root.id).map(function(u){return u.id;})).forEach(function(id){ids[id]=true;});
+      var hasUsage=rows.some(function(r){var unit=unitOf(r.d);return unit&&ids[unit.id];});
+      if(hasUsage&&!seen[root.id]){seen[root.id]=true;cols.push({id:root.id,label:root.name,kind:"unit"});}
     });
     cols.sort(function(x,y){ return x.label.localeCompare(y.label); });
     return {kind:"unit", cols:cols};
@@ -1432,7 +1513,9 @@ function buildAgentDeptHeatmap(rows){
       state.matrixUser=picked;
       // Nhảy breadcrumb tới đúng đơn vị của tài khoản được chọn.
       var acct=picked?USER_ACCOUNTS.filter(function(u){return u.user===picked;})[0]:null;
-      state.matrixPath=acct?unitPath(acct.unitId).map(function(u){return u.id;}):[];
+      state.matrixPath=acct?unitPath(acct.unitId).filter(function(u){
+        return u.id!=="company"&&u.id!=="rd-corp";
+      }).map(function(u){return u.id;}):[];
       renderAll();
     };
   }
@@ -1841,7 +1924,7 @@ function renderFilters(){
   rows.forEach(function(r){
     var u=unitOf(r.d);
     if(!u||isExcludedUnit(u)) return;
-    var root=unitPath(u.id)[0]||u;
+    var root=reportingRootOf(u.id)||u;
     if(!seenDept[root.name]){ seenDept[root.name]=true; deptNames.push(root.name); }
   });
   fillSelect("f-dept", deptNames.sort(), state.filters.dept, "Tất cả phòng ban");

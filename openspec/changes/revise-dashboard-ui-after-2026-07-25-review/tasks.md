@@ -6,7 +6,7 @@
 
 - [ ] 1.1 Bổ sung `userId` tùy chọn cho usage row và `loginRequired` cho metadata agent
 - [ ] 1.2 Tách bộ lọc username khỏi trường nhóm user `ug` và giữ adapter đọc state/localStorage cũ
-- [ ] 1.3 Bổ sung metadata phòng ban `id`, `parentId`, `level` với fallback danh sách phẳng
+- [x] 1.3 Bổ sung metadata phòng ban `id`, `parentId`, `level` với fallback danh sách phẳng
 - [ ] 1.4 Tạo helper xác định dữ liệu hỗ trợ phân rã user và trạng thái unavailable
 - [x] 1.5 Loại phòng ban `Đang trong quá trình thử nghiệm` khỏi seed, state cũ và mọi bộ lọc
 
@@ -50,6 +50,7 @@
 - [x] 5.5 Cho phép click phòng ban có cấp con để drilldown và quay lại cấp cha — **THAY THẾ** bởi change `unify-dept-user-workspace-and-agent-matrix`
 - [x] 5.6 Ẩn drilldown khi metadata phòng ban chỉ có một cấp — **THAY THẾ** bởi change `unify-dept-user-workspace-and-agent-matrix`
 - [x] 5.7 Bỏ badge `MỚI` khỏi tiêu đề ma trận
+- [x] 5.8 Đồng bộ cây phân quyền và số user Ralli từ `phong_ban_phan_quyen.xlsx`
 
 ## 6. Cost UI and Alerts
 

@@ -38,5 +38,7 @@ LƯU Ý
 -----
 - Dữ liệu nhập được lưu trong trình duyệt (localStorage) của MÁY đang mở.
   Gửi folder sang máy khác thì máy đó bắt đầu từ dữ liệu Excel tháng 6 và tháng 7.
+- Cây phòng ban và số user phân quyền Trợ lý ảo Ralli được chuẩn hóa từ
+  data/phong_ban_phan_quyen.xlsx và nhúng trong app.js.
 - Cột Users / Chat để 0: Google chỉ nhận diện theo API key, không quy ra
   người dùng thật, nên số này phải nhập tay nếu có nguồn khác.
