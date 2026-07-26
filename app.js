@@ -1128,9 +1128,10 @@ function buildOverviewWeekHeatmap(){
   var available=state.dayOrder.filter(function(d){return d>=state.range.start&&d<=state.range.end;});
   var endIso=available.length?available[available.length-1]:state.range.end;
   var end=parseISO(endIso), dates=[];
-  for(var offset=6;offset>=0;offset--){
-    var iso=toISO(addDays(end,-offset));
-    if(iso>=state.range.start&&iso<=state.range.end) dates.push(iso);
+  var daysSinceMonday=(end.getUTCDay()+6)%7;
+  var monday=addDays(end,-daysSinceMonday);
+  for(var offset=0;offset<7;offset++){
+    dates.push(toISO(addDays(monday,offset)));
   }
   var rowsByDate=dates.map(function(d){return applyFilters(state.days[d]||[]);});
   var agentTotals={};
