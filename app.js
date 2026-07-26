@@ -1448,35 +1448,59 @@ function chartsAgents(rows){
 function renderAgentBudgetChart(rows){
   var items=configuredBudgetSummary(rows).agents;
   var labels=items.map(function(item){return item.agent;});
-  var spent=items.map(function(item){return +item.cost.toFixed(4);});
-  var limits=items.map(function(item){return item.budget;});
+  var rates=items.map(function(item){return +item.rate.toFixed(2);});
   var spentColors=items.map(function(item){
     return item.rate>=100?"#ef4444":item.rate>=90?"#f97316":item.rate>=50?"#eab308":"#38bdf8";
   });
+  var maxRate=Math.max.apply(null,rates.concat([100]));
+  var yMax=Math.max(110,Math.ceil(maxRate/10)*10+10);
+  var thresholdSeries=function(value){return labels.map(function(){return value;});};
+  var valueLabelPlugin={
+    id:"agent-budget-value-labels",
+    afterDatasetsDraw:function(chartInstance){
+      var meta=chartInstance.getDatasetMeta(0);
+      if(!meta||meta.hidden) return;
+      var ctx=chartInstance.ctx;
+      ctx.save();
+      ctx.fillStyle=currentTheme()==="light"?"#334155":"#cbd5e1";
+      ctx.font="600 10px Inter, sans-serif";
+      ctx.textAlign="center";
+      ctx.textBaseline="bottom";
+      meta.data.forEach(function(bar,index){
+        var item=items[index];
+        var label=item.rate.toFixed(0)+"%";
+        if(chartInstance.width>=900) label+=" · "+moneyCompact(item.cost)+" / "+moneyCompact(item.budget);
+        ctx.fillText(label,bar.x,Math.max(bar.y-7,chartInstance.chartArea.top+11));
+      });
+      ctx.restore();
+    }
+  };
   chart("c-ag-budget",{
     type:"bar",
     data:{
       labels:labels,
       datasets:[
-        {label:"Đã sử dụng",data:spent,backgroundColor:spentColors,borderRadius:4,maxBarThickness:38},
-        {label:"Giới hạn",data:limits,backgroundColor:"rgba(139,92,246,.55)",borderColor:"#a78bfa",borderWidth:1,borderRadius:4,maxBarThickness:38}
+        {label:"Ngân sách đã dùng",data:rates,backgroundColor:spentColors,borderRadius:5,maxBarThickness:54,order:2},
+        {type:"line",label:"Mốc 50%",data:thresholdSeries(50),borderColor:"#eab308",borderWidth:1.5,borderDash:[6,5],pointRadius:0,fill:false,order:1},
+        {type:"line",label:"Cảnh báo 90%",data:thresholdSeries(90),borderColor:"#f97316",borderWidth:1.5,borderDash:[6,5],pointRadius:0,fill:false,order:1},
+        {type:"line",label:"Giới hạn 100%",data:thresholdSeries(100),borderColor:"#ef4444",borderWidth:2,pointRadius:0,fill:false,order:1}
       ]
     },
+    plugins:[valueLabelPlugin],
     options:{
       interaction:{mode:"index",intersect:false},
       plugins:{
         legend:{display:true,position:"bottom"},
-        tooltip:{callbacks:{
+        tooltip:{filter:function(context){return context.datasetIndex===0;},callbacks:{
           label:function(context){
-            var value=num(context.parsed.y), item=items[context.dataIndex];
-            var line=context.dataset.label+": "+money(value)+" ("+usd(value)+")";
-            return context.datasetIndex===0?line+" · "+item.rate.toFixed(0)+"% giới hạn":line;
+            var item=items[context.dataIndex];
+            return item.rate.toFixed(0)+"% · "+money(item.cost)+" / "+money(item.budget)+" ("+usd(item.cost)+" / "+usd(item.budget)+")";
           }
         }}
       },
       scales:{
         x:{grid:{display:false},ticks:{autoSkip:false,callback:function(v){return wrapAxisLabel(this.getLabelForValue(v),18);}}},
-        y:{beginAtZero:true,grid:{color:gridColor()},ticks:{callback:function(v){return moneyCompact(v);}}}
+        y:{beginAtZero:true,max:yMax,grid:{color:gridColor()},ticks:{stepSize:25,callback:function(v){return v+"%";}}}
       }
     }
   });
