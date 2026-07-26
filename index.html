@@ -64,8 +64,8 @@
   .canvas-box{ position:relative; height:210px; }
   .canvas-box canvas{ max-height:210px; }
   .agent-budget-chart{ grid-column:1 / -1; }
-  .agent-budget-chart .canvas-box{ height:260px; }
-  .agent-budget-chart .canvas-box canvas{ max-height:260px; }
+  .agent-budget-chart .canvas-box{ height:300px; }
+  .agent-budget-chart .canvas-box canvas{ max-height:300px; }
 
   /* Donut + legend cạnh nhau */
   .wf-donut-wrap{ display:flex; align-items:center; gap:18px; width:100%; }
@@ -365,7 +365,7 @@
   <button class="tab" data-tab="performance">⚡ Hiệu năng</button>
 </div>
 
-<div class="delta-legend">Chú giải so sánh trên scorecard: <b>KT</b> = kỳ trước · <b>CK</b> = cùng kỳ (năm trước) — theo danh mục viết tắt chuẩn của công ty</div>
+<div class="delta-legend">Cách đọc so sánh: <b>Tăng / Giảm / Không đổi so với kỳ trước: giá trị kỳ trước → giá trị hiện tại (mức biến động)</b>.</div>
 
 <!-- ═══════════════ TAB 1 — TỔNG QUAN ═══════════════ -->
 <div class="tab-content active" id="overview">
@@ -681,9 +681,9 @@
       <table style="margin-top:2px"><tbody id="ag-top"></tbody></table>
     </div>
     <div class="wf-chart agent-budget-chart">
-      <span class="wf-type">Cột</span>
+      <span class="wf-type">Thanh ngang</span>
       <div class="wf-title">Mức sử dụng ngân sách theo agent</div>
-      <div class="wf-q">Một cột = phần trăm ngân sách đã dùng · các đường ngang = mốc cảnh báo.</div>
+      <div class="wf-q">Một thanh = phần trăm ngân sách đã dùng · các đường dọc = mốc cảnh báo.</div>
       <div class="canvas-box"><canvas id="c-ag-budget"></canvas></div>
     </div>
   </div>

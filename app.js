@@ -756,11 +756,9 @@ function periodWindowLabel(w){
 }
 function previousPeriodLabel(){ return periodWindowLabel(previousPeriodWindow()); }
 function samePeriodLabel(){ return periodWindowLabel(samePeriodWindow()); }
-/* ─── Baseline so sánh: KT = kỳ trước, CK = cùng kỳ ───
-   KT/CK là viết tắt CHUẨN của công ty, theo "06.08 DM viết tắt" trong
-   data/20240806 Chuẩn hóa định dạng dashboard_RD Revised.xlsx (CK = Cùng kỳ, KT = Kỳ trước).
-   Scorecard hiển thị viết tắt để giữ card gọn; tên đầy đủ và kỳ cụ thể
-   nằm trong tooltip nên vẫn truy vết được baseline nào đang dùng. ─── */
+/* ─── Baseline so sánh: kỳ trước và cùng kỳ năm trước ───
+   Scorecard luôn viết đầy đủ chiều biến động, tên kỳ, giá trị gốc → giá trị hiện tại
+   và phần trăm thay đổi để người xem không phải giải mã KT/CK. ─── */
 var DELTA_BASIS = {
   KT: { abbr:"KT", full:"kỳ trước",            label:previousPeriodLabel },
   CK: { abbr:"CK", full:"cùng kỳ (năm trước)", label:samePeriodLabel }
@@ -774,8 +772,8 @@ function deltaLine(basisKey, cur, b, betterUp, fmtFn){
   var basis=DELTA_BASIS[basisKey]||DELTA_BASIS.KT, period=basis.label();
   var tip="so với "+basis.full+(period?" ("+period+")":"");
   if(b.v==null || b.v<=0){
-    return "<div class='delta-line d-dim' title='"+esc(tip+": chưa có dữ liệu")+"'>so với "+
-      basis.abbr+": chưa có dữ liệu</div>";
+    return "<div class='delta-line d-dim' title='"+esc(tip+": chưa có dữ liệu")+"'>So với "+
+      basis.full+": chưa có dữ liệu</div>";
   }
   var diff=cur-b.v, p=diff/b.v*100, flat=Math.abs(p)<0.5, up=diff>0;
   // Màu biểu thị trực tiếp hướng biến động theo quy ước dashboard:
@@ -783,9 +781,11 @@ function deltaLine(basisKey, cur, b, betterUp, fmtFn){
   // betterUp chỉ còn được giữ trong chữ ký hàm để tương thích với các lời gọi hiện tại.
   var cls = flat ? "d-neutral" : (up ? "d-green" : "d-red");
   var arrow = flat ? "→" : (up ? "▲" : "▼");
+  var direction = flat ? "Không đổi" : (up ? "Tăng" : "Giảm");
+  var percent = flat ? "0%" : ((up?"+":"−")+Math.abs(p).toFixed(0)+"%");
   return "<div class='delta-line "+cls+"' title='"+esc(tip+": "+fmtFn(b.v))+"'>"+arrow+" "+
-    Math.abs(p).toFixed(0)+"% <span class='delta-abs'>so với "+basis.abbr+" · "+
-    (b.mock?"≈":"")+fmtFn(b.v)+"</span></div>";
+    direction+" so với "+basis.full+": <span class='delta-abs'>"+
+    (b.mock?"≈":"")+fmtFn(b.v)+" → "+fmtFn(cur)+" ("+percent+")</span></div>";
 }
 function renderDelta(id, cur, prev, same, betterUp, fmtFn, mockPrev, mockSame){
   var el=document.getElementById(id); if(!el) return;
@@ -887,13 +887,16 @@ function tokenInsight(A, prevA, rows){
   var perReqGrowth=(curPerReq-prevPerReq)/prevPerReq*100;
   var top=topGroup(rows,function(r){return r.a;},"tokens");
   var driver=top?(top.key+" chiếm "+top.share.toFixed(0)+"% token trong kỳ."):"";
+  var perReqComparison=fmtTok(prevPerReq)+" → "+fmtTok(curPerReq)+" (+"+perReqGrowth.toFixed(0)+"%).";
   if(perReqGrowth>=INSIGHT_THRESHOLDS.tokenPerRequestCritical){
-    return insight("token-per-request","critical","Token/request tăng "+perReqGrowth.toFixed(0)+"% so với kỳ trước.",driver,"Kiểm tra prompt, context và giới hạn output của agent dẫn đầu.",perReqGrowth);
+    return insight("token-per-request","critical","Token/request tăng so với kỳ trước: "+perReqComparison,driver,"Kiểm tra prompt, context và giới hạn output của agent dẫn đầu.",perReqGrowth);
   }
   if(perReqGrowth>=INSIGHT_THRESHOLDS.tokenPerRequestWarning){
-    return insight("token-per-request","warning","Token/request tăng "+perReqGrowth.toFixed(0)+"% so với kỳ trước.",driver,"Rà soát các request có context lớn bất thường.",perReqGrowth);
+    return insight("token-per-request","warning","Token/request tăng so với kỳ trước: "+perReqComparison,driver,"Rà soát các request có context lớn bất thường.",perReqGrowth);
   }
-  return insight("token-growth","normal","Token "+(tokenGrowth>=0?"tăng ":"giảm ")+Math.abs(tokenGrowth).toFixed(0)+"%; mức dùng/request chưa vượt ngưỡng.",driver,"",Math.abs(tokenGrowth));
+  var tokenDirection=Math.abs(tokenGrowth)<0.5?"không đổi":(tokenGrowth>0?"tăng":"giảm");
+  var tokenPercent=Math.abs(tokenGrowth)<0.5?"0%":((tokenGrowth>0?"+":"−")+Math.abs(tokenGrowth).toFixed(0)+"%");
+  return insight("token-growth","normal","Token "+tokenDirection+" so với kỳ trước: "+fmtTok(prevA.tokens)+" → "+fmtTok(A.tokens)+" ("+tokenPercent+"); mức dùng/request chưa vượt ngưỡng.",driver,"",Math.abs(tokenGrowth));
 }
 function budgetInsight(A, rows){
   if(MONTHLY_BUDGET<=0) return insight("budget-pace","unavailable");
@@ -1454,7 +1457,41 @@ function renderAgentBudgetChart(rows){
   });
   var maxRate=Math.max.apply(null,rates.concat([100]));
   var yMax=Math.max(110,Math.ceil(maxRate/10)*10+10);
-  var thresholdSeries=function(value){return labels.map(function(){return value;});};
+  var budgetThresholds=[
+    {value:50,label:"50%",color:"#eab308",dash:[6,5]},
+    {value:90,label:"90%",color:"#f97316",dash:[6,5]},
+    {value:100,label:"100%",color:"#ef4444",dash:[]}
+  ];
+  var thresholdPlugin={
+    id:"agent-budget-thresholds",
+    beforeDatasetsDraw:function(chartInstance){
+      var ctx=chartInstance.ctx, xScale=chartInstance.scales.x, area=chartInstance.chartArea;
+      ctx.save();
+      budgetThresholds.forEach(function(threshold){
+        var x=xScale.getPixelForValue(threshold.value);
+        ctx.beginPath();
+        ctx.setLineDash(threshold.dash);
+        ctx.strokeStyle=threshold.color;
+        ctx.lineWidth=threshold.value===100?2:1.5;
+        ctx.moveTo(x,area.top);
+        ctx.lineTo(x,area.bottom);
+        ctx.stroke();
+      });
+      ctx.restore();
+    },
+    afterDraw:function(chartInstance){
+      var ctx=chartInstance.ctx, xScale=chartInstance.scales.x, area=chartInstance.chartArea;
+      ctx.save();
+      ctx.font="600 10px Inter, sans-serif";
+      ctx.textAlign="center";
+      ctx.textBaseline="bottom";
+      budgetThresholds.forEach(function(threshold){
+        ctx.fillStyle=threshold.color;
+        ctx.fillText(threshold.label,xScale.getPixelForValue(threshold.value),area.top-5);
+      });
+      ctx.restore();
+    }
+  };
   var valueLabelPlugin={
     id:"agent-budget-value-labels",
     afterDatasetsDraw:function(chartInstance){
@@ -1464,13 +1501,11 @@ function renderAgentBudgetChart(rows){
       ctx.save();
       ctx.fillStyle=currentTheme()==="light"?"#334155":"#cbd5e1";
       ctx.font="600 10px Inter, sans-serif";
-      ctx.textAlign="center";
-      ctx.textBaseline="bottom";
+      ctx.textAlign="left";
+      ctx.textBaseline="middle";
       meta.data.forEach(function(bar,index){
         var item=items[index];
-        var label=item.rate.toFixed(0)+"%";
-        if(chartInstance.width>=900) label+=" · "+moneyCompact(item.cost)+" / "+moneyCompact(item.budget);
-        ctx.fillText(label,bar.x,Math.max(bar.y-7,chartInstance.chartArea.top+11));
+        ctx.fillText(item.rate.toFixed(0)+"%",Math.min(bar.x+7,chartInstance.chartArea.right+8),bar.y);
       });
       ctx.restore();
     }
@@ -1480,18 +1515,17 @@ function renderAgentBudgetChart(rows){
     data:{
       labels:labels,
       datasets:[
-        {label:"Ngân sách đã dùng",data:rates,backgroundColor:spentColors,borderRadius:5,maxBarThickness:54,order:2},
-        {type:"line",label:"Mốc 50%",data:thresholdSeries(50),borderColor:"#eab308",borderWidth:1.5,borderDash:[6,5],pointRadius:0,fill:false,order:1},
-        {type:"line",label:"Cảnh báo 90%",data:thresholdSeries(90),borderColor:"#f97316",borderWidth:1.5,borderDash:[6,5],pointRadius:0,fill:false,order:1},
-        {type:"line",label:"Giới hạn 100%",data:thresholdSeries(100),borderColor:"#ef4444",borderWidth:2,pointRadius:0,fill:false,order:1}
+        {label:"Ngân sách đã dùng",data:rates,backgroundColor:spentColors,borderRadius:5,maxBarThickness:28}
       ]
     },
-    plugins:[valueLabelPlugin],
+    plugins:[thresholdPlugin,valueLabelPlugin],
     options:{
-      interaction:{mode:"index",intersect:false},
+      indexAxis:"y",
+      interaction:{mode:"nearest",intersect:true},
+      layout:{padding:{top:18,right:36}},
       plugins:{
-        legend:{display:true,position:"bottom"},
-        tooltip:{filter:function(context){return context.datasetIndex===0;},callbacks:{
+        legend:{display:false},
+        tooltip:{callbacks:{
           label:function(context){
             var item=items[context.dataIndex];
             return item.rate.toFixed(0)+"% · "+money(item.cost)+" / "+money(item.budget)+" ("+usd(item.cost)+" / "+usd(item.budget)+")";
@@ -1499,8 +1533,8 @@ function renderAgentBudgetChart(rows){
         }}
       },
       scales:{
-        x:{grid:{display:false},ticks:{autoSkip:false,callback:function(v){return wrapAxisLabel(this.getLabelForValue(v),18);}}},
-        y:{beginAtZero:true,max:yMax,grid:{color:gridColor()},ticks:{stepSize:25,callback:function(v){return v+"%";}}}
+        x:{beginAtZero:true,max:yMax,grid:{color:gridColor()},ticks:{stepSize:25,callback:function(v){return v+"%";}}},
+        y:{grid:{display:false},ticks:{autoSkip:false,callback:function(v){return wrapAxisLabel(this.getLabelForValue(v),26);}}}
       }
     }
   });
