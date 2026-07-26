@@ -850,6 +850,21 @@ function agentBudgetConfig(name){
   }
   return null;
 }
+/* Ngân sách cấu hình là mức THÁNG, còn chi phí được cộng theo khoảng thời gian đang chọn.
+   Quy đổi mẫu số theo số ngày của từng tháng giao với khoảng để hai vế cùng độ dài:
+   T6+T7 = 30/30 + 31/31 = 2,0 tháng; 15/6→15/7 = 16/30 + 15/31 ≈ 1,02 tháng. */
+function budgetMonthsInRange(){
+  var start=parseISO(state.range.start), end=parseISO(state.range.end);
+  if(!(start<=end)) return 0;
+  var months=0, cursor=new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+  while(cursor<=end){
+    var monthStart=cursor, monthEnd=new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth()+1, 0));
+    var from=monthStart>start?monthStart:start, to=monthEnd<end?monthEnd:end;
+    if(from<=to) months += (dayDiff(toISO(from), toISO(to))+1) / monthEnd.getUTCDate();
+    cursor=new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth()+1, 1));
+  }
+  return months;
+}
 function configuredBudgetSummary(rows){
   var costs={}, matchedRows=[];
   (rows||[]).forEach(function(row){
@@ -858,13 +873,15 @@ function configuredBudgetSummary(rows){
     costs[config.agent]=(costs[config.agent]||0)+cost(row);
     matchedRows.push(row);
   });
+  var months=budgetMonthsInRange();
   var agents=AGENT_MONTHLY_BUDGETS.map(function(config){
-    var spend=costs[config.agent]||0;
-    return {agent:config.agent,cost:spend,budget:config.usd,rate:pct(spend,config.usd)};
+    var spend=costs[config.agent]||0, budget=config.usd*months;
+    return {agent:config.agent,cost:spend,budget:budget,rate:pct(spend,budget)};
   });
   return {
     cost:agents.reduce(function(sum,item){return sum+item.cost;},0),
-    budget:MONTHLY_BUDGET,
+    budget:MONTHLY_BUDGET*months,
+    months:months,
     agents:agents,
     rows:matchedRows
   };
@@ -900,13 +917,13 @@ function tokenInsight(A, prevA, rows){
 function budgetInsight(A, rows){
   if(MONTHLY_BUDGET<=0) return insight("budget-pace","unavailable");
   var elapsed=dataDaysElapsed(), totalDays=rangeLenDays();
-  var configured=configuredBudgetSummary(rows), spend=configured.cost;
-  if(!elapsed || !totalDays || spend<=0) return insight("budget-pace","unavailable");
-  var budgetPct=pct(spend,MONTHLY_BUDGET), timePct=pct(elapsed,totalDays);
-  var forecast=spend/elapsed*totalDays, forecastPct=pct(forecast,MONTHLY_BUDGET);
+  var configured=configuredBudgetSummary(rows), spend=configured.cost, budget=configured.budget;
+  if(!elapsed || !totalDays || spend<=0 || budget<=0) return insight("budget-pace","unavailable");
+  var budgetPct=pct(spend,budget), timePct=pct(elapsed,totalDays);
+  var forecast=spend/elapsed*totalDays, forecastPct=pct(forecast,budget);
   var top=topGroup(configured.rows,function(r){return r.a;},"cost");
   var driver=top?(top.key+" đóng góp "+top.share.toFixed(0)+"% chi phí."):"";
-  var evidence="Dự kiến cuối kỳ "+money(forecast)+" / ngân sách "+money(MONTHLY_BUDGET)+" ("+forecastPct.toFixed(0)+"%).";
+  var evidence="Dự kiến cuối kỳ "+money(forecast)+" / ngân sách "+money(budget)+" ("+forecastPct.toFixed(0)+"%).";
   if(forecastPct>100){
     return insight("budget-forecast","critical",evidence,driver,"Mở tab Chi phí để rà soát agent/model vượt ngân sách.",forecastPct-100);
   }
@@ -1894,7 +1911,7 @@ function renderCost(rows){
   setMoney("m-co-total", A.cost);
   set("m-co-vnd", usdReference(A.cost));
   set("m-co-budget", pct(configured.cost,configured.budget).toFixed(0)+"%");
-  set("m-co-budget-def", "<b>= chi phí agent có ngân sách ÷ tổng ngân sách cấu hình</b> = <span title='"+esc(usdReference(configured.cost))+"'>"+money(configured.cost)+"</span> / <span title='"+esc(usdReference(configured.budget))+"'>"+money(configured.budget)+"</span>.");
+  set("m-co-budget-def", "<b>= chi phí agent có ngân sách ÷ ngân sách quy đổi cho khoảng đang chọn</b> = <span title='"+esc(usdReference(configured.cost))+"'>"+money(configured.cost)+"</span> / <span title='"+esc(usdReference(configured.budget))+"'>"+money(configured.budget)+"</span>.");
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;});
   var top2 = byAgent.slice(0,2).reduce(function(s,g){return s+g.cost;},0);
   set("m-co-conc", pct(top2,A.cost).toFixed(0)+"%");
