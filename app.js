@@ -12,7 +12,16 @@ var STORE = "agent-dash-state-v12-ralli-permissions"; // v12: Excel tháng 6/7 +
 var TAB_STORE = "agent-dash-tab";
 var THEME_STORE = "agent-dash-theme";
 var RANGE_PRESETS = [["7 ngày",7],["30 ngày",30],["90 ngày",90],["Tất cả",null]]; // preset time-range (kiểu Open WebUI)
-var MONTHLY_BUDGET = 30;                       // ngân sách/tháng (USD)
+var AGENT_MONTHLY_BUDGETS = [
+  {agent:"Trợ Lý Ảo Hợp Đồng",usd:20,aliases:["Chatbot hợp đồng"]},
+  {agent:"Chatbot Contact Center",usd:30,aliases:["Contact Center"]},
+  {agent:"Phân Loại Dữ Liệu CRM",usd:20,aliases:["CRM Feedback"]},
+  {agent:"Phân Loại Phản Hồi Tiếp Thị",usd:20,aliases:["DMS Feedback"]},
+  {agent:"Multi modal AI Invoice",usd:20,aliases:["Multi Modal"]},
+  {agent:"Sale Agent",usd:50,aliases:["Sale agent"]}
+]; // Theo cấu hình Google Cloud; Tools quizzer được loại khỏi danh sách.
+var BUDGET_ALERT_THRESHOLDS = [50,90,100];
+var MONTHLY_BUDGET = AGENT_MONTHLY_BUDGETS.reduce(function(sum,item){return sum+item.usd;},0);
 var VND_RATE = 25200;
 var EXCHANGE_RATE_META = { source:"Tỷ giá cấu hình", updated:"Cấu hình cục bộ" };
 var INSIGHT_THRESHOLDS = {
@@ -33,6 +42,7 @@ var INSIGHT_THRESHOLDS = {
   inactivityDays:30
 };
 var EXCLUDED_DEPARTMENTS = {"Đang trong quá trình thử nghiệm":true};
+var EXCLUDED_AGENTS = {"tools quizzer":true,"tool quizzer":true,"tools quizz":true,"tool quizz":true};
 var SEED_DAY = "2026-07-01";                   // ngày gắn dữ liệu tổng hợp tháng 7 (seed)
 
 /* ═══════════════ CÂY ĐƠN VỊ ═══════════════
@@ -509,7 +519,10 @@ function dayDiff(aISO,bISO){ return Math.round((parseISO(bISO)-parseISO(aISO))/8
 function dayLabel(iso){ var p=String(iso).split("-"); return p.length===3? (p[2]+"/"+p[1]) : iso; }
 function cost(r){ var p = state.pricing[r.m]; if(!p) return 0; return num(r.ti)/1e6*num(p.i) + num(r.to)/1e6*num(p.o); }
 function isExcludedDepartment(name){ return !!EXCLUDED_DEPARTMENTS[String(name||"").trim()]; }
-function sanitizeUsageRows(rows){ return (rows||[]).filter(function(r){return !isExcludedDepartment(r.d);}); }
+function isExcludedAgent(name){ return !!EXCLUDED_AGENTS[String(name||"").trim().toLowerCase()]; }
+function sanitizeUsageRows(rows){
+  return (rows||[]).filter(function(r){return !isExcludedDepartment(r.d)&&!isExcludedAgent(r.a);});
+}
 
 /* ═══════════════ TRUY VẤN CÂY ĐƠN VỊ ═══════════════ */
 var unitIndex = {}, unitChildIndex = {}, autoUnitSeq = 0;
@@ -827,6 +840,41 @@ function topGroup(rows, keyFn, metric){
   var total=groups.reduce(function(s,g){return s+num(g[metric]);},0);
   return {key:groups[0].key,value:num(groups[0][metric]),share:pct(groups[0][metric],total)};
 }
+function budgetAgentKey(name){
+  return String(name||"").trim().toLowerCase();
+}
+function agentBudgetConfig(name){
+  var key=budgetAgentKey(name);
+  for(var i=0;i<AGENT_MONTHLY_BUDGETS.length;i++){
+    var item=AGENT_MONTHLY_BUDGETS[i], names=[item.agent].concat(item.aliases||[]);
+    if(names.some(function(candidate){return budgetAgentKey(candidate)===key;})) return item;
+  }
+  return null;
+}
+function configuredBudgetSummary(rows){
+  var costs={}, matchedRows=[];
+  (rows||[]).forEach(function(row){
+    var config=agentBudgetConfig(row.a);
+    if(!config) return;
+    costs[config.agent]=(costs[config.agent]||0)+cost(row);
+    matchedRows.push(row);
+  });
+  var agents=AGENT_MONTHLY_BUDGETS.map(function(config){
+    var spend=costs[config.agent]||0;
+    return {agent:config.agent,cost:spend,budget:config.usd,rate:pct(spend,config.usd)};
+  });
+  return {
+    cost:agents.reduce(function(sum,item){return sum+item.cost;},0),
+    budget:MONTHLY_BUDGET,
+    agents:agents,
+    rows:matchedRows
+  };
+}
+function reachedBudgetThreshold(rate){
+  var reached=0;
+  BUDGET_ALERT_THRESHOLDS.forEach(function(threshold){if(rate>=threshold) reached=threshold;});
+  return reached;
+}
 function dataDaysElapsed(){
   var start=parseISO(state.range.start), end=parseISO(state.range.end), last=null;
   state.dayOrder.forEach(function(d){var day=parseISO(d);if(day>=start&&day<=end&&(!last||day>last))last=day;});
@@ -850,10 +898,11 @@ function tokenInsight(A, prevA, rows){
 function budgetInsight(A, rows){
   if(MONTHLY_BUDGET<=0) return insight("budget-pace","unavailable");
   var elapsed=dataDaysElapsed(), totalDays=rangeLenDays();
-  if(!elapsed || !totalDays || A.cost<=0) return insight("budget-pace","unavailable");
-  var budgetPct=pct(A.cost,MONTHLY_BUDGET), timePct=pct(elapsed,totalDays);
-  var forecast=A.cost/elapsed*totalDays, forecastPct=pct(forecast,MONTHLY_BUDGET);
-  var top=topGroup(rows,function(r){return r.a;},"cost");
+  var configured=configuredBudgetSummary(rows), spend=configured.cost;
+  if(!elapsed || !totalDays || spend<=0) return insight("budget-pace","unavailable");
+  var budgetPct=pct(spend,MONTHLY_BUDGET), timePct=pct(elapsed,totalDays);
+  var forecast=spend/elapsed*totalDays, forecastPct=pct(forecast,MONTHLY_BUDGET);
+  var top=topGroup(configured.rows,function(r){return r.a;},"cost");
   var driver=top?(top.key+" đóng góp "+top.share.toFixed(0)+"% chi phí."):"";
   var evidence="Dự kiến cuối kỳ "+money(forecast)+" / ngân sách "+money(MONTHLY_BUDGET)+" ("+forecastPct.toFixed(0)+"%).";
   if(forecastPct>100){
@@ -1075,13 +1124,25 @@ function renderOverview(rows){
   renderOverviewAlerts(A,rows,active,topAgent,inactiveUsers);
 }
 function renderOverviewAlerts(A,rows,active,topAgent,inactiveUsers){
-  var budgetPct=pct(A.cost,MONTHLY_BUDGET), alerts=[];
+  var configured=configuredBudgetSummary(rows);
+  var budgetPct=pct(configured.cost,configured.budget), budgetThreshold=reachedBudgetThreshold(budgetPct), alerts=[];
   alerts.push({
-    cls:budgetPct>=100?"danger":budgetPct>=80?"warning":"info",
+    cls:budgetPct>=100?"danger":budgetPct>=90?"warning":"info",
     icon:budgetPct>=100?"⚠":"ℹ",
-    title:budgetPct>=100?"Chi phí vượt ngân sách":budgetPct>=80?"Ngân sách sắp chạm ngưỡng":"Theo dõi ngân sách",
-    text:"Đã sử dụng "+budgetPct.toFixed(0)+"% ngân sách kỳ ("+money(A.cost)+" / "+money(MONTHLY_BUDGET)+")."
+    title:budgetThreshold?"Ngân sách đã chạm mốc "+budgetThreshold+"%":"Theo dõi ngân sách agent",
+    text:"Đã sử dụng "+budgetPct.toFixed(0)+"% ngân sách đã cấu hình ("+money(configured.cost)+" / "+money(configured.budget)+"). Cảnh báo tại 50%, 90% và 100%."
   });
+  configured.agents.filter(function(item){return reachedBudgetThreshold(item.rate)>0;})
+    .sort(function(a,b){return b.rate-a.rate;})
+    .forEach(function(item){
+      var threshold=reachedBudgetThreshold(item.rate);
+      alerts.push({
+        cls:item.rate>=100?"danger":item.rate>=90?"warning":"info",
+        icon:item.rate>=100?"⚠":"●",
+        title:item.rate>=100?item.agent+" đã vượt ngân sách":item.agent+" chạm mốc "+threshold+"%",
+        text:"Đã dùng "+item.rate.toFixed(0)+"% ("+money(item.cost)+" / "+money(item.budget)+")."
+      });
+    });
   var errTop=active.slice().sort(function(a,b){return b.er-a.er;})[0];
   alerts.push({
     cls:errTop&&errTop.er>=2?"danger":errTop&&errTop.er>0?"warning":"ok",
@@ -1735,10 +1796,11 @@ function chartsUsers(rows){
 /* ═══════════════ RENDER: CHI PHÍ ═══════════════ */
 function renderCost(rows){
   var A = aggregate(rows);
+  var configured=configuredBudgetSummary(rows);
   setMoney("m-co-total", A.cost);
   set("m-co-vnd", usdReference(A.cost));
-  set("m-co-budget", pct(A.cost,MONTHLY_BUDGET).toFixed(0)+"%");
-  set("m-co-budget-def", "<b>= chi phí ÷ ngân sách</b> = <span title='"+esc(usdReference(A.cost))+"'>"+money(A.cost)+"</span> / <span title='"+esc(usdReference(MONTHLY_BUDGET))+"'>"+money(MONTHLY_BUDGET)+"</span>.");
+  set("m-co-budget", pct(configured.cost,configured.budget).toFixed(0)+"%");
+  set("m-co-budget-def", "<b>= chi phí agent có ngân sách ÷ tổng ngân sách cấu hình</b> = <span title='"+esc(usdReference(configured.cost))+"'>"+money(configured.cost)+"</span> / <span title='"+esc(usdReference(configured.budget))+"'>"+money(configured.budget)+"</span>.");
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;});
   var top2 = byAgent.slice(0,2).reduce(function(s,g){return s+g.cost;},0);
   set("m-co-conc", pct(top2,A.cost).toFixed(0)+"%");
