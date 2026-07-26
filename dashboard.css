@@ -2285,6 +2285,14 @@ body.light-theme .insight-normal .metric-insight .insight-status {
     color: #f1f5f9;
 }
 
+/* Chú thích công thức trong lưới 8 thẻ: chữ nhỏ hơn thẻ tiêu chuẩn để giữ mật độ. */
+.overview-kpis .metric-def {
+    min-height: 30px;
+    margin-top: 6px;
+    font-size: 10.5px;
+    line-height: 1.4;
+}
+
 .overview-kpis .delta-badge {
     min-height: 24px;
     margin-top: 9px;
@@ -2864,7 +2872,8 @@ body.light-theme #heatmap-agent-dept th.row-h {
         grid-template-columns: 1fr;
     }
 
-    .overview-kpis .metric-card {
+    .overview-kpis .metric-card,
+    .overview-kpis .metric-def {
         min-height: 0;
     }
 }

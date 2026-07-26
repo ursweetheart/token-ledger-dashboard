@@ -1102,7 +1102,7 @@ function renderOverview(rows){
   renderSingleDelta("d-ov-error",A.er,prevA.er,function(v){return v.toFixed(1)+"%";});
 
   set("i-ov-agents",Math.max(0,created-active.length)+" agent chưa hoạt động trong kỳ.");
-  set("i-ov-units",topUnit?esc(topUnit.key)+" dẫn đầu, chiếm "+pct(topUnit.cost,A.cost).toFixed(0)+"% chi phí.":"Chưa có đơn vị phát sinh sử dụng.");
+  set("i-ov-units",topUnit?esc(topUnit.key)+" dẫn đầu, chiếm "+pct(topUnit.cost,A.cost).toFixed(0)+"% chi phí.":"Chưa có phòng ban phát sinh sử dụng.");
   set("i-ov-users",fmt(activeUsers)+" đang dùng · "+fmt(inactiveUsers)+" tài khoản không hoạt động.");
   set("i-ov-requests",topRequest?esc(topRequest.key)+" chiếm "+pct(topRequest.r,A.r).toFixed(0)+"% request.":"Chưa có request trong kỳ.");
   set("i-ov-tokens",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.tokens,A.tokens).toFixed(0)+"% token.":"Chưa có token trong kỳ.");
@@ -1735,7 +1735,7 @@ function renderProviders(rows){
   set("m-pv-count", byProv.length + " <span class='metric-unit'>đang dùng</span>");
   if(byProv.length){
     set("m-pv-share", pct(byProv[0].tokens,totTok).toFixed(0)+"%");
-    set("m-pv-share-def", "<b>"+esc(byProv[0].key)+"</b> gánh phần lớn traffic"+(byProv.length===1?" ⇒ rủi ro single-provider.":"."));
+    set("m-pv-share-def", "<b>"+esc(byProv[0].key)+"</b> gánh phần lớn lưu lượng"+(byProv.length===1?" ⇒ rủi ro phụ thuộc một provider.":"."));
     setMoney("m-pv-cost", byProv[0].cost);
     set("m-pv-latency", byProv[0].latAvailable?byProv[0].lat.toFixed(1)+"s":"Chưa có dữ liệu");
   } else { set("m-pv-share","—"); set("m-pv-share-def","—"); set("m-pv-cost",money(0)); set("m-pv-latency","—"); }
@@ -1762,8 +1762,8 @@ function renderModels(rows){
   var priced = allModels.map(function(m){ var p=state.pricing[m]; return {m:m, avg:(num(p.i)+num(p.o))/2, i:num(p.i), o:num(p.o)}; }).filter(function(x){ return x.avg>0; }).sort(function(a,b){return a.avg-b.avg;});
   if(priced.length){
     var cheap=priced[0], exp=priced[priced.length-1];
-    set("m-md-cheap", esc(shortModel(cheap.m))); set("m-md-cheap-def", "<b>"+esc(cheap.m)+"</b> — "+money(cheap.i)+" in / "+money(cheap.o)+" out / 1 triệu token.");
-    set("m-md-exp", esc(shortModel(exp.m))); set("m-md-exp-def", "<b>"+esc(exp.m)+"</b> — "+money(exp.i)+" in / "+money(exp.o)+" out / 1 triệu token.");
+    set("m-md-cheap", esc(shortModel(cheap.m))); set("m-md-cheap-def", "<b>"+esc(cheap.m)+"</b> — "+money(cheap.i)+" token vào / "+money(cheap.o)+" token ra / 1 triệu token.");
+    set("m-md-exp", esc(shortModel(exp.m))); set("m-md-exp-def", "<b>"+esc(exp.m)+"</b> — "+money(exp.i)+" token vào / "+money(exp.o)+" token ra / 1 triệu token.");
   }
   var A = aggregate(rows);
   set("m-md-cache", (A.ti? A.cached/A.ti*100:0).toFixed(0)+"%");
@@ -1797,7 +1797,7 @@ function renderUsers(rows){
   var newInRange=accounts.filter(function(u){return u.created>=state.range.start&&u.created<=state.range.end;}).length;
   var units=distinct(accounts.map(function(u){return u.d;})).length;
   set("m-us-total",fmt(accounts.length));
-  set("m-us-total-def","Đã dùng trong kỳ: <b>"+fmt(active.length)+"/"+fmt(accounts.length)+" ("+pct(active.length,accounts.length).toFixed(0)+"%)</b> · Disabled: "+fmt(disabled.length)+".");
+  set("m-us-total-def","Đã dùng trong kỳ: <b>"+fmt(active.length)+"/"+fmt(accounts.length)+" ("+pct(active.length,accounts.length).toFixed(0)+"%)</b> · Đã khoá: "+fmt(disabled.length)+".");
   set("m-us-adoption",pct(active.length,accounts.length).toFixed(0)+"%");
   set("m-us-adoption-def",fmt(active.length)+" đã dùng / "+fmt(accounts.length)+" đã cấp.");
   set("m-us-inactive",fmt(inactive.length));

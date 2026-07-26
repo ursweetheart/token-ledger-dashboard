@@ -63,6 +63,10 @@
   .wf-chart .wf-q{ font-size:11px; font-style:italic; color:#64748b; margin-bottom:12px; }
   .canvas-box{ position:relative; height:210px; }
   .canvas-box canvas{ max-height:210px; }
+  /* Tab Agents: cố định 2 cột để 2 thẻ trên cùng chia đôi hàng, thay vì auto-fit
+     tạo cột thứ 3 bỏ trống (thẻ ngân sách bên dưới luôn chiếm trọn hàng). */
+  #agents .chart-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  @media (max-width:900px){ #agents .chart-grid{ grid-template-columns:1fr; } }
   .agent-budget-chart{ grid-column:1 / -1; }
   .agent-budget-chart .canvas-box{ height:300px; }
   .agent-budget-chart .canvas-box canvas{ max-height:300px; }
@@ -378,48 +382,56 @@
     <div class="metric-card">
       <div class="metric-label">🤖 AI Agent</div>
       <div class="metric-value" id="m-ov-agents">—</div>
+      <div class="metric-def"><b>= agent có ≥1 request ÷ tổng agent đã tạo.</b></div>
       <div class="delta-badge" id="d-ov-agents"></div>
       <div class="overview-kpi-insight" id="i-ov-agents">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">🏢 Số phòng ban</div>
       <div class="metric-value" id="m-ov-units">—</div>
+      <div class="metric-def"><b>= số phòng ban có agent phát sinh sử dụng.</b></div>
       <div class="delta-badge" id="d-ov-units"></div>
       <div class="overview-kpi-insight" id="i-ov-units">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">👤 User hoạt động</div>
       <div class="metric-value" id="m-ov-users">—</div>
+      <div class="metric-def"><b>= tài khoản có ≥1 request trong kỳ.</b></div>
       <div class="delta-badge" id="d-ov-users"></div>
       <div class="overview-kpi-insight" id="i-ov-users">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">💬 Tổng request</div>
       <div class="metric-value" id="m-ov-requests">—</div>
+      <div class="metric-def"><b>= Σ lượt gọi của mọi agent trong kỳ.</b></div>
       <div class="delta-badge" id="d-ov-requests"></div>
       <div class="overview-kpi-insight" id="i-ov-requests">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">🪙 Tổng token</div>
       <div class="metric-value" id="m-ov-tokens">—</div>
+      <div class="metric-def"><b>= Σ token vào + token ra.</b></div>
       <div class="delta-badge" id="d-ov-tokens"></div>
       <div class="overview-kpi-insight" id="i-ov-tokens">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">💰 Chi phí (VNĐ)</div>
       <div class="metric-value" id="m-ov-cost">—</div>
+      <div class="metric-def"><b>= Σ (token × đơn giá)</b> quy đổi theo tỷ giá cấu hình.</div>
       <div class="delta-badge" id="d-ov-cost"></div>
       <div class="overview-kpi-insight" id="i-ov-cost">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">🧮 Chi phí / User</div>
       <div class="metric-value" id="m-ov-costuser">—</div>
+      <div class="metric-def"><b>= tổng chi phí ÷ số user hoạt động.</b></div>
       <div class="delta-badge" id="d-ov-costuser"></div>
       <div class="overview-kpi-insight" id="i-ov-costuser">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">⚠️ Tỷ lệ lỗi</div>
       <div class="metric-value" id="m-ov-error">—</div>
+      <div class="metric-def"><b>= request lỗi ÷ tổng request</b> (bình quân theo request).</div>
       <div class="delta-badge" id="d-ov-error"></div>
       <div class="overview-kpi-insight" id="i-ov-error">—</div>
     </div>
@@ -567,27 +579,32 @@
   <div class="metrics user-kpi-grid">
     <div class="metric-card">
       <div class="metric-label">👥 Tổng số tài khoản</div>
+      <div class="metric-q">Đã cấp bao nhiêu tài khoản?</div>
       <div class="metric-value" id="m-us-total">—</div>
       <div class="metric-def" id="m-us-total-def">—</div>
       <div class="metric-note">Chỉ tính tài khoản còn tồn tại; tài khoản đã xoá được giữ trong lịch sử.</div>
     </div>
     <div class="metric-card ok">
       <div class="metric-label">📈 Tài khoản hoạt động</div>
+      <div class="metric-q">Bao nhiêu tài khoản thực sự dùng?</div>
       <div class="metric-value" id="m-us-adoption">—</div>
       <div class="metric-def" id="m-us-adoption-def">—</div>
     </div>
     <div class="metric-card warn">
       <div class="metric-label">😴 Tài khoản không hoạt động</div>
+      <div class="metric-q">Bao nhiêu tài khoản đang bỏ không?</div>
       <div class="metric-value" id="m-us-inactive">—</div>
       <div class="metric-def" id="m-us-inactive-def">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">🆕 Cấp mới trong kỳ</div>
+      <div class="metric-q">Kỳ này cấp thêm bao nhiêu tài khoản?</div>
       <div class="metric-value" id="m-us-new">—</div>
       <div class="metric-def">Tài khoản được tạo trong khoảng thời gian đang chọn.</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">🏢 Số đơn vị</div>
+      <div class="metric-label">🏢 Số phòng ban</div>
+      <div class="metric-q">Bao nhiêu phòng ban được cấp tài khoản?</div>
       <div class="metric-value" id="m-us-units">—</div>
       <div class="metric-def">Phòng ban có tài khoản được cấp.</div>
     </div>
@@ -654,7 +671,7 @@
       <div class="metric-label">🧮 Chi phí TB / agent</div>
       <div class="metric-q">Bình quân mỗi agent tốn bao nhiêu?</div>
       <div class="metric-value" id="m-ag-cost">—</div>
-      <div class="metric-def"><b>= tổng chi phí ÷ số agent active.</b></div>
+      <div class="metric-def"><b>= tổng chi phí ÷ số agent đang hoạt động.</b></div>
     </div>
     <div class="metric-card warn">
       <div class="metric-label">💤 Agent không dùng</div>
@@ -727,7 +744,7 @@
       <div class="metric-label">🏭 Số provider</div>
       <div class="metric-q">Ta đang kết nối bao nhiêu provider?</div>
       <div class="metric-value" id="m-pv-count">—</div>
-      <div class="metric-def"><b>= provider có traffic</b> trong kỳ.</div>
+      <div class="metric-def"><b>= provider có lưu lượng</b> trong kỳ.</div>
     </div>
     <div class="metric-card danger">
       <div class="metric-label">🎯 Tỉ trọng provider lớn nhất</div>
@@ -745,7 +762,7 @@
       <div class="metric-label">⚡ Độ trễ trung bình</div>
       <div class="metric-q">Provider trả lời nhanh không?</div>
       <div class="metric-value" id="m-pv-latency">—</div>
-      <div class="metric-def"><b>= p95 latency</b> bình quân theo request.</div>
+      <div class="metric-def"><b>= độ trễ p95</b> bình quân theo request.</div>
     </div>
   </div>
 
@@ -812,9 +829,9 @@
     </div>
     <div class="metric-card">
       <div class="metric-label">🧠 Token suy luận <span class="pill-new">MỚI</span></div>
-      <div class="metric-q">Bao nhiêu token đốt cho reasoning nội bộ?</div>
+      <div class="metric-q">Bao nhiêu token dùng cho suy luận nội bộ?</div>
       <div class="metric-value" id="m-md-think">—</div>
-      <div class="metric-def"><b>= Σ thoughtsTokenCount.</b> Chỉ model có extended thinking; ảnh hưởng chi phí output.</div>
+      <div class="metric-def"><b>= Σ thoughtsTokenCount.</b> Chỉ model bật suy luận mở rộng; ảnh hưởng chi phí token ra.</div>
       <div class="metric-src"><span class="src-dot src-rt"></span>usageMetadata · realtime</div>
     </div>
   </div>
@@ -928,22 +945,22 @@
       <div class="metric-def"><b>= request thành công ÷ tổng request.</b></div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">🙋 Lỗi client (4xx) <span class="pill-new">MỚI</span></div>
+      <div class="metric-label">🙋 Lỗi phía gọi (4xx) <span class="pill-new">MỚI</span></div>
       <div class="metric-q">Lỗi do phía gọi?</div>
       <div class="metric-value" id="m-pf-4xx">—</div>
       <div class="metric-def"><b>≈ 64% lỗi</b> (400/401/403); xử lý phía tích hợp agent.</div>
     </div>
     <div class="metric-card danger">
-      <div class="metric-label">💥 Lỗi server (5xx) <span class="pill-new">MỚI</span></div>
+      <div class="metric-label">💥 Lỗi phía máy chủ (5xx) <span class="pill-new">MỚI</span></div>
       <div class="metric-q">Lỗi do phía Google?</div>
       <div class="metric-value" id="m-pf-5xx">—</div>
-      <div class="metric-def"><b>≈ 21% lỗi.</b> Cần retry/backoff.</div>
+      <div class="metric-def"><b>≈ 21% lỗi.</b> Cần thử lại có giãn cách (retry/backoff).</div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">🚧 Chạm rate limit (429) <span class="pill-new">MỚI</span></div>
-      <div class="metric-q">Bao nhiêu request chạm rate limit?</div>
+      <div class="metric-label">🚧 Chạm giới hạn tốc độ (429) <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Bao nhiêu request chạm giới hạn tốc độ?</div>
       <div class="metric-value" id="m-pf-429">—</div>
-      <div class="metric-def"><b>≈ 15% lỗi</b> (quota/exceeded). Cao ⇒ nâng RPM/TPM.</div>
+      <div class="metric-def"><b>≈ 15% lỗi</b> (vượt hạn mức). Cao ⇒ nâng RPM/TPM.</div>
     </div>
     <div class="metric-card ok">
       <div class="metric-label">⚡ Độ trễ p95</div>
