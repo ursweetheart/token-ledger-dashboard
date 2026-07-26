@@ -781,11 +781,10 @@ function deltaLine(basisKey, cur, b, betterUp, fmtFn){
   // betterUp chỉ còn được giữ trong chữ ký hàm để tương thích với các lời gọi hiện tại.
   var cls = flat ? "d-neutral" : (up ? "d-green" : "d-red");
   var arrow = flat ? "→" : (up ? "▲" : "▼");
-  var direction = flat ? "Không đổi" : (up ? "Tăng" : "Giảm");
   var percent = flat ? "0%" : ((up?"+":"−")+Math.abs(p).toFixed(0)+"%");
   return "<div class='delta-line "+cls+"' title='"+esc(tip+": "+fmtFn(b.v))+"'>"+arrow+" "+
-    direction+" so với "+basis.full+": <span class='delta-abs'>"+
-    (b.mock?"≈":"")+fmtFn(b.v)+" → "+fmtFn(cur)+" ("+percent+")</span></div>";
+    percent+" so với "+basis.full+": <span class='delta-abs'>"+
+    (b.mock?"≈":"")+fmtFn(b.v)+" → "+fmtFn(cur)+"</span></div>";
 }
 function renderDelta(id, cur, prev, same, betterUp, fmtFn, mockPrev, mockSame){
   var el=document.getElementById(id); if(!el) return;
