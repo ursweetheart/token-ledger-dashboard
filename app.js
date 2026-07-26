@@ -1431,6 +1431,7 @@ function renderAgents(rows){
 }
 function chartsAgents(rows){
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.r>0;}).sort(function(a,b){return b.r-a.r;});
+  renderAgentBudgetChart(rows);
   // Gộp phần đuôi thành "Agent khác" để lát bánh không vụn — cùng quy tắc với biểu đồ phòng ban.
   var labels=[], values=[];
   byAgent.slice(0,6).forEach(function(g){ labels.push(g.key); values.push(g.r); });
@@ -1443,6 +1444,42 @@ function chartsAgents(rows){
     return;
   }
   mkDonut("c-ag-usage", labels, values, "lg-ag-usage", fmt);
+}
+function renderAgentBudgetChart(rows){
+  var items=configuredBudgetSummary(rows).agents;
+  var labels=items.map(function(item){return item.agent;});
+  var spent=items.map(function(item){return +item.cost.toFixed(4);});
+  var limits=items.map(function(item){return item.budget;});
+  var spentColors=items.map(function(item){
+    return item.rate>=100?"#ef4444":item.rate>=90?"#f97316":item.rate>=50?"#eab308":"#38bdf8";
+  });
+  chart("c-ag-budget",{
+    type:"bar",
+    data:{
+      labels:labels,
+      datasets:[
+        {label:"Đã sử dụng",data:spent,backgroundColor:spentColors,borderRadius:4,maxBarThickness:38},
+        {label:"Giới hạn",data:limits,backgroundColor:"rgba(139,92,246,.55)",borderColor:"#a78bfa",borderWidth:1,borderRadius:4,maxBarThickness:38}
+      ]
+    },
+    options:{
+      interaction:{mode:"index",intersect:false},
+      plugins:{
+        legend:{display:true,position:"bottom"},
+        tooltip:{callbacks:{
+          label:function(context){
+            var value=num(context.parsed.y), item=items[context.dataIndex];
+            var line=context.dataset.label+": "+money(value)+" ("+usd(value)+")";
+            return context.datasetIndex===0?line+" · "+item.rate.toFixed(0)+"% giới hạn":line;
+          }
+        }}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{autoSkip:false,callback:function(v){return wrapAxisLabel(this.getLabelForValue(v),18);}}},
+        y:{beginAtZero:true,grid:{color:gridColor()},ticks:{callback:function(v){return moneyCompact(v);}}}
+      }
+    }
+  });
 }
 /* ═══════════════ MA TRẬN PROJECT × PHÒNG BAN ═══════════════
    Trục dọc = project (mỗi agent là 1 project theo hợp đồng dữ liệu Excel).

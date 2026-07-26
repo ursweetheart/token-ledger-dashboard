@@ -63,6 +63,9 @@
   .wf-chart .wf-q{ font-size:11px; font-style:italic; color:#64748b; margin-bottom:12px; }
   .canvas-box{ position:relative; height:210px; }
   .canvas-box canvas{ max-height:210px; }
+  .agent-budget-chart{ grid-column:1 / -1; }
+  .agent-budget-chart .canvas-box{ height:260px; }
+  .agent-budget-chart .canvas-box canvas{ max-height:260px; }
 
   /* Donut + legend cạnh nhau */
   .wf-donut-wrap{ display:flex; align-items:center; gap:18px; width:100%; }
@@ -477,7 +480,7 @@
       <div class="user-section-title">Bảng chi tiết sử dụng AI Agent</div>
       <div class="table-container">
         <table>
-          <thead><tr><th>AI Agent</th><th>Đơn vị</th><th class="num">User</th><th class="num">Request</th><th class="num">Token</th><th class="num">Chi phí</th><th class="num">Tỷ lệ lỗi</th><th>Success Rate</th></tr></thead>
+          <thead><tr><th>AI Agent</th><th>Đơn vị</th><th class="num">User</th><th class="num">Request</th><th class="num">Token</th><th class="num">Chi phí</th><th class="num">Tỷ lệ lỗi</th><th>Tỉ lệ thành công</th></tr></thead>
           <tbody id="ov-detail-tbody"></tbody>
         </table>
       </div>
@@ -676,6 +679,12 @@
       <div class="wf-title">Top agent theo token</div>
       <div class="wf-q">Agent nào tiêu nhiều token nhất?</div>
       <table style="margin-top:2px"><tbody id="ag-top"></tbody></table>
+    </div>
+    <div class="wf-chart agent-budget-chart">
+      <span class="wf-type">Cột</span>
+      <div class="wf-title">Chi phí và giới hạn theo agent</div>
+      <div class="wf-q">Agent nào đang tiến gần hoặc đã vượt giới hạn ngân sách tháng?</div>
+      <div class="canvas-box"><canvas id="c-ag-budget"></canvas></div>
     </div>
   </div>
 
