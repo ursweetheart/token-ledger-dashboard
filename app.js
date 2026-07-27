@@ -1286,12 +1286,13 @@ function deptAccountRow(u, level){
   var tokens=num(u.ti)+num(u.to);
   var status=u.disabled?"user-status-disabled":(u.active?"user-status-active":"user-status-inactive");
   var label=u.disabled?"Vô hiệu hóa":(u.active?"Hoạt động":"Chưa dùng");
+  var activeCount=u.active&&!u.disabled?1:0;
   return "<tr class='drill-row drill-account'>"+
     "<td class='drill-name drill-l"+level+"'><span class='drill-caret drill-leaf'>·</span>"+
       "<span class='user-id'>"+esc(u.user)+"</span> <span class='subtle'>"+esc(u.n)+"</span>"+
       " <span class='user-status "+status+"'>"+label+"</span></td>"+
     "<td class='num'>"+(u.a&&u.a!=="—"?1:0)+"</td>"+
-    naCell()+naCell()+naCell()+
+    adoptionCell(activeCount,1)+
     "<td class='num' title='"+esc(fmtTokFull(tokens))+"'>"+fmtTok(tokens)+"</td>"+
     "<td class='num'>"+fmt(u.req)+"</td>"+
     naCell()+
@@ -1312,7 +1313,7 @@ function renderDepartmentBranch(unit, level, rows, pool, expanded){
   var directAccounts=(pool||[]).filter(function(u){return u.unitId===unit.id;});
   var kids=unitChildren(unit.id).filter(function(k){return !isExcludedUnit(k);});
   var isOpen=!!expanded[unit.id], canOpen=kids.length>0||directAccounts.length>0;
-  var activeCount=accounts.filter(function(u){return u.active;}).length;
+  var activeCount=accounts.filter(function(u){return u.active&&!u.disabled;}).length;
   var prov=provisionedOf(unit.id), g=usage.agg, agents=usage.agents;
   // File usage chỉ có số ở PBH; các vùng/đội lấy phần đã phân bổ xuống tài khoản
   // để tổng cấp con khớp cấp cha mà không giả rằng Excel có usage chi tiết theo đội.
@@ -1331,8 +1332,6 @@ function renderDepartmentBranch(unit, level, rows, pool, expanded){
     "' data-unit='"+esc(unit.id)+"'>"+
     deptToggleCell(unit.name,level,canOpen,isOpen)+
     "<td class='num'>"+agents.length+"</td>"+
-    "<td class='num'>"+(prov==null?"<span class='metric-na'>—</span>":fmt(prov))+"</td>"+
-    "<td class='num'>"+fmt(activeCount)+"</td>"+
     adoptionCell(activeCount,prov)+
     "<td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td>"+
     "<td class='num'>"+fmt(g.r)+"</td>"+
@@ -1352,6 +1351,7 @@ function renderDepartmentBranch(unit, level, rows, pool, expanded){
 }
 function renderDepartments(rows){
   var byUnitId=groupRowsByUnit(rows), total=aggregate(rows).cost;
+  var pool=filterAccounts(), activeUsers=pool.filter(function(u){return u.active&&!u.disabled;}).length;
   var groups=Object.keys(byUnitId).map(function(id){
     var g=byUnitId[id];
     return {unit:g.unit, agents:Object.keys(g.agents), agg:aggregate(g.rows)};
@@ -1366,13 +1366,18 @@ function renderDepartments(rows){
   setMoney("m-dep-avg", groups.length? total/groups.length:0);
   var top2=groups.slice(0,2).reduce(function(s,g){return s+g.agg.cost;},0);
   set("m-dep-conc", pct(top2,total).toFixed(0)+"%");
+  set("m-dep-users",fmt(pool.length));
+  set("m-dep-user-rate",pool.length?pct(activeUsers,pool.length).toFixed(0)+"%":"—");
+  set("m-dep-user-rate-def",pool.length
+    ? "<b>"+fmt(activeUsers)+"/"+fmt(pool.length)+"</b> user hoạt động / tổng."
+    : "Chưa có tài khoản trong phạm vi đang lọc.");
 
-  var pool=filterAccounts(), expanded=state.deptExpanded||{}, html="", anyAccountRow=false;
+  var expanded=state.deptExpanded||{}, html="", anyAccountRow=false;
   unitRoots().filter(function(u){return !isExcludedUnit(u)&&provisionedOf(u.id)!=null;}).forEach(function(unit){
     var branch=renderDepartmentBranch(unit,1,rows,pool,expanded);
     html+=branch.html; anyAccountRow=anyAccountRow||branch.anyAccountRow;
   });
-  set("dep-tbody", html || emptyRow(8));
+  set("dep-tbody", html || emptyRow(6));
   set("dep-alloc-note", anyAccountRow
     ? "<span title='"+esc(ALLOCATED_DATA_HINT)+"'>ⓘ "+ALLOCATED_DATA_LABEL+"</span>" : "");
   bindDeptDrilldown();
@@ -1950,11 +1955,6 @@ function chartsCost(rows){
     values.push(+groups.slice(5).reduce(function(sum,g){return sum+g.cost;},0).toFixed(2));
   }
   mkDonut("c-co-dim",labels,values,"lg-co-dim",money);
-  var tl = trendSeries();
-  mkLine("c-co-trend", tl.labels, [
-    { label:"Chi phí", data:tl.data, borderColor:"#667eea", backgroundColor:"rgba(102,126,234,.12)", fill:true, tension:.35, pointRadius:3 },
-    { label:"Ngân sách", data:tl.labels.map(function(){return MONTHLY_BUDGET;}), borderColor:"#f59e0b", borderDash:[5,4], pointRadius:0, fill:false }
-  ], true);
 }
 
 /* ═══════════════ RENDER: HIỆU NĂNG ═══════════════ */

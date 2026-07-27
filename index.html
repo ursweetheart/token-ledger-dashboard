@@ -66,6 +66,7 @@
   /* Tab Agents: hai biểu đồ chính luôn chia đều một hàng trên màn hình rộng. */
   #agents .chart-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
   @media (max-width:900px){ #agents .chart-grid{ grid-template-columns:1fr; } }
+  #cost .chart-grid{ grid-template-columns:minmax(0, 1fr); }
   .agent-budget-chart{ grid-column:1 / -1; }
   .agent-budget-chart .canvas-box{ height:300px; }
   .agent-budget-chart .canvas-box canvas{ max-height:300px; }
@@ -534,6 +535,18 @@
       <div class="metric-value" id="m-dep-conc">—</div>
       <div class="metric-def"><b>= tỷ trọng chi phí của Top-2 phòng.</b> Cao ⇒ rủi ro phụ thuộc.</div>
     </div>
+    <div class="metric-card">
+      <div class="metric-label">👥 Số user</div>
+      <div class="metric-q">Có bao nhiêu user được phân quyền?</div>
+      <div class="metric-value" id="m-dep-users">—</div>
+      <div class="metric-def"><b>= tổng số tài khoản được phân quyền</b> trong phạm vi đang lọc.</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">📈 Tỷ lệ user hoạt động / Tổng</div>
+      <div class="metric-q">Bao nhiêu user được cấp đang thực sự dùng?</div>
+      <div class="metric-value" id="m-dep-user-rate">—</div>
+      <div class="metric-def" id="m-dep-user-rate-def">—</div>
+    </div>
   </div>
 
   <div class="chart-grid">
@@ -564,8 +577,8 @@
   <div class="table-container">
     <table class="dept-drill-table">
       <thead><tr>
-        <th>Phòng ban / Đơn vị</th><th class="num">Agent</th><th class="num">User phân quyền</th>
-        <th class="num">User hoạt động</th><th class="num">Tỷ lệ hoạt động</th>
+        <th>Phòng ban / Đơn vị</th><th class="num">Agent</th>
+        <th class="num">User hoạt động / Tổng</th>
         <th class="num">Token</th><th class="num">Request</th><th class="num">Tỷ lệ lỗi</th>
       </tr></thead>
       <tbody id="dep-tbody"></tbody>
@@ -900,12 +913,6 @@
         <div class="canvas-box"><canvas id="c-co-dim"></canvas></div>
         <div class="wf-legend" id="lg-co-dim"></div>
       </div>
-    </div>
-    <div class="wf-chart">
-      <span class="wf-type">Line</span>
-      <div class="wf-title">Chi phí theo kỳ vs ngân sách</div>
-      <div class="wf-q">Có đang đi nhanh hơn ngân sách không?</div>
-      <div class="canvas-box"><canvas id="c-co-trend"></canvas></div>
     </div>
     <div class="wf-chart agent-budget-chart">
       <span class="wf-type">Thanh ngang</span>
