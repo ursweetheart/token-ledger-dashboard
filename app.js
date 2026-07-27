@@ -1134,8 +1134,17 @@ function renderOverview(rows){
 
   var detail=active.slice().sort(function(a,b){return b.cost-a.cost;}).slice(0,8);
   set("ov-detail-tbody",detail.map(function(g){
-    var success=Math.max(0,100-g.er), dept=g.depts.length>1?g.depts[0]+" +"+(g.depts.length-1):g.depts[0]||"—";
-    return "<tr><td><b>"+esc(g.key)+"</b></td><td class='subtle'>"+esc(dept)+"</td><td class='num'>"+fmt(g.u)+"</td>"+
+    var success=Math.max(0,100-g.er), deptSeen={}, departments=[];
+    g.depts.forEach(function(dept){
+      var unit=unitOf(dept), name=unit?unit.name:String(dept||"").trim();
+      if(name&&name!=="—"&&!deptSeen[name]){deptSeen[name]=true;departments.push(name);}
+    });
+    departments.sort(function(a,b){return a.localeCompare(b,"vi");});
+    var deptHtml=departments.length
+      ? "<div class='overview-unit-count'>"+fmt(departments.length)+" phòng ban/đơn vị</div>"+
+        "<div class='overview-unit-list'>"+departments.map(function(name){return "<span>"+esc(name)+"</span>";}).join("")+"</div>"
+      : "<span class='metric-na'>—</span>";
+    return "<tr><td><b>"+esc(g.key)+"</b></td><td class='overview-unit-cell'>"+deptHtml+"</td><td class='num'>"+fmt(g.u)+"</td>"+
       "<td class='num'>"+fmt(g.r)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTokShort(g.tokens)+"</td>"+
       moneyCell(g.cost)+"<td class='num"+(g.er>=2?" text-red":"")+"'>"+g.er.toFixed(1)+"%</td>"+
       "<td><div class='overview-success-cell'><span><i style='width:"+success.toFixed(1)+"%'></i></span><b>"+success.toFixed(1)+"%</b></div></td></tr>";
