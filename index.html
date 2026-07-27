@@ -63,8 +63,7 @@
   .wf-chart .wf-q{ font-size:11px; font-style:italic; color:#64748b; margin-bottom:12px; }
   .canvas-box{ position:relative; height:210px; }
   .canvas-box canvas{ max-height:210px; }
-  /* Tab Agents: cố định 2 cột để 2 thẻ trên cùng chia đôi hàng, thay vì auto-fit
-     tạo cột thứ 3 bỏ trống (thẻ ngân sách bên dưới luôn chiếm trọn hàng). */
+  /* Tab Agents: hai biểu đồ chính luôn chia đều một hàng trên màn hình rộng. */
   #agents .chart-grid{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
   @media (max-width:900px){ #agents .chart-grid{ grid-template-columns:1fr; } }
   .agent-budget-chart{ grid-column:1 / -1; }
@@ -697,12 +696,6 @@
       <div class="wf-q">Agent nào tiêu nhiều token nhất?</div>
       <table style="margin-top:2px"><tbody id="ag-top"></tbody></table>
     </div>
-    <div class="wf-chart agent-budget-chart">
-      <span class="wf-type">Thanh ngang</span>
-      <div class="wf-title">Mức sử dụng ngân sách theo agent</div>
-      <div class="wf-q">Một thanh = phần trăm ngân sách đã dùng · các đường dọc = mốc cảnh báo.</div>
-      <div class="canvas-box"><canvas id="c-ag-budget"></canvas></div>
-    </div>
   </div>
 
   <div class="section-controls">
@@ -913,6 +906,12 @@
       <div class="wf-title">Chi phí theo kỳ vs ngân sách</div>
       <div class="wf-q">Có đang đi nhanh hơn ngân sách không?</div>
       <div class="canvas-box"><canvas id="c-co-trend"></canvas></div>
+    </div>
+    <div class="wf-chart agent-budget-chart">
+      <span class="wf-type">Thanh ngang</span>
+      <div class="wf-title">Mức sử dụng ngân sách theo agent</div>
+      <div class="wf-q">Một thanh = phần trăm ngân sách đã dùng · các đường dọc = mốc cảnh báo.</div>
+      <div class="canvas-box"><canvas id="c-co-agent-budget"></canvas></div>
     </div>
   </div>
 

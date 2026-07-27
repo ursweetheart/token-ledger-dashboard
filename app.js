@@ -1450,7 +1450,6 @@ function renderAgents(rows){
 }
 function chartsAgents(rows){
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.r>0;}).sort(function(a,b){return b.r-a.r;});
-  renderAgentBudgetChart(rows);
   // Gộp phần đuôi thành "Agent khác" để lát bánh không vụn — cùng quy tắc với biểu đồ phòng ban.
   var labels=[], values=[];
   byAgent.slice(0,6).forEach(function(g){ labels.push(g.key); values.push(g.r); });
@@ -1526,7 +1525,7 @@ function renderAgentBudgetChart(rows){
       ctx.restore();
     }
   };
-  chart("c-ag-budget",{
+  chart("c-co-agent-budget",{
     type:"bar",
     data:{
       labels:labels,
@@ -1941,6 +1940,7 @@ function renderCostTable(rows){
   }).join("") || emptyRow(6));
 }
 function chartsCost(rows){
+  renderAgentBudgetChart(rows);
   var keyFn=costKeyFn();
   var groups = groupAgg(rows.filter(function(r){var k=keyFn(r);return k&&k!=="—";}), keyFn).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;});
   var labels=[], values=[];
