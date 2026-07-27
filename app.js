@@ -162,9 +162,9 @@ var ORG_UNITS = [
   /* Đơn vị của các agent khác không nằm trong workbook phân quyền Ralli. */
   {id:"aemkt",name:"Anh Em tiếp thị",parent:null,level:1,provisioned:40},
   {id:"cskh",name:"Chăm sóc khách hàng",parent:null,level:1,provisioned:28},
-  {id:"nctt",name:"P.NCTT , TTDL&ĐHS",parent:null,level:1,provisioned:30},
+  {id:"nctt",name:"P.NCTT",parent:null,level:1,provisioned:30},
   {id:"cpbd",name:"Công ty CPBĐ PN Rạng Đông",parent:null,level:1,provisioned:18},
-  {id:"ttdl",name:"TTDL&DHS",parent:null,level:1,provisioned:6},
+  {id:"ttdl",name:"TTDL&ĐHS",parent:null,level:1,provisioned:6},
   {id:"tttmdt",name:"TT&TMĐT",parent:null,level:1,provisioned:3}
 ];
 var UNIT_ALIASES = {
@@ -175,9 +175,10 @@ var UNIT_ALIASES = {
   "TMĐT":"ecom", "Thương mại điện tử":"ecom",            // danh mục chuẩn: TMDT
   "TT C4LED":"c4led", "C4LED":"c4led",
   "Cty CPBĐ PN Rạng Đông":"cpbd", "Công ty CPBĐ PN Rạng Đông":"cpbd",
-  "P.NCTT , TTDL&ĐHS":"nctt", "P.NCTT, TTDL&ĐHS":"nctt", // chỉ khác dấu cách
+  "P.NCTT":"nctt",
+  "P.NCTT , TTDL&ĐHS":"nctt", "P.NCTT, TTDL&ĐHS":"nctt", // fallback cho dữ liệu cũ trước khi tách
   "Anh Em tiếp thị":"aemkt", "Chăm sóc khách hàng":"cskh",
-  "TTDL&DHS":"ttdl", "TT&TMĐT":"tttmdt", "Xuất khẩu":"pxk",
+  "TTDL&DHS":"ttdl", "TTDL&ĐHS":"ttdl", "TT&TMĐT":"tttmdt", "Xuất khẩu":"pxk",
   "Truyền thông":"truyenthong", "Kế toán":"ketoan", "Kế hoạch":"kehoach",
   "Nghiên cứu thị trường":"nctt2", "Trung tâm R&D":"rnd", "Quản trị hệ thống":"qths"
 };
@@ -520,8 +521,21 @@ function dayLabel(iso){ var p=String(iso).split("-"); return p.length===3? (p[2]
 function cost(r){ var p = state.pricing[r.m]; if(!p) return 0; return num(r.ti)/1e6*num(p.i) + num(r.to)/1e6*num(p.o); }
 function isExcludedDepartment(name){ return !!EXCLUDED_DEPARTMENTS[String(name||"").trim()]; }
 function isExcludedAgent(name){ return !!EXCLUDED_AGENTS[String(name||"").trim().toLowerCase()]; }
+/* File nguồn đang gộp P.NCTT và TTDL&ĐHS trong một nhãn. Tách theo đúng agent nghiệp vụ
+   để không nhân đôi request/token: phản hồi tiếp thị thuộc P.NCTT, dữ liệu CRM thuộc TTDL&ĐHS. */
+function splitCombinedDepartment(row){
+  var dept=String(row&&row.d||"").trim().replace(/\s*,\s*/g,",").toLowerCase();
+  if(dept!=="p.nctt,ttdl&đhs") return row.d;
+  if(row.a==="Phân Loại Phản Hồi Tiếp Thị") return "P.NCTT";
+  if(row.a==="Phân Loại Dữ Liệu CRM") return "TTDL&ĐHS";
+  return row.d;
+}
 function sanitizeUsageRows(rows){
-  return (rows||[]).filter(function(r){return !isExcludedDepartment(r.d)&&!isExcludedAgent(r.a);});
+  return (rows||[]).filter(function(r){return !isExcludedDepartment(r.d)&&!isExcludedAgent(r.a);})
+    .map(function(r){
+      var dept=splitCombinedDepartment(r);
+      return dept===r.d?r:Object.assign({},r,{d:dept});
+    });
 }
 
 /* ═══════════════ TRUY VẤN CÂY ĐƠN VỊ ═══════════════ */
@@ -1439,6 +1453,14 @@ function chartsDepartments(rows){
 }
 
 /* ═══════════════ RENDER: AGENTS ═══════════════ */
+function agentModelListHtml(models){
+  var names=distinct((models||[]).filter(function(name){return name&&name!=="—";}))
+    .sort(function(a,b){return a.localeCompare(b,"vi");});
+  if(!names.length) return "<span class='metric-na'>—</span>";
+  if(names.length===1) return esc(names[0]);
+  return "<div class='agent-model-count'>"+fmt(names.length)+" model</div>"+
+    "<div class='agent-model-list'>"+names.map(function(name){return "<span>"+esc(name)+"</span>";}).join("")+"</div>";
+}
 function renderAgents(rows){
   var byAgent = groupAgg(rows, function(r){return r.a;});
   var active = byAgent.filter(function(g){return g.r>0;});
@@ -1452,9 +1474,9 @@ function renderAgents(rows){
   byAgent.sort(function(a,b){return b.cost-a.cost;});
   set("ag-tbody", byAgent.map(function(g){
     var idle = g.r===0;
-    var model = g.models.length>1?"Nhiều model":(g.models[0]||"—");
+    var model = agentModelListHtml(g.models);
     var dept = g.depts[0]||"—";
-    return "<tr><td"+(idle?" class='subtle'":"")+">"+esc(g.key)+"</td><td class='subtle'>"+esc(dept)+"</td><td"+(idle?" class='subtle'":"")+">"+esc(model)+"</td>"+
+    return "<tr><td"+(idle?" class='subtle'":"")+">"+esc(g.key)+"</td><td class='subtle'>"+esc(dept)+"</td><td class='agent-model-cell"+(idle?" subtle":"")+"'>"+model+"</td>"+
       "<td class='num"+(idle?" subtle":"")+"'>"+(idle?"0":fmt(g.u))+"</td><td class='num"+(idle?" subtle":"")+"'>"+fmt(g.r)+"</td>"+
       "<td class='num"+(idle?" subtle":"")+"' title='"+esc(fmtTokFull(g.tokens))+"'>"+(idle?"0":fmtTok(g.tokens))+"</td><td class='num"+(g.er>2?" text-red":(idle?" subtle":""))+"'>"+(idle?"—":g.er.toFixed(1))+"</td>"+
       "<td class='num"+(idle?" subtle":"")+"'>"+(idle||!g.latAvailable?"—":g.lat.toFixed(1))+"</td>"+
@@ -1978,8 +2000,8 @@ function renderPerformance(rows){
   set("m-pf-req", fmt(A.r));
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.r>0;}).sort(function(a,b){return b.cost-a.cost;});
   set("pf-tbody", byAgent.map(function(g){
-    var model = g.models.length>1?"Nhiều model":(g.models[0]||"—");
-    return "<tr><td>"+esc(g.key)+"</td><td class='subtle'>"+esc(model)+"</td><td class='num'>"+fmt(g.r)+"</td><td class='num'>"+(100-g.er).toFixed(1)+"</td><td class='num"+(g.er>2?" text-red":"")+"'>"+g.er.toFixed(1)+"</td><td class='num'>"+(g.latAvailable?g.lat.toFixed(1):"—")+"</td><td class='num'>"+(g.latAvailable?(g.lat*2.1).toFixed(1):"—")+"</td></tr>";
+    var model = agentModelListHtml(g.models);
+    return "<tr><td>"+esc(g.key)+"</td><td class='agent-model-cell'>"+model+"</td><td class='num'>"+fmt(g.r)+"</td><td class='num'>"+(100-g.er).toFixed(1)+"</td><td class='num"+(g.er>2?" text-red":"")+"'>"+g.er.toFixed(1)+"</td><td class='num'>"+(g.latAvailable?g.lat.toFixed(1):"—")+"</td><td class='num'>"+(g.latAvailable?(g.lat*2.1).toFixed(1):"—")+"</td></tr>";
   }).join("") || emptyRow(7));
 }
 function chartsPerformance(rows){
