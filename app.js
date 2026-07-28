@@ -1777,7 +1777,7 @@ function matrixMeta(row){
   if(row.tier==="account")
     return esc(row.account.login||row.account.user)+share;
   if(row.noAccounts)
-    return "<span class='mx-warn'>chưa có tài khoản Ralli — không bung được</span>";
+    return "<span class='mx-warn'>chưa có user</span>";
   var parts=[];
   if(row.unitCount) parts.push(row.unitCount+" đơn vị");
   parts.push(fmt(row.accounts.length)+" tài khoản");
@@ -1919,7 +1919,7 @@ function renderMatrixNote(rows, scopeRows){
     note=fmt(shown)+" request trong phạm vi lọc · "+fmt(accounts)+" tài khoản"+allocated;
   } else if(shown===real){
     note="ⓘ Tổng ma trận "+fmt(shown)+" request — khớp đúng tổng usage của kỳ"+
-      (blind?", trong đó "+blind+" phòng chưa có tài khoản Ralli nên không bung được":"")+"."+allocated;
+      (blind?", trong đó "+blind+" phòng chưa có user":"")+"."+allocated;
   } else {
     note="⚠ Ma trận "+fmt(shown)+" / usage "+fmt(real)+" request — lệch "+fmt(real-shown)+
       " thuộc đơn vị chưa phân bổ được xuống tài khoản."+allocated;
