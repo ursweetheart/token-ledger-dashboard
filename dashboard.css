@@ -3199,3 +3199,15 @@ body.light-theme .mx-warn {
 body.light-theme .mx-idle-tag {
     color: #b45309;
 }
+
+/* Nút gom tài khoản gắn thẳng vào một đơn vị đã có đơn vị con — không phải một
+   đơn vị trong ORG_UNITS, nên gắn nhãn riêng để không đọc nhầm thành phòng ban. */
+.mx-tier-direct {
+    background: rgba(45, 212, 163, .15);
+    color: #6ee7b7;
+}
+
+body.light-theme .mx-tier-direct {
+    background: rgba(5, 150, 105, .12);
+    color: #047857;
+}

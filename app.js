@@ -671,7 +671,11 @@ function loadState(){
     delete s.matrixPath; delete s.matrixUser;
     // Khoá đơn vị không còn hợp lệ sau khi chuẩn hoá cây thì loại bỏ.
     Object.keys(s.deptExpanded).forEach(function(id){ if(!unitById(id)) delete s.deptExpanded[id]; });
-    Object.keys(s.matrixExpanded).forEach(function(id){ if(!unitById(id)) delete s.matrixExpanded[id]; });
+    // Khoá "<unitId>::direct" là nút gom tài khoản trực thuộc, không phải một đơn vị
+    // trong ORG_UNITS ⇒ kiểm theo phần trước "::" để không bị xoá oan khi tải lại.
+    Object.keys(s.matrixExpanded).forEach(function(id){
+      if(!unitById(String(id).split("::")[0])) delete s.matrixExpanded[id];
+    });
     s.dayOrder.forEach(function(d){if(s.days[d]) s.days[d]=sanitizeUsageRows(s.days[d]);});
     s.dayOrder = s.dayOrder.filter(function(d){ return s.days[d]&&s.days[d].length; }).sort();
     if(isExcludedDepartment(s.filters.dept)) s.filters.dept="";
@@ -1480,9 +1484,12 @@ function agentModelListHtml(models){
   var names=distinct((models||[]).filter(function(name){return name&&name!=="—";}))
     .sort(function(a,b){return a.localeCompare(b,"vi");});
   if(!names.length) return "<span class='metric-na'>—</span>";
-  if(names.length===1) return esc(names[0]);
-  return "<div class='agent-model-count'>"+fmt(names.length)+" model</div>"+
-    "<div class='agent-model-list'>"+names.map(function(name){return "<span>"+esc(name)+"</span>";}).join("")+"</div>";
+  // Mọi model đều gắn badge, kể cả khi agent chỉ dùng một model. Trả text trần cho
+  // trường hợp một model làm cùng một cột hiển thị hai kiểu khác nhau.
+  var list="<div class='agent-model-list'>"+
+    names.map(function(name){ return "<span>"+esc(name)+"</span>"; }).join("")+"</div>";
+  if(names.length===1) return list;
+  return "<div class='agent-model-count'>"+fmt(names.length)+" model</div>"+list;
 }
 function renderAgents(rows){
   var byAgent = groupAgg(rows, function(r){return r.a;});
@@ -1627,7 +1634,7 @@ function renderAgentBudgetChart(rows){
 var MATRIX_INDENT_STEP = 24;    // px thụt lề mỗi cấp
 var MATRIX_GUIDE_OFFSET = 19;   // px từ mép trái tới đường nối dọc của cấp 1
 var MATRIX_GROUP_COLORS = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ec4899","#8b5cf6"];
-var MATRIX_TIER_LABEL = {root:"Phòng ban", unit:"Đơn vị", account:"Tài khoản"};
+var MATRIX_TIER_LABEL = {root:"Phòng ban", unit:"Đơn vị", direct:"Trực thuộc", account:"Tài khoản"};
 var matrixLastRows = null;      // rows của kỳ đang xem, để bung/tìm kiếm không phải renderAll
 
 function matrixGuideX(level){ return MATRIX_GUIDE_OFFSET + (level-1)*MATRIX_INDENT_STEP; }
@@ -1678,11 +1685,26 @@ function matrixTree(unit, pool){
   return {unit:unit, kids:kids, direct:sortAccounts(direct), accounts:accounts};
 }
 
+function matrixAccountRow(acct, depth, guides, isLast, group, parent){
+  return {
+    key:"acct:"+acct.user, depth:depth, tier:"account", kind:"account",
+    label:acct.n||acct.user, account:acct, accounts:[acct], unitCount:0,
+    expandable:false, open:false, guides:guides,
+    lastOfParent:isLast, group:group, parent:parent
+  };
+}
 /* Làm phẳng cây thành danh sách hàng theo trạng thái đang mở.
    guides = tọa độ các đường dọc của tổ tiên còn nhánh phía dưới; đường của hàng cuối
-   cùng chỉ vẽ nửa chiều cao, đúng quy ước tree view. */
+   cùng chỉ vẽ nửa chiều cao, đúng quy ước tree view.
+
+   MỖI LẦN BUNG CHỈ RA MỘT LOẠI CẤP. Một đơn vị có thể vừa có đơn vị con vừa có tài
+   khoản gắn thẳng vào nó; để lẫn hai loại trong cùng một cấp thì tài khoản nằm ngang
+   hàng với đơn vị, tức sai cấp. Gặp trường hợp đó thì gom tài khoản vào một nút
+   "Trực thuộc" riêng, đẩy xuống thêm một cấp. */
 function flattenMatrixTree(node, depth, guides, isLast, group, parent, out){
-  var childCount=node.kids.length+node.direct.length;
+  var hasKids=node.kids.length>0, hasDirect=node.direct.length>0;
+  var groupDirect=hasKids&&hasDirect;
+  var childCount=node.kids.length+(groupDirect?1:node.direct.length);
   var row={
     key:node.unit.id, depth:depth, tier:depth===1?"root":"unit", kind:"unit",
     label:node.unit.name, accounts:node.accounts, unitCount:node.kids.length,
@@ -1695,13 +1717,28 @@ function flattenMatrixTree(node, depth, guides, isLast, group, parent, out){
   node.kids.forEach(function(kid,i){
     flattenMatrixTree(kid, depth+1, childGuides, i===childCount-1, group, row, out);
   });
-  node.direct.forEach(function(acct,i){
-    out.push({
-      key:"acct:"+acct.user, depth:depth+1, tier:"account", kind:"account",
-      label:acct.n||acct.user, account:acct, accounts:[acct], unitCount:0,
-      expandable:false, open:false, guides:childGuides,
-      lastOfParent:(node.kids.length+i)===childCount-1, group:group, parent:row
+  if(!hasDirect) return;
+
+  if(!groupDirect){
+    node.direct.forEach(function(acct,i){
+      out.push(matrixAccountRow(acct, depth+1, childGuides,
+        i===node.direct.length-1, group, row));
     });
+    return;
+  }
+  // Nút gom luôn là con CUỐI của đơn vị, nên đường dọc của nó chỉ vẽ nửa chiều cao
+  // và các tài khoản bên dưới không phải kéo dài đường của cấp trên nữa.
+  var key=node.unit.id+"::direct";
+  var groupRow={
+    key:key, depth:depth+1, tier:"direct", kind:"unit", label:node.unit.name,
+    accounts:node.direct, unitCount:0, expandable:true, open:matrixIsOpen(key),
+    guides:childGuides, lastOfParent:true, group:group, parent:row
+  };
+  out.push(groupRow);
+  if(!groupRow.open) return;
+  node.direct.forEach(function(acct,i){
+    out.push(matrixAccountRow(acct, depth+2, childGuides,
+      i===node.direct.length-1, group, groupRow));
   });
 }
 /* Usage THẬT theo (đơn vị, agent), cộng dồn lên toàn bộ tổ tiên. Dùng cho những phòng
