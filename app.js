@@ -286,8 +286,16 @@ function applyAccountAllocation(rows){
   var byUnit={};
   USER_ACCOUNTS.forEach(function(u){
     u.req=0; u.ti=0; u.to=0; u.active=false; u.last=""; u.quotaPct=0;
+    // byAgent giữ phần phân bổ TÁCH THEO AGENT. Không có nó thì u.req là số trộn
+    // của mọi agent, và ma trận cấp tài khoản buộc phải quy hết về một agent duy nhất.
+    u.byAgent={};
     (byUnit[u.unitId]=byUnit[u.unitId]||[]).push(u);
   });
+  function agentBucket(u, agent){
+    var b=u.byAgent[agent];
+    if(!b) b=u.byAgent[agent]={req:0, ti:0, to:0};
+    return b;
+  }
   function accountsFor(unitId){
     var out=[];
     [unitId].concat(unitDescendants(unitId).map(function(x){return x.id;})).forEach(function(id){
@@ -309,8 +317,14 @@ function applyAccountAllocation(rows){
     if(!W) return;
     ["r","ti","to"].forEach(function(field){
       var target=Math.round(t[field]), acctKey=field==="r"?"req":field, used=0;
-      pool.forEach(function(u){ var share=Math.floor(target*u.weight/W); u[acctKey]+=share; used+=share; });
-      pool[0][acctKey]+=target-used;      // dồn phần dư ⇒ tổng khớp chính xác
+      pool.forEach(function(u){
+        var share=Math.floor(target*u.weight/W);
+        u[acctKey]+=share; agentBucket(u,t.agent)[acctKey]+=share; used+=share;
+      });
+      // Dồn phần dư ⇒ tổng khớp chính xác. Phải dồn vào CẢ hai sổ (tổng và theo agent)
+      // để Σ byAgent của một tài khoản luôn bằng đúng u.req của nó.
+      var rest=target-used;
+      pool[0][acctKey]+=rest; agentBucket(pool[0],t.agent)[acctKey]+=rest;
     });
   });
   USER_ACCOUNTS.forEach(function(u){
@@ -641,21 +655,23 @@ function defaultState(){
   order.forEach(function(d){ days[d] = sanitizeUsageRows(sourceDays[d]).map(function(r){ return Object.assign({}, r, { id:rid() }); }); });
   return { days:days, dayOrder:order, activeDay:order[order.length-1],
     range:{ start:"2026-07-01", end:"2026-07-31" },
-    filters:{dept:"",user:"",provider:"",model:"",agent:""}, matrixUser:"",
-    deptExpanded:{}, matrixPath:[], pricing:clone(basePricing) };
+    filters:{dept:"",user:"",provider:"",model:"",agent:""},
+    deptExpanded:{}, matrixExpanded:{}, matrixSearch:"", pricing:clone(basePricing) };
 }
 function loadState(){
   try{ var raw = localStorage.getItem(STORE); if(!raw) return defaultState();
     var s = JSON.parse(raw);
     if(!s || !s.days || !s.dayOrder || !s.pricing) return defaultState();
     if(!s.filters) s.filters = {dept:"",user:"",provider:"",model:"",agent:""};
-    if(!s.matrixUser) s.matrixUser="";
     // State mới: bỏ qua an toàn khi đọc localStorage của phiên bản cũ.
     if(!s.deptExpanded||typeof s.deptExpanded!=="object") s.deptExpanded={};
-    if(!Array.isArray(s.matrixPath)) s.matrixPath=[];
-    // Đường đi/khoá đơn vị không còn hợp lệ sau khi chuẩn hoá cây thì loại bỏ.
+    if(!s.matrixExpanded||typeof s.matrixExpanded!=="object") s.matrixExpanded={};
+    if(typeof s.matrixSearch!=="string") s.matrixSearch="";
+    // Bản cũ dùng breadcrumb theo cột; ma trận giờ là cây accordion nên bỏ hai khoá này.
+    delete s.matrixPath; delete s.matrixUser;
+    // Khoá đơn vị không còn hợp lệ sau khi chuẩn hoá cây thì loại bỏ.
     Object.keys(s.deptExpanded).forEach(function(id){ if(!unitById(id)) delete s.deptExpanded[id]; });
-    s.matrixPath=s.matrixPath.filter(function(id){ return !!unitById(id); });
+    Object.keys(s.matrixExpanded).forEach(function(id){ if(!unitById(id)) delete s.matrixExpanded[id]; });
     s.dayOrder.forEach(function(d){if(s.days[d]) s.days[d]=sanitizeUsageRows(s.days[d]);});
     s.dayOrder = s.dayOrder.filter(function(d){ return s.days[d]&&s.days[d].length; }).sort();
     if(isExcludedDepartment(s.filters.dept)) s.filters.dept="";
@@ -1597,196 +1613,328 @@ function renderAgentBudgetChart(rows){
     }
   });
 }
-/* ═══════════════ MA TRẬN PROJECT × PHÒNG BAN ═══════════════
-   Trục dọc = project (mỗi agent là 1 project theo hợp đồng dữ liệu Excel).
-   Trục ngang = phòng ban, đi sâu theo cấp: phòng ban → Vùng → tài khoản.
+/* ═══════════════ MA TRẬN PHÒNG BAN × PROJECT ═══════════════
+   Hàng = cây phòng ban (Phòng ban → Vùng → Đội → Tài khoản), bung TẠI CHỖ theo kiểu
+   accordion giống bảng "Chi tiết theo phòng ban". Cột = project (mỗi agent là 1 project
+   theo hợp đồng dữ liệu Excel).
 
-   Drilldown đi theo TRỤC NGANG vì đó là trục phòng ban. Dùng breadcrumb + thay cột
-   thay vì lồng cột, vì lồng cột làm bảng phình ngang trên màn hình đã phải cuộn.
+   Giá trị ở MỌI cấp đều cộng từ các tài khoản nằm dưới nút đó. Các tập tài khoản của
+   những nút anh em là rời nhau, nên hàng cha luôn bằng đúng tổng các hàng con đang mở.
+   Con số vẫn là số thật chứ không phải ước lượng: applyAccountAllocation khoá phân bổ
+   theo cặp (đơn vị, agent) và dồn phần dư, nên tổng theo phòng và tổng theo phòng × agent
+   đều khớp usage gốc.
    ══════════════════════════════════════════════════════════ */
-function matrixLevelColumns(rows, pool){
-  var path=(state.matrixPath||[]).filter(function(id){return !!unitById(id);});
-  state.matrixPath=path;
-  // Cấp 0: cột là các phòng ban gốc có mặt trong phạm vi đang xem.
-  if(!path.length){
-    var seen={}, cols=[];
-    reportingRoots().forEach(function(root){
-      var ids={}; [root.id].concat(unitDescendants(root.id).map(function(u){return u.id;})).forEach(function(id){ids[id]=true;});
-      var hasUsage=rows.some(function(r){var unit=unitOf(r.d);return unit&&ids[unit.id];});
-      if(hasUsage&&!seen[root.id]){seen[root.id]=true;cols.push({id:root.id,label:root.name,kind:"unit"});}
+var MATRIX_INDENT_STEP = 24;    // px thụt lề mỗi cấp
+var MATRIX_GUIDE_OFFSET = 19;   // px từ mép trái tới đường nối dọc của cấp 1
+var MATRIX_GROUP_COLORS = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ec4899","#8b5cf6"];
+var MATRIX_TIER_LABEL = {root:"Phòng ban", unit:"Đơn vị", account:"Tài khoản"};
+var matrixLastRows = null;      // rows của kỳ đang xem, để bung/tìm kiếm không phải renderAll
+
+function matrixGuideX(level){ return MATRIX_GUIDE_OFFSET + (level-1)*MATRIX_INDENT_STEP; }
+function matrixSearching(){ return !!String(state.matrixSearch||"").trim(); }
+/* Đang tìm kiếm thì mở sẵn mọi nhánh, nếu không người dùng phải tự bung mới thấy kết quả. */
+function matrixIsOpen(id){ return matrixSearching() || !!(state.matrixExpanded||{})[id]; }
+
+/* Tài khoản trong phạm vi: bộ lọc chung của dashboard + ô tìm kiếm riêng của ma trận. */
+function matrixPool(){
+  var pool=filterAccounts();
+  var q=String(state.matrixSearch||"").trim().toLowerCase();
+  if(!q) return pool;
+  return pool.filter(function(u){
+    return [u.user,u.n,u.login,u.d,unitName(u.unitId)].join(" ").toLowerCase().indexOf(q)>=0;
+  });
+}
+function matrixAgents(rows){
+  var seen={}, out=[];
+  (rows||[]).forEach(function(r){ if(r.a&&!seen[r.a]){ seen[r.a]=1; out.push(r.a); } });
+  return out.sort(function(a,b){ return a.localeCompare(b,"vi"); });
+}
+/* Phần phân bổ của MỘT tài khoản cho ĐÚNG một agent. u.req là số trộn của mọi agent
+   nên không dùng được ở đây — phải đọc sổ tách theo agent. */
+function accountAgentReq(account, agent){
+  var b=account.byAgent&&account.byAgent[agent];
+  return b?num(b.req):0;
+}
+function matrixValues(accounts, agents){
+  return agents.map(function(agent){
+    var sum=0;
+    for(var i=0;i<accounts.length;i++) sum+=accountAgentReq(accounts[i],agent);
+    return sum;
+  });
+}
+
+/* Dựng cây, mỗi nút gom sẵn danh sách tài khoản bên dưới nó.
+   Nút không có tài khoản nào trong phạm vi thì bỏ hẳn, cho bảng không đầy hàng rỗng. */
+function matrixTree(unit, pool){
+  if(isExcludedUnit(unit)) return null;
+  var kids=unitChildren(unit.id).map(function(k){ return matrixTree(k,pool); })
+    .filter(function(n){ return !!n; });
+  kids.sort(function(a,b){ return a.unit.name.localeCompare(b.unit.name,"vi"); });
+  var direct=pool.filter(function(u){ return u.unitId===unit.id; });
+  var accounts=[];
+  kids.forEach(function(n){ accounts=accounts.concat(n.accounts); });
+  accounts=accounts.concat(direct);
+  if(!accounts.length) return null;
+  return {unit:unit, kids:kids, direct:sortAccounts(direct), accounts:accounts};
+}
+
+/* Làm phẳng cây thành danh sách hàng theo trạng thái đang mở.
+   guides = tọa độ các đường dọc của tổ tiên còn nhánh phía dưới; đường của hàng cuối
+   cùng chỉ vẽ nửa chiều cao, đúng quy ước tree view. */
+function flattenMatrixTree(node, depth, guides, isLast, group, parent, out){
+  var childCount=node.kids.length+node.direct.length;
+  var row={
+    key:node.unit.id, depth:depth, tier:depth===1?"root":"unit", kind:"unit",
+    label:node.unit.name, accounts:node.accounts, unitCount:node.kids.length,
+    expandable:childCount>0, open:matrixIsOpen(node.unit.id),
+    guides:guides, lastOfParent:isLast, group:group, parent:parent
+  };
+  out.push(row);
+  if(!row.open) return;
+  var childGuides=guides.concat(depth>1&&!isLast ? [matrixGuideX(depth-1)] : []);
+  node.kids.forEach(function(kid,i){
+    flattenMatrixTree(kid, depth+1, childGuides, i===childCount-1, group, row, out);
+  });
+  node.direct.forEach(function(acct,i){
+    out.push({
+      key:"acct:"+acct.user, depth:depth+1, tier:"account", kind:"account",
+      label:acct.n||acct.user, account:acct, accounts:[acct], unitCount:0,
+      expandable:false, open:false, guides:childGuides,
+      lastOfParent:(node.kids.length+i)===childCount-1, group:group, parent:row
     });
-    cols.sort(function(x,y){ return x.label.localeCompare(y.label); });
-    return {kind:"unit", cols:cols};
-  }
-  var current=path[path.length-1];
-  var kids=unitChildren(current).filter(function(k){ return !isExcludedUnit(k); });
-  if(kids.length){
-    return {kind:"unit", cols:kids.map(function(k){ return {id:k.id,label:k.name,kind:"unit"}; })};
-  }
-  // Không còn cấp đơn vị con ⇒ cột là tài khoản của đơn vị hiện tại.
-  var accounts=accountsUnderUnit(current, pool);
-  return {kind:"account", cols:sortAccounts(accounts).map(function(u){
-    return {id:u.user, label:u.user, kind:"account", account:u};
-  })};
-}
-/* Giá trị ô. Cột đơn vị cấp 1 lấy từ usage row (số thật); cột Vùng và cột tài khoản
-   lấy từ tầng phân bổ, nên tổng cột con luôn khớp cột cha. */
-function matrixCellValue(col, agent, rows, pool){
-  if(col.kind==="account"){
-    return col.account.a===agent ? num(col.account.req) : 0;
-  }
-  var kids=unitChildren(col.id).filter(function(k){ return !isExcludedUnit(k); });
-  var hasOwnRows=rows.some(function(r){
-    var u=unitOf(r.d); return u && u.id===col.id;
-  });
-  if(hasOwnRows||!kids.length){
-    var ids={};
-    [col.id].concat(unitDescendants(col.id).map(function(u){return u.id;})).forEach(function(i){ ids[i]=true; });
-    var fromRows=rows.reduce(function(sum,r){
-      var u=unitOf(r.d);
-      return sum + ((u&&ids[u.id]&&r.a===agent) ? num(r.r) : 0);
-    },0);
-    if(fromRows||hasOwnRows) return fromRows;
-  }
-  // Đơn vị chỉ tồn tại trong metadata (ví dụ Vùng) ⇒ lấy từ tài khoản đã phân bổ.
-  return accountsUnderUnit(col.id, pool).reduce(function(sum,u){
-    return sum + (u.a===agent ? num(u.req) : 0);
-  },0);
-}
-function renderMatrixBreadcrumb(){
-  var el=document.getElementById("matrix-breadcrumb"); if(!el) return;
-  var path=state.matrixPath||[];
-  var parts=["<a href='#' class='crumb"+(path.length?"":" crumb-current")+"' data-depth='0'>Tất cả phòng ban</a>"];
-  path.forEach(function(id,i){
-    var u=unitById(id); if(!u) return;
-    parts.push("<span class='crumb-sep'>›</span><a href='#' class='crumb"+
-      (i===path.length-1?" crumb-current":"")+"' data-depth='"+(i+1)+"'>"+esc(u.name)+"</a>");
-  });
-  el.innerHTML=parts.join("");
-  if(el.getAttribute("data-crumb-bound")) return;
-  el.setAttribute("data-crumb-bound","1");
-  el.addEventListener("click", function(ev){
-    var link=ev.target&&ev.target.closest?ev.target.closest("a.crumb"):null;
-    if(!link) return;
-    ev.preventDefault();
-    state.matrixPath=(state.matrixPath||[]).slice(0, parseInt(link.getAttribute("data-depth"),10)||0);
-    renderAll();
   });
 }
-function buildMatrixTable(tableId, cols, agents, matrix, drillable){
-  var table=document.getElementById(tableId); if(!table) return;
-  var light=currentTheme()==="light", max=0;
-  matrix.forEach(function(r){ r.forEach(function(v){ if(v>max) max=v; }); });
-  var html="<thead><tr><th class='row-h'></th>";
-  cols.forEach(function(c,ci){
-    var can=drillable[ci];
-    html+="<th class='col-h"+(can?" col-drill":"")+"'"+(can?" data-col='"+esc(String(ci))+"'":"")+">"+
-      esc(c.label)+(can?" <span class='col-caret'>⌄</span>":"")+"</th>";
-  });
-  html+="</tr></thead><tbody>";
-  agents.forEach(function(agent,ri){
-    html+="<tr><th class='row-h'>"+esc(agent)+"</th>";
-    (matrix[ri]||[]).forEach(function(v){
-      var norm=max? v/max:0;
-      var txt=v>0 ? (v>=1000?fmtDecimal(v/1000,1)+" nghìn":fmt(v)) : "·";
-      var col=v>0 ? (light?"#1e293b":"#e2e8f0") : (light?"#94a3b8":"#475569");
-      html+="<td class='hm-cell' style='background:"+intensityColor(norm,light)+";color:"+col+"'>"+txt+"</td>";
+/* Usage THẬT theo (đơn vị, agent), cộng dồn lên toàn bộ tổ tiên. Dùng cho những phòng
+   ban chưa có tài khoản Ralli nào — không có nguồn này thì chúng biến mất khỏi ma trận
+   và bảng sẽ thiếu phần lớn lưu lượng của kỳ. */
+function matrixUsageIndex(rows){
+  var map={};
+  (rows||[]).forEach(function(r){
+    var u=unitOf(r.d);
+    if(!u||isExcludedUnit(u)||!r.a) return;
+    unitPath(u.id).forEach(function(node){
+      var m=map[node.id]=map[node.id]||{};
+      m[r.a]=(m[r.a]||0)+num(r.r);
     });
+  });
+  return map;
+}
+/* Đơn vị nào có ít nhất một tài khoản trước khi áp ô tìm kiếm — dùng để phân biệt
+   "phòng ban chưa hề có tài khoản Ralli" với "có nhưng bị từ khóa lọc hết". */
+function unitsHavingAccounts(basePool){
+  var set={};
+  (basePool||[]).forEach(function(u){
+    unitPath(u.unitId).forEach(function(n){ set[n.id]=true; });
+  });
+  return set;
+}
+function buildMatrixRows(pool, usage, agents){
+  var out=[];
+  var hasAccounts=unitsHavingAccounts(filterAccounts());
+  var q=String(state.matrixSearch||"").trim().toLowerCase();
+  reportingRoots().forEach(function(root,i){
+    if(isExcludedUnit(root)) return;
+    var node=matrixTree(root,pool);
+    if(node){ flattenMatrixTree(node, 1, [], true, i, null, out); return; }
+    // Có tài khoản nhưng từ khóa lọc hết ⇒ ẩn hẳn, KHÔNG rơi xuống nhánh "chưa có
+    // tài khoản" bên dưới, vì như thế sẽ dán nhãn sai cho phòng ban.
+    if(hasAccounts[root.id]) return;
+    if(q && root.name.toLowerCase().indexOf(q)<0) return;
+    // Chưa có tài khoản Ralli ⇒ vẫn hiện phòng ban dưới dạng hàng lá với số usage thật,
+    // và nói rõ là không bung được, thay vì im lặng bỏ qua lưu lượng của phòng đó.
+    var byAgent=usage[root.id]; if(!byAgent) return;
+    var values=agents.map(function(a){ return num(byAgent[a]||0); });
+    if(!values.some(function(v){ return v>0; })) return;
+    out.push({key:root.id, depth:1, tier:"root", kind:"unit", label:root.name,
+      accounts:[], unitCount:0, expandable:false, open:false, guides:[],
+      lastOfParent:true, group:i, parent:null, fixedValues:values, noAccounts:true});
+  });
+  return out;
+}
+
+/* ── Trình bày phân cấp: thụt lề, đường nối cây, dải màu theo phòng ban gốc ── */
+function matrixGuideColor(light){ return light ? "rgba(100,116,139,.38)" : "rgba(148,163,184,.30)"; }
+function matrixNameStyle(row, light){
+  var pad=row.depth===1 ? 10 : matrixGuideX(row.depth-1)+14;
+  var css="padding-left:"+pad+"px;border-left-color:"+
+    MATRIX_GROUP_COLORS[row.group%MATRIX_GROUP_COLORS.length]+";";
+  if(row.depth<2) return css;
+  var c=matrixGuideColor(light), line="linear-gradient("+c+","+c+")";
+  var layers=[], sizes=[], spots=[];
+  row.guides.forEach(function(x){ layers.push(line); sizes.push("1px 100%"); spots.push(x+"px 0"); });
+  layers.push(line);
+  sizes.push(row.lastOfParent?"1px 50%":"1px 100%");
+  spots.push(matrixGuideX(row.depth-1)+"px 0");
+  return css+"background-image:"+layers.join(",")+";background-size:"+sizes.join(",")+
+    ";background-position:"+spots.join(",")+";background-repeat:no-repeat;";
+}
+/* Dòng phụ dưới tên: hàng này là cấp gì, gồm bao nhiêu con, và chiếm bao nhiêu phần
+   của hàng cha — để quan hệ "tổng con = cha" nhìn thấy được ngay trên bảng. */
+function matrixMeta(row){
+  var share=row.share!=null
+    ? " · <span class='mx-share'>"+fmtDecimal(row.share,1)+"% của "+esc(row.parent.label)+"</span>"
+    : "";
+  if(row.tier==="account")
+    return esc(row.account.login||row.account.user)+share;
+  if(row.noAccounts)
+    return "<span class='mx-warn'>chưa có tài khoản Ralli — không bung được</span>";
+  var parts=[];
+  if(row.unitCount) parts.push(row.unitCount+" đơn vị");
+  parts.push(fmt(row.accounts.length)+" tài khoản");
+  return parts.join(" · ")+share+
+    (row.open?" · <span class='mx-share'>∑ con = 100%</span>":"");
+}
+/* Số hiện ĐẦY ĐỦ chứ không rút gọn "1 nghìn": cả bảng dựa trên việc người xem cộng
+   được các hàng con ra hàng cha, mà số rút gọn thì không cộng kiểm được. */
+function matrixCellHtml(value, max, light, extraClass){
+  var norm=max?value/max:0;
+  var txt=value>0 ? (value>=100000 ? fmtDecimal(value/1000,0)+" nghìn" : fmt(value)) : "·";
+  var col=value>0 ? (light?"#1e293b":"#e2e8f0") : (light?"#94a3b8":"#475569");
+  return "<td class='hm-cell"+(extraClass?" "+extraClass:"")+"' style='background:"+
+    intensityColor(norm,light)+";color:"+col+"'"+
+    (value>0?" title='"+esc(fmt(value)+" request")+"'":"")+">"+txt+"</td>";
+}
+
+function renderMatrixTree(rows, agents){
+  var table=document.getElementById("matrix-tree-table"); if(!table) return;
+  var light=currentTheme()==="light";
+
+  // Chuẩn hóa độ đậm theo TỪNG CẤP: gộp chung thì mọi hàng tài khoản sẽ nhạt như nhau.
+  var maxBy={}, maxTotalBy={};
+  rows.forEach(function(row){
+    row.values=row.fixedValues || matrixValues(row.accounts, agents);
+    row.total=row.values.reduce(function(s,v){ return s+v; },0);
+    row.normKey=row.tier==="account" ? "account" : ("d"+row.depth);
+    row.values.forEach(function(v){ if(v>(maxBy[row.normKey]||0)) maxBy[row.normKey]=v; });
+    if(row.total>(maxTotalBy[row.normKey]||0)) maxTotalBy[row.normKey]=row.total;
+  });
+  rows.forEach(function(row){
+    row.share=row.parent&&row.parent.total>0 ? row.total/row.parent.total*100 : null;
+  });
+
+  var html="<thead><tr><th class='mx-th-name'>Phòng ban / Đơn vị</th>";
+  agents.forEach(function(a){ html+="<th class='num mx-th-agent'>"+esc(a)+"</th>"; });
+  html+="<th class='num mx-th-total'>Tổng</th></tr></thead><tbody>";
+
+  if(!rows.length){
+    html+="<tr><td class='mx-empty' colspan='"+(agents.length+2)+"'>"+
+      (matrixSearching()?"Không có tài khoản nào khớp từ khóa.":"Chưa có tài khoản nào trong phạm vi đang lọc.")+
+      "</td></tr>";
+  }
+  rows.forEach(function(row){
+    var cls="mx-row mx-d"+row.depth+" mx-"+row.tier+(row.open?" mx-open":"")+
+      (row.expandable?" mx-clickable":"");
+    html+="<tr class='"+cls+"'"+(row.expandable?" data-unit='"+esc(row.key)+"'":"")+">"+
+      "<td class='mx-name' style='"+matrixNameStyle(row,light)+"'>"+
+      (row.depth>1?"<i class='mx-elbow' style='left:"+matrixGuideX(row.depth-1)+"px'></i>":"")+
+      "<span class='drill-caret"+(row.expandable?"":" drill-leaf")+"'>"+
+        (row.expandable?(row.open?"▼":"▶"):"·")+"</span>"+
+      "<span class='mx-text'><span class='mx-label'>"+
+        "<span class='mx-tier mx-tier-"+row.tier+"'>"+MATRIX_TIER_LABEL[row.tier]+"</span>"+
+        esc(row.label)+"</span>"+
+      "<span class='mx-meta'>"+matrixMeta(row)+"</span></span></td>";
+    row.values.forEach(function(v){ html+=matrixCellHtml(v, maxBy[row.normKey]||0, light); });
+    html+=matrixCellHtml(row.total, maxTotalBy[row.normKey]||0, light, "mx-total");
     html+="</tr>";
   });
   html+="</tbody>";
   table.innerHTML=html;
-  // Cập nhật cột TRƯỚC khi thoát sớm: nếu gán sau, từ lượt render thứ hai trở đi
-  // handler sẽ đọc danh sách cột cũ và drilldown nhảy sai đơn vị.
-  table.__cols=cols;
-  if(table.getAttribute("data-drill-bound")) return;
-  table.setAttribute("data-drill-bound","1");
+  bindMatrixTree(table);
+}
+
+/* Toggle bung/thu. Trạng thái nằm trong state.matrixExpanded nên giữ nguyên qua các
+   lần đổi bộ lọc hoặc khoảng thời gian. Listener gắn một lần trên bảng. */
+function bindMatrixTree(table){
+  if(table.getAttribute("data-mx-bound")) return;
+  table.setAttribute("data-mx-bound","1");
   table.addEventListener("click", function(ev){
-    var th=ev.target&&ev.target.closest?ev.target.closest("th.col-drill"):null;
-    if(!th) return;
-    var idx=parseInt(th.getAttribute("data-col"),10);
-    var target=(table.__cols||[])[idx];
-    if(!target||target.kind!=="unit") return;
-    state.matrixPath=(state.matrixPath||[]).concat([target.id]);
-    renderAll();
+    var tr=ev.target&&ev.target.closest?ev.target.closest("tr[data-unit]"):null;
+    if(!tr) return;
+    var id=tr.getAttribute("data-unit");
+    state.matrixExpanded=state.matrixExpanded||{};
+    if(state.matrixExpanded[id]) delete state.matrixExpanded[id];
+    else state.matrixExpanded[id]=true;
+    refreshMatrix();
   });
 }
+/* Vẽ lại RIÊNG ma trận. Bung một hàng không nên dựng lại toàn bộ biểu đồ của dashboard. */
+function refreshMatrix(){
+  if(matrixLastRows) buildAgentDeptHeatmap(matrixLastRows);
+  saveState();
+}
+function matrixAnyOpen(){
+  var open=state.matrixExpanded||{};
+  for(var k in open) if(Object.prototype.hasOwnProperty.call(open,k)) return true;
+  return false;
+}
+function bindMatrixToolbar(){
+  var search=document.getElementById("matrix-search");
+  if(search){
+    if(search.value!==(state.matrixSearch||"")) search.value=state.matrixSearch||"";
+    if(!search.getAttribute("data-mx-bound")){
+      search.setAttribute("data-mx-bound","1");
+      search.oninput=function(){ state.matrixSearch=this.value; refreshMatrix(); };
+    }
+  }
+  var btn=document.getElementById("matrix-expand");
+  if(btn){
+    var anyOpen=matrixAnyOpen();
+    btn.textContent=anyOpen?"Thu gọn tất cả":"Mở tất cả phòng ban";
+    btn.disabled=matrixSearching();
+    if(!btn.getAttribute("data-mx-bound")){
+      btn.setAttribute("data-mx-bound","1");
+      btn.onclick=function(){
+        var opened=matrixAnyOpen();
+        state.matrixExpanded={};
+        if(!opened) reportingRoots().forEach(function(u){ state.matrixExpanded[u.id]=true; });
+        refreshMatrix();
+      };
+    }
+  }
+}
+
+/* Ghi chú kiểm chứng: tổng ma trận có bằng tổng usage thật của kỳ không.
+   Nêu thẳng phần lệch thay vì im lặng, vì lệch nghĩa là có đơn vị phát sinh usage
+   nhưng chưa có tài khoản Ralli nào để phân bổ xuống. */
+function renderMatrixNote(rows, scopeRows){
+  var shown=0;
+  rows.forEach(function(r){ if(r.depth===1) shown+=r.total; });
+  var real=0;
+  (scopeRows||[]).forEach(function(r){
+    var u=unitOf(r.d);
+    if(u&&!isExcludedUnit(u)&&r.a) real+=num(r.r);
+  });
+  var accounts=0, blind=0;
+  rows.forEach(function(r){
+    if(r.depth!==1) return;
+    accounts+=r.accounts.length;
+    if(r.noAccounts) blind++;
+  });
+  // Dưới cấp mà file usage ghi nhận, phần chia cho từng đơn vị/tài khoản là số PHÂN BỔ.
+  var allocated=" · <span title='"+esc(ALLOCATED_DATA_HINT)+"'>ⓘ "+ALLOCATED_DATA_LABEL+"</span>";
+  var note;
+  if(matrixSearching()){
+    note="Đang lọc · "+fmt(accounts)+" tài khoản khớp · "+fmt(shown)+" request"+allocated;
+  } else if(state.filters&&state.filters.dept){
+    note=fmt(shown)+" request trong phạm vi lọc · "+fmt(accounts)+" tài khoản"+allocated;
+  } else if(shown===real){
+    note="ⓘ Tổng ma trận "+fmt(shown)+" request — khớp đúng tổng usage của kỳ"+
+      (blind?", trong đó "+blind+" phòng chưa có tài khoản Ralli nên không bung được":"")+"."+allocated;
+  } else {
+    note="⚠ Ma trận "+fmt(shown)+" / usage "+fmt(real)+" request — lệch "+fmt(real-shown)+
+      " thuộc đơn vị chưa phân bổ được xuống tài khoản."+allocated;
+  }
+  set("matrix-note", note);
+}
+
 function buildAgentDeptHeatmap(rows){
-  var pool=filterAccounts();
-  var select=document.getElementById("matrix-user-filter");
-  var selected=state.matrixUser||"";
-  if(select){
-    var optionAccounts=pool.slice().sort(function(a,b){return a.user.localeCompare(b.user);});
-    var selectedAccount=USER_ACCOUNTS.filter(function(u){return u.user===selected;})[0];
-    if(selectedAccount&&!optionAccounts.some(function(u){return u.user===selected;})) optionAccounts.unshift(selectedAccount);
-    select.innerHTML="<option value=''>Tất cả user</option>"+optionAccounts.map(function(u){
-      return "<option value='"+esc(u.user)+"'"+(u.user===selected?" selected":"")+">"+
-        esc(u.user)+" · "+esc(unitName(u.unitId))+"</option>";
-    }).join("");
-    select.onchange=function(){
-      var picked=this.value;
-      state.matrixUser=picked;
-      // Nhảy breadcrumb tới đúng đơn vị của tài khoản được chọn.
-      var acct=picked?USER_ACCOUNTS.filter(function(u){return u.user===picked;})[0]:null;
-      state.matrixPath=acct?unitPath(acct.unitId).filter(function(u){
-        return u.id!=="company"&&u.id!=="rd-corp";
-      }).map(function(u){return u.id;}):[];
-      renderAll();
-    };
-  }
-
-  var account=selected?(USER_ACCOUNTS.filter(function(u){return u.user===selected;})[0]||null):null;
-
-  var level=matrixLevelColumns(rows, pool);
-  var cols=level.cols;
-  // Hàng = project/agent có mặt trong phạm vi đang xem.
-  var seenAgent={}, agents=[];
-  rows.forEach(function(r){ if(r.a&&!seenAgent[r.a]){ seenAgent[r.a]=true; agents.push(r.a); } });
-  if(level.kind==="account"){
-    cols.forEach(function(c){ if(c.account.a&&!seenAgent[c.account.a]){ seenAgent[c.account.a]=true; agents.push(c.account.a); } });
-  }
-  agents.sort();
-
-  var matrix=agents.map(function(agent){
-    return cols.map(function(c){ return matrixCellValue(c, agent, rows, pool); });
-  });
-
-  // Ẩn cột không có hoạt động, trừ tài khoản đang được chọn ở bộ lọc user.
-  var keep=cols.map(function(c,ci){
-    if(selected&&c.kind==="account"&&c.id===selected) return true;
-    return agents.some(function(_,ri){ return (matrix[ri]||[])[ci]>0; });
-  });
-  var keptCols=cols.filter(function(_,ci){return keep[ci];});
-  if(keptCols.length){
-    cols=keptCols;
-    matrix=matrix.map(function(row){ return row.filter(function(_,ci){return keep[ci];}); });
-  }
-  // Bỏ hàng project không có ô nào, cho ma trận không rỗng vô nghĩa.
-  var keepRow=matrix.map(function(row){ return row.some(function(v){return v>0;}); });
-  if(keepRow.some(Boolean)){
-    agents=agents.filter(function(_,ri){return keepRow[ri];});
-    matrix=matrix.filter(function(_,ri){return keepRow[ri];});
-  }
-
-  var drillable=cols.map(function(c){
-    if(c.kind!=="unit") return false;
-    var kids=unitChildren(c.id).filter(function(k){ return !isExcludedUnit(k); });
-    return kids.length>0 || accountsUnderUnit(c.id, pool).length>0;
-  });
-
-  renderMatrixBreadcrumb();
-  buildMatrixTable("heatmap-agent-dept", cols, agents, matrix, drillable);
-
-  var summary;
-  if(selected) summary=account
-    ? esc(account.user)+" · "+esc(unitName(account.unitId))+
-      (num(account.req)>0?"":" · không phát sinh usage trong kỳ")
-    : "Không tìm thấy user đã chọn";
-  else if(level.kind==="account") summary="ⓘ "+ALLOCATED_DATA_LABEL;
-  else summary="Ô càng đậm = càng nhiều request";
-  set("matrix-user-summary", summary);
+  matrixLastRows=rows;
+  var agents=matrixAgents(rows);
+  var matrixRows=buildMatrixRows(matrixPool(), matrixUsageIndex(rows), agents);
+  bindMatrixToolbar();
+  renderMatrixTree(matrixRows, agents);
+  renderMatrixNote(matrixRows, rows);
 }
-
 /* ═══════════════ RENDER: PROVIDERS ═══════════════ */
 function renderProviders(rows){
   var byProv = groupAgg(rows, function(r){return modelProvider(r.m);}).filter(function(g){return g.r>0||g.tokens>0;}).sort(function(a,b){return b.tokens-a.tokens;});
@@ -2132,7 +2280,8 @@ function fillSelect(id, opts, val, allLabel){
     var key=id.split("-")[1];
     state.filters[key] = this.value;
     // Đổi phòng ban ⇒ đường đi drilldown của ma trận không còn hợp lệ, đưa về cấp gốc.
-    if(key==="dept") state.matrixPath=[];
+    // Đổi phòng ban lọc thì cây ma trận đang bung không còn nghĩa gì, thu về gốc.
+    if(key==="dept") state.matrixExpanded={};
     renderAll();
   };
 }

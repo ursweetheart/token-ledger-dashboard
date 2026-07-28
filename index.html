@@ -716,19 +716,16 @@
   </div>
 
   <div class="section-controls">
-    <div class="section-title">Ma trận Project × Phòng ban</div>
+    <div class="section-title">Ma trận Phòng ban × Project</div>
     <div class="matrix-toolbar">
-      <label for="matrix-user-filter">User</label>
-      <select id="matrix-user-filter" class="filter-select">
-        <option value="">Tất cả user</option>
-      </select>
-      <span class="subtle" id="matrix-user-summary">Ô càng đậm = càng nhiều request</span>
+      <input type="search" id="matrix-search" class="filter-select matrix-search" placeholder="Tìm tài khoản, login hoặc đơn vị…">
+      <button type="button" id="matrix-expand" class="matrix-btn">Mở tất cả phòng ban</button>
     </div>
   </div>
   <div class="section">
-    <div class="matrix-breadcrumb" id="matrix-breadcrumb"></div>
-    <div class="heatmap-wrap"><table class="heatmap matrix-drill" id="heatmap-agent-dept"></table></div>
-    <div class="hm-scale">Ít <span class="bar"></span> Nhiều · hàng = project, cột = phòng ban · <i>bấm tiêu đề cột để xem theo Vùng rồi tới từng tài khoản.</i></div>
+    <div class="heatmap-wrap"><table class="heatmap matrix-tree" id="matrix-tree-table"></table></div>
+    <div class="hm-scale">Ít <span class="bar"></span> Nhiều · hàng = phòng ban, cột = project · <i>bấm một hàng để bung Vùng → Đội → tài khoản ngay tại chỗ.</i></div>
+    <div class="matrix-note" id="matrix-note"></div>
   </div>
 
   <div class="section-controls"><div class="section-title">Chi tiết theo agent</div></div>
