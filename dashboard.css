@@ -631,6 +631,37 @@ td.user-id {
     color: #60a5fa;
 }
 
+.user-real-name,
+.user-account {
+    display: block;
+}
+
+.user-real-name {
+    color: #e2e8f0;
+    font-weight: 700;
+}
+
+.user-account {
+    margin-top: 3px;
+    color: #60a5fa;
+    font-size: 11px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.user-department {
+    min-width: 180px;
+    color: #cbd5e1;
+}
+
+body.light-theme .user-real-name {
+    color: #0f172a;
+}
+
+body.light-theme .user-department {
+    color: #334155;
+}
+
 td.model-name {
     font-weight: 500;
 }
@@ -1804,6 +1835,12 @@ input:checked+.slider:before {
 .user-summary-chips {
     display: flex;
     gap: 8px;
+}
+
+.user-data-note {
+    display: block;
+    margin: -4px 0 12px;
+    line-height: 1.5;
 }
 
 .summary-chip {

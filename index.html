@@ -586,7 +586,7 @@
   </div>
 
   <!-- ─── Phần User (gộp từ tab User cũ) ─── -->
-  <div class="section-controls"><div class="section-title">Tài khoản người dùng</div></div>
+  <div class="section-controls"><div class="section-title">Tài khoản người dùng Ralli</div></div>
 
   <div class="metrics user-kpi-grid">
     <div class="metric-card">
@@ -612,7 +612,7 @@
       <div class="metric-label">🆕 Cấp mới trong kỳ</div>
       <div class="metric-q">Kỳ này cấp thêm bao nhiêu tài khoản?</div>
       <div class="metric-value" id="m-us-new">—</div>
-      <div class="metric-def">Tài khoản được tạo trong khoảng thời gian đang chọn.</div>
+      <div class="metric-def" id="m-us-new-def">—</div>
     </div>
     <div class="metric-card">
       <div class="metric-label">🏢 Số phòng ban</div>
@@ -624,16 +624,20 @@
 
   <div class="user-section-card">
     <div class="user-section-head">
-      <div class="user-section-title">👥 Users</div>
+      <div class="user-section-title">👥 Người dùng Ralli</div>
       <div class="user-summary-chips">
         <span class="summary-chip active" id="user-active-chip">Đã dùng: —</span>
         <span class="summary-chip" id="user-total-chip">Tổng: —</span>
       </div>
     </div>
+    <div class="allocated-note user-data-note">
+      ⓘ Danh tính và phòng ban lấy từ TLA Ralli; request, chi phí và quota theo tài khoản
+      chỉ là số phân bổ vì dữ liệu usage hiện chưa có userId.
+    </div>
     <div class="table-container user-main-table">
       <table>
         <thead><tr>
-          <th>#</th><th>User</th><th>Role</th><th>Status</th>
+          <th>#</th><th>Họ tên / Tài khoản</th><th>Phòng ban</th><th>Vai trò</th><th>Trạng thái</th>
           <th class="num">Reqs</th><th class="num">Chi phí</th><th>Quota kỳ hiện tại</th>
         </tr></thead>
         <tbody id="user-acct-tbody"></tbody>
@@ -1018,6 +1022,7 @@
   </div>
 </div>
 
+<script src="ralli-users.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

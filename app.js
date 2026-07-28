@@ -8,7 +8,7 @@
 "use strict";
 
 /* ─── Hằng số ─── */
-var STORE = "agent-dash-state-v12-ralli-permissions"; // v12: Excel tháng 6/7 + cây phân quyền Ralli
+var STORE = "agent-dash-state-v13-ralli-users"; // v13: danh tính user Ralli thật + Excel tháng 6/7
 var TAB_STORE = "agent-dash-tab";
 var THEME_STORE = "agent-dash-theme";
 var RANGE_PRESETS = [["7 ngày",7],["30 ngày",30],["90 ngày",90],["Tất cả",null]]; // preset time-range (kiểu Open WebUI)
@@ -182,11 +182,9 @@ var UNIT_ALIASES = {
   "Truyền thông":"truyenthong", "Kế toán":"ketoan", "Kế hoạch":"kehoach",
   "Nghiên cứu thị trường":"nctt2", "Trung tâm R&D":"rnd", "Quản trị hệ thống":"qths"
 };
-/* Snapshot phân quyền Ralli đọc từ data/phong_ban_phan_quyen.xlsx.
-   Mỗi cấp giữ số Excel khai báo trực tiếp; không tự cộng lại từ cấp con vì số cấp cha
-   gồm cả user chưa được gán xuống đội/vùng. */
+/* Số tài khoản được cấp sẽ được dựng lại từ danh sách user Ralli đã làm sạch.
+   Không dùng số demo hoặc số của agent khác cho các KPI/bảng người dùng. */
 var DEPT_PROVISIONED = {};
-ORG_UNITS.forEach(function(unit){ DEPT_PROVISIONED[unit.id]=unit.provisioned; });
 var MODALITY = [["TEXT",86,"#667eea"],["IMAGE",9,"#10b981"],["AUDIO",4,"#f59e0b"],["VIDEO",1,"#8b5cf6"]];
 var USER_HEAT = {
   cols: ["Sale Agent","Chatbot CC","CRM","Phản Hồi TT","Ralli","Hợp Đồng"],
@@ -195,10 +193,10 @@ var USER_HEAT = {
 };
 var palette = ["#667eea","#3b82f6","#f59e0b","#10b981","#8b5cf6","#06b6d4","#ef4444","#64748b","#ec4899","#14b8a6"];
 
-/* ═══════════════ DANH MỤC TÀI KHOẢN (DEMO) ═══════════════
+/* ═══════════════ DANH MỤC TÀI KHOẢN RALLI ═══════════════
    Nguồn usage KHÔNG có userId (mỗi dòng là tổng theo agent × phòng ban), nên không thể
-   quy số liệu về từng tài khoản thật. Tầng này sinh danh tính tài khoản rồi PHÂN BỔ số
-   liệu thật của phòng xuống các tài khoản đó, để mọi cấp drilldown cộng khớp cấp cha.
+   quy số liệu về từng tài khoản thật. Danh tính, tên và phòng ban lấy từ TLA Ralli;
+   request/token chỉ được PHÂN BỔ từ tổng thật của phòng để các cấp drilldown cộng khớp.
 
    Vì vậy: số của từng tài khoản là SỐ PHÂN BỔ, không phải số đo. Mọi khối UI hiển thị
    số ở cấp tài khoản phải mang nhãn ALLOCATED_DATA_LABEL.
@@ -207,7 +205,7 @@ var palette = ["#667eea","#3b82f6","#f59e0b","#10b981","#8b5cf6","#06b6d4","#ef4
      buildAccountCatalogue()      → danh tính, tĩnh (không chứa số liệu)
      applyAccountAllocation(rows) → phân bổ theo kỳ + bộ lọc đang xem, chạy mỗi lượt render
    ═════════════════════════════════════════════════════════ */
-var ALLOCATED_DATA_LABEL = "Dữ liệu phân bổ (demo)";
+var ALLOCATED_DATA_LABEL = "Số liệu phân bổ theo phòng ban";
 var ALLOCATED_DATA_HINT = "Nguồn usage hiện tại không có định danh user. Số theo tài khoản là "
   + "số phân bổ từ tổng thật của phòng ban, không phải số đo theo từng tài khoản.";
 var USER_ACCOUNTS = [];
@@ -239,44 +237,35 @@ function unitAgentProfiles(){
   });
   return byUnit;
 }
-var FAMILY_NAMES=["Nguyễn","Trần","Lê","Phạm","Hoàng","Vũ","Đặng","Đỗ","Bùi","Ngô"];
-var GIVEN_NAMES=["An","Bình","Chi","Dũng","Giang","Hà","Hải","Hương","Khánh","Linh",
-  "Minh","Nam","Oanh","Phương","Quân","Sơn","Trang","Tuấn","Vy","Yến"];
 /* Tỷ lệ tài khoản có khả năng hoạt động của một đơn vị — cố định theo unitId. */
 function adoptionRatio(unitId){ return 0.55 + (stableHash("adopt:"+unitId)%36)/100; }
 function buildAccountCatalogue(){
-  var profiles=unitAgentProfiles(), out=[], seq=0;
-  ORG_UNITS.forEach(function(unit){
-    if(isExcludedUnit(unit)) return;
-    // Chỉ sinh phần user thuộc trực tiếp đơn vị này. Phần đã phân xuống cấp con
-    // được sinh tại chính cấp con, nhờ đó tổng của mọi nút khớp workbook.
-    var total=directProvisionedOf(unit.id);
-    if(total==null||total<=0) return;
-    var path=unitPath(unit.id), root=path[0]||unit, prof=null;
-    // Toàn bộ cây từ workbook phong_ban_phan_quyen.xlsx là quyền của Ralli.
-    if(root.id==="company") prof=[{a:"Trợ lý ảo Ralli",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh"}];
-    else {
-      for(var k=path.length-1;k>=0&&!prof;k--) if(profiles[path[k].id]) prof=profiles[path[k].id];
-    }
-    if(!prof||!prof.length) prof=[{a:"—",m:"—",ug:"—"}];
-    var eligible=Math.max(1, Math.round(total*adoptionRatio(unit.id)));
-    for(var i=0;i<total;i++){
-      seq++;
-      var p=prof[i%prof.length], h=stableHash(unit.id+":"+i);
+  var out=[], byUnit={};
+  (window.RALLI_USERS||[]).forEach(function(entry){
+    var unit=unitOf(entry.department);
+    if(!unit||isExcludedUnit(unit)) return;
+    (byUnit[unit.id]=byUnit[unit.id]||[]).push({entry:entry,unit:unit});
+  });
+  Object.keys(byUnit).sort().forEach(function(unitId){
+    var group=byUnit[unitId].sort(function(x,y){return x.entry.login.localeCompare(y.entry.login);});
+    var eligible=Math.max(1,Math.round(group.length*adoptionRatio(unitId)));
+    group.forEach(function(item,i){
+      var entry=item.entry, unit=item.unit, h=stableHash(entry.login);
+      var sourceActive=String(entry.status||"").trim().toLowerCase()==="hoạt động";
       out.push({
-        user:"user."+("0000"+seq).slice(-4)+"@corp.vn",
-        // Dùng >>> để giữ số không dấu: h>>3 có thể âm khi h > 2^31 ⇒ index âm ⇒ undefined.
-        n:FAMILY_NAMES[h%FAMILY_NAMES.length]+" "+GIVEN_NAMES[(h>>>3)%GIVEN_NAMES.length],
-        unitId:unit.id, d:unit.name,
-        a:p.a, m:p.m, ug:p.ug,
+        user:entry.email||entry.login,
+        login:entry.login, email:entry.email, n:entry.name,
+        unitId:unit.id, d:entry.department,
+        a:"Trợ lý ảo Ralli", m:"Gemini 2.5 Flash", ug:"Người dùng Ralli",
         // weight > 0 ⇒ tài khoản có thể nhận phân bổ; = 0 ⇒ luôn là tài khoản chưa dùng.
-        weight: i<eligible ? 1+(h%9) : 0,
-        role: seq%31===0 ? "Admin" : "User",
-        created: (h%9===0) ? "2026-07-"+("0"+(1+h%27)).slice(-2) : "2026-03-"+("0"+(1+h%27)).slice(-2),
-        disabled: (h%97===0),
+        weight: sourceActive&&i<eligible ? 1+(h%9) : 0,
+        role:entry.accountType==="service"?"Tài khoản chức năng":(entry.role||"Nhân viên"),
+        accountType:entry.accountType||"person", sourceStatus:entry.status||"",
+        created:"",
+        disabled:!sourceActive,
         req:0, ti:0, to:0, last:"", active:false, quotaPct:0
       });
-    }
+    });
   });
   return out;
 }
@@ -563,6 +552,11 @@ function unitOf(deptString){
       if(hit) return hit;
     }
   }
+  // Danh sách Ralli dùng tên đầy đủ của 86 phòng/đội trong ORG_UNITS. Khớp trực tiếp
+  // trước khi tạo auto-unit để tài khoản luôn nằm đúng nhánh vùng/chi nhánh.
+  for(var i=0;i<ORG_UNITS.length;i++){
+    if(ORG_UNITS[i].name.trim().toLowerCase()===loose) return ORG_UNITS[i];
+  }
   var autoId = "auto:" + key;
   if(!unitIndex[autoId]){
     var unit = {id:autoId, name:key, parent:null, level:1, auto:true};
@@ -603,6 +597,19 @@ function unitDescendants(unitId){
   return out;
 }
 function isExcludedUnit(unit){ return !unit || isExcludedDepartment(unit.name); }
+/* Đếm 622 tài khoản Ralli theo phòng trực tiếp, sau đó cộng vào toàn bộ cấp cha.
+   Nhờ đó company/PBH/vùng/đội đều có mẫu số đúng nhưng mỗi tài khoản chỉ tồn tại một lần. */
+function rebuildRalliProvisioned(){
+  DEPT_PROVISIONED={};
+  (window.RALLI_USERS||[]).forEach(function(entry){
+    var unit=unitOf(entry.department);
+    if(!unit||isExcludedUnit(unit)) return;
+    unitPath(unit.id).forEach(function(node){
+      DEPT_PROVISIONED[node.id]=(DEPT_PROVISIONED[node.id]||0)+1;
+    });
+  });
+}
+rebuildRalliProvisioned();
 /* Số tài khoản được cấp: khai báo ở cấp lá, cấp cha cộng dồn từ con.
    Trả về null khi không có dữ liệu — KHÔNG suy ra từ số user active. */
 function provisionedOf(unitId){
@@ -1846,7 +1853,8 @@ function renderUsers(rows){
   var disabled=accounts.filter(function(u){return u.disabled;});
   var neverUsed=inactive.filter(function(u){return !u.last;}).length;
   var dormant=inactive.filter(function(u){return u.last&&dayDiff(u.last,state.range.end)>30;}).length;
-  var newInRange=accounts.filter(function(u){return u.created>=state.range.start&&u.created<=state.range.end;}).length;
+  var datedAccounts=accounts.filter(function(u){return !!u.created;});
+  var newInRange=datedAccounts.filter(function(u){return u.created>=state.range.start&&u.created<=state.range.end;}).length;
   var units=distinct(accounts.map(function(u){return u.d;})).length;
   set("m-us-total",fmt(accounts.length));
   set("m-us-total-def","Đã dùng trong kỳ: <b>"+fmt(active.length)+"/"+fmt(accounts.length)+" ("+pct(active.length,accounts.length).toFixed(0)+"%)</b> · Đã khoá: "+fmt(disabled.length)+".");
@@ -1854,7 +1862,10 @@ function renderUsers(rows){
   set("m-us-adoption-def",fmt(active.length)+" đã dùng / "+fmt(accounts.length)+" đã cấp.");
   set("m-us-inactive",fmt(inactive.length));
   set("m-us-inactive-def","Chưa từng dùng: "+fmt(neverUsed)+" · ngừng >30 ngày: "+fmt(dormant)+".");
-  set("m-us-new",fmt(newInRange));
+  set("m-us-new",datedAccounts.length?fmt(newInRange):"—");
+  set("m-us-new-def",datedAccounts.length
+    ?"Tài khoản được tạo trong khoảng thời gian đang chọn."
+    :"Nguồn TLA Ralli chưa có ngày cấp tài khoản.");
   set("m-us-units",fmt(units));
   set("user-active-chip","Đã dùng: "+fmt(active.length));
   set("user-total-chip","Tổng: "+fmt(accounts.length));
@@ -1900,7 +1911,9 @@ function renderUserAccounts(accounts){
     var status=accountStatus(u), roleClass=u.role==="Admin"?"badge-admin":"badge-user";
     return "<tr>"+
       "<td class='rank'>"+(i+1)+"</td>"+
-      "<td class='user-id'>"+esc(u.user)+"</td>"+
+      "<td class='user-id'><span class='user-real-name'>"+esc(u.n)+"</span>"+
+        "<span class='user-account'>"+esc(u.login)+" · "+esc(u.email)+"</span></td>"+
+      "<td class='user-department'>"+esc(u.d)+"</td>"+
       "<td><span class='"+roleClass+"'>"+esc(u.role)+"</span></td>"+
       "<td><span class='user-status "+status.cls+"'>"+status.label+"</span></td>"+
       "<td class='num'>"+fmt(u.req)+"</td>"+
@@ -1908,7 +1921,7 @@ function renderUserAccounts(accounts){
       "<td class='quota-cell'><div class='quota-gauge'><div class='quota-gauge-fill' style='width:"+q+"%;background:"+quotaColor(q)+"'></div></div>"+
       "<span class='quota-text'>"+q.toFixed(0)+"%</span><span class='quota-detail'>"+money(c)+" / "+money(quotaUsd)+"</span></td>"+
       "</tr>";
-  }).join("") || emptyRow(7);
+  }).join("") || emptyRow(8);
 }
 function lastActivityLabel(u){
   if(!u.last) return "— (chưa từng)";
@@ -1924,7 +1937,8 @@ function renderInactiveAccounts(accounts){
     return a.last.localeCompare(b.last);
   }).slice(0,8);
   tb.innerHTML=rows.map(function(u){
-    return "<tr><td class='user-id'>"+esc(u.user)+"</td><td>"+esc(u.d)+"</td><td>"+lastActivityLabel(u)+"</td></tr>";
+    return "<tr><td class='user-id'><span class='user-real-name'>"+esc(u.n)+"</span>"+
+      "<span class='user-account'>"+esc(u.login)+"</span></td><td>"+esc(u.d)+"</td><td>"+lastActivityLabel(u)+"</td></tr>";
   }).join("") || emptyRow(3);
 }
 function chartsUsers(rows){
