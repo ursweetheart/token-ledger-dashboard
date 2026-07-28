@@ -3179,3 +3179,23 @@ body.light-theme .matrix-note {
 body.light-theme .mx-warn {
     color: #b45309;
 }
+
+/* Cột project không phát sinh request trong kỳ: làm mờ + gắn nhãn, để cột rỗng
+   đọc ra là "không dùng" chứ không phải "thiếu dữ liệu". */
+#matrix-tree-table th.mx-col-idle {
+    opacity: .55;
+}
+
+.mx-idle-tag {
+    display: block;
+    margin-top: 3px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    text-transform: none;
+    color: #f59e0b;
+}
+
+body.light-theme .mx-idle-tag {
+    color: #b45309;
+}

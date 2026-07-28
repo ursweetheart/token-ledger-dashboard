@@ -1812,8 +1812,19 @@ function renderMatrixTree(rows, agents){
     row.share=row.parent&&row.parent.total>0 ? row.total/row.parent.total*100 : null;
   });
 
+  /* Cột không phát sinh request nào trong kỳ ⇒ đánh dấu idle. Không có dấu này thì
+     một cột trắng trơn đọc ra như "thiếu dữ liệu", trong khi sự thật là agent đó
+     không được dùng trong kỳ — đúng nhãn Idle mà bảng chi tiết agent đang dùng. */
+  var colTotals=agents.map(function(_,i){
+    return rows.reduce(function(s,r){ return s+(r.depth===1?r.values[i]:0); },0);
+  });
+  var idleAgents=agents.filter(function(_,i){ return !colTotals[i]; });
+
   var html="<thead><tr><th class='mx-th-name'>Phòng ban / Đơn vị</th>";
-  agents.forEach(function(a){ html+="<th class='num mx-th-agent'>"+esc(a)+"</th>"; });
+  agents.forEach(function(a,i){
+    html+="<th class='num mx-th-agent"+(colTotals[i]?"":" mx-col-idle")+"'>"+esc(a)+
+      (colTotals[i]?"":"<span class='mx-idle-tag'>không dùng trong kỳ</span>")+"</th>";
+  });
   html+="<th class='num mx-th-total'>Tổng</th></tr></thead><tbody>";
 
   if(!rows.length){
@@ -1840,6 +1851,7 @@ function renderMatrixTree(rows, agents){
   html+="</tbody>";
   table.innerHTML=html;
   bindMatrixTree(table);
+  return idleAgents;
 }
 
 /* Toggle bung/thu. Trạng thái nằm trong state.matrixExpanded nên giữ nguyên qua các
@@ -1896,7 +1908,7 @@ function bindMatrixToolbar(){
 /* Ghi chú kiểm chứng: tổng ma trận có bằng tổng usage thật của kỳ không.
    Nêu thẳng phần lệch thay vì im lặng, vì lệch nghĩa là có đơn vị phát sinh usage
    nhưng chưa có tài khoản Ralli nào để phân bổ xuống. */
-function renderMatrixNote(rows, scopeRows){
+function renderMatrixNote(rows, scopeRows, idleAgents){
   var shown=0;
   rows.forEach(function(r){ if(r.depth===1) shown+=r.total; });
   var real=0;
@@ -1912,6 +1924,10 @@ function renderMatrixNote(rows, scopeRows){
   });
   // Dưới cấp mà file usage ghi nhận, phần chia cho từng đơn vị/tài khoản là số PHÂN BỔ.
   var allocated=" · <span title='"+esc(ALLOCATED_DATA_HINT)+"'>ⓘ "+ALLOCATED_DATA_LABEL+"</span>";
+  // Nêu tên project cột rỗng, để không ai phải đoán cột trắng là lỗi hay là không dùng.
+  if(idleAgents&&idleAgents.length) allocated=" · <span class='mx-warn'>"+
+    idleAgents.length+" project không phát sinh request trong kỳ: "+
+    esc(idleAgents.join(", "))+"</span>"+allocated;
   var note;
   if(matrixSearching()){
     note="Đang lọc · "+fmt(accounts)+" tài khoản khớp · "+fmt(shown)+" request"+allocated;
@@ -1932,8 +1948,8 @@ function buildAgentDeptHeatmap(rows){
   var agents=matrixAgents(rows);
   var matrixRows=buildMatrixRows(matrixPool(), matrixUsageIndex(rows), agents);
   bindMatrixToolbar();
-  renderMatrixTree(matrixRows, agents);
-  renderMatrixNote(matrixRows, rows);
+  var idleAgents=renderMatrixTree(matrixRows, agents);
+  renderMatrixNote(matrixRows, rows, idleAgents);
 }
 /* ═══════════════ RENDER: PROVIDERS ═══════════════ */
 function renderProviders(rows){
