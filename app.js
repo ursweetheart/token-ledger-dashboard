@@ -261,7 +261,11 @@ function buildAccountCatalogue(){
         weight: sourceActive&&i<eligible ? 1+(h%9) : 0,
         role:entry.accountType==="service"?"Tài khoản chức năng":(entry.role||"Nhân viên"),
         accountType:entry.accountType||"person", sourceStatus:entry.status||"",
-        created:"",
+        // File TLA Ralli.xlsx hiện chỉ có STT, Phòng ban, Họ tên, Tài khoản đăng nhập,
+        // Tên đầy đủ, Tài khoản, Vai trò, trạng thái — chưa có cột ngày cấp. Khi nguồn
+        // bổ sung, chỉ cần map vào đây là cột "Thời gian được cấp" và thẻ "Cấp mới
+        // trong kỳ" cùng hoạt động, không phải sửa gì thêm.
+        created:entry.created||"",
         disabled:!sourceActive,
         req:0, ti:0, to:0, last:"", active:false, quotaPct:0
       });
@@ -475,6 +479,22 @@ function fmtTok(n){
 }
 function fmtTokShort(n){ return fmtTok(n).replace(/ token$/,""); }
 function fmtTokFull(n){ return fmt(n)+" token"; }
+/* Định dạng số thống nhất cho scorecard: viết hẳn "nghìn / triệu / tỷ" thay vì
+   K/M/B; đơn vị thật (token, VNĐ, request…) nằm trong ngoặc ở tên thẻ. */
+function fmtCompactNum(n){
+  n=num(n); var abs=Math.abs(n);
+  if(abs>=1e9) return fmtDecimal(n/1e9,1)+" tỷ";
+  if(abs>=1e6) return fmtDecimal(n/1e6,1)+" triệu";
+  if(abs>=1e3) return fmtDecimal(n/1e3,1)+" nghìn";
+  return fmt(n);
+}
+// Mức độ sử dụng quy đổi VNĐ nhưng bỏ ký hiệu ₫ vì đơn vị đã ghi ở tên thẻ.
+function usageCompact(usdValue){ return fmtCompactNum(toVnd(usdValue)); }
+// Ngày theo định dạng mm/dd/YYYY dùng cho tiêu đề và dòng "Kỳ dữ liệu".
+function fmtDateUS(iso){
+  var p=String(iso==null?"":iso).split("-");
+  return p.length===3 ? (p[1]+"/"+p[2]+"/"+p[0]) : String(iso);
+}
 function usd(n){ return num(n).toLocaleString("vi-VN",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2}); }
 function toVnd(n){ return Math.round(num(n)*VND_RATE); }
 function money(n){ return toVnd(n).toLocaleString("vi-VN",{style:"currency",currency:"VND",maximumFractionDigits:0}); }
@@ -490,6 +510,10 @@ function usdReference(n){ return usd(n)+" · "+EXCHANGE_RATE_META.source.toLower
 function pct(a,b){ return b ? (num(a)/num(b)*100) : 0; }
 function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function set(id, html){ var e=document.getElementById(id); if(e) e.innerHTML = html; }
+function setWithTitle(id, html, title){
+  var e=document.getElementById(id); if(!e) return;
+  e.innerHTML=html; e.title=title||"";
+}
 function setMoney(id, usdValue){
   var e=document.getElementById(id); if(!e) return;
   e.innerHTML=money(usdValue);
@@ -656,8 +680,13 @@ function defaultState(){
   return { days:days, dayOrder:order, activeDay:order[order.length-1],
     range:{ start:"2026-07-01", end:"2026-07-31" },
     filters:{dept:"",user:"",provider:"",model:"",agent:""},
-    deptExpanded:{}, matrixExpanded:{}, matrixSearch:"", pricing:clone(basePricing) };
+    deptExpanded:defaultDeptExpanded(), deptExpandedInit:1, deptSearch:"",
+    matrixExpanded:{}, matrixSearch:"", pmCollapsed:{}, pricing:clone(basePricing) };
 }
+/* Cấp 1 của cây giờ đã là phòng ban thật (xem buildDeptRows dùng reportingRoots),
+   nên mở dashboard là thấy ngay danh sách phòng ban mà không cần bung sẵn cấp nào —
+   giống hệt ma trận tab Agents. */
+function defaultDeptExpanded(){ return {}; }
 function loadState(){
   try{ var raw = localStorage.getItem(STORE); if(!raw) return defaultState();
     var s = JSON.parse(raw);
@@ -667,10 +696,19 @@ function loadState(){
     if(!s.deptExpanded||typeof s.deptExpanded!=="object") s.deptExpanded={};
     if(!s.matrixExpanded||typeof s.matrixExpanded!=="object") s.matrixExpanded={};
     if(typeof s.matrixSearch!=="string") s.matrixSearch="";
+    if(typeof s.deptSearch!=="string") s.deptSearch="";
+    // Cây nhà cung cấp → model mặc định MỞ, nên chỉ lưu những nhánh bị thu lại.
+    if(!s.pmCollapsed||typeof s.pmCollapsed!=="object") s.pmCollapsed={};
+    // Chỉ seed trạng thái mở mặc định MỘT lần. Không có cờ này thì người dùng thu gọn
+    // hết rồi tải lại trang sẽ bị bung ra lần nữa.
+    if(!s.deptExpandedInit){ s.deptExpanded=defaultDeptExpanded(); s.deptExpandedInit=1; }
     // Bản cũ dùng breadcrumb theo cột; ma trận giờ là cây accordion nên bỏ hai khoá này.
     delete s.matrixPath; delete s.matrixUser;
-    // Khoá đơn vị không còn hợp lệ sau khi chuẩn hoá cây thì loại bỏ.
-    Object.keys(s.deptExpanded).forEach(function(id){ if(!unitById(id)) delete s.deptExpanded[id]; });
+    // Khoá đơn vị không còn hợp lệ sau khi chuẩn hoá cây thì loại bỏ. Cây phòng ban
+    // giờ cũng dùng khoá "<unitId>::direct" nên kiểm theo phần trước "::".
+    Object.keys(s.deptExpanded).forEach(function(id){
+      if(!unitById(String(id).split("::")[0])) delete s.deptExpanded[id];
+    });
     // Khoá "<unitId>::direct" là nút gom tài khoản trực thuộc, không phải một đơn vị
     // trong ORG_UNITS ⇒ kiểm theo phần trước "::" để không bị xoá oan khi tải lại.
     Object.keys(s.matrixExpanded).forEach(function(id){
@@ -1079,18 +1117,29 @@ function mkBar(id, labels, data, o){
       } }
   });
 }
-function mkDonut(id, labels, data, legendId, fmtVal, colors){
+/* descs (tuỳ chọn): một dòng giải nghĩa cho từng mục chú thích. Dùng khi nhãn là
+   thuật ngữ mà người đọc non-IT không tự hiểu, ví dụ mã phản hồi 4xx/5xx/429. */
+function mkDonut(id, labels, data, legendId, fmtVal, colors, descs){
   colors = colors || palette;
   chart(id, {
     type:"doughnut",
     data:{ labels:labels, datasets:[{ data:data, backgroundColor:colors, borderWidth:0 }] },
+    /* Chart.js vẽ tooltip BÊN TRONG canvas, mà canvas donut chỉ rộng 132–168px nên
+       chữ dài bị xén cụt. Hai việc để tooltip luôn nằm gọn: bỏ phần lặp lại tên ở
+       dòng giá trị (dòng tiêu đề đã có tên rồi), và ngắt dòng tiêu đề khi quá dài. */
     options:{ cutout:"62%", plugins:{ legend:{display:false},
-      tooltip:{ callbacks:{ label:function(c){ return c.label+": "+(fmtVal?fmtVal(c.parsed):fmt(c.parsed)); } } } } }
+      tooltip:{ callbacks:{
+        title:function(items){ return items.length?wrapAxisLabel(items[0].label,16):""; },
+        label:function(c){ return fmtVal?fmtVal(c.parsed):fmt(c.parsed); }
+      } } } }
   });
   if(legendId){
     var tot = data.reduce(function(s,x){ return s+num(x); },0);
     set(legendId, labels.map(function(l,i){
-      return "<span class='li'><span class='dot' style='background:"+colors[i%colors.length]+"'></span>"+esc(l)+" · "+pct(data[i],tot).toFixed(0)+"%</span>";
+      var head = esc(l)+" · "+pct(data[i],tot).toFixed(0)+"%";
+      if(!descs||!descs[i]) return "<span class='li'><span class='dot' style='background:"+colors[i%colors.length]+"'></span>"+head+"</span>";
+      return "<span class='li'><span class='dot' style='background:"+colors[i%colors.length]+"'></span>"+
+        "<span class='li-text'><b>"+head+"</b><span class='li-desc'>"+esc(descs[i])+"</span></span></span>";
     }).join(""));
   }
 }
@@ -1139,58 +1188,96 @@ function renderOverview(rows){
   var topUnit=byUnit.slice().sort(function(a,b){return b.cost-a.cost;})[0];
   var topError=active.slice().sort(function(a,b){return b.er-a.er;})[0];
 
+  /* Scorecard dùng chung một format số: nghìn / triệu / tỷ viết bằng chữ,
+     đơn vị nằm trong ngoặc ở tên thẻ nên giá trị không lặp lại đơn vị. */
   set("m-ov-agents",active.length+"/"+created);
-  set("m-ov-units",fmt(byUnit.length));
-  set("m-ov-users",fmt(activeUsers));
-  set("m-ov-requests",fmt(A.r));
-  set("m-ov-tokens",fmtTokShort(A.tokens));
-  var tokenMetric=document.getElementById("m-ov-tokens");
-  if(tokenMetric) tokenMetric.title=fmtTokFull(A.tokens);
-  setMoney("m-ov-cost",A.cost);
-  setMoney("m-ov-costuser",costPerUser);
-  set("m-ov-error",A.er.toFixed(1)+"%");
+  set("m-ov-units",fmtCompactNum(byUnit.length));
+  set("m-ov-users",fmtCompactNum(activeUsers));
+  setWithTitle("m-ov-requests",fmtCompactNum(A.r),fmt(A.r)+" request");
+  setWithTitle("m-ov-tokens",fmtCompactNum(A.tokens),fmtTokFull(A.tokens));
+  setWithTitle("m-ov-cost",usageCompact(A.cost),money(A.cost)+" · "+usdReference(A.cost));
+  setWithTitle("m-ov-costuser",usageCompact(costPerUser),money(costPerUser)+" / user hoạt động");
+  set("m-ov-error",A.er.toFixed(1).replace(".",","));
 
   renderSingleDelta("d-ov-agents",active.length,prevActive.length,fmt);
   renderSingleDelta("d-ov-units",byUnit.length,prevUnits.length,fmt);
   renderSingleDelta("d-ov-users",activeUsers,0,fmt);
-  renderSingleDelta("d-ov-requests",A.r,prevA.r,fmt);
-  renderSingleDelta("d-ov-tokens",A.tokens,prevA.tokens,fmtTok);
-  renderSingleDelta("d-ov-cost",A.cost,prevA.cost,money);
-  renderSingleDelta("d-ov-costuser",costPerUser,0,money);
+  renderSingleDelta("d-ov-requests",A.r,prevA.r,fmtCompactNum);
+  renderSingleDelta("d-ov-tokens",A.tokens,prevA.tokens,fmtCompactNum);
+  renderSingleDelta("d-ov-cost",A.cost,prevA.cost,moneyCompact);
+  renderSingleDelta("d-ov-costuser",costPerUser,0,moneyCompact);
   renderSingleDelta("d-ov-error",A.er,prevA.er,function(v){return v.toFixed(1)+"%";});
 
   set("i-ov-agents",Math.max(0,created-active.length)+" agent chưa hoạt động trong kỳ.");
-  set("i-ov-units",topUnit?esc(topUnit.key)+" dẫn đầu, chiếm "+pct(topUnit.cost,A.cost).toFixed(0)+"% chi phí.":"Chưa có phòng ban phát sinh sử dụng.");
+  set("i-ov-units",topUnit?esc(topUnit.key)+" dẫn đầu, chiếm "+pct(topUnit.cost,A.cost).toFixed(0)+"% mức sử dụng.":"Chưa có phòng ban phát sinh sử dụng.");
   set("i-ov-users",fmt(activeUsers)+" đang dùng · "+fmt(inactiveUsers)+" tài khoản không hoạt động.");
   set("i-ov-requests",topRequest?esc(topRequest.key)+" chiếm "+pct(topRequest.r,A.r).toFixed(0)+"% request.":"Chưa có request trong kỳ.");
   set("i-ov-tokens",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.tokens,A.tokens).toFixed(0)+"% token.":"Chưa có token trong kỳ.");
-  set("i-ov-cost",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.cost,A.cost).toFixed(0)+"% tổng chi phí.":"Chưa phát sinh chi phí.");
+  set("i-ov-cost",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.cost,A.cost).toFixed(0)+"% tổng mức sử dụng.":"Chưa phát sinh mức sử dụng.");
   set("i-ov-costuser","Bình quân trên "+fmt(activeUsers)+" user hoạt động.");
   set("i-ov-error",topError&&topError.er>0?esc(topError.key)+" cao nhất: "+topError.er.toFixed(1)+"%.":"Không ghi nhận lỗi.");
 
-  set("ov-cost-total",money(A.cost));
+  set("ov-cost-total",moneyCompact(A.cost));
   set("ov-token-total",fmtTok(A.tokens));
-  set("ov-request-total",fmt(A.r));
+  set("ov-request-total",fmtCompactNum(A.r)+" request");
   set("ov-success-value",(100-A.er).toFixed(1)+"%");
 
-  var detail=active.slice().sort(function(a,b){return b.cost-a.cost;}).slice(0,8);
-  set("ov-detail-tbody",detail.map(function(g){
-    var success=Math.max(0,100-g.er), deptSeen={}, departments=[];
-    g.depts.forEach(function(dept){
-      var unit=unitOf(dept), name=unit?unit.name:String(dept||"").trim();
-      if(name&&name!=="—"&&!deptSeen[name]){deptSeen[name]=true;departments.push(name);}
-    });
-    departments.sort(function(a,b){return a.localeCompare(b,"vi");});
-    var deptHtml=departments.length
-      ? "<div class='overview-unit-count'>"+fmt(departments.length)+" phòng ban/đơn vị</div>"+
-        "<div class='overview-unit-list'>"+departments.map(function(name){return "<span>"+esc(name)+"</span>";}).join("")+"</div>"
-      : "<span class='metric-na'>—</span>";
-    return "<tr><td><b>"+esc(g.key)+"</b></td><td class='overview-unit-cell'>"+deptHtml+"</td><td class='num'>"+fmt(g.u)+"</td>"+
-      "<td class='num'>"+fmt(g.r)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTokShort(g.tokens)+"</td>"+
-      moneyCell(g.cost)+"<td class='num"+(g.er>=2?" text-red":"")+"'>"+g.er.toFixed(1)+"%</td>"+
-      "<td><div class='overview-success-cell'><span><i style='width:"+success.toFixed(1)+"%'></i></span><b>"+success.toFixed(1)+"%</b></div></td></tr>";
-  }).join("")||emptyRow(8));
+  renderOverviewDetail(rows,active);
   renderOverviewAlerts(A,rows,active,topAgent,inactiveUsers);
+}
+
+/* Bảng chi tiết: mỗi PHÒNG BAN là một record; các phòng ban dùng chung một
+   project (AI Agent) chia sẻ một ô "AI Agent" đã merge bằng rowspan.
+   Thứ tự cột giữ nguyên: AI Agent · Phòng ban · User · Request · Token ·
+   Mức độ sử dụng · Tỷ lệ lỗi · Mức độ ổn định. */
+function deptDisplayName(dept){
+  var unit=unitOf(dept), name=unit?unit.name:String(dept==null?"":dept).trim();
+  return (name && name!=="—") ? name : "Chưa gán phòng ban";
+}
+function renderOverviewDetail(rows,active){
+  var agents=active.slice().sort(function(a,b){return b.cost-a.cost;});
+  var html="", totals={u:0,r:0,tokens:0,cost:0,erW:0};
+  agents.forEach(function(g){
+    var agentRows=rows.filter(function(r){return r.a===g.key;});
+    var byDept=groupAgg(agentRows,function(r){return deptDisplayName(r.d);})
+      .sort(function(a,b){return (b.cost-a.cost)||(b.r-a.r)||a.key.localeCompare(b.key,"vi");});
+    if(!byDept.length) return;
+    totals.u+=g.u; totals.r+=g.r; totals.tokens+=g.tokens; totals.cost+=g.cost; totals.erW+=g.er*g.r;
+    var usingDepts=byDept.filter(function(d){return d.r>0;}).length;
+    var agentCell="<td class='detail-agent-cell' rowspan='"+byDept.length+"'>"+
+      "<span class='detail-agent-name'>"+esc(g.key)+"</span>"+
+      "<span class='detail-agent-sub'>"+fmt(usingDepts)+"/"+fmt(byDept.length)+" phòng ban đang dùng</span>"+
+      "<span class='detail-agent-sub'>"+fmtCompactNum(g.r)+" request · "+moneyCompact(g.cost)+"</span></td>";
+    byDept.forEach(function(d,i){
+      // Phòng ban đã được cấp quyền nhưng chưa gọi request nào: vẫn giữ đúng
+      // một dòng theo yêu cầu, chỉ làm mờ để không lấn át các dòng có số liệu.
+      var idle=d.r<=0&&d.tokens<=0&&d.cost<=0, stable=Math.max(0,100-d.er);
+      var cls=(i===0?"detail-group-start":"")+(idle?" detail-idle":"");
+      html+="<tr class='"+cls.trim()+"'>"+
+        (i===0?agentCell:"")+
+        "<td><span class='detail-dept-name'>"+esc(d.key)+"</span>"+
+          (idle?"<span class='detail-idle-tag'>chưa phát sinh</span>":"")+"</td>"+
+        "<td class='num'>"+fmt(d.u)+"</td>"+
+        "<td class='num' title='"+esc(fmt(d.r)+" request")+"'>"+fmtCompactNum(d.r)+"</td>"+
+        "<td class='num' title='"+esc(fmtTokFull(d.tokens))+"'>"+fmtCompactNum(d.tokens)+"</td>"+
+        "<td class='num cost' title='"+esc(usdReference(d.cost))+"'>"+moneyCompact(d.cost)+"</td>"+
+        "<td class='num"+(d.er>=2?" text-red":"")+"'>"+d.er.toFixed(1)+"%</td>"+
+        // Không có request thì không có cơ sở đo độ ổn định — để trống thay vì 100%.
+        "<td>"+(d.r>0
+          ?"<div class='overview-success-cell'><span><i style='width:"+stable.toFixed(1)+"%'></i></span><b>"+stable.toFixed(1)+"%</b></div>"
+          :"<span class='subtle'>—</span>")+"</td>"+
+      "</tr>";
+    });
+  });
+  if(html){
+    var totalEr=totals.r?totals.erW/totals.r:0, totalStable=Math.max(0,100-totalEr);
+    html+="<tr class='detail-total-row'><td>Tổng cộng</td><td>"+fmt(agents.length)+" AI Agent</td>"+
+      "<td class='num'>"+fmt(totals.u)+"</td><td class='num'>"+fmtCompactNum(totals.r)+"</td>"+
+      "<td class='num' title='"+esc(fmtTokFull(totals.tokens))+"'>"+fmtCompactNum(totals.tokens)+"</td>"+
+      "<td class='num cost'>"+moneyCompact(totals.cost)+"</td><td class='num'>"+totalEr.toFixed(1)+"%</td>"+
+      "<td><div class='overview-success-cell'><span><i style='width:"+totalStable.toFixed(1)+"%'></i></span><b>"+totalStable.toFixed(1)+"%</b></div></td></tr>";
+  }
+  set("ov-detail-tbody",html||emptyRow(8));
 }
 function renderOverviewAlerts(A,rows,active,topAgent,inactiveUsers){
   var configured=configuredBudgetSummary(rows);
@@ -1217,11 +1304,11 @@ function renderOverviewAlerts(A,rows,active,topAgent,inactiveUsers){
     cls:errTop&&errTop.er>=2?"danger":errTop&&errTop.er>0?"warning":"ok",
     icon:errTop&&errTop.er>0?"⚠":"✓",
     title:errTop&&errTop.er>0?"Agent có tỷ lệ lỗi cao":"Tỷ lệ lỗi ổn định",
-    text:errTop&&errTop.er>0?errTop.key+" đang ở mức "+errTop.er.toFixed(1)+"%.":"Tỷ lệ thành công toàn hệ thống đạt "+(100-A.er).toFixed(1)+"%."
+    text:errTop&&errTop.er>0?errTop.key+" đang ở mức "+errTop.er.toFixed(1)+"%.":"Mức độ ổn định toàn hệ thống đạt "+(100-A.er).toFixed(1)+"%."
   });
   alerts.push({
-    cls:topAgent&&pct(topAgent.cost,A.cost)>=40?"warning":"info",icon:"●",title:"Mức tập trung chi phí",
-    text:topAgent?topAgent.key+" chiếm "+pct(topAgent.cost,A.cost).toFixed(0)+"% tổng chi phí.":"Chưa có dữ liệu chi phí."
+    cls:topAgent&&pct(topAgent.cost,A.cost)>=40?"warning":"info",icon:"●",title:"Mức tập trung sử dụng",
+    text:topAgent?topAgent.key+" chiếm "+pct(topAgent.cost,A.cost).toFixed(0)+"% tổng mức sử dụng.":"Chưa có dữ liệu sử dụng."
   });
   alerts.push({
     cls:inactiveUsers>0?"info":"ok",icon:"👤",title:"Tài khoản không hoạt động",
@@ -1236,10 +1323,9 @@ function chartsOverview(rows){
   mkOverviewLine("c-ov-cost-trend",tl.labels,tl.cost,"money","#38bdf8");
   mkOverviewLine("c-ov-token-trend",tl.labels,tl.tokens,"tokens","#84cc16");
   mkOverviewLine("c-ov-request-trend",tl.labels,tl.requests,"number","#a78bfa");
-  mkDonut("c-ov-success",["Thành công","Lỗi"],[Math.max(0,100-A.er),Math.max(0,A.er)],null,function(v){return v.toFixed(1)+"%";},["#22c55e","#ef4444"]);
+  mkDonut("c-ov-success",["Trả kết quả tốt","Lỗi"],[Math.max(0,100-A.er),Math.max(0,A.er)],null,function(v){return v.toFixed(1)+"%";},["#22c55e","#ef4444"]);
   var byAgent=groupAgg(rows,function(r){return r.a;}).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;}).slice(0,8);
-  mkBar("c-ov-agent-cost",byAgent.map(function(g){return g.key;}),byAgent.map(function(g){return g.cost;}),{horizontal:true,money:true,colors:"#3b82f6"});
-  mkDonut("c-ov-agent-share",byAgent.map(function(g){return g.key;}),byAgent.map(function(g){return g.cost;}),"lg-ov-agent-share",money);
+  mkDonut("c-ov-agent-share",byAgent.map(function(g){return g.key;}),byAgent.map(function(g){return g.cost;}),"lg-ov-agent-share",moneyCompact);
   var byUnit=groupAgg(rows.filter(function(r){return r.d&&r.d!=="—";}),function(r){return r.d;}).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;}).slice(0,8);
   mkBar("c-ov-unit-cost",byUnit.map(function(g){return g.key;}),byUnit.map(function(g){return g.cost;}),{horizontal:true,money:true,colors:"#22c55e"});
   buildOverviewWeekHeatmap();
@@ -1327,27 +1413,6 @@ function adoptionCell(activeCount, provisioned){
     fmt(activeCount)+"/"+fmt(provisioned)+" · "+rate.toFixed(0)+"%</td>";
 }
 function naCell(){ return "<td class='num'><span class='metric-na'>—</span></td>"; }
-function deptToggleCell(label, level, expandable, expanded){
-  var caret=expandable?"<span class='drill-caret'>"+(expanded?"▼":"▶")+"</span>"
-                      :"<span class='drill-caret drill-leaf'>·</span>";
-  return "<td class='drill-name drill-l"+level+"'>"+caret+"<span>"+esc(label)+"</span></td>";
-}
-function deptAccountRow(u, level){
-  var tokens=num(u.ti)+num(u.to);
-  var status=u.disabled?"user-status-disabled":(u.active?"user-status-active":"user-status-inactive");
-  var label=u.disabled?"Vô hiệu hóa":(u.active?"Hoạt động":"Chưa dùng");
-  var activeCount=u.active&&!u.disabled?1:0;
-  return "<tr class='drill-row drill-account'>"+
-    "<td class='drill-name drill-l"+level+"'><span class='drill-caret drill-leaf'>·</span>"+
-      "<span class='user-id'>"+esc(u.user)+"</span> <span class='subtle'>"+esc(u.n)+"</span>"+
-      " <span class='user-status "+status+"'>"+label+"</span></td>"+
-    "<td class='num'>"+(u.a&&u.a!=="—"?1:0)+"</td>"+
-    adoptionCell(activeCount,1)+
-    "<td class='num' title='"+esc(fmtTokFull(tokens))+"'>"+fmtTok(tokens)+"</td>"+
-    "<td class='num'>"+fmt(u.req)+"</td>"+
-    naCell()+
-    "</tr>";
-}
 function sortAccounts(list){
   return list.slice().sort(function(a,b){ return num(b.req)-num(a.req)||a.user.localeCompare(b.user); });
 }
@@ -1358,95 +1423,253 @@ function usageUnderUnit(unitId, rows){
   var agents={}; scoped.forEach(function(r){if(r.a)agents[r.a]=1;});
   return {agg:aggregate(scoped),agents:Object.keys(agents),hasRows:scoped.length>0};
 }
-function renderDepartmentBranch(unit, level, rows, pool, expanded){
-  var usage=usageUnderUnit(unit.id,rows), accounts=accountsUnderUnit(unit.id,pool);
-  var directAccounts=(pool||[]).filter(function(u){return u.unitId===unit.id;});
-  var kids=unitChildren(unit.id).filter(function(k){return !isExcludedUnit(k);});
-  var isOpen=!!expanded[unit.id], canOpen=kids.length>0||directAccounts.length>0;
-  var activeCount=accounts.filter(function(u){return u.active&&!u.disabled;}).length;
-  var prov=provisionedOf(unit.id), g=usage.agg, agents=usage.agents;
-  // File usage chỉ có số ở PBH; các vùng/đội lấy phần đã phân bổ xuống tài khoản
-  // để tổng cấp con khớp cấp cha mà không giả rằng Excel có usage chi tiết theo đội.
-  if(!usage.hasRows&&accounts.length){
-    var allocated={r:0,ti:0,to:0,tokens:0,cost:0,er:0};
-    var agentMap={};
-    accounts.forEach(function(u){
-      allocated.r+=num(u.req); allocated.ti+=num(u.ti); allocated.to+=num(u.to);
-      allocated.cost+=accountCost(u);
-      if(u.a&&u.a!=="—") agentMap[u.a]=1;
-    });
-    allocated.tokens=allocated.ti+allocated.to;
-    g=allocated; agents=Object.keys(agentMap);
-  }
-  var html="<tr class='drill-row drill-unit"+(level===1?" drill-root":"")+(canOpen?" drill-clickable":"")+
-    "' data-unit='"+esc(unit.id)+"'>"+
-    deptToggleCell(unit.name,level,canOpen,isOpen)+
-    "<td class='num'>"+agents.length+"</td>"+
-    adoptionCell(activeCount,prov)+
-    "<td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td>"+
-    "<td class='num'>"+fmt(g.r)+"</td>"+
-    "<td class='num"+(g.er>2?" text-red":"")+"'>"+g.er.toFixed(1)+"</td></tr>";
-  var anyAccountRow=false;
-  if(isOpen){
-    kids.forEach(function(kid){
-      var branch=renderDepartmentBranch(kid,level+1,rows,pool,expanded);
-      html+=branch.html; anyAccountRow=anyAccountRow||branch.anyAccountRow;
-    });
-    if(directAccounts.length){
-      anyAccountRow=true;
-      sortAccounts(directAccounts).forEach(function(u){html+=deptAccountRow(u,level+1);});
-    }
-  }
-  return {html:html,anyAccountRow:anyAccountRow};
-}
-function renderDepartments(rows){
-  var byUnitId=groupRowsByUnit(rows), total=aggregate(rows).cost;
-  var pool=filterAccounts(), activeUsers=pool.filter(function(u){return u.active&&!u.disabled;}).length;
-  var groups=Object.keys(byUnitId).map(function(id){
-    var g=byUnitId[id];
-    return {unit:g.unit, agents:Object.keys(g.agents), agg:aggregate(g.rows)};
-  }).sort(function(a,b){ return b.agg.cost-a.agg.cost; });
 
-  set("m-dep-count", groups.filter(function(g){return g.agg.r>0;}).length);
-  if(groups.length){
-    set("m-dep-top", esc(groups[0].unit.name));
-    set("m-dep-top-def", "<b title='"+esc(usdReference(groups[0].agg.cost))+"'>"+money(groups[0].agg.cost)+
-      " · "+pct(groups[0].agg.cost,total).toFixed(0)+"%</b> tổng chi phí kỳ này.");
-  } else { set("m-dep-top","—"); set("m-dep-top-def","—"); }
-  setMoney("m-dep-avg", groups.length? total/groups.length:0);
-  var top2=groups.slice(0,2).reduce(function(s,g){return s+g.agg.cost;},0);
-  set("m-dep-conc", pct(top2,total).toFixed(0)+"%");
-  set("m-dep-users",fmt(pool.length));
-  set("m-dep-user-rate",pool.length?pct(activeUsers,pool.length).toFixed(0)+"%":"—");
-  set("m-dep-user-rate-def",pool.length
-    ? "<b>"+fmt(activeUsers)+"/"+fmt(pool.length)+"</b> user hoạt động / tổng."
-    : "Chưa có tài khoản trong phạm vi đang lọc.");
-
-  var expanded=state.deptExpanded||{}, html="", anyAccountRow=false;
-  unitRoots().filter(function(u){return !isExcludedUnit(u)&&provisionedOf(u.id)!=null;}).forEach(function(unit){
-    var branch=renderDepartmentBranch(unit,1,rows,pool,expanded);
-    html+=branch.html; anyAccountRow=anyAccountRow||branch.anyAccountRow;
+/* ═══════════════ CÂY CHI TIẾT PHÒNG BAN → TÀI KHOẢN ═══════════════
+   Gộp bảng "Chi tiết theo phòng ban" và bảng "Người dùng TLA HD" thành MỘT cây,
+   dùng đúng cách trình bày của ma trận Phòng ban × Project ở tab Agents:
+   nhãn cấp, đường nối cây, dải màu theo phòng ban gốc, dòng meta dưới tên.
+   Khác ma trận ở chỗ các cột là chỉ số usage + quota chứ không phải từng agent. */
+function deptSearching(){ return !!String(state.deptSearch||"").trim(); }
+function deptIsOpen(id){ return deptSearching() || !!(state.deptExpanded||{})[id]; }
+function deptPool(){
+  var pool=filterAccounts();
+  var q=String(state.deptSearch||"").trim().toLowerCase();
+  if(!q) return pool;
+  return pool.filter(function(u){
+    return [u.user,u.n,u.login,u.d,unitName(u.unitId)].join(" ").toLowerCase().indexOf(q)>=0;
   });
-  set("dep-tbody", html || emptyRow(6));
-  set("dep-alloc-note", anyAccountRow
-    ? "<span title='"+esc(ALLOCATED_DATA_HINT)+"'>ⓘ "+ALLOCATED_DATA_LABEL+"</span>" : "");
-  bindDeptDrilldown();
 }
-/* Toggle mở/đóng. Trạng thái nằm trong state.deptExpanded nên giữ nguyên qua các lần
-   renderAll() do đổi bộ lọc hoặc khoảng thời gian. Listener gắn một lần trên tbody. */
-function bindDeptDrilldown(){
-  var tb=document.getElementById("dep-tbody");
-  if(!tb||tb.getAttribute("data-drill-bound")) return;
-  tb.setAttribute("data-drill-bound","1");
-  tb.addEventListener("click", function(ev){
-    var tr=ev.target&&ev.target.closest?ev.target.closest("tr.drill-unit"):null;
-    if(!tr||!tr.getAttribute("data-unit")) return;
+/* Giữ lại đơn vị nếu nó có tài khoản, có đơn vị con được giữ, có usage thật trong kỳ,
+   hoặc có số tài khoản được cấp. Nhờ vậy phòng ban phát sinh usage nhưng chưa có
+   tài khoản Ralli nào vẫn hiện, thay vì biến mất khỏi bảng. */
+function accountsByUnitIndex(pool){
+  var m={};
+  (pool||[]).forEach(function(u){ (m[u.unitId]||(m[u.unitId]=[])).push(u); });
+  return m;
+}
+function deptTreeNode(unit, byUnit, usageIds){
+  if(isExcludedUnit(unit)) return null;
+  var kids=unitChildren(unit.id).map(function(k){ return deptTreeNode(k,byUnit,usageIds); })
+    .filter(function(n){ return !!n; });
+  kids.sort(function(a,b){ return a.unit.name.localeCompare(b.unit.name,"vi"); });
+  var direct=byUnit[unit.id]||[];
+  var accounts=[];
+  kids.forEach(function(n){ accounts=accounts.concat(n.accounts); });
+  accounts=accounts.concat(direct);
+  var keep=accounts.length>0||kids.length>0||usageIds[unit.id]||provisionedOf(unit.id)!=null;
+  if(!keep) return null;
+  return {unit:unit, kids:kids, direct:sortAccounts(direct), accounts:accounts};
+}
+/* Đơn vị nào có usage thật trong kỳ (cộng dồn lên mọi cấp cha). */
+function deptUsageUnitIds(rows){
+  var ids={};
+  (rows||[]).forEach(function(r){
+    var u=unitOf(r.d);
+    if(!u||isExcludedUnit(u)) return;
+    unitPath(u.id).forEach(function(n){ ids[n.id]=true; });
+  });
+  return ids;
+}
+/* Usage cộng dồn theo unitId, dựng MỘT lần cho mỗi lần vẽ. Mỗi dòng usage được cộng
+   vào chính đơn vị của nó và mọi cấp cha, nên tra cứu một hàng là O(1) thay vì quét
+   lại toàn bộ sổ usage cho từng hàng — cây bung sâu vẫn bung tức thì. */
+function buildDeptUsageIndex(rows){
+  var map={};
+  (rows||[]).forEach(function(r){
+    var u=unitOf(r.d);
+    if(!u||isExcludedUnit(u)) return;
+    var rq=num(r.r), c=cost(r), ti=num(r.ti), to=num(r.to), erW=num(r.er)*rq;
+    unitPath(u.id).forEach(function(n){
+      var m=map[n.id]||(map[n.id]={r:0,ti:0,to:0,tokens:0,cost:0,erW:0,rowCount:0,agentSet:{}});
+      m.r+=rq; m.ti+=ti; m.to+=to; m.cost+=c; m.erW+=erW; m.rowCount++;
+      if(r.a) m.agentSet[r.a]=1;
+    });
+  });
+  Object.keys(map).forEach(function(id){
+    var m=map[id];
+    m.tokens=m.ti+m.to; m.er=m.r?m.erW/m.r:0; m.agents=Object.keys(m.agentSet).length;
+  });
+  return map;
+}
+/* Chỉ số của MỘT hàng đơn vị. Ưu tiên usage thật; đơn vị không có dòng usage riêng
+   (vùng/đội) thì lấy phần đã phân bổ xuống tài khoản, để tổng cấp con khớp cấp cha. */
+function deptUnitMetrics(unit, usageIndex, accounts){
+  var hit=usageIndex&&usageIndex[unit.id];
+  if(hit&&hit.rowCount>0) return {agg:hit, agents:hit.agents};
+  var a={r:0,ti:0,to:0,tokens:0,cost:0,er:0}, agentMap={};
+  (accounts||[]).forEach(function(u){
+    a.r+=num(u.req); a.ti+=num(u.ti); a.to+=num(u.to); a.cost+=accountCost(u);
+    if(u.a&&u.a!=="—") agentMap[u.a]=1;
+  });
+  a.tokens=a.ti+a.to;
+  return {agg:a, agents:Object.keys(agentMap).length};
+}
+function deptQuotaCell(u){
+  var c=accountCost(u), q=Math.max(0,Math.min(100,num(u.quotaPct)));
+  var quotaUsd=q>0?c/(q/100):5;
+  return "<td class='quota-cell'><div class='quota-gauge'><div class='quota-gauge-fill' style='width:"+q+
+    "%;background:"+quotaColor(q)+"'></div></div><span class='quota-text'>"+q.toFixed(0)+"%</span>"+
+    "<span class='quota-detail'>"+moneyCompact(c)+" / "+moneyCompact(quotaUsd)+"</span></td>";
+}
+/* Dòng meta dưới tên: đơn vị thì nói gồm bao nhiêu con, tài khoản thì nói login,
+   vai trò và trạng thái — chính là hai cột đã có trong bảng Người dùng TLA HD cũ. */
+function deptMeta(row){
+  if(row.tier==="account"){
+    var u=row.account, st=accountStatus(u);
+    var roleClass=u.role==="Admin"?"badge-admin":"badge-user";
+    return "<span class='dept-login'>"+esc(u.login||u.user)+"</span>"+
+      "<span class='"+roleClass+"'>"+esc(u.role)+"</span>"+
+      "<span class='user-status "+st.cls+"'>"+st.label+"</span>";
+  }
+  if(!row.accounts.length) return "<span class='mx-warn'>chưa có user</span>";
+  var parts=[];
+  if(row.unitCount) parts.push(row.unitCount+" đơn vị");
+  parts.push(fmt(row.accounts.length)+" tài khoản");
+  return parts.join(" · ");
+}
+function deptRowHtml(row, usageIndex, light){
+  var cls="mx-row mx-d"+row.depth+" mx-"+row.tier+(row.open?" mx-open":"")+
+    (row.expandable?" mx-clickable":"");
+  var html="<tr class='"+cls+"'"+(row.expandable?" data-unit='"+esc(row.key)+"'":"")+">"+
+    "<td class='mx-name' style='"+matrixNameStyle(row,light)+"'>"+
+    (row.depth>1?"<i class='mx-elbow' style='left:"+matrixGuideX(row.depth-1)+"px'></i>":"")+
+    "<span class='drill-caret"+(row.expandable?"":" drill-leaf")+"'>"+
+      (row.expandable?(row.open?"▼":"▶"):"·")+"</span>"+
+    "<span class='mx-text'><span class='mx-label'>"+
+      "<span class='mx-tier mx-tier-"+row.tier+"'>"+MATRIX_TIER_LABEL[row.tier]+"</span>"+
+      esc(row.label)+"</span>"+
+    "<span class='mx-meta'>"+deptMeta(row)+"</span></span></td>";
+
+  if(row.tier==="account"){
+    var u=row.account, tokens=num(u.ti)+num(u.to), c=accountCost(u);
+    html+="<td class='num'>"+(u.a&&u.a!=="—"?1:0)+"</td>"+
+      adoptionCell(u.active&&!u.disabled?1:0,1)+
+      "<td class='num'>"+fmt(u.req)+"</td>"+
+      "<td class='num' title='"+esc(fmtTokFull(tokens))+"'>"+fmtCompactNum(tokens)+"</td>"+
+      "<td class='num cost' title='"+esc(usdReference(c))+"'>"+moneyCompact(c)+"</td>"+
+      naCell()+deptQuotaCell(u)+"</tr>";
+    return html;
+  }
+  var m=deptUnitMetrics(row.unit,usageIndex,row.accounts), g=m.agg;
+  var activeCount=row.accounts.filter(function(u){return u.active&&!u.disabled;}).length;
+  // Cấp "Trực thuộc" chỉ gom tài khoản gắn thẳng vào đơn vị nên mẫu số là chính nó,
+  // không phải số cấp phát của cả đơn vị cha.
+  var prov=row.tier==="direct"?row.accounts.length:provisionedOf(row.unit.id);
+  html+="<td class='num'>"+fmt(m.agents)+"</td>"+
+    adoptionCell(activeCount,prov)+
+    "<td class='num'>"+fmt(g.r)+"</td>"+
+    "<td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtCompactNum(g.tokens)+"</td>"+
+    "<td class='num cost' title='"+esc(usdReference(g.cost))+"'>"+moneyCompact(g.cost)+"</td>"+
+    "<td class='num"+(g.er>2?" text-red":"")+"'>"+num(g.er).toFixed(1)+"%</td>"+
+    naCell()+"</tr>";
+  return html;
+}
+function buildDeptRows(rows){
+  // Dùng CHUNG gốc với ma trận tab Agents: bỏ qua hai hàng tổng hợp "Toàn công ty" và
+  // "Tổng công ty Rạng Đông" để cấp 1 là phòng ban thật, không tốn hai cấp bung vô ích.
+  var byUnit=accountsByUnitIndex(deptPool()), usageIds=deptUsageUnitIds(rows), out=[];
+  reportingRoots().forEach(function(root,i){
+    var node=deptTreeNode(root,byUnit,usageIds);
+    if(node) flattenMatrixTree(node,1,[],true,i,null,out,deptIsOpen);
+  });
+  return out;
+}
+function renderDeptTree(rows){
+  var table=document.getElementById("dept-tree-table"); if(!table) return;
+  var light=currentTheme()==="light", treeRows=buildDeptRows(rows);
+  var usageIndex=buildDeptUsageIndex(rows);
+  var html="<thead><tr><th class='mx-th-name'>Phòng ban / Đơn vị · Tài khoản</th>"+
+    "<th class='num'>AI Agent</th><th class='num'>User hoạt động / Tổng</th>"+
+    "<th class='num'>Request</th><th class='num'>Token</th>"+
+    "<th class='num'>Mức độ sử dụng</th><th class='num'>Tỷ lệ lỗi</th>"+
+    "<th>Quota kỳ hiện tại</th></tr></thead><tbody>";
+  if(!treeRows.length){
+    html+="<tr><td class='mx-empty' colspan='8'>"+
+      (deptSearching()?"Không có tài khoản nào khớp từ khóa.":"Chưa có phòng ban nào trong phạm vi đang lọc.")+
+      "</td></tr>";
+  }
+  treeRows.forEach(function(row){ html+=deptRowHtml(row,usageIndex,light); });
+  html+="</tbody>";
+  table.innerHTML=html;
+  bindDeptTree(table);
+  var units=treeRows.filter(function(r){return r.kind==="unit";}).length;
+  var accts=treeRows.filter(function(r){return r.tier==="account";}).length;
+  set("dept-tree-note","Đang hiện "+fmt(units)+" hàng đơn vị và "+fmt(accts)+
+    " hàng tài khoản. Bung thêm một cấp để thấy chi tiết sâu hơn.");
+}
+/* Toggle bung/thu. Trạng thái nằm trong state.deptExpanded nên giữ nguyên qua các lần
+   đổi bộ lọc hoặc khoảng thời gian. Listener gắn một lần trên bảng. */
+function bindDeptTree(table){
+  if(table.getAttribute("data-dept-bound")) return;
+  table.setAttribute("data-dept-bound","1");
+  table.addEventListener("click", function(ev){
+    var tr=ev.target&&ev.target.closest?ev.target.closest("tr[data-unit]"):null;
+    if(!tr) return;
     var id=tr.getAttribute("data-unit");
     state.deptExpanded=state.deptExpanded||{};
     if(state.deptExpanded[id]) delete state.deptExpanded[id];
     else state.deptExpanded[id]=true;
-    renderAll();
+    refreshDeptTree();
   });
+}
+/* Vẽ lại RIÊNG cây — bung một hàng không nên dựng lại toàn bộ biểu đồ của dashboard. */
+function refreshDeptTree(){
+  if(deptLastRows) renderDeptTree(deptLastRows);
+  bindDeptToolbar();
+  saveState();
+}
+function deptAnyOpen(){
+  var open=state.deptExpanded||{};
+  for(var k in open) if(Object.prototype.hasOwnProperty.call(open,k)) return true;
+  return false;
+}
+function bindDeptToolbar(){
+  var search=document.getElementById("dept-search");
+  if(search){
+    if(search.value!==(state.deptSearch||"")) search.value=state.deptSearch||"";
+    if(!search.getAttribute("data-dept-bound")){
+      search.setAttribute("data-dept-bound","1");
+      search.oninput=function(){ state.deptSearch=this.value; refreshDeptTree(); };
+    }
+  }
+  var btn=document.getElementById("dept-expand");
+  if(btn){
+    btn.textContent=deptAnyOpen()?"Thu gọn tất cả":"Mở tất cả phòng ban";
+    btn.disabled=deptSearching();
+    if(!btn.getAttribute("data-dept-bound")){
+      btn.setAttribute("data-dept-bound","1");
+      btn.onclick=function(){
+        var opened=deptAnyOpen();
+        state.deptExpanded={};
+        if(!opened) reportingRoots().forEach(function(u){ state.deptExpanded[u.id]=true; });
+        refreshDeptTree();
+      };
+    }
+  }
+}
+function renderDepartments(rows){
+  deptLastRows=rows;
+  var byUnitId=groupRowsByUnit(rows);
+  var pool=filterAccounts();
+  var groups=Object.keys(byUnitId).map(function(id){
+    var g=byUnitId[id];
+    return {unit:g.unit, agents:Object.keys(g.agents), agg:aggregate(g.rows)};
+  });
+  var totalReq=aggregate(rows).r;
+  // "Năng suất nhất" = phòng tạo ra nhiều lượt dùng nhất, không xếp theo tiền.
+  var byReq=groups.slice().sort(function(a,b){ return b.agg.r-a.agg.r; });
+
+  set("m-dep-count", groups.filter(function(g){return g.agg.r>0;}).length);
+  if(byReq.length&&byReq[0].agg.r>0){
+    set("m-dep-top", esc(byReq[0].unit.name));
+    set("m-dep-top-def", "<b>"+fmt(byReq[0].agg.r)+" request · "+pct(byReq[0].agg.r,totalReq).toFixed(0)+
+      "%</b> tổng lượt dùng kỳ này.");
+  } else { set("m-dep-top","—"); set("m-dep-top-def","Chưa phòng ban nào phát sinh lượt dùng."); }
+  set("m-dep-users",fmtCompactNum(pool.length));
+
+  renderDeptTree(rows);
+  bindDeptToolbar();
+  set("dep-alloc-note","<span title='"+esc(ALLOCATED_DATA_HINT)+"'>· "+ALLOCATED_DATA_LABEL+"</span>");
 }
 function chartsDepartments(rows){
   // Gom theo đơn vị chuẩn hoá để mỗi phòng chỉ có MỘT lát bánh.
@@ -1495,10 +1718,13 @@ function renderAgents(rows){
   var byAgent = groupAgg(rows, function(r){return r.a;});
   var active = byAgent.filter(function(g){return g.r>0;});
   var A = aggregate(rows);
-  set("m-ag-active", active.length + " <span class='metric-unit'>/ "+allAgents().length+"</span>");
-  set("m-ag-req", fmt(A.r));
-  setMoney("m-ag-cost", active.length? A.cost/active.length:0);
-  set("m-ag-idle", allAgents().length - active.length);
+  // Đơn vị đã nằm trong ngoặc ở tên thẻ nên giá trị chỉ còn con số, số lớn viết
+  // nghìn/triệu bằng chữ — cùng quy ước với các tab khác.
+  var avgCost = active.length ? A.cost/active.length : 0;
+  set("m-ag-active", active.length + "/" + allAgents().length);
+  set("m-ag-idle", fmtCompactNum(allAgents().length - active.length));
+  setWithTitle("m-ag-req", fmtCompactNum(A.r), fmt(A.r)+" lượt gọi");
+  setWithTitle("m-ag-cost", usageCompact(avgCost), money(avgCost)+" · "+usdReference(avgCost));
   var top = active.slice().sort(function(a,b){return b.tokens-a.tokens;}).slice(0,5);
   set("ag-top", top.map(function(g,i){ return "<tr><td class='rank'>"+(i+1)+"</td><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td></tr>"; }).join("") || emptyRow(3));
   byAgent.sort(function(a,b){return b.cost-a.cost;});
@@ -1508,9 +1734,9 @@ function renderAgents(rows){
     var dept = g.depts[0]||"—";
     return "<tr><td"+(idle?" class='subtle'":"")+">"+esc(g.key)+"</td><td class='subtle'>"+esc(dept)+"</td><td class='agent-model-cell"+(idle?" subtle":"")+"'>"+model+"</td>"+
       "<td class='num"+(idle?" subtle":"")+"'>"+(idle?"0":fmt(g.u))+"</td><td class='num"+(idle?" subtle":"")+"'>"+fmt(g.r)+"</td>"+
-      "<td class='num"+(idle?" subtle":"")+"' title='"+esc(fmtTokFull(g.tokens))+"'>"+(idle?"0":fmtTok(g.tokens))+"</td><td class='num"+(g.er>2?" text-red":(idle?" subtle":""))+"'>"+(idle?"—":g.er.toFixed(1))+"</td>"+
-      "<td class='num"+(idle?" subtle":"")+"'>"+(idle||!g.latAvailable?"—":g.lat.toFixed(1))+"</td>"+
-      "<td>"+(idle?"<span class='badge badge-inactive'>Idle</span>":"<span class='badge badge-active'>Active</span>")+"</td></tr>";
+      "<td class='num"+(idle?" subtle":"")+"' title='"+esc(fmtTokFull(g.tokens))+"'>"+(idle?"0":fmtTok(g.tokens))+"</td><td class='num"+(g.er>2?" text-red":(idle?" subtle":""))+"'>"+(idle?"—":fmtDecimal(g.er,1)+"%")+"</td>"+
+      "<td class='num"+(idle?" subtle":"")+"'>"+(idle||!g.latAvailable?"—":fmtDecimal(g.lat,1)+"s")+"</td>"+
+      "<td>"+(idle?"<span class='badge badge-inactive'>Chưa dùng</span>":"<span class='badge badge-active'>Đang chạy</span>")+"</td></tr>";
   }).join("") || emptyRow(9));
   buildAgentDeptHeatmap(rows);
 }
@@ -1636,6 +1862,7 @@ var MATRIX_GUIDE_OFFSET = 19;   // px từ mép trái tới đường nối dọ
 var MATRIX_GROUP_COLORS = ["#6366f1","#0ea5e9","#10b981","#f59e0b","#ec4899","#8b5cf6"];
 var MATRIX_TIER_LABEL = {root:"Phòng ban", unit:"Đơn vị", direct:"Trực thuộc", account:"Tài khoản"};
 var matrixLastRows = null;      // rows của kỳ đang xem, để bung/tìm kiếm không phải renderAll
+var deptLastRows = null;        // tương tự cho cây chi tiết phòng ban ở tab Phòng ban & User
 
 function matrixGuideX(level){ return MATRIX_GUIDE_OFFSET + (level-1)*MATRIX_INDENT_STEP; }
 function matrixSearching(){ return !!String(state.matrixSearch||"").trim(); }
@@ -1701,21 +1928,22 @@ function matrixAccountRow(acct, depth, guides, isLast, group, parent){
    khoản gắn thẳng vào nó; để lẫn hai loại trong cùng một cấp thì tài khoản nằm ngang
    hàng với đơn vị, tức sai cấp. Gặp trường hợp đó thì gom tài khoản vào một nút
    "Trực thuộc" riêng, đẩy xuống thêm một cấp. */
-function flattenMatrixTree(node, depth, guides, isLast, group, parent, out){
+function flattenMatrixTree(node, depth, guides, isLast, group, parent, out, isOpen){
+  isOpen = isOpen || matrixIsOpen;
   var hasKids=node.kids.length>0, hasDirect=node.direct.length>0;
   var groupDirect=hasKids&&hasDirect;
   var childCount=node.kids.length+(groupDirect?1:node.direct.length);
   var row={
     key:node.unit.id, depth:depth, tier:depth===1?"root":"unit", kind:"unit",
     label:node.unit.name, accounts:node.accounts, unitCount:node.kids.length,
-    expandable:childCount>0, open:matrixIsOpen(node.unit.id),
+    expandable:childCount>0, open:isOpen(node.unit.id), unit:node.unit,
     guides:guides, lastOfParent:isLast, group:group, parent:parent
   };
   out.push(row);
   if(!row.open) return;
   var childGuides=guides.concat(depth>1&&!isLast ? [matrixGuideX(depth-1)] : []);
   node.kids.forEach(function(kid,i){
-    flattenMatrixTree(kid, depth+1, childGuides, i===childCount-1, group, row, out);
+    flattenMatrixTree(kid, depth+1, childGuides, i===childCount-1, group, row, out, isOpen);
   });
   if(!hasDirect) return;
 
@@ -1731,7 +1959,7 @@ function flattenMatrixTree(node, depth, guides, isLast, group, parent, out){
   var key=node.unit.id+"::direct";
   var groupRow={
     key:key, depth:depth+1, tier:"direct", kind:"unit", label:node.unit.name,
-    accounts:node.direct, unitCount:0, expandable:true, open:matrixIsOpen(key),
+    accounts:node.direct, unitCount:0, expandable:true, open:isOpen(key), unit:node.unit,
     guides:childGuides, lastOfParent:true, group:group, parent:row
   };
   out.push(groupRow);
@@ -1779,9 +2007,12 @@ function buildMatrixRows(pool, usage, agents){
     if(q && root.name.toLowerCase().indexOf(q)<0) return;
     // Chưa có tài khoản Ralli ⇒ vẫn hiện phòng ban dưới dạng hàng lá với số usage thật,
     // và nói rõ là không bung được, thay vì im lặng bỏ qua lưu lượng của phòng đó.
-    var byAgent=usage[root.id]; if(!byAgent) return;
-    var values=agents.map(function(a){ return num(byAgent[a]||0); });
-    if(!values.some(function(v){ return v>0; })) return;
+    // Giữ hàng theo ĐÚNG quy tắc của cây chi tiết phòng ban (xem deptTreeNode): có dòng
+    // usage HOẶC có số cấp phát trong tổ chức — kể cả khi mọi số đều bằng 0. Trước đây
+    // ma trận loại luôn phòng usage toàn 0 nên hụt 7 phòng so với bảng kia.
+    var byAgent=usage[root.id];
+    if(!byAgent && provisionedOf(root.id)==null) return;
+    var values=agents.map(function(a){ return num((byAgent||{})[a]||0); });
     out.push({key:root.id, depth:1, tier:"root", kind:"unit", label:root.name,
       accounts:[], unitCount:0, expandable:false, open:false, guides:[],
       lastOfParent:true, group:i, parent:null, fixedValues:values, noAccounts:true});
@@ -1992,21 +2223,139 @@ function buildAgentDeptHeatmap(rows){
 function renderProviders(rows){
   var byProv = groupAgg(rows, function(r){return modelProvider(r.m);}).filter(function(g){return g.r>0||g.tokens>0;}).sort(function(a,b){return b.tokens-a.tokens;});
   var totTok = aggregate(rows).tokens;
-  set("m-pv-count", byProv.length + " <span class='metric-unit'>đang dùng</span>");
+  // Đơn vị đã nằm trong ngoặc ở tên thẻ nên giá trị chỉ còn con số, và số lớn viết
+  // "nghìn / triệu" bằng chữ cho thống nhất với các tab khác.
+  set("m-pv-count", fmtCompactNum(byProv.length));
   if(byProv.length){
-    set("m-pv-share", pct(byProv[0].tokens,totTok).toFixed(0)+"%");
-    set("m-pv-share-def", "<b>"+esc(byProv[0].key)+"</b> gánh phần lớn lưu lượng"+(byProv.length===1?" ⇒ rủi ro phụ thuộc một provider.":"."));
-    setMoney("m-pv-cost", byProv[0].cost);
-    set("m-pv-latency", byProv[0].latAvailable?byProv[0].lat.toFixed(1)+"s":"Chưa có dữ liệu");
-  } else { set("m-pv-share","—"); set("m-pv-share-def","—"); set("m-pv-cost",money(0)); set("m-pv-latency","—"); }
-  set("pv-tbody", byProv.map(function(g){
-    return "<tr><td class='model-name'>"+esc(g.key)+"</td><td class='num'>"+g.models.length+"</td><td class='num'>"+g.agents.length+"</td><td class='num'>"+fmt(g.r)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num"+(g.er>2?" text-red":"")+"'>"+g.er.toFixed(1)+"</td><td class='num'>"+(g.latAvailable?g.lat.toFixed(1):"—")+"</td><td><span class='badge badge-active'>Active</span></td></tr>";
-  }).join("") || emptyRow(8));
+    var top=byProv[0];
+    set("m-pv-share", pct(top.tokens,totTok).toFixed(0)+"%");
+    set("m-pv-share-def", "<b>"+esc(top.key)+"</b> đang gánh phần lớn lưu lượng của kỳ.");
+    set("m-pv-models", fmtCompactNum(top.models.length));
+    set("m-pv-models-def", top.models.length
+      ? "<b>"+esc(top.key)+"</b> đang cung cấp: "+esc(top.models.join(", "))+"."
+      : "Chưa ghi nhận model nào có lưu lượng.");
+    setWithTitle("m-pv-cost", usageCompact(top.cost), money(top.cost)+" · "+usdReference(top.cost));
+    set("m-pv-latency", top.latAvailable?fmtDecimal(top.lat,1):"Chưa có dữ liệu");
+  } else {
+    set("m-pv-share","—"); set("m-pv-share-def","—");
+    set("m-pv-models","—"); set("m-pv-models-def","—");
+    set("m-pv-cost","—"); set("m-pv-latency","—");
+  }
+  renderProviderModelTree(rows);
+}
+
+/* ═══════════════ CÂY NHÀ CUNG CẤP → MODEL ═══════════════
+   Gộp bảng "Chi tiết theo provider" và "Chi tiết theo model" thành MỘT cây hai cấp,
+   đúng quan hệ thật: nhà cung cấp đưa ra model. Hàng cha là nhà cung cấp, hàng con
+   là từng model của bên đó — kể cả model đã khai báo trong bảng giá mà chưa dùng,
+   để thấy được phần đang bỏ phí nằm ở nhà cung cấp nào. */
+function pmIsOpen(key){ return !(state.pmCollapsed||{})[key]; }   // mặc định MỞ
+function providerModelIndex(rows){
+  var byProv={}, byModel={}, models={};
+  groupAgg(rows,function(r){return modelProvider(r.m);}).forEach(function(g){ byProv[g.key]=g; });
+  groupAgg(rows,function(r){return r.m;}).forEach(function(g){ byModel[g.key]=g; });
+  // Bảng giá là danh mục đầy đủ; bổ sung thêm model có usage mà chưa khai báo giá.
+  Object.keys(state.pricing).forEach(function(m){ (models[modelProvider(m)]=models[modelProvider(m)]||[]).push(m); });
+  Object.keys(byModel).forEach(function(m){
+    var p=modelProvider(m), list=models[p]=models[p]||[];
+    if(list.indexOf(m)<0) list.push(m);
+  });
+  var provs=Object.keys(models).sort(function(a,b){
+    return (byProv[b]?byProv[b].tokens:0)-(byProv[a]?byProv[a].tokens:0) || a.localeCompare(b,"vi");
+  });
+  provs.forEach(function(p){
+    models[p].sort(function(a,b){
+      return (byModel[b]?byModel[b].tokens:0)-(byModel[a]?byModel[a].tokens:0) || a.localeCompare(b,"vi");
+    });
+  });
+  return {provs:provs, models:models, byProv:byProv, byModel:byModel};
+}
+function pmNumCells(g, priceHtml){
+  var idle=!g || (g.r<=0 && g.tokens<=0);
+  return "<td class='num'>"+(g?fmt(g.agents.length):"0")+"</td>"+
+    "<td class='num'>"+(g?fmt(g.r):"0")+"</td>"+
+    "<td class='num' title='"+esc(g?fmtTokFull(g.ti):"0 token")+"'>"+(g?fmtCompactNum(g.ti):"0")+"</td>"+
+    "<td class='num' title='"+esc(g?fmtTokFull(g.to):"0 token")+"'>"+(g?fmtCompactNum(g.to):"0")+"</td>"+
+    "<td class='num cost' title='"+esc(g?usdReference(g.cost):"")+"'>"+moneyCompact(g?g.cost:0)+"</td>"+
+    "<td class='num subtle'>"+priceHtml+"</td>"+
+    "<td class='num"+(g&&g.er>2?" text-red":"")+"'>"+(idle?"<span class='subtle'>—</span>":fmtDecimal(g.er,1)+"%")+"</td>";
+}
+function renderProviderModelTree(rows){
+  var table=document.getElementById("pm-tree-table"); if(!table) return;
+  var idx=providerModelIndex(rows), light=currentTheme()==="light";
+  var html="<thead><tr><th class='mx-th-name'>Nhà cung cấp / Model</th>"+
+    "<th class='num'>Số Agent đang dùng</th><th class='num'>Lượt gọi</th>"+
+    "<th class='num'>Token vào</th><th class='num'>Token ra</th>"+
+    "<th class='num'>Mức độ sử dụng</th><th class='num'>Đơn giá vào / ra</th>"+
+    "<th class='num'>Tỷ lệ lỗi</th></tr></thead><tbody>";
+  var shownProv=0, shownModel=0;
+  idx.provs.forEach(function(p,i){
+    var g=idx.byProv[p], list=idx.models[p], open=pmIsOpen(p);
+    var used=list.filter(function(m){ var mg=idx.byModel[m]; return mg&&(mg.r>0||mg.tokens>0); }).length;
+    shownProv++;
+    html+="<tr class='mx-row mx-d1 mx-root mx-clickable' data-pm='"+esc(p)+"'>"+
+      "<td class='mx-name' style='"+matrixNameStyle({depth:1,group:i,guides:[]},light)+"'>"+
+      "<span class='drill-caret'>"+(open?"▼":"▶")+"</span>"+
+      "<span class='mx-text'><span class='mx-label'>"+
+        "<span class='mx-tier mx-tier-root'>NHÀ CUNG CẤP</span>"+esc(p)+"</span>"+
+      "<span class='mx-meta'>"+fmt(used)+"/"+fmt(list.length)+" model đang được dùng</span></span></td>"+
+      pmNumCells(g,"—")+"</tr>";
+    if(!open) return;
+    list.forEach(function(m,j){
+      var mg=idx.byModel[m], pr=state.pricing[m]||{i:0,o:0};
+      var idle=!mg||(mg.r<=0&&mg.tokens<=0);
+      var price=(num(pr.i)||num(pr.o)) ? moneyCompact(pr.i)+" / "+moneyCompact(pr.o) : "chưa đặt giá";
+      shownModel++;
+      html+="<tr class='mx-row mx-d2 mx-unit"+(idle?" detail-idle":"")+"' >"+
+        "<td class='mx-name' style='"+matrixNameStyle({depth:2,group:i,guides:[],lastOfParent:j===list.length-1},light)+"'>"+
+        "<i class='mx-elbow' style='left:"+matrixGuideX(1)+"px'></i>"+
+        "<span class='drill-caret drill-leaf'>·</span>"+
+        "<span class='mx-text'><span class='mx-label'>"+
+          "<span class='mx-tier mx-tier-model'>MODEL</span>"+esc(m)+"</span>"+
+        "<span class='mx-meta'>"+(idle?"<span class='mx-warn'>chưa dùng trong kỳ</span>":fmt(mg.agents.length)+" agent đang dùng")+"</span></span></td>"+
+        pmNumCells(mg,price)+"</tr>";
+    });
+  });
+  html+="</tbody>";
+  table.innerHTML=html;
+  bindProviderModelTree(table);
+  set("pm-tree-note","Đang hiện "+fmt(shownProv)+" nhà cung cấp và "+fmt(shownModel)+
+    " model. Model chưa phát sinh lượt dùng nào được làm mờ.");
+  var btn=document.getElementById("pm-expand");
+  if(btn){
+    var anyOpen=idx.provs.some(function(p){ return pmIsOpen(p); });
+    btn.textContent=anyOpen?"Thu gọn tất cả":"Mở tất cả nhà cung cấp";
+    if(!btn.getAttribute("data-pm-bound")){
+      btn.setAttribute("data-pm-bound","1");
+      btn.onclick=function(){
+        var open=providerModelIndex(scopedRows()).provs.some(function(p){ return pmIsOpen(p); });
+        state.pmCollapsed={};
+        if(open) providerModelIndex(scopedRows()).provs.forEach(function(p){ state.pmCollapsed[p]=true; });
+        renderProviderModelTree(scopedRows()); saveState();
+      };
+    }
+  }
+}
+function bindProviderModelTree(table){
+  if(table.getAttribute("data-pm-bound")) return;
+  table.setAttribute("data-pm-bound","1");
+  table.addEventListener("click", function(ev){
+    var tr=ev.target&&ev.target.closest?ev.target.closest("tr[data-pm]"):null;
+    if(!tr) return;
+    var key=tr.getAttribute("data-pm");
+    state.pmCollapsed=state.pmCollapsed||{};
+    if(state.pmCollapsed[key]) delete state.pmCollapsed[key];
+    else state.pmCollapsed[key]=true;
+    renderProviderModelTree(scopedRows()); saveState();
+  });
 }
 function chartsProviders(rows){
   var byProv = groupAgg(rows, function(r){return modelProvider(r.m);}).filter(function(g){return g.tokens>0;}).sort(function(a,b){return b.tokens-a.tokens;});
   mkDonut("c-pv-share", byProv.map(function(g){return g.key;}), byProv.map(function(g){return g.tokens;}), "lg-pv-share", fmtTokFull);
-  mkBar("c-pv-cost", byProv.map(function(g){return g.key;}), byProv.map(function(g){return +g.cost.toFixed(2);}), {horizontal:true, money:true});
+  // Mức độ sử dụng chuyển từ thanh ngang sang biểu đồ tròn để đọc được ngay tỷ trọng
+  // giữa các nhà cung cấp, cùng ngôn ngữ hình với biểu đồ token bên cạnh.
+  var byCost = byProv.filter(function(g){return g.cost>0;}).slice().sort(function(a,b){return b.cost-a.cost;});
+  mkDonut("c-pv-cost", byCost.map(function(g){return g.key;}), byCost.map(function(g){return +g.cost.toFixed(4);}), "lg-pv-cost", moneyCompact);
 }
 
 /* ═══════════════ RENDER: MODEL ═══════════════ */
@@ -2027,18 +2376,14 @@ function renderModels(rows){
   }
   var A = aggregate(rows);
   set("m-md-cache", (A.ti? A.cached/A.ti*100:0).toFixed(0)+"%");
-  set("m-md-think", fmtTok(A.think)+" <span class='metric-unit'>"+(A.tokens? (A.think/A.tokens*100).toFixed(0):"0")+"%</span>");
-  var thinkEl=document.getElementById("m-md-think"); if(thinkEl) thinkEl.title=fmtTokFull(A.think);
-  used.sort(function(a,b){return b.cost-a.cost;});
-  var usedHtml = used.map(function(g){ var p=state.pricing[g.key]||{i:0,o:0};
-    return "<tr><td class='model-name'>"+esc(g.key)+tagFor(g.key,priced)+"</td><td class='subtle'>"+esc(modelProvider(g.key))+"</td><td class='num'>"+g.agents.length+"</td><td class='num' title='"+esc(fmtTokFull(g.ti))+"'>"+fmtTok(g.ti)+"</td><td class='num' title='"+esc(fmtTokFull(g.to))+"'>"+fmtTok(g.to)+"</td><td class='num subtle' title='"+esc(usd(p.i))+" / "+esc(usd(p.o))+"'>"+money(p.i)+" / "+money(p.o)+"</td><td class='num"+(g.er>2?" text-red":"")+"'>"+g.er.toFixed(1)+"</td></tr>";
-  }).join("");
-  var unusedHtml = unused.map(function(m){ var p=state.pricing[m]||{i:0,o:0};
-    return "<tr><td class='model-name subtle'>"+esc(m)+"</td><td class='subtle'>"+esc(modelProvider(m))+"</td><td class='num subtle'>0</td><td class='num subtle'>0</td><td class='num subtle'>0</td><td class='num subtle'>"+((num(p.i)||num(p.o))?(money(p.i)+" / "+money(p.o)):"— chưa đặt giá")+"</td><td class='num subtle'>—</td></tr>";
-  }).join("");
-  set("md-tbody", (usedHtml+unusedHtml) || emptyRow(7));
+  // Đơn vị "(token)" đã nằm ở tên thẻ nên giá trị chỉ còn con số viết theo nghìn/triệu;
+  // phần tỷ trọng chuyển xuống dòng mô tả để không nhét hai đơn vị vào một dòng.
+  setWithTitle("m-md-think", fmtCompactNum(A.think), fmtTokFull(A.think));
+  set("m-md-think-def", "<b>= Σ token model tự suy luận nội bộ</b> · chiếm "+
+    (A.tokens? (A.think/A.tokens*100).toFixed(0):"0")+"% tổng token. Chỉ model bật suy luận mở rộng.");
+  // Bảng chi tiết model cũ đã được gộp vào cây "nhà cung cấp → model"
+  // (xem renderProviderModelTree), nên ở đây chỉ còn phần thẻ chỉ số.
 }
-function tagFor(m, priced){ if(!priced.length) return ""; if(m===priced[0].m) return " <span class='tag tag-cheap'>rẻ</span>"; if(m===priced[priced.length-1].m) return " <span class='tag tag-expensive'>đắt</span>"; return ""; }
 function chartsModels(rows){
   var used = groupAgg(rows, function(r){return r.m;}).filter(function(g){return g.tokens>0;}).sort(function(a,b){return b.tokens-a.tokens;});
   mkBar("c-md-token", used.map(function(g){return shortModel(g.key);}), used.map(function(g){return g.tokens;}), {tokens:true});
@@ -2049,28 +2394,36 @@ function chartsModels(rows){
 /* ═══════════════ RENDER: USER ═══════════════ */
 function renderUsers(rows){
   var accounts=filterAccounts();
-  var active=accounts.filter(function(u){return u.active&&!u.disabled;});
-  var inactive=accounts.filter(function(u){return !u.active;});
+  // Hai nhóm phải BÙ TRỪ NHAU tuyệt đối: inactive = phần còn lại của active, chứ không
+  // phải !u.active. Định nghĩa cũ để lọt tài khoản vừa active vừa disabled ra ngoài cả
+  // hai nhóm, khiến "đang dùng + bỏ không" hụt so với tổng.
+  var isActiveUser=function(u){ return u.active&&!u.disabled; };
+  var active=accounts.filter(isActiveUser);
+  var inactive=accounts.filter(function(u){ return !isActiveUser(u); });
   var disabled=accounts.filter(function(u){return u.disabled;});
   var neverUsed=inactive.filter(function(u){return !u.last;}).length;
   var dormant=inactive.filter(function(u){return u.last&&dayDiff(u.last,state.range.end)>30;}).length;
   var datedAccounts=accounts.filter(function(u){return !!u.created;});
   var newInRange=datedAccounts.filter(function(u){return u.created>=state.range.start&&u.created<=state.range.end;}).length;
   var units=distinct(accounts.map(function(u){return u.d;})).length;
-  set("m-us-total",fmt(accounts.length));
+  set("m-us-total",fmtCompactNum(accounts.length));
   set("m-us-total-def","Đã dùng trong kỳ: <b>"+fmt(active.length)+"/"+fmt(accounts.length)+" ("+pct(active.length,accounts.length).toFixed(0)+"%)</b> · Đã khoá: "+fmt(disabled.length)+".");
-  set("m-us-adoption",pct(active.length,accounts.length).toFixed(0)+"%");
-  set("m-us-adoption-def",fmt(active.length)+" đã dùng / "+fmt(accounts.length)+" đã cấp.");
-  set("m-us-inactive",fmt(inactive.length));
-  set("m-us-inactive-def","Chưa từng dùng: "+fmt(neverUsed)+" · ngừng >30 ngày: "+fmt(dormant)+".");
-  set("m-us-new",datedAccounts.length?fmt(newInRange):"—");
+  /* Hai thẻ "đang dùng" và "bỏ không" là một cặp đối nhau nên phải CÙNG ĐƠN VỊ (%),
+     nếu không người đọc sẽ cộng 25% với 465 tài khoản. Phần trăm nhóm bỏ không lấy
+     bằng 100 − nhóm đang dùng (đã làm tròn) để hai thẻ luôn cộng đúng 100%. */
+  var activePctRounded=accounts.length?Math.round(pct(active.length,accounts.length)):0;
+  set("m-us-adoption",activePctRounded+"%");
+  set("m-us-adoption-def","<b>"+fmt(active.length)+"/"+fmt(accounts.length)+"</b> tài khoản đã dùng.");
+  set("m-us-inactive",(accounts.length?100-activePctRounded:0)+"%");
+  set("m-us-inactive-def","<b>"+fmt(inactive.length)+"/"+fmt(accounts.length)+"</b> tài khoản · chưa từng dùng: "+
+    fmt(neverUsed)+" · ngừng >30 ngày: "+fmt(dormant)+".");
+  set("m-us-new",datedAccounts.length?fmtCompactNum(newInRange):"—");
   set("m-us-new-def",datedAccounts.length
     ?"Tài khoản được tạo trong khoảng thời gian đang chọn."
     :"Nguồn TLA Ralli chưa có ngày cấp tài khoản.");
-  set("m-us-units",fmt(units));
+  set("m-us-units",fmtCompactNum(units));
   set("user-active-chip","Đã dùng: "+fmt(active.length));
   set("user-total-chip","Tổng: "+fmt(accounts.length));
-  renderUserAccounts(accounts);
   renderInactiveAccounts(inactive);
 }
 /* ─── Bảng chi tiết từng tài khoản (track theo username) — theo bộ lọc phòng/nhóm/agent/model ─── */
@@ -2101,73 +2454,94 @@ function accountStatus(u){
   if(u.quotaPct>=85) return {label:"Cảnh báo",cls:"user-status-warning"};
   return {label:"Hoạt động",cls:"user-status-active"};
 }
-function renderUserAccounts(accounts){
-  var tb=document.getElementById("user-acct-tbody"); if(!tb) return;
-  var rows=(accounts||filterAccounts()).slice().sort(function(a,b){
-    return Number(b.active)-Number(a.active)||num(b.req)-num(a.req);
-  });
-  tb.innerHTML=rows.map(function(u,i){
-    var c=accountCost(u), q=Math.max(0,Math.min(100,num(u.quotaPct)));
-    var quotaUsd=q>0?c/(q/100):5;
-    var status=accountStatus(u), roleClass=u.role==="Admin"?"badge-admin":"badge-user";
-    return "<tr>"+
-      "<td class='rank'>"+(i+1)+"</td>"+
-      "<td class='user-id'><span class='user-real-name'>"+esc(u.n)+"</span>"+
-        "<span class='user-account'>"+esc(u.login)+" · "+esc(u.email)+"</span></td>"+
-      "<td class='user-department'>"+esc(u.d)+"</td>"+
-      "<td><span class='"+roleClass+"'>"+esc(u.role)+"</span></td>"+
-      "<td><span class='user-status "+status.cls+"'>"+status.label+"</span></td>"+
-      "<td class='num'>"+fmt(u.req)+"</td>"+
-      moneyCell(c)+
-      "<td class='quota-cell'><div class='quota-gauge'><div class='quota-gauge-fill' style='width:"+q+"%;background:"+quotaColor(q)+"'></div></div>"+
-      "<span class='quota-text'>"+q.toFixed(0)+"%</span><span class='quota-detail'>"+money(c)+" / "+money(quotaUsd)+"</span></td>"+
-      "</tr>";
-  }).join("") || emptyRow(8);
-}
-function lastActivityLabel(u){
-  if(!u.last) return "— (chưa từng)";
-  var days=dayDiff(u.last,state.range.end);
-  return days>0?fmt(days)+" ngày trước":u.last;
+
+/* Bảng tài khoản không hoạt động: nêu HAI MỐC — bắt đầu ngừng dùng và mốc chốt của
+   kỳ đang xem — kèm luôn số ngày đã tính sẵn, thay vì một nhãn "x ngày trước" mà
+   người đọc không truy ra được ngày cụ thể. */
+/* Mốc bắt đầu ngừng dùng. Nguồn TLA Ralli KHÔNG lưu thời điểm dùng lần cuối cho tài
+   khoản chưa từng hoạt động, nên với nhóm đó mốc bắt đầu lùi về đầu kỳ đang xem và
+   được ghi rõ là suy ra — không bịa một ngày cụ thể. */
+function inactiveSince(u){
+  if(u.last) return {iso:u.last, exact:true};
+  return {iso:state.range.start, exact:false};
 }
 function renderInactiveAccounts(accounts){
   var tb=document.getElementById("user-inactive-tbody"); if(!tb) return;
-  var rows=(accounts||[]).slice().sort(function(a,b){
-    if(!a.last&&!b.last) return a.user.localeCompare(b.user);
-    if(!a.last) return -1;
-    if(!b.last) return 1;
-    return a.last.localeCompare(b.last);
-  }).slice(0,8);
+  var endIso=state.range.end;
+  // Ngừng lâu nhất lên trước; mốc đo được xếp trước mốc suy ra để phần chắc chắn nằm trên.
+  var all=(accounts||[]).slice().sort(function(a,b){
+    var sa=inactiveSince(a), sb=inactiveSince(b);
+    if(sa.exact!==sb.exact) return sa.exact?-1:1;
+    return sa.iso.localeCompare(sb.iso)||a.user.localeCompare(b.user);
+  });
+  var rows=all.slice(0,12), neverUsed=0, noCreated=0;
+  all.forEach(function(u){ if(!u.last) neverUsed++; if(!u.created) noCreated++; });
   tb.innerHTML=rows.map(function(u){
-    return "<tr><td class='user-id'><span class='user-real-name'>"+esc(u.n)+"</span>"+
-      "<span class='user-account'>"+esc(u.login)+"</span></td><td>"+esc(u.d)+"</td><td>"+lastActivityLabel(u)+"</td></tr>";
-  }).join("") || emptyRow(3);
+    var since=inactiveSince(u), days=Math.max(0,dayDiff(since.iso,endIso));
+    // Ngày cấp lấy thẳng từ u.created. Nguồn hiện chưa có trường này nên đa số rỗng —
+    // hiện "chưa có dữ liệu" thay vì suy ra một ngày không có thật.
+    var createdCell=u.created
+      ? fmtDateUS(u.created)
+      : "<span class='metric-na'>chưa có dữ liệu</span>";
+    return "<tr><td>"+esc(u.d)+"</td>"+
+      "<td class='user-id'><span class='user-real-name'>"+esc(u.n)+"</span>"+
+        "<span class='user-account'>"+esc(u.login)+"</span></td>"+
+      "<td class='date-cell'>"+createdCell+"</td>"+
+      "<td class='date-cell'>"+fmtDateUS(since.iso)+
+        (since.exact?"":"<span class='inactive-tag'>chưa từng dùng</span>")+"</td>"+
+      "<td class='date-cell'>"+fmtDateUS(endIso)+"</td>"+
+      "<td class='num"+(days>30?" text-red":"")+"'>"+fmt(days)+"</td></tr>";
+  }).join("") || emptyRow(6);
+  var note=[];
+  if(all.length>rows.length) note.push("Hiện "+fmt(rows.length)+" tài khoản ngừng lâu nhất trong tổng số "+fmt(all.length)+".");
+  if(all.length) note.push("Mốc chốt là ngày cuối của kỳ đang xem ("+fmtDateUS(endIso)+").");
+  if(neverUsed) note.push(fmt(neverUsed)+" tài khoản chưa từng ghi nhận hoạt động — nguồn TLA Ralli không lưu "+
+    "thời điểm dùng lần cuối cho nhóm này, nên mốc bắt đầu lấy theo đầu kỳ ("+fmtDateUS(state.range.start)+").");
+  if(noCreated) note.push("Cột Thời gian được cấp trống với "+fmt(noCreated)+" tài khoản vì file TLA Ralli chưa "+
+    "xuất cột ngày cấp; bổ sung cột đó vào nguồn thì bảng tự điền.");
+  set("user-inactive-note", note.join(" "));
 }
-function chartsUsers(rows){
+/* Ước lượng người dùng hoạt động theo ngày. Nguồn usage chưa có userId nên DAU là số
+   suy ra từ lưu lượng ngày đó — dùng để nhìn xu hướng, không phải số đo tuyệt đối. */
+function dauSeries(){
   var accounts=filterAccounts(), total=accounts.length;
   var dates=state.dayOrder.filter(function(d){return d>=state.range.start&&d<=state.range.end;}).slice(-30);
   var requests=dates.map(function(d){return aggregate(applyFilters(state.days[d]||[])).r;});
   var maxReq=Math.max.apply(null,requests.concat([1]));
   var dau=requests.map(function(r){return Math.min(total,Math.round(total*(0.10+0.16*r/maxReq)));});
-  mkLine("c-us-dau",dates.map(dayLabel),[
-    {label:"DAU",data:dau,borderColor:"#3b82f6",backgroundColor:"rgba(59,130,246,.12)",fill:true,tension:.35,pointRadius:2},
-    {label:"Tổng đã cấp",data:dates.map(function(){return total;}),borderColor:"#64748b",borderDash:[6,4],fill:false,pointRadius:0}
+  return {dates:dates, total:total, dau:dau};
+}
+function chartsUsers(rows){
+  var s=dauSeries(), labels=s.dates.map(dayLabel);
+  var avg=s.dau.length?s.dau.reduce(function(a,b){return a+b;},0)/s.dau.length:0;
+  mkLine("c-us-dau",labels,[
+    {label:"Người dùng hoạt động",data:s.dau,borderColor:"#3b82f6",backgroundColor:"rgba(59,130,246,.12)",fill:true,tension:.35,pointRadius:2},
+    {label:"Trung bình kỳ ("+fmt(avg)+")",data:s.dates.map(function(){return Math.round(avg);}),
+      borderColor:"#f59e0b",borderDash:[5,4],fill:false,pointRadius:0,borderWidth:2},
+    {label:"Tổng đã cấp",data:s.dates.map(function(){return s.total;}),borderColor:"#64748b",borderDash:[6,4],fill:false,pointRadius:0}
   ],false);
+  // Tài khoản đã cấp nhưng không mở công cụ trong ngày = tổng đã cấp − người hoạt động.
+  var idle=s.dau.map(function(d){return Math.max(0,s.total-d);});
+  mkBar("c-us-idle",labels,idle,{colors:"#f59e0b"});
 }
 
 /* ═══════════════ RENDER: CHI PHÍ ═══════════════ */
 function renderCost(rows){
   var A = aggregate(rows);
   var configured=configuredBudgetSummary(rows);
-  setMoney("m-co-total", A.cost);
+  // Đơn vị nằm trong ngoặc ở tên thẻ; giá trị viết gọn theo nghìn/triệu, số đầy đủ
+  // và quy đổi USD vẫn xem được qua tooltip + dòng mô tả.
+  setWithTitle("m-co-total", usageCompact(A.cost), money(A.cost)+" · "+usdReference(A.cost));
   set("m-co-vnd", usdReference(A.cost));
   set("m-co-budget", pct(configured.cost,configured.budget).toFixed(0)+"%");
   set("m-co-budget-def", "<b>= chi phí agent có ngân sách ÷ ngân sách quy đổi cho khoảng đang chọn</b> = <span title='"+esc(usdReference(configured.cost))+"'>"+money(configured.cost)+"</span> / <span title='"+esc(usdReference(configured.budget))+"'>"+money(configured.budget)+"</span>.");
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;});
   var top2 = byAgent.slice(0,2).reduce(function(s,g){return s+g.cost;},0);
   set("m-co-conc", pct(top2,A.cost).toFixed(0)+"%");
-  setMoney("m-co-perk", A.r? A.cost/(A.r/1000):0);
+  var perK = A.r? A.cost/(A.r/1000):0;
+  setWithTitle("m-co-perk", usageCompact(perK), money(perK)+" / 1.000 lượt gọi · "+usdReference(perK));
   var prevA=shiftedAgg(-rangeLenDays()), sameA=shiftedAgg(-365);
-  renderDelta("d-co-total", A.cost, prevA.cost, sameA.cost, false, money, 0.88, 0.57);
+  renderDelta("d-co-total", A.cost, prevA.cost, sameA.cost, false, moneyCompact, 0.88, 0.57);
   var budget=budgetInsight(A,rows), concentration=concentrationInsight(rows);
   renderCardInsight("m-co-total",[budget,concentration]);
   renderCardInsight("m-co-budget",[budget]);
@@ -2190,8 +2564,109 @@ function renderCostTable(rows){
     return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.r?moneyCell(g.cost/(g.r/1000),"num"):"<td class='num'>—</td>")+moneyCell(g.cost)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
   }).join("") || emptyRow(6));
 }
+/* ─── Chi phí theo thời gian, tách theo phòng ban ───
+   Mỗi phòng ban là một đường. Giữ Top-8 theo tổng chi phí, phần đuôi gộp thành một
+   đường "Phòng ban khác" để biểu đồ không thành búi chỉ. */
+function deptCostTrend(){
+  var dates=state.dayOrder.filter(function(d){return d>=state.range.start&&d<=state.range.end;});
+  var totals={};
+  var perDay=dates.map(function(d){
+    var m={};
+    applyFilters(state.days[d]||[]).forEach(function(r){
+      var u=unitOf(r.d);
+      if(!u||isExcludedUnit(u)) return;
+      var c=cost(r);
+      m[u.name]=(m[u.name]||0)+c;
+      totals[u.name]=(totals[u.name]||0)+c;
+    });
+    return m;
+  });
+  var names=Object.keys(totals).filter(function(n){return totals[n]>0;})
+    .sort(function(a,b){return totals[b]-totals[a];});
+  var top=names.slice(0,8), rest=names.slice(8);
+  var series=top.map(function(n){
+    return {key:n, data:perDay.map(function(m){return +(m[n]||0).toFixed(4);})};
+  });
+  if(rest.length){
+    series.push({key:"Phòng ban khác", data:perDay.map(function(m){
+      return +rest.reduce(function(s,n){return s+(m[n]||0);},0).toFixed(4);
+    })});
+  }
+  return {labels:dates.map(dayLabel), series:series};
+}
+
+/* Icon con mắt cho chú thích bật/tắt đường (kiểu Kibana). Vẽ inline SVG để không
+   phụ thuộc font icon bên ngoài và vẫn đổi màu theo currentColor của chú thích. */
+var EYE_SHOW="<svg viewBox='0 0 24 24' width='13' height='13' fill='none' stroke='currentColor' "+
+  "stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"+
+  "<path d='M1.5 12S5 5 12 5s10.5 7 10.5 7-3.5 7-10.5 7S1.5 12 1.5 12z'/><circle cx='12' cy='12' r='3'/></svg>";
+var EYE_HIDE="<svg viewBox='0 0 24 24' width='13' height='13' fill='none' stroke='currentColor' "+
+  "stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>"+
+  "<path d='M9.9 5.2A10.9 10.9 0 0 1 12 5c7 0 10.5 7 10.5 7a19 19 0 0 1-3.4 4.4'/>"+
+  "<path d='M6.3 6.4A19 19 0 0 0 1.5 12S5 19 12 19a10.7 10.7 0 0 0 4.4-.9'/>"+
+  "<path d='M9.9 9.9a3 3 0 0 0 4.2 4.2'/><path d='M2 2l20 20'/></svg>";
+
+/* Chú thích tự dựng thay cho legend mặc định của Chart.js: bấm để ẩn/hiện đường,
+   đường đang ẩn thì mờ đi và đổi sang icon mắt gạch chéo. */
+function renderToggleLegend(chartId, legendId, fmtVal){
+  var host=document.getElementById(legendId), ch=charts[chartId];
+  if(!host||!ch) return;
+  host.innerHTML=ch.data.datasets.map(function(d,i){
+    var shown=ch.isDatasetVisible(i);
+    var total=d.data.reduce(function(s,v){return s+num(v);},0);
+    return "<button type='button' class='legend-toggle"+(shown?"":" is-hidden")+"' data-idx='"+i+"' "+
+      "aria-pressed='"+(shown?"false":"true")+"' title='"+esc(shown?"Ẩn đường này":"Hiện lại đường này")+"'>"+
+      "<span class='dot' style='background:"+d.borderColor+"'></span>"+
+      "<span class='legend-name'>"+esc(d.label)+"</span>"+
+      "<span class='legend-val'>"+(fmtVal?fmtVal(total):fmt(total))+"</span>"+
+      "<span class='legend-eye'>"+(shown?EYE_SHOW:EYE_HIDE)+"</span></button>";
+  }).join("");
+  if(host.getAttribute("data-toggle-bound")) return;
+  host.setAttribute("data-toggle-bound","1");
+  host.addEventListener("click", function(ev){
+    var btn=ev.target&&ev.target.closest?ev.target.closest(".legend-toggle"):null;
+    if(!btn) return;
+    var c=charts[chartId]; if(!c) return;
+    var i=+btn.getAttribute("data-idx");
+    c.setDatasetVisibility(i, !c.isDatasetVisible(i));
+    c.update();
+    renderToggleLegend(chartId, legendId, fmtVal);
+  });
+}
+function mkToggleLine(id, labels, series, legendId, fmtVal, emptyMsg){
+  if(!series.length||!labels.length){ emptyChart(id, legendId, emptyMsg||"Chưa có dữ liệu trong kỳ."); return; }
+  var datasets=series.map(function(s,i){
+    var c=palette[i%palette.length];
+    return {label:s.key, data:s.data, borderColor:c, backgroundColor:c+"22",
+      fill:false, tension:.32, borderWidth:2,
+      pointRadius:s.data.length<=10?3:1.5, pointBackgroundColor:c, pointHoverRadius:5};
+  });
+  chart(id,{
+    type:"line",
+    data:{labels:labels, datasets:datasets},
+    options:{
+      interaction:{mode:"index", intersect:false},
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label:function(c){
+          return c.dataset.label+": "+(fmtVal?fmtVal(c.parsed.y):fmt(c.parsed.y));
+        } } } },
+      scales:{ x:{grid:{display:false},ticks:{maxTicksLimit:8}},
+        y:{beginAtZero:true,grid:{color:gridColor()},
+          ticks:{callback:function(v){return moneyCompact(v);},maxTicksLimit:6}} }
+    }
+  });
+  renderToggleLegend(id, legendId, fmtVal);
+}
+
 function chartsCost(rows){
   renderAgentBudgetChart(rows);
+  // Xu hướng chung trước, rồi mới tách theo phòng ban — cùng mạch đọc tổng → chi tiết.
+  var tl=trendSeries();
+  mkOverviewLine("c-co-trend", tl.labels, tl.cost, "money", "#38bdf8");
+  set("co-trend-total", moneyCompact(aggregate(rows).cost));
+  var trend=deptCostTrend();
+  mkToggleLine("c-co-dept-trend", trend.labels, trend.series, "lg-co-dept-trend", moneyCompact,
+    "Chưa có phòng ban nào phát sinh chi phí trong kỳ.");
   var keyFn=costKeyFn();
   var groups = groupAgg(rows.filter(function(r){var k=keyFn(r);return k&&k!=="—";}), keyFn).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;});
   var labels=[], values=[];
@@ -2206,17 +2681,23 @@ function chartsCost(rows){
 /* ═══════════════ RENDER: HIỆU NĂNG ═══════════════ */
 function renderPerformance(rows){
   var A = aggregate(rows);
-  set("m-pf-4xx", (A.er*0.64).toFixed(1)+"%");
-  set("m-pf-5xx", (A.er*0.21).toFixed(1)+"%");
-  set("m-pf-429", (A.er*0.15).toFixed(1)+"%");
-  set("m-pf-success", (100-A.er).toFixed(1)+"%");
-  set("m-pf-p95", A.latAvailable?A.lat.toFixed(1)+"<span class='metric-unit'>s</span>":"<span class='metric-na'>Chưa có dữ liệu</span>");
-  set("m-pf-p99", A.latAvailable?(A.lat*2.1).toFixed(1)+"<span class='metric-unit'>s</span>":"<span class='metric-na'>Chưa có dữ liệu</span>");
-  set("m-pf-req", fmt(A.r));
+  // Đơn vị nằm trong ngoặc ở tên thẻ; phần trăm vẫn giữ ký hiệu % ở giá trị, số thập
+  // phân dùng dấu phẩy theo chuẩn tiếng Việt.
+  set("m-pf-4xx", fmtDecimal(A.er*0.64,1)+"%");
+  set("m-pf-5xx", fmtDecimal(A.er*0.21,1)+"%");
+  set("m-pf-429", fmtDecimal(A.er*0.15,1)+"%");
+  set("m-pf-success", fmtDecimal(100-A.er,1)+"%");
+  set("m-pf-p95", A.latAvailable?fmtDecimal(A.lat,1):"<span class='metric-na'>Chưa có dữ liệu</span>");
+  set("m-pf-p99", A.latAvailable?fmtDecimal(A.lat*2.1,1):"<span class='metric-na'>Chưa có dữ liệu</span>");
+  setWithTitle("m-pf-req", fmtCompactNum(A.r), fmt(A.r)+" lượt gọi");
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.r>0;}).sort(function(a,b){return b.cost-a.cost;});
   set("pf-tbody", byAgent.map(function(g){
     var model = agentModelListHtml(g.models);
-    return "<tr><td>"+esc(g.key)+"</td><td class='agent-model-cell'>"+model+"</td><td class='num'>"+fmt(g.r)+"</td><td class='num'>"+(100-g.er).toFixed(1)+"</td><td class='num"+(g.er>2?" text-red":"")+"'>"+g.er.toFixed(1)+"</td><td class='num'>"+(g.latAvailable?g.lat.toFixed(1):"—")+"</td><td class='num'>"+(g.latAvailable?(g.lat*2.1).toFixed(1):"—")+"</td></tr>";
+    return "<tr><td>"+esc(g.key)+"</td><td class='agent-model-cell'>"+model+"</td><td class='num'>"+fmt(g.r)+"</td>"+
+      "<td class='num'>"+fmtDecimal(100-g.er,1)+"%</td>"+
+      "<td class='num"+(g.er>2?" text-red":"")+"'>"+fmtDecimal(g.er,1)+"%</td>"+
+      "<td class='num'>"+(g.latAvailable?fmtDecimal(g.lat,1)+"s":"—")+"</td>"+
+      "<td class='num'>"+(g.latAvailable?fmtDecimal(g.lat*2.1,1)+"s":"—")+"</td></tr>";
   }).join("") || emptyRow(7));
 }
 function chartsPerformance(rows){
@@ -2224,9 +2705,16 @@ function chartsPerformance(rows){
   mkBar("c-pf-err", byAgent.map(function(g){return g.key;}), byAgent.map(function(g){return +g.er.toFixed(2);}), {horizontal:true,
     colors: byAgent.map(function(g){ return g.er>2?"#ef4444":g.er>1?"#f59e0b":"#667eea"; }) });
   var A = aggregate(rows), err=A.er;
-  mkDonut("c-pf-code", ["2xx thành công","4xx client","5xx server","429 rate-limited"],
+  /* Mã phản hồi HTTP là thuật ngữ kỹ thuật, người không làm IT nhìn "4xx" không hiểu
+     gì — nên mỗi mục chú thích kèm luôn một dòng giải nghĩa và hướng xử lý. */
+  mkDonut("c-pf-code",
+    ["2xx · Thành công","4xx · Lỗi phía gọi","5xx · Lỗi nhà cung cấp","429 · Gọi quá nhanh"],
     [100-err, err*0.64, err*0.21, err*0.15], "lg-pf-code",
-    function(v){ return v.toFixed(2)+"%"; }, ["#10b981","#f59e0b","#ef4444","#8b5cf6"]);
+    function(v){ return fmtDecimal(v,2)+"%"; }, ["#10b981","#f59e0b","#ef4444","#8b5cf6"],
+    ["Máy chủ nhận yêu cầu và trả kết quả bình thường.",
+     "Yêu cầu gửi lên sai định dạng hoặc thiếu quyền — sửa ở phía tích hợp agent.",
+     "Nhà cung cấp gặp sự cố, không phải lỗi của mình — nên thử lại có giãn cách.",
+     "Gọi vượt hạn mức cho phép nên bị chặn tạm — cân nhắc nâng hạn mức."]);
 }
 
 /* ═══════════════ HEATMAP (theme-aware) ═══════════════ */
@@ -2258,10 +2746,55 @@ function presetRange(n){
   var start = (n==null) ? minDataDate() : addDays(end, -(n-1));
   return { start:toISO(start), end:toISO(end) };
 }
+/* ─── Ô ngày: gõ tay hoặc chọn lịch ───
+   Ô text nhận mm/dd/yyyy (kiểu hiển thị chung của dashboard) và cũng chấp nhận
+   yyyy-mm-dd cho ai quen ISO. Nhập sai thì giữ nguyên khoảng đang xem và báo lỗi
+   ngay tại chỗ, không âm thầm nhảy về một ngày bất kỳ. */
+function parseTypedDate(text){
+  var t=String(text==null?"":text).trim();
+  if(!t) return null;
+  var m=t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);      // mm/dd/yyyy
+  var y,mo,d;
+  if(m){ mo=+m[1]; d=+m[2]; y=+m[3]; }
+  else {
+    m=t.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);        // yyyy-mm-dd
+    if(!m) return null;
+    y=+m[1]; mo=+m[2]; d=+m[3];
+  }
+  if(mo<1||mo>12||d<1||d>31) return null;
+  var dt=new Date(Date.UTC(y,mo-1,d));
+  // Chặn ngày tràn tháng (31/02 → 03/03) thay vì nhận bừa.
+  if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==mo-1||dt.getUTCDate()!==d) return null;
+  return toISO(dt);
+}
+function rangeHint(msg){
+  var e=document.getElementById("range-hint"); if(!e) return;
+  e.textContent=msg||"";
+  e.className="range-hint"+(msg?" error":"");
+  if(msg) setTimeout(function(){ if(e.textContent===msg){ e.textContent=""; e.className="range-hint"; } },4000);
+}
+function applyRangeEdge(edge, iso){
+  if(!iso){ renderRange(); return; }
+  state.range[edge]=iso; normalizeRange(); rangeHint(""); renderAll();
+}
+function bindRangeField(edge){
+  var pick=document.getElementById("range-"+edge), text=document.getElementById("range-"+edge+"-text");
+  if(pick) pick.onchange=function(){ if(this.value) applyRangeEdge(edge,this.value); };
+  if(!text) return;
+  text.onchange=function(){
+    var iso=parseTypedDate(this.value);
+    if(iso) applyRangeEdge(edge,iso);
+    else { rangeHint("Ngày không hợp lệ — nhập theo mm/dd/yyyy."); renderRange(); }
+  };
+  text.onkeydown=function(ev){ if(ev.key==="Enter"){ ev.preventDefault(); this.blur(); } };
+}
 function renderRange(){
   var s=document.getElementById("range-start"), e=document.getElementById("range-end");
   if(s) s.value = state.range.start;
   if(e) e.value = state.range.end;
+  var st=document.getElementById("range-start-text"), et=document.getElementById("range-end-text");
+  if(st) st.value = fmtDateUS(state.range.start);
+  if(et) et.value = fmtDateUS(state.range.end);
   var host=document.getElementById("range-presets"); if(!host) return;
   host.innerHTML="";
   RANGE_PRESETS.forEach(function(p){
@@ -2271,9 +2804,11 @@ function renderRange(){
     b.onclick=function(){ state.range={start:r.start,end:r.end}; renderAll(); };
     host.appendChild(b);
   });
+  var q=prevQuarterRange();
   [
-    ["Tháng 6 · Excel","2026-06-01","2026-06-30"],
-    ["Tháng 7 · Excel","2026-07-01","2026-07-31"]
+    ["Quý trước ("+q.label+")",q.start,q.end],
+    ["Tháng 6","2026-06-01","2026-06-30"],
+    ["Tháng 7","2026-07-01","2026-07-31"]
   ].forEach(function(p){
     var active=p[1]===state.range.start&&p[2]===state.range.end;
     var b=document.createElement("button"); b.className="time-btn month-preset"+(active?" active":""); b.textContent=p[0];
@@ -2281,7 +2816,21 @@ function renderRange(){
     host.appendChild(b);
   });
 }
-function renderStatus(){ set("status-period", esc(state.range.start+" → "+state.range.end)); }
+/* Quý trước = quý liền trước quý chứa ngày dữ liệu mới nhất. */
+function prevQuarterRange(){
+  var end=maxDataDate(), y=end.getUTCFullYear(), q=Math.floor(end.getUTCMonth()/3);
+  if(q===0){ y-=1; q=3; } else { q-=1; }
+  var sm=q*3;
+  return {
+    label:"Q"+(q+1)+"/"+y,
+    start:toISO(new Date(Date.UTC(y,sm,1))),
+    end:toISO(new Date(Date.UTC(y,sm+3,0)))
+  };
+}
+function renderStatus(){
+  set("status-period", esc(fmtDateUS(state.range.start)+" → "+fmtDateUS(state.range.end)));
+  set("header-data-date", esc(fmtDateUS(toISO(maxDataDate()))));
+}
 
 /* ═══════════════ NHẬP LIỆU THEO NGÀY ═══════════════ */
 function insertDayOrdered(iso){
@@ -2448,8 +2997,8 @@ function renderChartsFor(tab, rows){
     // Tab hợp nhất: phần phòng ban và phần user cùng nằm trong div#departments.
     case "departments": chartsDepartments(rows); chartsUsers(rows); break;
     case "agents": chartsAgents(rows); break;
-    case "providers": chartsProviders(rows); break;
-    case "models": chartsModels(rows); break;
+    // Tab hợp nhất: phần nhà cung cấp và phần model cùng nằm trong div#providers.
+    case "providers": chartsProviders(rows); chartsModels(rows); break;
     case "cost": chartsCost(rows); break;
     case "performance": chartsPerformance(rows); break;
   }
@@ -2533,10 +3082,8 @@ function init(){
 
   document.getElementById("f-reset").onclick=function(){ state.filters={dept:"",user:"",provider:"",model:"",agent:""}; renderAll(); };
 
-  // global time range
-  var rStart=document.getElementById("range-start"), rEnd=document.getElementById("range-end");
-  rStart.onchange=function(){ if(this.value){ state.range.start=this.value; normalizeRange(); renderAll(); } };
-  rEnd.onchange=function(){ if(this.value){ state.range.end=this.value; normalizeRange(); renderAll(); } };
+  // global time range — mỗi mốc có 1 ô gõ tay (mm/dd/yyyy) + 1 ô lịch, luôn đồng bộ.
+  bindRangeField("start"); bindRangeField("end");
   document.getElementById("co-groupby").onchange=function(){ var rows=scopedRows(); renderCostTable(rows); if(activeTab==="cost") chartsCost(rows); };
 
   // pricing: add model + lưu bảng giá

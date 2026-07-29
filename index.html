@@ -32,6 +32,23 @@
     padding:7px 10px; font-size:12px; font-family:'Inter',sans-serif; color-scheme:dark; }
   .date-input:focus{ outline:none; border-color:#667eea; }
 
+  /* Mỗi mốc thời gian = ô gõ tay (mm/dd/yyyy) + nút lịch. Ô lịch bị thu về đúng
+     phần icon, phần hiển thị ngày của nó ẩn đi để không nhắc lại ngày hai lần. */
+  .date-field{ display:inline-flex; align-items:stretch; }
+  .date-field .date-text{ width:104px; border-top-right-radius:0; border-bottom-right-radius:0;
+    font-family:'JetBrains Mono',monospace; letter-spacing:.2px; }
+  .date-field .date-pick{ width:32px; padding:7px 4px; border-left:none;
+    border-top-left-radius:0; border-bottom-left-radius:0; cursor:pointer; }
+  .date-field .date-pick::-webkit-datetime-edit,
+  .date-field .date-pick::-webkit-inner-spin-button,
+  .date-field .date-pick::-webkit-clear-button{ display:none; }
+  .date-field .date-pick::-webkit-calendar-picker-indicator{ margin:0; padding:0; cursor:pointer; opacity:.65; }
+  .date-field .date-pick::-webkit-calendar-picker-indicator:hover{ opacity:1; }
+  .date-field:focus-within .date-text,
+  .date-field:focus-within .date-pick{ border-color:#667eea; }
+  .range-hint{ font-size:11px; color:#64748b; }
+  .range-hint.error{ color:#f87171; }
+
   /* ─── Thanh filter chung ─── */
   .filter-bar{
     background:#111827; border:1px solid #1e293b; border-radius:8px;
@@ -222,8 +239,7 @@
     <img src="assets/rang-dong-logo.png" alt="Rạng Đông">
   </div>
   <div>
-    <h1>AI OPERATIONS CENTER</h1>
-    <p>Dashboard theo dõi &amp; quản trị AI Agent · Token Ledger</p>
+    <h1>Dashboard theo dõi &amp; quản trị AI Agent · Token Ledger <span class="header-datanote">(Dữ liệu tính đến ngày <b id="header-data-date">—</b>)</span></h1>
   </div>
 </div>
 
@@ -255,9 +271,19 @@
   <div class="period-stack">
     <div class="period-row">
       <span class="range-label">Khoảng thời gian</span>
-      <input type="date" id="range-start" class="date-input">
+      <!-- Gõ tay theo mm/dd/yyyy hoặc bấm 📅 để chọn trên lịch — hai ô luôn đồng bộ. -->
+      <span class="date-field">
+        <input type="text" id="range-start-text" class="date-input date-text" placeholder="mm/dd/yyyy"
+               maxlength="10" inputmode="numeric" autocomplete="off" aria-label="Ngày bắt đầu (mm/dd/yyyy)">
+        <input type="date" id="range-start" class="date-input date-pick" aria-label="Chọn ngày bắt đầu trên lịch">
+      </span>
       <span class="range-sep">→</span>
-      <input type="date" id="range-end" class="date-input">
+      <span class="date-field">
+        <input type="text" id="range-end-text" class="date-input date-text" placeholder="mm/dd/yyyy"
+               maxlength="10" inputmode="numeric" autocomplete="off" aria-label="Ngày kết thúc (mm/dd/yyyy)">
+        <input type="date" id="range-end" class="date-input date-pick" aria-label="Chọn ngày kết thúc trên lịch">
+      </span>
+      <span class="range-hint" id="range-hint"></span>
     </div>
     <div class="period-row" id="range-presets"></div>
   </div>
@@ -363,8 +389,7 @@
   <button class="tab active" data-tab="overview">📊 Tổng quan</button>
   <button class="tab" data-tab="departments">🏢 Phòng ban &amp; User</button>
   <button class="tab" data-tab="agents">🤖 Agents</button>
-  <button class="tab" data-tab="providers">🏭 Providers</button>
-  <button class="tab" data-tab="models">🧩 Model</button>
+  <button class="tab" data-tab="providers">🏭 Provider &amp; Model</button>
   <button class="tab" data-tab="cost">💸 Chi phí</button>
   <button class="tab" data-tab="performance">⚡ Hiệu năng</button>
 </div>
@@ -378,58 +403,64 @@
     <span class="insight-text">Bức tranh tổng thể: hệ thống đang phục vụ <b>bao nhiêu agent</b>, tiêu tốn <b>bao nhiêu token &amp; tiền</b>, có <b>bao nhiêu người thật sự dùng</b>, và <b>chạy có ổn không</b>?</span>
   </div>
 
+  <!-- ① QUY MÔ & MỨC ĐỘ SỬ DỤNG -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">1</span>Quy mô &amp; mức độ sử dụng trong kỳ</h3>
+    <p>Hệ thống đang phục vụ ai, ở quy mô nào, và chạy ổn tới đâu.</p>
+  </div>
+
   <div class="metrics overview-kpis">
     <div class="metric-card">
-      <div class="metric-label">🤖 AI Agent</div>
+      <div class="metric-label">🤖 AI Agent (đang chạy / đã tạo)</div>
       <div class="metric-value" id="m-ov-agents">—</div>
       <div class="metric-def"><b>= agent có ≥1 request ÷ tổng agent đã tạo.</b></div>
       <div class="delta-badge" id="d-ov-agents"></div>
       <div class="overview-kpi-insight" id="i-ov-agents">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">🏢 Số phòng ban</div>
+      <div class="metric-label">🏢 Số phòng ban (phòng ban)</div>
       <div class="metric-value" id="m-ov-units">—</div>
       <div class="metric-def"><b>= số phòng ban có agent phát sinh sử dụng.</b></div>
       <div class="delta-badge" id="d-ov-units"></div>
       <div class="overview-kpi-insight" id="i-ov-units">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">👤 User hoạt động</div>
+      <div class="metric-label">👤 User hoạt động (user)</div>
       <div class="metric-value" id="m-ov-users">—</div>
       <div class="metric-def"><b>= tài khoản có ≥1 request trong kỳ.</b></div>
       <div class="delta-badge" id="d-ov-users"></div>
       <div class="overview-kpi-insight" id="i-ov-users">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">💬 Tổng request</div>
+      <div class="metric-label">💬 Tổng request (request)</div>
       <div class="metric-value" id="m-ov-requests">—</div>
       <div class="metric-def"><b>= Σ lượt gọi của mọi agent trong kỳ.</b></div>
       <div class="delta-badge" id="d-ov-requests"></div>
       <div class="overview-kpi-insight" id="i-ov-requests">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">🪙 Tổng token</div>
+      <div class="metric-label">🪙 Tổng token (token)</div>
       <div class="metric-value" id="m-ov-tokens">—</div>
       <div class="metric-def"><b>= Σ token vào + token ra.</b></div>
       <div class="delta-badge" id="d-ov-tokens"></div>
       <div class="overview-kpi-insight" id="i-ov-tokens">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">💰 Chi phí (VNĐ)</div>
+      <div class="metric-label">💰 Mức độ sử dụng (VNĐ)</div>
       <div class="metric-value" id="m-ov-cost">—</div>
       <div class="metric-def"><b>= Σ (token × đơn giá)</b> quy đổi theo tỷ giá cấu hình.</div>
       <div class="delta-badge" id="d-ov-cost"></div>
       <div class="overview-kpi-insight" id="i-ov-cost">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">🧮 Chi phí / User</div>
+      <div class="metric-label">🧮 Mức độ sử dụng trung bình của User (VNĐ/user)</div>
       <div class="metric-value" id="m-ov-costuser">—</div>
-      <div class="metric-def"><b>= tổng chi phí ÷ số user hoạt động.</b></div>
+      <div class="metric-def"><b>= tổng mức độ sử dụng ÷ số user hoạt động.</b></div>
       <div class="delta-badge" id="d-ov-costuser"></div>
       <div class="overview-kpi-insight" id="i-ov-costuser">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">⚠️ Tỷ lệ lỗi</div>
+      <div class="metric-label">⚠️ Tỷ lệ lỗi (%)</div>
       <div class="metric-value" id="m-ov-error">—</div>
       <div class="metric-def"><b>= request lỗi ÷ tổng request</b> (bình quân theo request).</div>
       <div class="delta-badge" id="d-ov-error"></div>
@@ -437,69 +468,96 @@
     </div>
   </div>
 
+  <!-- ② DIỄN BIẾN THEO THỜI GIAN -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">2</span>Diễn biến theo thời gian</h3>
+    <p>Các con số ở trên đang tăng hay giảm qua từng ngày trong kỳ?</p>
+  </div>
+
   <div class="overview-trend-grid">
     <div class="wf-chart">
-      <div class="wf-title">Xu hướng chi phí (VNĐ)</div>
+      <div class="wf-title">Mức độ sử dụng theo thời gian (VNĐ)</div>
       <div class="chart-total" id="ov-cost-total">—</div>
       <div class="canvas-box overview-canvas"><canvas id="c-ov-cost-trend"></canvas></div>
     </div>
     <div class="wf-chart">
-      <div class="wf-title">Xu hướng Token</div>
-      <div class="chart-total" id="ov-token-total">—</div>
-      <div class="canvas-box overview-canvas"><canvas id="c-ov-token-trend"></canvas></div>
-    </div>
-    <div class="wf-chart">
-      <div class="wf-title">Xu hướng Request</div>
+      <div class="wf-title">Request theo thời gian (request)</div>
       <div class="chart-total" id="ov-request-total">—</div>
       <div class="canvas-box overview-canvas"><canvas id="c-ov-request-trend"></canvas></div>
     </div>
-    <div class="wf-chart overview-success-card">
-      <div class="wf-title">Tỷ lệ thành công</div>
-      <div class="overview-donut">
-        <canvas id="c-ov-success"></canvas>
-        <div class="overview-donut-center"><b id="ov-success-value">—</b><span>Thành công</span></div>
-      </div>
-      <div class="success-legend"><span><i class="success-dot ok"></i>Thành công</span><span><i class="success-dot err"></i>Lỗi</span></div>
+    <div class="wf-chart">
+      <div class="wf-title">Token theo thời gian (token)</div>
+      <div class="chart-total" id="ov-token-total">—</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-token-trend"></canvas></div>
     </div>
+  </div>
+
+  <!-- ③ AI AGENT / ĐƠN VỊ NÀO ĐANG DÙNG NHIỀU -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">3</span>Mức sử dụng đang tập trung ở đâu?</h3>
+    <p>Cùng một tổng mức sử dụng, phần lớn đến từ AI Agent nào, đơn vị nào và vào những ngày nào.</p>
   </div>
 
   <div class="overview-breakdown-grid">
     <div class="wf-chart">
-      <div class="wf-title">Top AI Agent theo chi phí (VNĐ)</div>
-      <div class="canvas-box overview-canvas"><canvas id="c-ov-agent-cost"></canvas></div>
-    </div>
-    <div class="wf-chart">
-      <div class="wf-title">Phân bổ chi phí theo AI Agent</div>
+      <div class="wf-title">Phân bố mức độ sử dụng theo AI Agent</div>
+      <div class="wf-q">Mỗi AI Agent chiếm bao nhiêu phần trong tổng mức sử dụng?</div>
       <div class="wf-donut-wrap">
         <div class="canvas-box"><canvas id="c-ov-agent-share"></canvas></div>
         <div class="wf-legend" id="lg-ov-agent-share"></div>
       </div>
     </div>
     <div class="wf-chart">
-      <div class="wf-title">Top đơn vị theo chi phí (VNĐ)</div>
+      <div class="wf-title">Top đơn vị theo mức độ sử dụng (VNĐ)</div>
       <div class="canvas-box overview-canvas"><canvas id="c-ov-unit-cost"></canvas></div>
     </div>
     <div class="wf-chart">
-      <div class="wf-title">Heatmap request 7 ngày gần nhất</div>
+      <div class="wf-title">Nhịp sử dụng 7 ngày gần nhất</div>
       <div class="wf-q">Agent nào được sử dụng nhiều theo từng ngày?</div>
       <div class="heatmap-wrap overview-week-wrap"><table class="heatmap weekly-usage-heatmap" id="heatmap-ov-week"></table></div>
       <div class="usage-scale"><span>Ít</span><i></i><span>Nhiều</span></div>
     </div>
   </div>
 
-  <div class="overview-lower-grid">
-    <div class="user-section-card overview-detail-card">
-      <div class="user-section-title">Bảng chi tiết sử dụng AI Agent</div>
-      <div class="table-container">
-        <table>
-          <thead><tr><th>AI Agent</th><th>Phòng ban / Đơn vị</th><th class="num">User</th><th class="num">Request</th><th class="num">Token</th><th class="num">Chi phí</th><th class="num">Tỷ lệ lỗi</th><th>Tỉ lệ thành công</th></tr></thead>
-          <tbody id="ov-detail-tbody"></tbody>
-        </table>
+  <!-- ④ CHẤT LƯỢNG VẬN HÀNH + VIỆC CẦN CHÚ Ý -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">4</span>Hệ thống chạy có ổn không &amp; cần chú ý gì?</h3>
+    <p>Chất lượng xử lý yêu cầu trong kỳ và những điểm nên xem lại ngay.</p>
+  </div>
+
+  <div class="overview-quality-grid">
+    <div class="wf-chart overview-success-card">
+      <div class="wf-title">Kết quả xử lý yêu cầu</div>
+      <div class="wf-q">Trong 100 yêu cầu gửi đi, bao nhiêu yêu cầu được trả kết quả trọn vẹn?</div>
+      <div class="overview-donut">
+        <canvas id="c-ov-success"></canvas>
+        <div class="overview-donut-center"><b id="ov-success-value">—</b><span>Trả kết quả tốt</span></div>
       </div>
+      <div class="success-legend"><span><i class="success-dot ok"></i>Trả kết quả tốt</span><span><i class="success-dot err"></i>Lỗi</span></div>
     </div>
     <div class="user-section-card overview-alert-card">
-      <div class="user-section-title">Cảnh báo &amp; sự kiện</div>
+      <div class="user-section-title">Chú ý &amp; Sự kiện</div>
       <div class="overview-alerts" id="ov-alerts"></div>
+    </div>
+  </div>
+
+  <!-- ⑤ CHI TIẾT -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">5</span>Chi tiết theo AI Agent &amp; phòng ban</h3>
+    <p>Bóc tách từng AI Agent xuống tới từng phòng ban đang sử dụng nó.</p>
+  </div>
+
+  <div class="user-section-card overview-detail-card">
+    <div class="user-section-title">Bảng chi tiết sử dụng AI Agent</div>
+    <div class="table-container">
+      <table class="overview-detail-table">
+        <thead><tr>
+          <th>AI Agent</th><th>Phòng ban / Đơn vị</th><th class="num">User</th><th class="num">Request</th>
+          <th class="num">Token</th><th class="num">Mức độ sử dụng</th><th class="num">Tỷ lệ lỗi</th>
+          <th title="Phần trăm yêu cầu được trả kết quả trọn vẹn, không báo lỗi">Mức độ ổn định</th>
+        </tr></thead>
+        <tbody id="ov-detail-tbody"></tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -508,52 +566,46 @@
 <div class="tab-content" id="departments">
   <div class="insight-banner">
     <span class="insight-icon">❓</span>
-    <span class="insight-text">Phòng ban nào <b>tiêu nhiều nhất</b>, đã <b>dùng đúng mức</b> chưa, chi phí có <b>dồn vào một phòng</b> không, và <b>ai trong phòng</b> đang thực sự dùng?</span>
+    <span class="insight-text">Phòng ban nào <b>năng suất nhất</b>, tài khoản đã cấp có <b>được dùng đúng mức</b> chưa, và <b>ai trong phòng</b> đang thực sự dùng?</span>
   </div>
-  <div class="metrics">
+
+  <!-- ① QUY MÔ PHÒNG BAN -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">1</span>Quy mô &amp; mức độ áp dụng theo phòng ban</h3>
+    <p>Có bao nhiêu phòng ban và bao nhiêu người đang thực sự dùng công cụ.</p>
+  </div>
+
+  <div class="metrics dept-kpi-grid">
     <div class="metric-card">
-      <div class="metric-label">🏢 Số phòng ban</div>
-      <div class="metric-q">Có bao nhiêu phòng ban đang dùng?</div>
+      <div class="metric-label">🏢 Số phòng ban (phòng ban)</div>
+      <div class="metric-q">Bao nhiêu phòng đang dùng?</div>
       <div class="metric-value" id="m-dep-count">—</div>
       <div class="metric-def"><b>= số phòng ban có agent phát sinh sử dụng.</b></div>
     </div>
-    <div class="metric-card danger">
-      <div class="metric-label">🔥 Phòng sử dụng nhiều nhất</div>
-      <div class="metric-q">Phòng nào đang sử dụng nhiều nhất</div>
-      <div class="metric-value" id="m-dep-top" style="font-size:22px">—</div>
-      <div class="metric-def" id="m-dep-top-def">—</div>
-    </div>
     <div class="metric-card">
-      <div class="metric-label">🧮 Chi phí TB / phòng</div>
-      <div class="metric-q">Bình quân mỗi phòng tốn bao nhiêu?</div>
-      <div class="metric-value" id="m-dep-avg">—</div>
-      <div class="metric-def"><b>= tổng chi phí ÷ số phòng ban.</b></div>
-    </div>
-    <div class="metric-card warn">
-      <div class="metric-label">🎯 Mức độ tập trung chi phí</div>
-      <div class="metric-q">Chi phí có bị dồn vào ít phòng không?</div>
-      <div class="metric-value" id="m-dep-conc">—</div>
-      <div class="metric-def"><b>= tỷ trọng chi phí của Top-2 phòng.</b> Cao ⇒ rủi ro phụ thuộc.</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">👥 Số user</div>
-      <div class="metric-q">Có bao nhiêu user được phân quyền?</div>
+      <div class="metric-label">👥 Số user được cấp (user)</div>
+      <div class="metric-q">Bao nhiêu người có tài khoản?</div>
       <div class="metric-value" id="m-dep-users">—</div>
       <div class="metric-def"><b>= tổng số tài khoản được phân quyền</b> trong phạm vi đang lọc.</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">📈 Tỷ lệ user hoạt động / Tổng</div>
-      <div class="metric-q">Bao nhiêu user được cấp đang thực sự dùng?</div>
-      <div class="metric-value" id="m-dep-user-rate">—</div>
-      <div class="metric-def" id="m-dep-user-rate-def">—</div>
+    <div class="metric-card ok metric-card-text no-metric-q">
+      <div class="metric-label">🏆 Phòng năng suất nhất (tên phòng ban)</div>
+      <div class="metric-value" id="m-dep-top">—</div>
+      <div class="metric-def" id="m-dep-top-def">—</div>
     </div>
+  </div>
+
+  <!-- ② PHÂN BỔ GIỮA CÁC PHÒNG BAN -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">2</span>Mức dùng chia về các phòng ban thế nào?</h3>
+    <p>So sánh phần đóng góp của từng phòng với tỷ lệ tài khoản thực sự được dùng.</p>
   </div>
 
   <div class="chart-grid">
     <div class="wf-chart">
       <span class="wf-type">Tròn</span>
-      <div class="wf-title">Chi phí theo phòng ban</div>
-      <div class="wf-q">Tiền phân bổ về các phòng thế nào?</div>
+      <div class="wf-title">Mức độ sử dụng theo phòng ban</div>
+      <div class="wf-q">Mức sử dụng phân bổ về các phòng thế nào?</div>
       <div class="wf-donut-wrap">
         <div class="canvas-box"><canvas id="c-dep-cost"></canvas></div>
         <div class="wf-legend" id="lg-dep-cost"></div>
@@ -570,97 +622,112 @@
     </div>
   </div>
 
-  <div class="section-controls">
-    <div class="section-title">Chi tiết theo phòng ban</div>
-    <span class="allocated-note" id="dep-alloc-note"></span>
+  <!-- ③ BỨC TRANH TÀI KHOẢN -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">3</span>Bức tranh tài khoản người dùng</h3>
+    <p>Tài khoản đã cấp đang được dùng tới đâu, còn bao nhiêu đang bỏ không.</p>
   </div>
-  <div class="table-container">
-    <table class="dept-drill-table">
-      <thead><tr>
-        <th>Phòng ban / Đơn vị</th><th class="num">Agent</th>
-        <th class="num">User hoạt động / Tổng</th>
-        <th class="num">Token</th><th class="num">Request</th><th class="num">Tỷ lệ lỗi</th>
-      </tr></thead>
-      <tbody id="dep-tbody"></tbody>
-    </table>
-  </div>
-
-  <!-- ─── Phần User (gộp từ tab User cũ) ─── -->
-  <div class="section-controls"><div class="section-title">Người dùng TLA HD</div></div>
 
   <div class="metrics user-kpi-grid">
     <div class="metric-card">
-      <div class="metric-label">👥 Tổng số tài khoản</div>
+      <div class="metric-label">👥 Tổng số tài khoản (tài khoản)</div>
       <div class="metric-q">Đã cấp bao nhiêu tài khoản?</div>
       <div class="metric-value" id="m-us-total">—</div>
       <div class="metric-def" id="m-us-total-def">—</div>
-      <div class="metric-note">Chỉ tính tài khoản còn tồn tại; tài khoản đã xoá được giữ trong lịch sử.</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🏢 Phòng ban có tài khoản (phòng ban)</div>
+      <div class="metric-q">Tài khoản trải trên bao nhiêu phòng?</div>
+      <div class="metric-value" id="m-us-units">—</div>
+      <div class="metric-def">Phòng ban có tài khoản được cấp.</div>
     </div>
     <div class="metric-card ok">
-      <div class="metric-label">📈 Tài khoản hoạt động</div>
-      <div class="metric-q">Bao nhiêu tài khoản thực sự dùng?</div>
+      <div class="metric-label">📈 Tài khoản đang dùng (%)</div>
+      <div class="metric-q">Bao nhiêu phần trăm tài khoản có dùng?</div>
       <div class="metric-value" id="m-us-adoption">—</div>
       <div class="metric-def" id="m-us-adoption-def">—</div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">😴 Tài khoản không hoạt động</div>
-      <div class="metric-q">Bao nhiêu tài khoản đang bỏ không?</div>
+      <div class="metric-label">😴 Tài khoản bỏ không (%)</div>
+      <div class="metric-q">Bao nhiêu phần trăm tài khoản chưa dùng?</div>
       <div class="metric-value" id="m-us-inactive">—</div>
       <div class="metric-def" id="m-us-inactive-def">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">🆕 Cấp mới trong kỳ</div>
-      <div class="metric-q">Kỳ này cấp thêm bao nhiêu tài khoản?</div>
+      <div class="metric-label">🆕 Cấp mới trong kỳ (tài khoản)</div>
+      <div class="metric-q">Kỳ này cấp thêm bao nhiêu?</div>
       <div class="metric-value" id="m-us-new">—</div>
       <div class="metric-def" id="m-us-new-def">—</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">🏢 Số phòng ban</div>
-      <div class="metric-q">Bao nhiêu phòng ban được cấp tài khoản?</div>
-      <div class="metric-value" id="m-us-units">—</div>
-      <div class="metric-def">Phòng ban có tài khoản được cấp.</div>
-    </div>
   </div>
 
-  <div class="user-section-card">
-    <div class="user-section-head">
-      <div class="user-section-title">👥 Người dùng TLA HD</div>
-      <div class="user-summary-chips">
-        <span class="summary-chip active" id="user-active-chip">Đã dùng: —</span>
-        <span class="summary-chip" id="user-total-chip">Tổng: —</span>
-      </div>
-    </div>
-    <div class="allocated-note user-data-note">
-      ⓘ Danh tính và phòng ban lấy từ TLA Ralli; request, chi phí và quota theo tài khoản
-      chỉ là số phân bổ vì dữ liệu usage hiện chưa có userId.
-    </div>
-    <div class="table-container user-main-table">
-      <table>
-        <thead><tr>
-          <th>#</th><th>Họ tên / Tài khoản</th><th>Phòng ban</th><th>Vai trò</th><th>Trạng thái</th>
-          <th class="num">Reqs</th><th class="num">Chi phí</th><th>Quota kỳ hiện tại</th>
-        </tr></thead>
-        <tbody id="user-acct-tbody"></tbody>
-      </table>
-    </div>
+  <!-- ④ DIỄN BIẾN NGƯỜI DÙNG THEO NGÀY -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">4</span>Người dùng thay đổi thế nào theo ngày?</h3>
+    <p>Số người thực sự mở công cụ mỗi ngày, và phần tài khoản vẫn nằm im.</p>
   </div>
 
   <div class="user-bottom-grid">
     <div class="wf-chart">
       <span class="wf-type">Line</span>
-      <div class="wf-title">Người dùng hoạt động theo ngày (DAU, 30d)</div>
+      <div class="wf-title">Người dùng hoạt động theo ngày (khoảng đang xét: 30 ngày gần nhất)</div>
       <div class="wf-q">Khoảng cách giữa tài khoản được cấp và số người dùng thực tế.</div>
       <div class="canvas-box user-dau-canvas"><canvas id="c-us-dau"></canvas></div>
     </div>
-    <div class="user-section-card inactive-list-card">
-      <div class="user-section-title">😴 Tài khoản không hoạt động</div>
-      <div class="table-container">
-        <table>
-          <thead><tr><th>User</th><th>Phòng ban</th><th>Lần cuối dùng</th></tr></thead>
-          <tbody id="user-inactive-tbody"></tbody>
-        </table>
-      </div>
+    <div class="wf-chart">
+      <span class="wf-type">Cột</span>
+      <div class="wf-title">Tài khoản không sử dụng theo ngày (tài khoản)</div>
+      <div class="wf-q">Mỗi ngày còn bao nhiêu tài khoản đã cấp nhưng không mở công cụ?</div>
+      <div class="canvas-box user-dau-canvas"><canvas id="c-us-idle"></canvas></div>
     </div>
+  </div>
+
+  <!-- ⑤ DRILLDOWN CHI TIẾT -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">5</span>Chi tiết theo phòng ban → tài khoản</h3>
+    <p>Bung từng cấp để đi từ phòng ban xuống tận từng người dùng TLA HD.</p>
+  </div>
+
+  <div class="section-controls">
+    <div class="section-title">Chi tiết theo phòng ban</div>
+    <div class="matrix-toolbar">
+      <span class="user-summary-chips">
+        <span class="summary-chip active" id="user-active-chip">Đã dùng: —</span>
+        <span class="summary-chip" id="user-total-chip">Tổng: —</span>
+      </span>
+      <input type="search" id="dept-search" class="filter-select matrix-search" placeholder="Tìm tài khoản, login hoặc đơn vị…">
+      <button type="button" id="dept-expand" class="matrix-btn">Mở tất cả phòng ban</button>
+    </div>
+  </div>
+  <div class="allocated-note user-data-note">
+    ⓘ Danh tính và phòng ban lấy từ TLA Ralli; request, mức độ sử dụng và quota theo tài khoản
+    chỉ là số phân bổ vì dữ liệu usage hiện chưa có userId.
+    <span id="dep-alloc-note"></span>
+  </div>
+  <div class="section">
+    <div class="heatmap-wrap tree-scroll"><table class="heatmap matrix-tree dept-tree" id="dept-tree-table"></table></div>
+    <div class="hm-scale">hàng = phòng ban / đơn vị / tài khoản · <i>bấm một hàng để bung Vùng → Đội → tài khoản ngay tại chỗ.</i></div>
+    <div class="matrix-note" id="dept-tree-note"></div>
+  </div>
+
+  <!-- ⑥ VIỆC CẦN XỬ LÝ -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">6</span>Tài khoản cần rà soát lại</h3>
+    <p>Những tài khoản đã cấp nhưng chưa phát sinh hoạt động trong kỳ.</p>
+  </div>
+
+  <div class="user-section-card inactive-list-card">
+    <div class="user-section-title">Tài khoản không hoạt động</div>
+    <div class="table-container">
+      <table class="inactive-table">
+        <thead><tr>
+          <th>Phòng ban</th><th>User</th><th>Thời gian được cấp</th>
+          <th>Bắt đầu không hoạt động</th><th>Không hoạt động tới</th><th class="num">Số ngày</th>
+        </tr></thead>
+        <tbody id="user-inactive-tbody"></tbody>
+      </table>
+    </div>
+    <div class="subtle inactive-note" id="user-inactive-note"></div>
   </div>
 </div>
 
@@ -668,39 +735,52 @@
 <div class="tab-content" id="agents">
   <div class="insight-banner">
     <span class="insight-icon">❓</span>
-    <span class="insight-text">Agent nào <b>được dùng nhiều</b>, agent nào <b>tốn kém</b>, và agent nào <b>đã tạo mà bỏ không</b>?</span>
+    <span class="insight-text">Agent nào <b>được dùng nhiều</b>, agent nào <b>ngốn nhiều tài nguyên</b>, và agent nào <b>đã tạo mà bỏ không</b>?</span>
   </div>
-  <div class="metrics">
+
+  <!-- ① QUY MÔ & MỨC KHAI THÁC -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">1</span>Quy mô &amp; mức khai thác agent</h3>
+    <p>Đã tạo bao nhiêu agent, bao nhiêu đang chạy thật, và chúng tạo ra khối lượng việc thế nào.</p>
+  </div>
+
+  <div class="metrics agent-kpi-grid">
     <div class="metric-card">
-      <div class="metric-label">🤖 Agent đang hoạt động</div>
-      <div class="metric-q">Bao nhiêu agent đang thực sự chạy?</div>
+      <div class="metric-label">🤖 Agent đang chạy (đang chạy / đã tạo)</div>
+      <div class="metric-q">Bao nhiêu agent thực sự chạy?</div>
       <div class="metric-value" id="m-ag-active">—</div>
-      <div class="metric-def"><b>= agent có ≥1 request</b> trong kỳ.</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">📨 Tổng lượt request</div>
-      <div class="metric-q">Tổng số lượt gọi agent là bao nhiêu?</div>
-      <div class="metric-value" id="m-ag-req">—</div>
-      <div class="metric-def"><b>= Σ request</b> của mọi agent trong kỳ.</div>
-    </div>
-    <div class="metric-card">
-      <div class="metric-label">🧮 Chi phí TB / agent</div>
-      <div class="metric-q">Bình quân mỗi agent tốn bao nhiêu?</div>
-      <div class="metric-value" id="m-ag-cost">—</div>
-      <div class="metric-def"><b>= tổng chi phí ÷ số agent đang hoạt động.</b></div>
+      <div class="metric-def"><b>= agent có ≥1 lượt gọi</b> trong kỳ.</div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">💤 Agent không dùng</div>
-      <div class="metric-q">Có agent nào tạo ra mà không ai dùng?</div>
+      <div class="metric-label">💤 Agent bỏ không (agent)</div>
+      <div class="metric-q">Bao nhiêu agent tạo ra mà không ai dùng?</div>
       <div class="metric-value" id="m-ag-idle">—</div>
-      <div class="metric-def"><b>= agent 0 request trong kỳ.</b> Cân nhắc gỡ hoặc truyền thông lại.</div>
+      <div class="metric-def"><b>= agent 0 lượt gọi trong kỳ.</b> Cân nhắc gỡ hoặc truyền thông lại.</div>
     </div>
+    <div class="metric-card">
+      <div class="metric-label">📨 Tổng lượt gọi (lượt gọi)</div>
+      <div class="metric-q">Các agent tạo ra bao nhiêu lượt việc?</div>
+      <div class="metric-value" id="m-ag-req">—</div>
+      <div class="metric-def"><b>= Σ lượt gọi</b> của mọi agent trong kỳ.</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">🧮 Mức độ sử dụng TB / agent (VNĐ)</div>
+      <div class="metric-q">Bình quân mỗi agent dùng bao nhiêu?</div>
+      <div class="metric-value" id="m-ag-cost">—</div>
+      <div class="metric-def"><b>= tổng mức độ sử dụng ÷ số agent đang chạy.</b></div>
+    </div>
+  </div>
+
+  <!-- ② AGENT NÀO ĐANG GÁNH TẢI -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">2</span>Tải đang dồn về agent nào?</h3>
+    <p>Agent nào nhiều lượt gọi nhất, và agent nào ngốn nhiều token nhất — hai thứ không phải lúc nào cũng trùng.</p>
   </div>
 
   <div class="chart-grid">
     <div class="wf-chart">
       <span class="wf-type">Tròn</span>
-      <div class="wf-title">Mức độ sử dụng các agent</div>
+      <div class="wf-title">Phân bố lượt gọi theo agent</div>
       <div class="wf-q">Agent nào bận rộn nhất?</div>
       <div class="wf-donut-wrap">
         <div class="canvas-box"><canvas id="c-ag-usage"></canvas></div>
@@ -708,11 +788,17 @@
       </div>
     </div>
     <div class="wf-chart">
-      <span class="wf-type">Table</span>
+      <span class="wf-type">Bảng</span>
       <div class="wf-title">Top agent theo token</div>
       <div class="wf-q">Agent nào tiêu nhiều token nhất?</div>
       <table style="margin-top:2px"><tbody id="ag-top"></tbody></table>
     </div>
+  </div>
+
+  <!-- ③ AI ĐANG DÙNG NHỮNG AGENT ĐÓ -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">3</span>Phòng ban nào đang dùng agent nào?</h3>
+    <p>Bung từng phòng ban xuống tới tài khoản để xem lượt gọi rơi vào agent nào.</p>
   </div>
 
   <div class="section-controls">
@@ -723,150 +809,182 @@
     </div>
   </div>
   <div class="section">
-    <div class="heatmap-wrap"><table class="heatmap matrix-tree" id="matrix-tree-table"></table></div>
+    <div class="heatmap-wrap tree-scroll"><table class="heatmap matrix-tree" id="matrix-tree-table"></table></div>
     <div class="hm-scale">Ít <span class="bar"></span> Nhiều · hàng = phòng ban, cột = project · <i>bấm một hàng để bung Vùng → Đội → tài khoản ngay tại chỗ.</i></div>
     <div class="matrix-note" id="matrix-note"></div>
   </div>
 
-  <div class="section-controls"><div class="section-title">Chi tiết theo agent</div></div>
+  <!-- ④ CHI TIẾT TỪNG AGENT -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">4</span>Chi tiết từng agent</h3>
+    <p>Bảng đối chiếu cả agent đang chạy lẫn agent bỏ không, kèm model và chất lượng phục vụ.</p>
+  </div>
+
   <div class="table-container">
     <table>
       <thead><tr>
-        <th>Agent</th><th>Phòng ban chính</th><th>Model</th><th class="num">Users</th>
-        <th class="num">Requests</th><th class="num">Tokens</th><th class="num">Error %</th><th class="num">p95 (s)</th><th>Trạng thái</th>
+        <th>Agent</th><th>Phòng ban chính</th><th>Model</th>
+        <th class="num">Số user</th><th class="num">Lượt gọi</th><th class="num">Token đã dùng</th>
+        <th class="num">Tỷ lệ lỗi</th>
+        <th class="num" title="Mốc thời gian mà 95% lượt gọi trả kết quả nhanh hơn">Thời gian phản hồi</th>
+        <th>Trạng thái</th>
       </tr></thead>
       <tbody id="ag-tbody"></tbody>
     </table>
   </div>
 </div>
 
-<!-- ═══════════════ TAB 4 — PROVIDERS ═══════════════ -->
+<!-- ═══════════════ TAB 4 — PROVIDER & MODEL ═══════════════
+     Gộp từ hai tab cũ theo đúng phân cấp thật: nhà cung cấp CUNG CẤP model, nên
+     provider là cấp trên, model là cấp dưới. Đọc từ trên xuống là đi từ cấp cao
+     xuống cấp thấp, kết lại bằng một bảng cây bung provider → model. -->
 <div class="tab-content" id="providers">
   <div class="insight-banner">
     <span class="insight-icon">❓</span>
-    <span class="insight-text">Mỗi <b>nhà cung cấp</b> đang gánh <b>bao nhiêu tải &amp; chi phí</b>, độ <b>ổn định</b> ra sao — ta có phụ thuộc 1 provider không?</span>
+    <span class="insight-text">Ta đang dùng <b>nhà cung cấp nào</b>, mỗi bên <b>đưa ra những model gì</b>, và lưu lượng cùng <b>mức sử dụng dồn về đâu</b>?</span>
   </div>
-  <div class="metrics">
+
+  <!-- ① CẤP TRÊN: NHÀ CUNG CẤP -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">1</span>Bức tranh nhà cung cấp</h3>
+    <p>Đang kết nối mấy bên, bên nào được dùng nhiều nhất và bên đó phục vụ ra sao.</p>
+  </div>
+
+  <div class="metrics provider-kpi-grid">
     <div class="metric-card">
-      <div class="metric-label">🏭 Số provider</div>
-      <div class="metric-q">Ta đang kết nối bao nhiêu provider?</div>
+      <div class="metric-label">🏭 Số nhà cung cấp (nhà cung cấp)</div>
+      <div class="metric-q">Đang kết nối mấy bên?</div>
       <div class="metric-value" id="m-pv-count">—</div>
-      <div class="metric-def"><b>= provider có lưu lượng</b> trong kỳ.</div>
+      <div class="metric-def"><b>= nhà cung cấp có lưu lượng</b> trong kỳ.</div>
     </div>
-    <div class="metric-card danger">
-      <div class="metric-label">🎯 Tỉ trọng provider lớn nhất</div>
-      <div class="metric-q">Tải có dồn vào 1 provider không?</div>
+    <div class="metric-card ok">
+      <div class="metric-label">🏆 Provider được ưa chuộng (%)</div>
+      <div class="metric-q">Bên nào được dùng nhiều nhất?</div>
       <div class="metric-value" id="m-pv-share">—</div>
       <div class="metric-def" id="m-pv-share-def">—</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label">💰 Chi phí (provider lớn nhất)</div>
-      <div class="metric-q">Provider chính tốn bao nhiêu?</div>
+      <div class="metric-label">🧩 Model bên đó cung cấp (model)</div>
+      <div class="metric-q">Bên được ưa chuộng có mấy model?</div>
+      <div class="metric-value" id="m-pv-models">—</div>
+      <div class="metric-def" id="m-pv-models-def">—</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">💰 Mức độ sử dụng (VNĐ)</div>
+      <div class="metric-q">Bên được ưa chuộng dùng bao nhiêu?</div>
       <div class="metric-value" id="m-pv-cost">—</div>
-      <div class="metric-def"><b>= chi phí quy đổi từ token</b> theo bảng giá.</div>
+      <div class="metric-def"><b>= mức sử dụng quy đổi từ token</b> theo bảng giá.</div>
     </div>
     <div class="metric-card ok">
-      <div class="metric-label">⚡ Độ trễ trung bình</div>
-      <div class="metric-q">Provider trả lời nhanh không?</div>
+      <div class="metric-label">⚡ Thời gian phản hồi (giây)</div>
+      <div class="metric-q">Bên đó trả lời nhanh không?</div>
       <div class="metric-value" id="m-pv-latency">—</div>
-      <div class="metric-def"><b>= độ trễ p95</b> bình quân theo request.</div>
+      <div class="metric-def"><b>= mốc 95% lượt gọi trả về nhanh hơn</b> (bình quân theo lượt gọi).</div>
     </div>
+  </div>
+
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">2</span>Lưu lượng &amp; mức sử dụng chia về nhà cung cấp nào?</h3>
+    <p>Cùng một hệ thống, token đi qua bên nào và tiền tương ứng rơi về bên nào.</p>
   </div>
 
   <div class="chart-grid">
     <div class="wf-chart">
-      <span class="wf-type">Donut</span>
-      <div class="wf-title">Phân bổ token theo Provider</div>
-      <div class="wf-q">Token đang đi qua provider nào?</div>
+      <span class="wf-type">Tròn</span>
+      <div class="wf-title">Phân bổ token theo nhà cung cấp</div>
+      <div class="wf-q">Token đang đi qua bên nào?</div>
       <div class="wf-donut-wrap">
         <div class="canvas-box"><canvas id="c-pv-share"></canvas></div>
         <div class="wf-legend" id="lg-pv-share"></div>
       </div>
     </div>
     <div class="wf-chart">
-      <span class="wf-type">Bar</span>
-      <div class="wf-title">Chi phí theo provider</div>
-      <div class="wf-q">Provider nào tốn tiền nhất?</div>
-      <div class="canvas-box"><canvas id="c-pv-cost"></canvas></div>
+      <span class="wf-type">Tròn</span>
+      <div class="wf-title">Mức độ sử dụng theo nhà cung cấp (VNĐ)</div>
+      <div class="wf-q">Mức sử dụng chia về bên nào?</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-pv-cost"></canvas></div>
+        <div class="wf-legend" id="lg-pv-cost"></div>
+      </div>
     </div>
   </div>
 
-  <div class="section-controls"><div class="section-title">Chi tiết theo provider</div></div>
-  <div class="table-container">
-    <table>
-      <thead><tr>
-        <th>Provider</th><th class="num">Models</th><th class="num">Agents</th><th class="num">Requests</th>
-        <th class="num">Tokens</th><th class="num">Error %</th><th class="num">p95 (s)</th><th>Trạng thái</th>
-      </tr></thead>
-      <tbody id="pv-tbody"></tbody>
-    </table>
+  <!-- ② CẤP DƯỚI: MODEL DO CÁC NHÀ CUNG CẤP ĐƯA RA -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">3</span>Danh mục model &amp; mức khai thác</h3>
+    <p>Xuống một cấp: các nhà cung cấp trên đang đưa ra bao nhiêu model, còn bao nhiêu bỏ không.</p>
   </div>
-</div>
 
-<!-- ═══════════════ TAB 5 — MODEL ═══════════════ -->
-<div class="tab-content" id="models">
-  <div class="insight-banner">
-    <span class="insight-icon">❓</span>
-    <span class="insight-text">Model đã khai báo có <b>được dùng hết</b> không, model nào <b>đắt / rẻ</b>, và ta có đang dùng <b>đúng model cho đúng việc</b>?</span>
-  </div>
-  <div class="metrics">
+  <div class="metrics model-kpi-grid">
     <div class="metric-card">
-      <div class="metric-label">🧩 Tổng số model</div>
-      <div class="metric-q">Có bao nhiêu model đã khai báo?</div>
+      <div class="metric-label">🧩 Tổng số model đã khai báo (model)</div>
+      <div class="metric-q">Cả các bên đưa ra bao nhiêu model?</div>
       <div class="metric-value" id="m-md-total">—</div>
       <div class="metric-def"><b>= số model trong bảng giá.</b> <span id="m-md-total-def">—</span></div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">🚫 Model chưa dùng</div>
-      <div class="metric-q">Model nào khai báo mà không ai dùng?</div>
+      <div class="metric-label">🚫 Model chưa dùng (model)</div>
+      <div class="metric-q">Bao nhiêu model khai báo mà bỏ không?</div>
       <div class="metric-value" id="m-md-unused">—</div>
       <div class="metric-def" id="m-md-unused-def">—</div>
     </div>
-    <div class="metric-card accent-green">
-      <div class="metric-label">💚 Rẻ nhất / token</div>
-      <div class="metric-q">Model nào rẻ nhất / token?</div>
-      <div class="metric-value" id="m-md-cheap" style="font-size:20px">—</div>
-      <div class="metric-def" id="m-md-cheap-def">—</div>
-    </div>
-    <div class="metric-card danger">
-      <div class="metric-label">💸 Đắt nhất / token</div>
-      <div class="metric-q">Model nào đắt nhất / token?</div>
-      <div class="metric-value" id="m-md-exp" style="font-size:20px">—</div>
-      <div class="metric-def" id="m-md-exp-def">—</div>
-    </div>
     <div class="metric-card">
-      <div class="metric-label">🧠 Token suy luận <span class="pill-new">MỚI</span></div>
-      <div class="metric-q">Bao nhiêu token dùng cho suy luận nội bộ?</div>
+      <div class="metric-label">🧠 Token suy luận (token) <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Bao nhiêu token dùng để máy tự suy luận?</div>
       <div class="metric-value" id="m-md-think">—</div>
-      <div class="metric-def"><b>= Σ thoughtsTokenCount.</b> Chỉ model bật suy luận mở rộng; ảnh hưởng chi phí token ra.</div>
+      <div class="metric-def" id="m-md-think-def">—</div>
       <div class="metric-src"><span class="src-dot src-rt"></span>usageMetadata · realtime</div>
     </div>
+    <div class="metric-card accent-green metric-card-text">
+      <div class="metric-label">💚 Model rẻ nhất (tên model)</div>
+      <div class="metric-q">Rẻ nhất trên 1 triệu token là model nào?</div>
+      <div class="metric-value" id="m-md-cheap">—</div>
+      <div class="metric-def" id="m-md-cheap-def">—</div>
+    </div>
+    <div class="metric-card danger metric-card-text">
+      <div class="metric-label">💸 Model đắt nhất (tên model)</div>
+      <div class="metric-q">Đắt nhất trên 1 triệu token là model nào?</div>
+      <div class="metric-value" id="m-md-exp">—</div>
+      <div class="metric-def" id="m-md-exp-def">—</div>
+    </div>
+  </div>
+
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">4</span>Tải &amp; mức sử dụng dồn về model nào?</h3>
+    <p>Model nào tiêu nhiều token nhất, và quy ra tiền thì thứ hạng có đổi không.</p>
   </div>
 
   <div class="chart-grid">
     <div class="wf-chart">
-      <span class="wf-type">Bar</span>
-      <div class="wf-title">Token theo model</div>
+      <span class="wf-type">Cột</span>
+      <div class="wf-title">Token theo model (token)</div>
       <div class="wf-q">Model nào tiêu token nhiều nhất?</div>
       <div class="canvas-box"><canvas id="c-md-token"></canvas></div>
     </div>
     <div class="wf-chart">
-      <span class="wf-type">Bar</span>
-      <div class="wf-title">Chi phí theo model</div>
-      <div class="wf-q">Tiền dồn về model nào?</div>
+      <span class="wf-type">Cột</span>
+      <div class="wf-title">Mức độ sử dụng theo model (VNĐ)</div>
+      <div class="wf-q">Quy ra tiền thì dồn về model nào?</div>
       <div class="canvas-box"><canvas id="c-md-cost"></canvas></div>
     </div>
   </div>
 
-  <div class="section-controls"><div class="section-title">Chi tiết theo model</div></div>
-  <div class="table-container">
-    <table>
-      <thead><tr>
-        <th>Model</th><th>Provider</th><th class="num">Agents dùng</th><th class="num">Token in</th><th class="num">Token out</th>
-        <th class="num">Giá in/out</th><th class="num">Error %</th>
-      </tr></thead>
-      <tbody id="md-tbody"></tbody>
-    </table>
+  <!-- ③ GỘP HAI CẤP LẠI: CÂY NHÀ CUNG CẤP → MODEL -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">5</span>Chi tiết: nhà cung cấp → model</h3>
+    <p>Bung từng nhà cung cấp để xem đúng những model bên đó đưa ra và số liệu của từng model.</p>
+  </div>
+
+  <div class="section-controls">
+    <div class="section-title">Chi tiết theo nhà cung cấp và model</div>
+    <div class="matrix-toolbar">
+      <button type="button" id="pm-expand" class="matrix-btn">Thu gọn tất cả</button>
+    </div>
+  </div>
+  <div class="section">
+    <div class="heatmap-wrap tree-scroll"><table class="heatmap matrix-tree dept-tree pm-tree" id="pm-tree-table"></table></div>
+    <div class="hm-scale">hàng cha = nhà cung cấp, hàng con = model bên đó cung cấp · <i>bấm một hàng để bung hoặc thu.</i></div>
+    <div class="matrix-note" id="pm-tree-note"></div>
   </div>
 </div>
 
@@ -874,42 +992,78 @@
 <div class="tab-content" id="cost">
   <div class="insight-banner">
     <span class="insight-icon">❓</span>
-    <span class="insight-text">Tiền đang <b>chảy về đâu</b> — theo <b>agent, phòng ban hay model</b> — và tháng này có <b>vượt ngân sách</b> không?</span>
+    <span class="insight-text">Kỳ này <b>tốn bao nhiêu</b>, có <b>vượt ngân sách</b> không, và tiền đang <b>chảy về agent / phòng ban / model nào</b>?</span>
   </div>
-  <div class="metrics">
+
+  <!-- ① BỨC TRANH CHI PHÍ -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">1</span>Bức tranh chi phí kỳ này</h3>
+    <p>Tốn tổng bao nhiêu, so với ngân sách ra sao, mỗi nghìn lượt gọi tốn bao nhiêu và tiền có bị dồn vào ít chỗ không.</p>
+  </div>
+
+  <div class="metrics cost-kpi-grid">
     <div class="metric-card">
-      <div class="metric-label">💰 Tổng chi phí (net)</div>
+      <div class="metric-label">💰 Tổng chi phí (VNĐ)</div>
       <div class="metric-q">Kỳ này tốn tổng bao nhiêu?</div>
       <div class="metric-value" id="m-co-total">—</div>
-      <div class="metric-def"><b>= Σ (token × đơn giá)</b> theo bảng giá. <span id="m-co-vnd">—</span></div>
+      <div class="metric-def"><b>= Σ (token × đơn giá)</b> theo bảng giá, đã trừ ưu đãi. <span id="m-co-vnd">—</span></div>
       <div class="metric-src"><span class="src-dot src-batch"></span>BigQuery Billing · ≈1 ngày</div>
       <div class="delta-badge" id="d-co-total"></div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">🧾 Đã dùng ngân sách</div>
-      <div class="metric-q">Đã tiêu bao nhiêu % ngân sách?</div>
+      <div class="metric-label">🧾 Đã dùng ngân sách (%)</div>
+      <div class="metric-q">Đã tiêu bao nhiêu phần ngân sách?</div>
       <div class="metric-value" id="m-co-budget">—</div>
       <div class="metric-def" id="m-co-budget-def">—</div>
     </div>
-    <div class="metric-card warn">
-      <div class="metric-label">🎯 Mức độ tập trung chi phí</div>
-      <div class="metric-q">Chi phí có dồn vào ít agent không?</div>
-      <div class="metric-value" id="m-co-conc">—</div>
-      <div class="metric-def"><b>= tỷ trọng chi phí Top-2 agent.</b></div>
-    </div>
     <div class="metric-card">
-      <div class="metric-label">🧮 Chi phí / 1K request</div>
-      <div class="metric-q">Bình quân 1.000 request tốn bao nhiêu?</div>
+      <div class="metric-label">🧮 Chi phí / 1.000 lượt gọi (VNĐ)</div>
+      <div class="metric-q">Bình quân 1.000 lượt gọi tốn bao nhiêu?</div>
       <div class="metric-value" id="m-co-perk">—</div>
-      <div class="metric-def"><b>= tổng chi phí ÷ (tổng request / 1000).</b></div>
+      <div class="metric-def"><b>= tổng chi phí ÷ (tổng lượt gọi / 1.000).</b></div>
     </div>
+    <div class="metric-card warn">
+      <div class="metric-label">🎯 Mức độ tập trung chi phí (%)</div>
+      <div class="metric-q">Tiền có dồn vào ít agent không?</div>
+      <div class="metric-value" id="m-co-conc">—</div>
+      <div class="metric-def"><b>= tỷ trọng chi phí của Top-2 agent.</b> Cao ⇒ rủi ro phụ thuộc.</div>
+    </div>
+  </div>
+
+  <!-- ② DIỄN BIẾN THEO THỜI GIAN -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">2</span>Chi phí thay đổi thế nào theo thời gian?</h3>
+    <p>Nhìn đường tổng trước để thấy xu hướng chung, rồi tách theo phòng ban để biết phòng nào đẩy xu hướng đó.</p>
+  </div>
+
+  <!-- Không gắn <span class="wf-type"> ở thẻ này: nó và .chart-total cùng ghim góc
+       phải trên nên sẽ đè lên nhau. Thẻ xu hướng ưu tiên hiện con số tổng. -->
+  <div class="wf-chart cost-trend-chart">
+    <div class="wf-title">Xu hướng chi phí (VNĐ)</div>
+    <div class="chart-total" id="co-trend-total">—</div>
+    <div class="wf-q">Toàn hệ thống đang tăng hay giảm chi?</div>
+    <div class="canvas-box cost-trend-canvas"><canvas id="c-co-trend"></canvas></div>
+  </div>
+
+  <div class="wf-chart dept-trend-chart">
+    <span class="wf-type">Đường</span>
+    <div class="wf-title">Chi phí theo thời gian của các phòng ban (VNĐ)</div>
+    <div class="wf-q">Phòng nào đang tăng, phòng nào đang giảm?</div>
+    <div class="canvas-box dept-trend-canvas"><canvas id="c-co-dept-trend"></canvas></div>
+    <div class="wf-legend legend-toggles" id="lg-co-dept-trend"></div>
+  </div>
+
+  <!-- ③ TIỀN CHẢY VỀ ĐÂU -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">3</span>Tiền chảy về đâu?</h3>
+    <p>Đổi chiều cắt ở bảng bên dưới để xem tiền phân bổ theo agent, phòng ban hay model — rồi đối chiếu với ngân sách từng agent.</p>
   </div>
 
   <div class="chart-grid">
     <div class="wf-chart">
       <span class="wf-type">Tròn</span>
       <div class="wf-title" id="co-dim-title">Chi phí theo Agent</div>
-      <div class="wf-q">Cắt theo chiều nào cũng thấy tiền đi đâu?</div>
+      <div class="wf-q">Phần lớn tiền rơi vào đâu?</div>
       <div class="wf-donut-wrap">
         <div class="canvas-box"><canvas id="c-co-dim"></canvas></div>
         <div class="wf-legend" id="lg-co-dim"></div>
@@ -917,10 +1071,16 @@
     </div>
     <div class="wf-chart agent-budget-chart">
       <span class="wf-type">Thanh ngang</span>
-      <div class="wf-title">Mức sử dụng ngân sách theo agent</div>
+      <div class="wf-title">Mức sử dụng ngân sách theo agent (%)</div>
       <div class="wf-q">Một thanh = phần trăm ngân sách đã dùng · các đường dọc = mốc cảnh báo.</div>
       <div class="canvas-box"><canvas id="c-co-agent-budget"></canvas></div>
     </div>
+  </div>
+
+  <!-- ④ BẢNG CHI TIẾT -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">4</span>Bảng chi phí chi tiết</h3>
+    <p>Cùng số liệu ở trên nhưng xem được đơn giá bình quân và tỷ trọng của từng mục.</p>
   </div>
 
   <div class="section-controls">
@@ -931,7 +1091,8 @@
   <div class="table-container">
     <table>
       <thead><tr>
-        <th id="co-col1">Agent</th><th class="num">Tokens</th><th class="num">Requests</th><th class="num">Chi phí / 1K req</th><th class="num">Chi phí (VNĐ)</th><th style="width:150px">Tỷ trọng</th>
+        <th id="co-col1">Agent</th><th class="num">Token đã dùng</th><th class="num">Lượt gọi</th>
+        <th class="num">Chi phí / 1.000 lượt gọi</th><th class="num">Chi phí (VNĐ)</th><th style="width:150px">Tỷ trọng</th>
       </tr></thead>
       <tbody id="co-tbody"></tbody>
     </table>
@@ -942,77 +1103,97 @@
 <div class="tab-content" id="performance">
   <div class="insight-banner">
     <span class="insight-icon">❓</span>
-    <span class="insight-text">Hệ thống trả lời có <b>nhanh &amp; ổn định</b> không — <b>tỉ lệ lỗi, độ trễ, throughput</b> đang ở mức nào so với ngưỡng?</span>
+    <span class="insight-text">Hệ thống trả lời có <b>nhanh &amp; ổn định</b> không — bao nhiêu lượt gọi <b>thành công</b>, lỗi <b>đến từ đâu</b>, và <b>chờ bao lâu</b> mới có kết quả?</span>
   </div>
-  <div class="metrics">
+
+  <!-- ① CHẤT LƯỢNG PHỤC VỤ -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">1</span>Chất lượng phục vụ trong kỳ</h3>
+    <p>Bao nhiêu lượt gọi, bao nhiêu phần thành công, phần lỗi chia thành mấy loại, và phải chờ bao lâu.</p>
+  </div>
+
+  <div class="metrics perf-kpi-grid">
+    <div class="metric-card">
+      <div class="metric-label">📨 Tổng lượt gọi (lượt gọi)</div>
+      <div class="metric-q">Kỳ này gọi bao nhiêu lượt?</div>
+      <div class="metric-value" id="m-pf-req">—</div>
+      <div class="metric-def"><b>= Σ lượt gọi</b> của mọi agent — mẫu số của các tỷ lệ bên cạnh.</div>
+    </div>
     <div class="metric-card ok">
-      <div class="metric-label">✅ Tỉ lệ thành công</div>
-      <div class="metric-q">Bao nhiêu % request thành công?</div>
+      <div class="metric-label">✅ Tỉ lệ thành công (%)</div>
+      <div class="metric-q">Bao nhiêu phần trả kết quả tốt?</div>
       <div class="metric-value" id="m-pf-success">—</div>
-      <div class="metric-def"><b>= request thành công ÷ tổng request.</b></div>
+      <div class="metric-def"><b>= lượt gọi thành công ÷ tổng lượt gọi.</b></div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">🙋 Lỗi phía gọi (4xx) <span class="pill-new">MỚI</span></div>
-      <div class="metric-q">Lỗi do phía gọi?</div>
+      <div class="metric-label">🙋 Lỗi phía gọi (%) <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Lỗi do mình gửi sai?</div>
       <div class="metric-value" id="m-pf-4xx">—</div>
-      <div class="metric-def"><b>≈ 64% lỗi</b> (400/401/403); xử lý phía tích hợp agent.</div>
+      <div class="metric-def">Nhóm <b>4xx</b> — yêu cầu sai định dạng hoặc thiếu quyền. Sửa ở phía tích hợp agent.</div>
     </div>
     <div class="metric-card danger">
-      <div class="metric-label">💥 Lỗi phía máy chủ (5xx) <span class="pill-new">MỚI</span></div>
-      <div class="metric-q">Lỗi do phía Google?</div>
+      <div class="metric-label">💥 Lỗi nhà cung cấp (%) <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Lỗi do bên cung cấp?</div>
       <div class="metric-value" id="m-pf-5xx">—</div>
-      <div class="metric-def"><b>≈ 21% lỗi.</b> Cần thử lại có giãn cách (retry/backoff).</div>
+      <div class="metric-def">Nhóm <b>5xx</b> — nhà cung cấp gặp sự cố. Cần thử lại có giãn cách.</div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">🚧 Chạm giới hạn tốc độ (429) <span class="pill-new">MỚI</span></div>
-      <div class="metric-q">Bao nhiêu request chạm giới hạn tốc độ?</div>
+      <div class="metric-label">🚧 Gọi quá nhanh (%) <span class="pill-new">MỚI</span></div>
+      <div class="metric-q">Bao nhiêu lượt bị chặn tạm?</div>
       <div class="metric-value" id="m-pf-429">—</div>
-      <div class="metric-def"><b>≈ 15% lỗi</b> (vượt hạn mức). Cao ⇒ nâng RPM/TPM.</div>
+      <div class="metric-def">Mã <b>429</b> — vượt hạn mức cho phép. Cao ⇒ cân nhắc nâng hạn mức.</div>
     </div>
     <div class="metric-card ok">
-      <div class="metric-label">⚡ Độ trễ p95</div>
-      <div class="metric-q">95% request nhanh hơn bao lâu?</div>
+      <div class="metric-label">⚡ Thời gian phản hồi (giây)</div>
+      <div class="metric-q">Thường phải chờ bao lâu?</div>
       <div class="metric-value" id="m-pf-p95">—</div>
-      <div class="metric-def"><b>= mốc trễ 95% request nằm dưới</b> (bình quân theo request).</div>
+      <div class="metric-def"><b>= mốc mà 95% lượt gọi trả kết quả nhanh hơn</b> (bình quân theo lượt gọi).</div>
     </div>
     <div class="metric-card warn">
-      <div class="metric-label">🐢 Độ trễ p99</div>
-      <div class="metric-q">Trường hợp chậm nhất tệ tới đâu?</div>
+      <div class="metric-label">🐢 Trường hợp chậm nhất (giây)</div>
+      <div class="metric-q">Lúc chậm nhất tệ tới đâu?</div>
       <div class="metric-value" id="m-pf-p99">—</div>
-      <div class="metric-def"><b>≈ p95 × 2.1</b> — đuôi chậm cần theo dõi.</div>
+      <div class="metric-def"><b>= mốc mà 99% lượt gọi nhanh hơn.</b> Phần đuôi chậm cần theo dõi.</div>
     </div>
-    <div class="metric-card">
-      <div class="metric-label">📨 Tổng lượt request</div>
-      <div class="metric-q">Tổng lượt gọi trong kỳ?</div>
-      <div class="metric-value" id="m-pf-req">—</div>
-      <div class="metric-def"><b>= Σ request</b> mọi agent.</div>
-    </div>
+  </div>
+
+  <!-- ② LỖI ĐẾN TỪ ĐÂU -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">2</span>Lỗi đến từ đâu?</h3>
+    <p>Nhìn phân loại lỗi trước để biết trách nhiệm thuộc bên nào, rồi xem lỗi đang tập trung ở agent nào.</p>
   </div>
 
   <div class="chart-grid">
     <div class="wf-chart">
-      <span class="wf-type">Bar</span>
-      <div class="wf-title">Tỉ lệ lỗi theo agent</div>
-      <div class="wf-q">Agent nào hay lỗi nhất?</div>
-      <div class="canvas-box"><canvas id="c-pf-err"></canvas></div>
-    </div>
-    <div class="wf-chart">
-      <span class="wf-type">Donut</span>
-      <div class="wf-title">Request theo response code <span class="pill-new">MỚI</span></div>
-      <div class="wf-q">Lỗi rơi vào nhóm nào — client, server hay rate-limit?</div>
+      <span class="wf-type">Tròn</span>
+      <div class="wf-title">Kết quả trả về theo mã phản hồi <span class="pill-new">MỚI</span></div>
+      <div class="wf-q">Trong 100 lượt gọi, bao nhiêu lượt OK và phần lỗi thuộc loại nào?</div>
       <div class="wf-donut-wrap">
         <div class="canvas-box"><canvas id="c-pf-code"></canvas></div>
-        <div class="wf-legend" id="lg-pf-code"></div>
+        <div class="wf-legend legend-described" id="lg-pf-code"></div>
       </div>
+    </div>
+    <div class="wf-chart">
+      <span class="wf-type">Thanh ngang</span>
+      <div class="wf-title">Tỉ lệ lỗi theo agent (%)</div>
+      <div class="wf-q">Lỗi đang tập trung ở agent nào?</div>
+      <div class="canvas-box"><canvas id="c-pf-err"></canvas></div>
     </div>
   </div>
 
-  <div class="section-controls"><div class="section-title">Hiệu năng theo agent</div></div>
+  <!-- ③ CHI TIẾT THEO AGENT -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">3</span>Hiệu năng từng agent</h3>
+    <p>Bảng đối chiếu tốc độ và độ ổn định của từng agent để biết nên xử lý cái nào trước.</p>
+  </div>
+
   <div class="table-container">
     <table>
       <thead><tr>
-        <th>Agent</th><th>Model</th><th class="num">Requests</th><th class="num">Success %</th>
-        <th class="num">Error %</th><th class="num">p95 (s)</th><th class="num">p99 (s)</th>
+        <th>Agent</th><th>Model</th><th class="num">Lượt gọi</th>
+        <th class="num">Tỉ lệ thành công</th><th class="num">Tỷ lệ lỗi</th>
+        <th class="num" title="Mốc thời gian mà 95% lượt gọi trả kết quả nhanh hơn">Thời gian phản hồi</th>
+        <th class="num" title="Mốc thời gian mà 99% lượt gọi trả kết quả nhanh hơn">Trường hợp chậm nhất</th>
       </tr></thead>
       <tbody id="pf-tbody"></tbody>
     </table>
