@@ -836,8 +836,8 @@ function periodWindowLabel(w){
 function previousPeriodLabel(){ return periodWindowLabel(previousPeriodWindow()); }
 function samePeriodLabel(){ return periodWindowLabel(samePeriodWindow()); }
 /* ─── Baseline so sánh: kỳ trước và cùng kỳ năm trước ───
-   Scorecard luôn viết đầy đủ chiều biến động, tên kỳ, giá trị gốc → giá trị hiện tại
-   và phần trăm thay đổi để người xem không phải giải mã KT/CK. ─── */
+   Scorecard viết gọn: mũi tên + màu cho chiều biến động, % thay đổi, KT/CK cho kỳ gốc.
+   Tên kỳ đầy đủ và giá trị gốc → giá trị hiện tại nằm trong tooltip. ─── */
 var DELTA_BASIS = {
   KT: { abbr:"KT", full:"kỳ trước",            label:previousPeriodLabel },
   CK: { abbr:"CK", full:"cùng kỳ (năm trước)", label:samePeriodLabel }
@@ -851,8 +851,8 @@ function deltaLine(basisKey, cur, b, betterUp, fmtFn){
   var basis=DELTA_BASIS[basisKey]||DELTA_BASIS.KT, period=basis.label();
   var tip="so với "+basis.full+(period?" ("+period+")":"");
   if(b.v==null || b.v<=0){
-    return "<div class='delta-line d-dim' title='"+esc(tip+": chưa có dữ liệu")+"'>So với "+
-      basis.full+": chưa có dữ liệu</div>";
+    return "<div class='delta-line d-dim' title='"+esc(tip+": chưa có dữ liệu")+"'>– <span class='delta-basis'>"+
+      basis.abbr+"</span> chưa có dữ liệu</div>";
   }
   var diff=cur-b.v, p=diff/b.v*100, flat=Math.abs(p)<0.5, up=diff>0;
   // Màu biểu thị trực tiếp hướng biến động theo quy ước dashboard:
@@ -860,10 +860,11 @@ function deltaLine(basisKey, cur, b, betterUp, fmtFn){
   // betterUp chỉ còn được giữ trong chữ ký hàm để tương thích với các lời gọi hiện tại.
   var cls = flat ? "d-neutral" : (up ? "d-green" : "d-red");
   var arrow = flat ? "→" : (up ? "▲" : "▼");
-  var percent = flat ? "0%" : ((up?"+":"−")+Math.abs(p).toFixed(0)+"%");
-  return "<div class='delta-line "+cls+"' title='"+esc(tip+": "+fmtFn(b.v))+"'>"+arrow+" "+
-    percent+" so với "+basis.full+": <span class='delta-abs'>"+
-    (b.mock?"≈":"")+fmtFn(b.v)+" → "+fmtFn(cur)+"</span></div>";
+  var percent = flat ? "0%" : (Math.abs(p).toFixed(0)+"%");
+  // Chi tiết đầy đủ (tên kỳ, giá trị gốc → hiện tại) chuyển hết vào tooltip.
+  var detail = tip+": "+(b.mock?"≈":"")+fmtFn(b.v)+" → "+fmtFn(cur);
+  return "<div class='delta-line "+cls+"' title='"+esc(detail)+"'>"+arrow+" "+
+    percent+" <span class='delta-basis'>"+basis.abbr+"</span></div>";
 }
 function renderDelta(id, cur, prev, same, betterUp, fmtFn, mockPrev, mockSame){
   var el=document.getElementById(id); if(!el) return;
@@ -1069,7 +1070,7 @@ function renderCardInsight(valueId, candidates){
   candidates=(candidates||[]).filter(function(x){return x&&x.severity!=="unavailable";});
   if(!candidates.length){ if(existing)existing.remove(); card.classList.remove("insight-normal","insight-warning","insight-critical"); return; }
   candidates.sort(function(a,b){return severityRank(b.severity)-severityRank(a.severity)||b.score-a.score;});
-  var chosen=candidates[0], label=chosen.severity==="critical"?"CẢNH BÁO":chosen.severity==="warning"?"CẦN CHÚ Ý":"BÌNH THƯỜNG";
+  var chosen=candidates[0], label=chosen.severity==="critical"?"CẢNH BÁO":chosen.severity==="warning"?"CẦN THEO DÕI":"ỔN ĐỊNH";
   if(!existing){existing=document.createElement("div");existing.className="metric-insight";card.appendChild(existing);}
   existing.setAttribute("data-rule",chosen.ruleId);
   existing.innerHTML="<span class='insight-status'>"+label+"</span><div class='insight-evidence'>"+esc(chosen.evidence)+(chosen.driver?" "+esc(chosen.driver):"")+"</div>"+(chosen.recommendation?"<div class='insight-action'>→ "+esc(chosen.recommendation)+"</div>":"");
@@ -1102,17 +1103,51 @@ function wrapAxisLabel(label, maxChars){
   if(line) lines.push(line);
   return lines.length>1?lines:lines[0]||"";
 }
+/* Nhãn giá trị in ngay cuối mỗi thanh ngang: người xem đọc được con số mà không phải rê
+   chuột từng thanh, giống cột "tỷ trọng" trong bảng chi phí. Chỉ dùng cho thanh NGANG —
+   thanh dọc hẹp hơn nhiều nên chữ sẽ chồng lên nhau. */
+function barValueLabels(fmtFn){
+  return {
+    id:"bar-value-labels",
+    afterDatasetsDraw:function(chartInstance){
+      var meta=chartInstance.getDatasetMeta(0);
+      if(!meta||meta.hidden) return;
+      var ctx=chartInstance.ctx, area=chartInstance.chartArea,
+          values=chartInstance.data.datasets[0].data||[];
+      ctx.save();
+      ctx.fillStyle=currentTheme()==="light"?"#334155":"#cbd5e1";
+      ctx.font="600 10px Inter, sans-serif";
+      ctx.textAlign="left";
+      ctx.textBaseline="middle";
+      meta.data.forEach(function(bar,i){
+        var v=values[i];
+        // Chặn ở mép phải để nhãn của thanh dài nhất không bị cắt mất.
+        ctx.fillText(fmtFn?fmtFn(v,i):fmt(v), Math.min(bar.x+7, area.right+6), bar.y);
+      });
+      ctx.restore();
+    }
+  };
+}
 function mkBar(id, labels, data, o){
   o = o || {};
   var numericTick=o.money?function(v){return moneyCompact(v);}:o.tokens?function(v){return fmtTokShort(v);}:undefined;
   var categoryTick=function(v){return wrapAxisLabel(this.getLabelForValue(v),26);};
+  var valueLabel=o.money?moneyCompact:o.tokens?fmtTokShort:
+    o.percent?function(v){return fmtDecimal(v,1)+"%";}:fmt;
   chart(id, {
     type:"bar",
     data:{ labels:labels, datasets:[{ data:data, backgroundColor:o.colors||"#667eea", borderRadius:4, maxBarThickness:o.horizontal?22:44 }] },
+    plugins:o.horizontal?[barValueLabels(valueLabel)]:[],
     options:{ indexAxis:o.horizontal?"y":"x",
+      // Chừa lề phải để nhãn giá trị của thanh dài nhất vẫn nằm trong khung; nhãn tiền
+      // và token dài hơn nhãn số thường nên cần nhiều chỗ hơn.
+      layout:o.horizontal?{padding:{right:(o.money||o.tokens)?76:46}}:{},
       plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function(c){ var v=o.horizontal?c.parsed.x:c.parsed.y; return o.money?[money(v),usd(v)+" · "+EXCHANGE_RATE_META.source]:(o.tokens?fmtTokFull(v):fmt(v)); } } } },
       scales:{
-        x:{ grid:{ color:gridColor(), display:!o.horizontal }, ticks:{ callback:o.horizontal?numericTick:categoryTick } },
+        // Thanh ngang: khoá xoay nhãn trục giá trị. Sau khi chừa lề phải cho nhãn giá trị,
+        // Chart.js thấy trục hẹp đi nên tự xoay chéo chữ — để nằm ngang và tự bớt mốc.
+        x:{ grid:{ color:gridColor(), display:!o.horizontal },
+            ticks:{ callback:o.horizontal?numericTick:categoryTick, maxRotation:o.horizontal?0:50 } },
         y:{ grid:{ color:gridColor(), display:!!o.horizontal }, ticks:{ callback:o.horizontal?categoryTick:numericTick, autoSkip:false } }
       } }
   });
@@ -1688,18 +1723,60 @@ function chartsDepartments(rows){
   if(!costLabels.length) emptyChart("c-dep-cost","lg-dep-cost","Chưa có phòng ban nào phát sinh chi phí trong kỳ.");
   else mkDonut("c-dep-cost",costLabels,costValues,"lg-dep-cost",money);
 
-  // Tỷ lệ sử dụng = tài khoản có request / tài khoản được cấp, khoá theo unitId.
-  // Đơn vị chưa khai báo số cấp bị loại khỏi biểu đồ thay vì bị suy ra thành 100%.
-  var pool=filterAccounts();
+  // Tỷ lệ tài khoản được sử dụng = tài khoản có request / tài khoản được cấp, khoá theo
+  // unitId. Đây là tỷ lệ NỘI BỘ từng phòng, các phòng KHÔNG cộng lại thành 100% — nên vẽ
+  // bằng thanh ngang thang 0–100%, không dùng biểu đồ chia phần (tròn/polar).
+  // Đơn vị chưa khai báo số cấp không được suy ra thành 100%: tách ra ghi chú bên dưới.
+  var pool=filterAccounts(), missing=[];
   var adoption=units.map(function(g){
     var prov=provisionedOf(g.unit.id);
-    if(prov==null||prov<=0) return null;
+    if(prov==null||prov<=0){ missing.push(g.unit.name); return null; }
     var active=accountsUnderUnit(g.unit.id,pool).filter(function(u){return u.active;}).length;
-    return {key:g.unit.name, value:Math.min(100,Math.round(active/prov*100))};
-  }).filter(Boolean).sort(function(a,b){return a.value-b.value;}).slice(0,6);
-  if(!adoption.length) emptyChart("c-dep-adopt","lg-dep-adopt","Chưa có phòng ban nào khai báo số tài khoản được cấp.");
-  else mkPolar("c-dep-adopt",adoption.map(function(g){return g.key;}),adoption.map(function(g){return g.value;}),
-    "lg-dep-adopt",function(v){return fmt(v)+"%";});
+    return {key:g.unit.name, active:active, prov:prov,
+            value:Math.min(100,Math.round(active/prov*100))};
+  }).filter(Boolean).sort(function(a,b){return a.value-b.value;}).slice(0,8);
+  var missingNote=missing.length
+    ? "Chưa tính được "+missing.length+" phòng do nguồn TLA Ralli chưa có số tài khoản được cấp: "+missing.join(", ")+"."
+    : "";
+  if(!adoption.length){
+    emptyChart("c-dep-adopt","lg-dep-adopt",
+      missingNote||"Chưa có phòng ban nào khai báo số tài khoản được cấp.");
+  }else{
+    mkAdoptionBar("c-dep-adopt",adoption);
+    set("lg-dep-adopt",esc(missingNote));
+  }
+}
+/* Thanh ngang tỷ lệ áp dụng: thang cố định 0–100% để so ngang giữa các phòng, màu theo
+   đúng ngưỡng cảnh báo đang dùng ở bảng chi tiết. */
+function mkAdoptionBar(id, items){
+  var colorOf=function(rate){
+    return rate<INSIGHT_THRESHOLDS.adoptionCritical ? "#ef4444"
+      : (rate<INSIGHT_THRESHOLDS.adoptionWarning ? "#f59e0b" : "#10b981");
+  };
+  chart(id, {
+    type:"bar",
+    data:{ labels:items.map(function(i){return i.key;}),
+      datasets:[{ data:items.map(function(i){return i.value;}), borderRadius:4, maxBarThickness:22,
+        backgroundColor:items.map(function(i){return colorOf(i.value);}) }] },
+    // Nhãn ghi kèm số tài khoản: "66% · 28/42" nói đủ cả tỷ lệ lẫn quy mô mẫu số.
+    plugins:[barValueLabels(function(v,i){
+      var it=items[i];
+      return it? v+"% · "+fmt(it.active)+"/"+fmt(it.prov) : v+"%";
+    })],
+    options:{ indexAxis:"y",
+      layout:{padding:{right:96}},
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ label:function(c){
+          var it=items[c.dataIndex];
+          return it.value+"% — "+fmt(it.active)+"/"+fmt(it.prov)+" tài khoản được cấp có phát sinh request";
+        } } } },
+      scales:{
+        x:{ beginAtZero:true, max:100, grid:{color:gridColor()},
+            ticks:{stepSize:25, callback:function(v){return v+"%";}} },
+        y:{ grid:{display:false},
+            ticks:{autoSkip:false, callback:function(v){return wrapAxisLabel(this.getLabelForValue(v),26);}} }
+      } }
+  });
 }
 
 /* ═══════════════ RENDER: AGENTS ═══════════════ */
@@ -2231,9 +2308,15 @@ function renderProviders(rows){
     set("m-pv-share", pct(top.tokens,totTok).toFixed(0)+"%");
     set("m-pv-share-def", "<b>"+esc(top.key)+"</b> đang gánh phần lớn lưu lượng của kỳ.");
     set("m-pv-models", fmtCompactNum(top.models.length));
-    set("m-pv-models-def", top.models.length
-      ? "<b>"+esc(top.key)+"</b> đang cung cấp: "+esc(top.models.join(", "))+"."
-      : "Chưa ghi nhận model nào có lưu lượng.");
+    /* Đây là số model CÓ PHÁT SINH REQUEST của provider dẫn đầu, không phải toàn bộ
+       model bên đó khai báo trong bảng giá — thẻ "Tổng số model đã khai báo" mới là số
+       khai báo. Chú thích nói rõ tiêu chí; danh sách tên model để trong tooltip vì liệt
+       kê thẳng trên thẻ thì chiếm 3-4 dòng mà người xem hiếm khi cần đọc hết. */
+    setWithTitle("m-pv-models-def",
+      top.models.length
+        ? "<b>= model của "+esc(top.key)+" có ≥1 request trong kỳ.</b>"
+        : "Chưa ghi nhận model nào có lưu lượng.",
+      top.models.length ? top.models.join(", ") : "");
     setWithTitle("m-pv-cost", usageCompact(top.cost), money(top.cost)+" · "+usdReference(top.cost));
     set("m-pv-latency", top.latAvailable?fmtDecimal(top.lat,1):"Chưa có dữ liệu");
   } else {
@@ -2376,11 +2459,9 @@ function renderModels(rows){
   }
   var A = aggregate(rows);
   set("m-md-cache", (A.ti? A.cached/A.ti*100:0).toFixed(0)+"%");
-  // Đơn vị "(token)" đã nằm ở tên thẻ nên giá trị chỉ còn con số viết theo nghìn/triệu;
-  // phần tỷ trọng chuyển xuống dòng mô tả để không nhét hai đơn vị vào một dòng.
-  setWithTitle("m-md-think", fmtCompactNum(A.think), fmtTokFull(A.think));
-  set("m-md-think-def", "<b>= Σ token model tự suy luận nội bộ</b> · chiếm "+
-    (A.tokens? (A.think/A.tokens*100).toFixed(0):"0")+"% tổng token. Chỉ model bật suy luận mở rộng.");
+  // Thẻ "Token suy luận" đã gỡ khỏi giao diện: chưa xác nhận được agent nào thực sự bật
+  // suy luận mở rộng, nên con số luôn bằng 0 và chỉ gây hiểu nhầm. Trường A.think vẫn
+  // được tính trong aggregate() nên khi cần dựng lại thẻ thì không phải sửa gì thêm.
   // Bảng chi tiết model cũ đã được gộp vào cây "nhà cung cấp → model"
   // (xem renderProviderModelTree), nên ở đây chỉ còn phần thẻ chỉ số.
 }
@@ -2405,7 +2486,14 @@ function renderUsers(rows){
   var dormant=inactive.filter(function(u){return u.last&&dayDiff(u.last,state.range.end)>30;}).length;
   var datedAccounts=accounts.filter(function(u){return !!u.created;});
   var newInRange=datedAccounts.filter(function(u){return u.created>=state.range.start&&u.created<=state.range.end;}).length;
-  var units=distinct(accounts.map(function(u){return u.d;})).length;
+  /* Đếm theo PHÒNG BAN, không theo đơn vị ghi trên tài khoản: cột "Phòng ban" của nguồn
+     TLA Ralli trộn nhiều cấp (đội, vùng, chi nhánh, trung tâm), đếm thô sẽ ra 86 "phòng
+     ban" trong khi thực tế chỉ là các đội trực thuộc vài phòng. reportingRootOf() quy mỗi
+     đơn vị về phòng ban cấp đầu (bỏ qua hai cấp gộp Toàn công ty / Tổng công ty). */
+  var units=distinct(accounts.map(function(u){
+    var root=reportingRootOf(u.unitId);
+    return root?root.id:u.d;
+  })).length;
   set("m-us-total",fmtCompactNum(accounts.length));
   set("m-us-total-def","Đã dùng trong kỳ: <b>"+fmt(active.length)+"/"+fmt(accounts.length)+" ("+pct(active.length,accounts.length).toFixed(0)+"%)</b> · Đã khoá: "+fmt(disabled.length)+".");
   /* Hai thẻ "đang dùng" và "bỏ không" là một cặp đối nhau nên phải CÙNG ĐƠN VỊ (%),
@@ -2523,6 +2611,23 @@ function chartsUsers(rows){
   // Tài khoản đã cấp nhưng không mở công cụ trong ngày = tổng đã cấp − người hoạt động.
   var idle=s.dau.map(function(d){return Math.max(0,s.total-d);});
   mkBar("c-us-idle",labels,idle,{colors:"#f59e0b"});
+
+  /* Bánh tròn toàn công ty: hai phần BÙ NHAU nên cộng đúng 100%. Dùng đúng định nghĩa
+     active/inactive của các thẻ KPI phía trên để bánh và thẻ không nói khác nhau. */
+  var accounts=filterAccounts();
+  var activeCount=accounts.filter(function(u){return u.active&&!u.disabled;}).length;
+  if(!accounts.length){
+    emptyChart("c-us-adopt-all","lg-us-adopt-all","Chưa có tài khoản nào trong phạm vi đang lọc.");
+    set("nt-us-adopt-all","");
+  }else{
+    mkDonut("c-us-adopt-all",["Đang dùng","Chưa dùng"],[activeCount,accounts.length-activeCount],
+      "lg-us-adopt-all",
+      function(v){ return fmt(v)+"/"+fmt(accounts.length)+" tài khoản"; },
+      ["#10b981","#f59e0b"]);
+    set("nt-us-adopt-all","Mẫu số là "+fmt(accounts.length)+" tài khoản đã cấp"+
+      (state.filters.dept?" trong phạm vi đang lọc":"")+
+      "; đang dùng = có ≥1 request trong kỳ và tài khoản chưa bị khoá.");
+  }
 }
 
 /* ═══════════════ RENDER: CHI PHÍ ═══════════════ */
@@ -2556,12 +2661,15 @@ function renderCostTable(rows){
   var gb = document.getElementById("co-groupby").value;
   var col1 = gb==="dept"?"Phòng ban":gb==="model"?"Model":"Agent";
   var el1=document.getElementById("co-col1"); if(el1) el1.textContent=col1;
-  var dt=document.getElementById("co-dim-title"); if(dt) dt.textContent="Chi phí theo "+col1;
+  var dt=document.getElementById("co-dim-title"); if(dt) dt.textContent="Phân bổ chi phí theo "+col1;
   var keyFn=costKeyFn();
   var groups = groupAgg(rows.filter(function(r){var k=keyFn(r);return k&&k!=="—";}), keyFn).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;});
   var total = groups.reduce(function(s,g){return s+g.cost;},0);
+  /* Đơn giá thực tế tính trên 1 TRIỆU TOKEN — cùng đơn vị với bảng giá của nhà cung cấp,
+     nên đối chiếu được thẳng với giá niêm yết. Chia theo lượt gọi thì mỗi agent có độ dài
+     prompt khác nhau, con số không so ngang được giữa các agent. */
   set("co-tbody", groups.map(function(g){
-    return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.r?moneyCell(g.cost/(g.r/1000),"num"):"<td class='num'>—</td>")+moneyCell(g.cost)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
+    return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.tokens?moneyCell(g.cost/(g.tokens/1e6),"num"):"<td class='num'>—</td>")+moneyCell(g.cost)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
   }).join("") || emptyRow(6));
 }
 /* ─── Chi phí theo thời gian, tách theo phòng ban ───
@@ -2702,19 +2810,16 @@ function renderPerformance(rows){
 }
 function chartsPerformance(rows){
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.r>0;}).sort(function(a,b){return b.er-a.er;});
-  mkBar("c-pf-err", byAgent.map(function(g){return g.key;}), byAgent.map(function(g){return +g.er.toFixed(2);}), {horizontal:true,
+  mkBar("c-pf-err", byAgent.map(function(g){return g.key;}), byAgent.map(function(g){return +g.er.toFixed(2);}), {horizontal:true, percent:true,
     colors: byAgent.map(function(g){ return g.er>2?"#ef4444":g.er>1?"#f59e0b":"#667eea"; }) });
   var A = aggregate(rows), err=A.er;
-  /* Mã phản hồi HTTP là thuật ngữ kỹ thuật, người không làm IT nhìn "4xx" không hiểu
-     gì — nên mỗi mục chú thích kèm luôn một dòng giải nghĩa và hướng xử lý. */
+  /* Nhãn dùng đúng tên của bốn thẻ chỉ số ngay phía trên (Lỗi phía Client / Lỗi phía
+     Provider / Lỗi giới hạn tốc độ request) để người xem đối chiếu được ngay; phần giải nghĩa dài
+     đã nằm ở dòng mô tả của các thẻ đó nên không lặp lại dưới chú giải nữa. */
   mkDonut("c-pf-code",
-    ["2xx · Thành công","4xx · Lỗi phía gọi","5xx · Lỗi nhà cung cấp","429 · Gọi quá nhanh"],
+    ["2xx · Thành công","4xx · Lỗi phía Client","5xx · Lỗi phía Provider","429 · Lỗi giới hạn tốc độ request"],
     [100-err, err*0.64, err*0.21, err*0.15], "lg-pf-code",
-    function(v){ return fmtDecimal(v,2)+"%"; }, ["#10b981","#f59e0b","#ef4444","#8b5cf6"],
-    ["Máy chủ nhận yêu cầu và trả kết quả bình thường.",
-     "Yêu cầu gửi lên sai định dạng hoặc thiếu quyền — sửa ở phía tích hợp agent.",
-     "Nhà cung cấp gặp sự cố, không phải lỗi của mình — nên thử lại có giãn cách.",
-     "Gọi vượt hạn mức cho phép nên bị chặn tạm — cân nhắc nâng hạn mức."]);
+    function(v){ return fmtDecimal(v,2)+"%"; }, ["#10b981","#f59e0b","#ef4444","#8b5cf6"]);
 }
 
 /* ═══════════════ HEATMAP (theme-aware) ═══════════════ */
