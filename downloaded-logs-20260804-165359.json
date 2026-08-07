@@ -1,0 +1,3335 @@
+[
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "CreateProject",
+      "authorizationInfo": [
+        {
+          "resourceAttributes": {}
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "project": {
+          "projectNumber": "779509080458",
+          "projectId": "ai-chatbot-contract",
+          "createTime": "2026-06-20T07:08:28.815Z",
+          "name": "AI chatbot contract",
+          "lifecycleState": "ACTIVE"
+        },
+        "@type": "type.googleapis.com/google.cloudresourcemanager.v1.CreateProjectRequest"
+      }
+    },
+    "insertId": "xbep22cinc",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:08:30.268781Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:08:31.213562850Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "methodName": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458/services/cloudapis.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "serviceusage.googleapis.com",
+            "name": "projectnumbers/779509080458/services/cloudapis.googleapis.com"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/services/cloudapis.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract/services/cloudapis.googleapis.com"
+    },
+    "insertId": "jftvvid7bjy",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "project_id": "ai-chatbot-contract",
+        "service": "",
+        "method": "google.api.serviceusage.v1.ServiceUsage.EnableService"
+      }
+    },
+    "timestamp": "2026-06-20T07:08:31.924551Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/acat.p2-779509080458-08a993f2-d905-489d-bc38-bdad183a1b8e",
+      "producer": "serviceusage.googleapis.com",
+      "first": true
+    },
+    "receiveTimestamp": "2026-06-20T07:08:33.212889372Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458/services/cloudapis.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "serviceusage.googleapis.com",
+            "name": "projectnumbers/779509080458/services/cloudapis.googleapis.com"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/services/cloudapis.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract/services/cloudapis.googleapis.com",
+      "request": {
+        "name": "projects/ai-chatbot-contract/services/cloudapis.googleapis.com",
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceRequest"
+      }
+    },
+    "insertId": "nbo77od74iw",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "project_id": "ai-chatbot-contract",
+        "service": "serviceusage.googleapis.com",
+        "method": "google.api.serviceusage.v1.ServiceUsage.EnableService"
+      }
+    },
+    "timestamp": "2026-06-20T07:08:31.924551Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/acat.p2-779509080458-08a993f2-d905-489d-bc38-bdad183a1b8e",
+      "producer": "serviceusage.googleapis.com",
+      "first": true
+    },
+    "receiveTimestamp": "2026-06-20T07:08:33.314141181Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/acat.p2-779509080458-08a993f2-d905-489d-bc38-bdad183a1b8e"
+    },
+    "insertId": "er5k3ade02v",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.longrunning.Operations.GetOperation",
+        "project_id": "ai-chatbot-contract",
+        "service": "serviceusage.googleapis.com"
+      }
+    },
+    "timestamp": "2026-06-20T07:08:34.121525Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:08:35.119462305Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)"
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458/services/cloudapis.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract/services/cloudapis.googleapis.com",
+      "request": {
+        "name": "projects/ai-chatbot-contract/services/cloudapis.googleapis.com",
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceRequest"
+      },
+      "response": {
+        "service": {
+          "name": "projects/779509080458/services/cloudapis.googleapis.com",
+          "config": {
+            "name": "cloudapis.googleapis.com",
+            "title": "Google Cloud APIs"
+          },
+          "state": "ENABLED",
+          "parent": "projects/779509080458"
+        },
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceResponse"
+      }
+    },
+    "insertId": "5kr0otd7wby",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "project_id": "ai-chatbot-contract",
+        "method": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+        "service": "serviceusage.googleapis.com"
+      }
+    },
+    "timestamp": "2026-06-20T07:08:34.643812472Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/acat.p2-779509080458-08a993f2-d905-489d-bc38-bdad183a1b8e",
+      "producer": "serviceusage.googleapis.com",
+      "last": true
+    },
+    "receiveTimestamp": "2026-06-20T07:08:34.643812472Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)"
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458/services/cloudapis.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract/services/cloudapis.googleapis.com",
+      "request": {
+        "name": "projects/ai-chatbot-contract/services/cloudapis.googleapis.com",
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceRequest"
+      },
+      "response": {
+        "status": "ENABLED",
+        "services": [
+          "cloudapis.googleapis.com",
+          "analyticshub.googleapis.com",
+          "bigquery.googleapis.com",
+          "bigqueryconnection.googleapis.com",
+          "bigquerydatapolicy.googleapis.com",
+          "bigquerydatatransfer.googleapis.com",
+          "bigquerymigration.googleapis.com",
+          "bigqueryreservation.googleapis.com",
+          "bigquerystorage.googleapis.com",
+          "cloudtrace.googleapis.com",
+          "dataform.googleapis.com",
+          "dataplex.googleapis.com",
+          "datastore.googleapis.com",
+          "logging.googleapis.com",
+          "monitoring.googleapis.com",
+          "servicemanagement.googleapis.com",
+          "serviceusage.googleapis.com",
+          "sql-component.googleapis.com",
+          "storage-api.googleapis.com",
+          "storage-component.googleapis.com",
+          "storage.googleapis.com",
+          "telemetry.googleapis.com"
+        ],
+        "@type": "type.googleapis.com/google.api.tenant.apis.shared.activation.CrossLoggingResponse"
+      }
+    },
+    "insertId": "5kr0otd7wc0",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+        "project_id": "ai-chatbot-contract",
+        "service": "serviceusage.googleapis.com"
+      }
+    },
+    "timestamp": "2026-06-20T07:08:34.643812472Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/acat.p2-779509080458-08a993f2-d905-489d-bc38-bdad183a1b8e",
+      "producer": "serviceusage.googleapis.com",
+      "last": true
+    },
+    "receiveTimestamp": "2026-06-20T07:08:34.643812472Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "ADD",
+              "role": "roles/editor",
+              "member": "user:rangdongai@gmail.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "policy": {
+          "bindings": [
+            {
+              "members": [
+                "user:letrunghieu4799@gmail.com"
+              ],
+              "role": "roles/owner"
+            },
+            {
+              "role": "roles/editor",
+              "members": [
+                "user:rangdongai@gmail.com"
+              ]
+            }
+          ],
+          "etag": "BwZUqhOVUPs="
+        },
+        "resource": "ai-chatbot-contract",
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest"
+      },
+      "response": {
+        "@type": "type.googleapis.com/google.iam.v1.Policy",
+        "bindings": [
+          {
+            "members": [
+              "user:rangdongai@gmail.com"
+            ],
+            "role": "roles/editor"
+          },
+          {
+            "role": "roles/owner",
+            "members": [
+              "user:letrunghieu4799@gmail.com"
+            ]
+          }
+        ],
+        "etag": "BwZUqhiqiaQ="
+      }
+    },
+    "insertId": "-qbhpfge1itbq",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:09:54.331255Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:09:55.827701349Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458/services/generativelanguage.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "serviceusage.googleapis.com",
+            "name": "projectnumbers/779509080458/services/generativelanguage.googleapis.com"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/services/generativelanguage.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract/services/generativelanguage.googleapis.com",
+      "request": {
+        "name": "projects/ai-chatbot-contract/services/generativelanguage.googleapis.com",
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceRequest"
+      }
+    },
+    "insertId": "pkdw8mda58r",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+        "service": "serviceusage.googleapis.com",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:52.405730Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/acat.p2-779509080458-cb946a24-1a71-4d49-80c6-e8a76e9d7337",
+      "producer": "serviceusage.googleapis.com",
+      "first": true
+    },
+    "receiveTimestamp": "2026-06-20T07:16:53.022194969Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "private",
+        "requestAttributes": {
+          "time": "2026-06-20T07:16:52.632016488Z",
+          "auth": {}
+        },
+        "destinationAttributes": {}
+      },
+      "serviceName": "iam.googleapis.com",
+      "methodName": "google.iam.admin.v1.CreateServiceAccount",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "iam.serviceAccounts.create",
+          "granted": true,
+          "resourceAttributes": {
+            "type": "iam.googleapis.com/ServiceAccount"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/779509080458",
+      "request": {
+        "@type": "type.googleapis.com/google.iam.admin.v1.CreateServiceAccountRequest",
+        "account_id": "ais-gemini-key-4a877251605946b",
+        "name": "projects/779509080458",
+        "service_account": {
+          "display_name": "Gemini API Key",
+          "description": "Service account for a Gemini API key"
+        }
+      },
+      "response": {
+        "oauth2_client_id": "102306932481974320680",
+        "project_id": "ai-chatbot-contract",
+        "display_name": "Gemini API Key",
+        "name": "projects/ai-chatbot-contract/serviceAccounts/ais-gemini-key-4a877251605946b@779509080458.iam.gserviceaccount.com",
+        "email": "ais-gemini-key-4a877251605946b@779509080458.iam.gserviceaccount.com",
+        "unique_id": "102306932481974320680",
+        "description": "Service account for a Gemini API key",
+        "@type": "type.googleapis.com/google.iam.admin.v1.ServiceAccount",
+        "etag": "MDEwMjE5MjA="
+      }
+    },
+    "insertId": "1k3w636e8zwch",
+    "resource": {
+      "type": "service_account",
+      "labels": {
+        "email_id": "ais-gemini-key-4a877251605946b@779509080458.iam.gserviceaccount.com",
+        "unique_id": "102306932481974320680",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:52.620108539Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:16:54.313894766Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.api.apikeys.v2.ApiKeys.CreateKey",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.apiKeys.create",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458",
+            "type": "apikeys.googleapis.com/Key"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.apiKeys.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/779509080458",
+      "request": {
+        "parent": "projects/ai-chatbot-contract/locations/global",
+        "@type": "type.googleapis.com/google.api.apikeys.v2.CreateKeyRequest",
+        "key": {
+          "annotations": {
+            "generative-language": "enabled"
+          }
+        }
+      }
+    },
+    "insertId": "1kcm9ohd8fj4",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "service": "apikeys.googleapis.com",
+        "project_id": "ai-chatbot-contract",
+        "method": "google.api.apikeys.v2.ApiKeys.CreateKey"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:53.331396Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/akmf.p7-779509080458-82e03200-58db-488f-9911-43ba3b1c9bbd",
+      "producer": "apikeys.googleapis.com",
+      "first": true
+    },
+    "receiveTimestamp": "2026-06-20T07:16:53.890242958Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/akmf.p7-779509080458-82e03200-58db-488f-9911-43ba3b1c9bbd"
+    },
+    "insertId": "pkdw8mda58y",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.longrunning.Operations.GetOperation",
+        "project_id": "ai-chatbot-contract",
+        "service": "apikeys.googleapis.com"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:53.813388Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:16:54.023922830Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)"
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458/services/generativelanguage.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract/services/generativelanguage.googleapis.com",
+      "request": {
+        "name": "projects/ai-chatbot-contract/services/generativelanguage.googleapis.com",
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceRequest"
+      },
+      "response": {
+        "service": {
+          "name": "projects/779509080458/services/generativelanguage.googleapis.com",
+          "config": {
+            "name": "generativelanguage.googleapis.com",
+            "title": "Gemini API"
+          },
+          "state": "ENABLED",
+          "parent": "projects/779509080458"
+        },
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceResponse"
+      }
+    },
+    "insertId": "7hvufbdazp6",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "project_id": "ai-chatbot-contract",
+        "method": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+        "service": "serviceusage.googleapis.com"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:54.411531889Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/acat.p2-779509080458-cb946a24-1a71-4d49-80c6-e8a76e9d7337",
+      "producer": "serviceusage.googleapis.com",
+      "last": true
+    },
+    "receiveTimestamp": "2026-06-20T07:16:54.411531889Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)"
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.api.apikeys.v2.ApiKeys.CreateKey",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.apiKeys.create",
+          "granted": true,
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/779509080458",
+      "request": {
+        "parent": "projects/ai-chatbot-contract/locations/global",
+        "key": {
+          "annotations": {
+            "generative-language": "enabled"
+          }
+        },
+        "@type": "type.googleapis.com/google.api.apikeys.v2.CreateKeyRequest"
+      },
+      "response": {
+        "code": 7,
+        "message": "Service Account `ais-gemini-key-4a877251605946b@779509080458.iam.gserviceaccount.com` not found.\nHelp Token: AfYMUrjfMaM0KdBpJSrHFKzCVcp1JXgTUVgUjOolUWGccCyD-xfchK_3NRirdFZGCwn1AG3EWt84ZcPMqqHZD-Nq6KrucEYpCX5YRtUGjbcvbIvl",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.rpc.PreconditionFailure",
+            "violations": [
+              {
+                "type": "googleapis.com",
+                "subject": "161004"
+              }
+            ]
+          },
+          {
+            "@type": "type.googleapis.com/google.rpc.ErrorInfo",
+            "reason": "FLOW_APIKEY_SERVICE_ACCOUNT_BINDING_PERMISSION_ERROR",
+            "domain": "apikeys.googleapis.com"
+          }
+        ],
+        "@type": "type.googleapis.com/google.rpc.Status"
+      }
+    },
+    "insertId": "-ye2nr6c1w8",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.api.apikeys.v2.ApiKeys.CreateKey",
+        "service": "apikeys.googleapis.com",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:54.603886728Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/akmf.p7-779509080458-82e03200-58db-488f-9911-43ba3b1c9bbd",
+      "producer": "apikeys.googleapis.com",
+      "last": true
+    },
+    "receiveTimestamp": "2026-06-20T07:16:54.603886728Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.api.apikeys.v2.ApiKeys.CreateKey",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.apiKeys.create",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458",
+            "type": "apikeys.googleapis.com/Key"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.apiKeys.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/779509080458",
+      "request": {
+        "@type": "type.googleapis.com/google.api.apikeys.v2.CreateKeyRequest",
+        "key": {
+          "annotations": {
+            "generative-language": "enabled"
+          }
+        },
+        "parent": "projects/ai-chatbot-contract/locations/global"
+      }
+    },
+    "insertId": "14tchqsddvbz",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.api.apikeys.v2.ApiKeys.CreateKey",
+        "service": "apikeys.googleapis.com",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:54.644067Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/akmf.p7-779509080458-f3223164-dd05-48b0-8879-1e0cc36a30d2",
+      "producer": "apikeys.googleapis.com",
+      "first": true
+    },
+    "receiveTimestamp": "2026-06-20T07:16:55.520866061Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/akmf.p7-779509080458-f3223164-dd05-48b0-8879-1e0cc36a30d2"
+    },
+    "insertId": "n27ym2ddm6b",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.longrunning.Operations.GetOperation",
+        "service": "apikeys.googleapis.com",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:55.144388Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:16:56.098079487Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/akmf.p7-779509080458-f3223164-dd05-48b0-8879-1e0cc36a30d2"
+    },
+    "insertId": "46neaid4cpf",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.longrunning.Operations.GetOperation",
+        "service": "apikeys.googleapis.com",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:55.454660Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:16:55.817541251Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/akmf.p7-779509080458-f3223164-dd05-48b0-8879-1e0cc36a30d2"
+    },
+    "insertId": "yenpt1d9r18",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "service": "apikeys.googleapis.com",
+        "project_id": "ai-chatbot-contract",
+        "method": "google.longrunning.Operations.GetOperation"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:55.765719Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:16:56.658261618Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/akmf.p7-779509080458-f3223164-dd05-48b0-8879-1e0cc36a30d2"
+    },
+    "insertId": "1yrekqrd8f51",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "project_id": "ai-chatbot-contract",
+        "method": "google.longrunning.Operations.GetOperation",
+        "service": "apikeys.googleapis.com"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:56.331640Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:16:56.814958498Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "apikeys.keys.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/akmf.p7-779509080458-f3223164-dd05-48b0-8879-1e0cc36a30d2"
+    },
+    "insertId": "kk0x8vd1qbn",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.longrunning.Operations.GetOperation",
+        "service": "apikeys.googleapis.com",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:57.395696Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:16:58.223120583Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe)"
+      },
+      "serviceName": "apikeys.googleapis.com",
+      "methodName": "google.api.apikeys.v2.ApiKeys.CreateKey",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.apiKeys.create",
+          "granted": true,
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/779509080458",
+      "request": {
+        "parent": "projects/ai-chatbot-contract/locations/global",
+        "key": {
+          "annotations": {
+            "generative-language": "enabled"
+          }
+        },
+        "@type": "type.googleapis.com/google.api.apikeys.v2.CreateKeyRequest"
+      },
+      "response": {
+        "name": "projects/779509080458/locations/global/keys/305c18cc-7d5a-4efc-8ef8-6a19e8e5829a",
+        "createTime": "1970-01-01T00:00:00Z",
+        "updateTime": "1970-01-01T00:00:00Z",
+        "annotations": {
+          "generative-language": "enabled"
+        },
+        "etag": "W/\"790L9ARq4Pn6N8GfypFnTw==\"",
+        "@type": "type.googleapis.com/google.api.apikeys.v2.Key"
+      }
+    },
+    "insertId": "9rcv7ndanni",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.api.apikeys.v2.ApiKeys.CreateKey",
+        "project_id": "ai-chatbot-contract",
+        "service": "apikeys.googleapis.com"
+      }
+    },
+    "timestamp": "2026-06-20T07:16:57.596651023Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/akmf.p7-779509080458-f3223164-dd05-48b0-8879-1e0cc36a30d2",
+      "producer": "apikeys.googleapis.com",
+      "last": true
+    },
+    "receiveTimestamp": "2026-06-20T07:16:57.596651023Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458/services/privilegedaccessmanager.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "serviceusage.googleapis.com",
+            "name": "projectnumbers/779509080458/services/privilegedaccessmanager.googleapis.com"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/services/privilegedaccessmanager.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract/services/privilegedaccessmanager.googleapis.com",
+      "request": {
+        "name": "projects/ai-chatbot-contract/services/privilegedaccessmanager.googleapis.com",
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceRequest"
+      }
+    },
+    "insertId": "1ma7x5gd7c0g",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "service": "serviceusage.googleapis.com",
+        "project_id": "ai-chatbot-contract",
+        "method": "google.api.serviceusage.v1.ServiceUsage.EnableService"
+      }
+    },
+    "timestamp": "2026-06-20T07:18:13.206934Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/acat.p2-779509080458-bda66305-7d30-4a7f-bc63-49274bf08305",
+      "producer": "serviceusage.googleapis.com",
+      "first": true
+    },
+    "receiveTimestamp": "2026-06-20T07:18:14.221974429Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/acat.p2-779509080458-bda66305-7d30-4a7f-bc63-49274bf08305"
+    },
+    "insertId": "16cj7mdfdl6",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "project_id": "ai-chatbot-contract",
+        "method": "google.longrunning.Operations.GetOperation",
+        "service": "serviceusage.googleapis.com"
+      }
+    },
+    "timestamp": "2026-06-20T07:18:13.673981Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:18:14.120965415Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)"
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458/services/privilegedaccessmanager.googleapis.com",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract/services/privilegedaccessmanager.googleapis.com",
+      "request": {
+        "name": "projects/ai-chatbot-contract/services/privilegedaccessmanager.googleapis.com",
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceRequest"
+      },
+      "response": {
+        "service": {
+          "name": "projects/779509080458/services/privilegedaccessmanager.googleapis.com",
+          "config": {
+            "name": "privilegedaccessmanager.googleapis.com",
+            "title": "Privileged Access Manager API"
+          },
+          "state": "ENABLED",
+          "parent": "projects/779509080458"
+        },
+        "@type": "type.googleapis.com/google.api.serviceusage.v1.EnableServiceResponse"
+      }
+    },
+    "insertId": "c87a7yd5mo0",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.api.serviceusage.v1.ServiceUsage.EnableService",
+        "service": "serviceusage.googleapis.com",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:18:15.313769618Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "operation": {
+      "id": "operations/acat.p2-779509080458-bda66305-7d30-4a7f-bc63-49274bf08305",
+      "producer": "serviceusage.googleapis.com",
+      "last": true
+    },
+    "receiveTimestamp": "2026-06-20T07:18:15.313769618Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "serviceusage.googleapis.com",
+      "methodName": "google.longrunning.Operations.GetOperation",
+      "authorizationInfo": [
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projectnumbers/779509080458"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.enable",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projectnumbers/779509080458/operations/-",
+          "permission": "serviceusage.operations.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        },
+        {
+          "resource": "projectnumbers/779509080458",
+          "permission": "serviceusage.services.get",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "DATA_READ"
+        }
+      ],
+      "resourceName": "projects/779509080458/operations/acat.p2-779509080458-bda66305-7d30-4a7f-bc63-49274bf08305"
+    },
+    "insertId": "n27ym2ddmda",
+    "resource": {
+      "type": "audited_resource",
+      "labels": {
+        "method": "google.longrunning.Operations.GetOperation",
+        "service": "serviceusage.googleapis.com",
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:18:17.219421Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:18:18.312388084Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "UpdateProject",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.update",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "project": {
+          "parent": {
+            "id": "0",
+            "type": "organization"
+          },
+          "name": "AI Chatbot Contract hop dong"
+        },
+        "@type": "type.googleapis.com/google.cloudresourcemanager.v1.UpdateProjectRequest",
+        "projectId": "ai-chatbot-contract"
+      },
+      "response": {
+        "createTime": "2026-06-20T07:08:28.815Z",
+        "@type": "type.googleapis.com/google.cloudresourcemanager.v1.Project",
+        "projectId": "ai-chatbot-contract",
+        "lifecycleState": "ACTIVE",
+        "name": "AI Chatbot Contract hop dong",
+        "projectNumber": "779509080458"
+      }
+    },
+    "insertId": "gykupxe11iu4",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T07:25:48.933284Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T07:25:49.734342616Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "CheckInvitationRequired",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "email": "tdbao@gimasys.com",
+        "projectId": "ai-chatbot-contract"
+      }
+    },
+    "insertId": "-vbm1nwbuy",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T09:02:08.382527Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T09:02:08.955410297Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "InsertProjectOwnershipInviteForPantheon",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "projectId": "ai-chatbot-contract",
+        "member": "user:tdbao@gimasys.com"
+      },
+      "response": {}
+    },
+    "insertId": "-oxy9txbfs",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T09:02:08.741379Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T09:02:09.849767690Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "InsertProjectOwnershipInvite",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.InsertProjectOwnershipInviteRequest",
+        "projectId": "ai-chatbot-contract",
+        "member": "user:tdbao@gimasys.com"
+      },
+      "response": {
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.InsertProjectOwnershipInviteResponse"
+      }
+    },
+    "insertId": "-od2w9eb1s",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-20T09:02:08.814510Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-20T09:02:09.176622003Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "tdbao@gimasys.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.69.35.183",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "AcceptProjectOwnership",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projectInvites.acceptProjectOwnership",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.AcceptProjectOwnershipRequest",
+        "projectId": "ai-chatbot-contract"
+      },
+      "response": {
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.AcceptProjectOwnershipResponse"
+      }
+    },
+    "insertId": "dlxztgc4tq",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-22T01:53:38.825057Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-22T01:53:39.888064132Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "tdbao@gimasys.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.69.35.183",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudbilling.googleapis.com",
+      "methodName": "AssignResourceToBillingAccount",
+      "authorizationInfo": [
+        {
+          "resource": "billingAccounts/011F53-FB4D9A-9E5452",
+          "permission": "billing.resourceAssociations.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.createBillingAssignment",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "billingAccounts/011F53-FB4D9A-9E5452",
+          "permission": "billing.resourceAssociations.create",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.deleteBillingAssignment",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "billingAccountName": "billingAccounts/011F53-FB4D9A-9E5452",
+        "@type": "type.googleapis.com/google.internal.cloudbilling.billingaccount.v1.AssignResourceToBillingAccountRequest",
+        "resourceName": "projects/779509080458"
+      }
+    },
+    "insertId": "tzpb2oe5e8wm",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-22T02:15:35.321490Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-22T02:15:37.024686195Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "REMOVE",
+              "role": "roles/owner",
+              "member": "user:tdbao@gimasys.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "policy": {
+          "bindings": [
+            {
+              "role": "roles/editor",
+              "members": [
+                "user:rangdongai@gmail.com"
+              ]
+            },
+            {
+              "role": "roles/owner",
+              "members": [
+                "user:letrunghieu4799@gmail.com"
+              ]
+            }
+          ],
+          "etag": "BwZUzelJNDk="
+        },
+        "resource": "ai-chatbot-contract",
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest"
+      },
+      "response": {
+        "@type": "type.googleapis.com/google.iam.v1.Policy",
+        "etag": "BwZUzwnGoxQ=",
+        "bindings": [
+          {
+            "members": [
+              "user:rangdongai@gmail.com"
+            ],
+            "role": "roles/editor"
+          },
+          {
+            "role": "roles/owner",
+            "members": [
+              "user:letrunghieu4799@gmail.com"
+            ]
+          }
+        ]
+      }
+    },
+    "insertId": "-4porgee28g1m",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-22T03:14:18.614289Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-22T03:14:19.861088255Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "CheckInvitationRequired",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "email": "rangdongai@gmail.com",
+        "projectId": "ai-chatbot-contract"
+      }
+    },
+    "insertId": "-c5hargc72q",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-22T03:14:24.642528Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-22T03:14:25.446377984Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "REMOVE",
+              "role": "roles/editor",
+              "member": "user:rangdongai@gmail.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "policy": {
+          "bindings": [
+            {
+              "members": [
+                "user:letrunghieu4799@gmail.com"
+              ],
+              "role": "roles/owner"
+            }
+          ],
+          "etag": "BwZUzwnGoxQ="
+        },
+        "resource": "ai-chatbot-contract",
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest"
+      },
+      "response": {
+        "etag": "BwZUzwolXbE=",
+        "@type": "type.googleapis.com/google.iam.v1.Policy",
+        "bindings": [
+          {
+            "members": [
+              "user:letrunghieu4799@gmail.com"
+            ],
+            "role": "roles/owner"
+          }
+        ]
+      }
+    },
+    "insertId": "-6bd35ge2i5k8",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-22T03:14:24.913011Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-22T03:14:25.994912868Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "InsertProjectOwnershipInviteForPantheon",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "projectId": "ai-chatbot-contract",
+        "member": "user:rangdongai@gmail.com"
+      },
+      "response": {}
+    },
+    "insertId": "2sezewc2fy",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-22T03:14:25.772325Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-22T03:14:26.654285031Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "InsertProjectOwnershipInvite",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {},
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "member": "user:rangdongai@gmail.com",
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.InsertProjectOwnershipInviteRequest",
+        "projectId": "ai-chatbot-contract"
+      },
+      "response": {
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.InsertProjectOwnershipInviteResponse"
+      }
+    },
+    "insertId": "qz9hqpc20q",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-22T03:14:25.814974Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-22T03:14:26.284373612Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "rangdongai@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "AcceptProjectOwnership",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projectInvites.acceptProjectOwnership",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.AcceptProjectOwnershipRequest",
+        "projectId": "ai-chatbot-contract"
+      },
+      "response": {
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.AcceptProjectOwnershipResponse"
+      }
+    },
+    "insertId": "-ef5jiac4ba",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-25T02:26:20.175442Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-25T02:26:21.136056825Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {
+        "code": 7,
+        "message": "IAM authority does not have the permission 'resourcemanager.projectInvites.acceptProjectOwnership' required for action CloudResourceManagerInvitationsService-AcceptProjectOwnership on resource 'projects/ai-chatbot-contract'. Explanation:  Security Context: ValidatedSecurityContextWithSystemAuthorizationPolicy{delegate=ValidatedSecurityContextWithRegistryHandle{delegate=ValidatedSecurityContextWithObligations{delegate=ContextWithGaiaMintToken{delegate=ValidatedIamSecurityContext{user=gaiauser/0x2e65215ef, creds=EndUserCreds{loggable_credential { type: GAIA_MINT loggable_gaia_mint { } } loggable_credential { type: SERVICE_CONTROL_TOKEN }}, peer=protocol=loas;psp_version=1;level=strong_privacy_and_integrity;host=tiln20.prod.google.com;is_authenticated_host=false;role=cloud-boq-clientapi-iam;gaiaId=250014094659;security_realm=campus-chg;is_delegated=false;borgcell=ti;task_id=1;user_type=MDB_USER_NON_PERSON;jobname_chosen_by_user=prod.cloud-boq-clientapi-iam;identity_attributes=, InternalIAMIdentity{log=originator { scope: GAIA_USER gaia_user { user_id: 12454073839 } }}}}}}}"
+      },
+      "authenticationInfo": {
+        "principalEmail": "rangdongai@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "AcceptProjectOwnership",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projectInvites.acceptProjectOwnership",
+          "granted": false,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "request": {
+        "@type": "type.googleapis.com/google.internal.cloud.resourcemanager.AcceptProjectOwnershipRequest",
+        "projectId": "ai-chatbot-contract"
+      }
+    },
+    "insertId": "-iav5h8c40m",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-25T02:37:56.560469Z",
+    "severity": "ERROR",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-25T02:37:57.601717093Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "ADD",
+              "role": "roles/logging.viewer",
+              "member": "user:nct18082004@gmail.com"
+            },
+            {
+              "action": "ADD",
+              "role": "roles/monitoring.viewer",
+              "member": "user:nct18082004@gmail.com"
+            },
+            {
+              "action": "ADD",
+              "role": "roles/recommender.billingAccountCudViewer",
+              "member": "user:nct18082004@gmail.com"
+            },
+            {
+              "action": "ADD",
+              "role": "roles/serviceusage.serviceUsageViewer",
+              "member": "user:nct18082004@gmail.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest",
+        "resource": "ai-chatbot-contract",
+        "policy": {
+          "bindings": [
+            {
+              "members": [
+                "user:letrunghieu4799@gmail.com",
+                "user:rangdongai@gmail.com"
+              ],
+              "role": "roles/owner"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/recommender.billingAccountCudViewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/logging.viewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/monitoring.viewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/serviceusage.serviceUsageViewer"
+            }
+          ],
+          "etag": "BwZVCre36+w="
+        }
+      },
+      "response": {
+        "etag": "BwZVR6vjBQQ=",
+        "bindings": [
+          {
+            "members": [
+              "user:nct18082004@gmail.com"
+            ],
+            "role": "roles/logging.viewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com"
+            ],
+            "role": "roles/monitoring.viewer"
+          },
+          {
+            "members": [
+              "user:letrunghieu4799@gmail.com",
+              "user:rangdongai@gmail.com"
+            ],
+            "role": "roles/owner"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com"
+            ],
+            "role": "roles/recommender.billingAccountCudViewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com"
+            ],
+            "role": "roles/serviceusage.serviceUsageViewer"
+          }
+        ],
+        "@type": "type.googleapis.com/google.iam.v1.Policy"
+      }
+    },
+    "insertId": "-4porgee4reji",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-28T03:09:34.296861Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-28T03:09:35.793925402Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "ADD",
+              "role": "roles/billing.projectManager",
+              "member": "user:nct18082004@gmail.com"
+            },
+            {
+              "action": "REMOVE",
+              "role": "roles/recommender.billingAccountCudViewer",
+              "member": "user:nct18082004@gmail.com"
+            },
+            {
+              "action": "ADD",
+              "role": "roles/servicemanagement.quotaViewer",
+              "member": "user:nct18082004@gmail.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "policy": {
+          "bindings": [
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/logging.viewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/monitoring.viewer"
+            },
+            {
+              "members": [
+                "user:letrunghieu4799@gmail.com",
+                "user:rangdongai@gmail.com"
+              ],
+              "role": "roles/owner"
+            },
+            {
+              "role": "roles/serviceusage.serviceUsageViewer",
+              "members": [
+                "user:nct18082004@gmail.com"
+              ]
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/billing.projectManager"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/servicemanagement.quotaViewer"
+            }
+          ],
+          "etag": "BwZVR6vjBQQ="
+        },
+        "resource": "ai-chatbot-contract",
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest"
+      },
+      "response": {
+        "etag": "BwZVb22q4jk=",
+        "bindings": [
+          {
+            "role": "roles/billing.projectManager",
+            "members": [
+              "user:nct18082004@gmail.com"
+            ]
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com"
+            ],
+            "role": "roles/logging.viewer"
+          },
+          {
+            "role": "roles/monitoring.viewer",
+            "members": [
+              "user:nct18082004@gmail.com"
+            ]
+          },
+          {
+            "members": [
+              "user:letrunghieu4799@gmail.com",
+              "user:rangdongai@gmail.com"
+            ],
+            "role": "roles/owner"
+          },
+          {
+            "role": "roles/servicemanagement.quotaViewer",
+            "members": [
+              "user:nct18082004@gmail.com"
+            ]
+          },
+          {
+            "role": "roles/serviceusage.serviceUsageViewer",
+            "members": [
+              "user:nct18082004@gmail.com"
+            ]
+          }
+        ],
+        "@type": "type.googleapis.com/google.iam.v1.Policy"
+      }
+    },
+    "insertId": "ozgum0e4kxhu",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-06-30T02:35:29.136146Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-06-30T02:35:30.434797305Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "ADD",
+              "role": "roles/logging.viewer",
+              "member": "user:tranxuantuan1522005@gmail.com"
+            },
+            {
+              "action": "ADD",
+              "role": "roles/monitoring.viewer",
+              "member": "user:tranxuantuan1522005@gmail.com"
+            },
+            {
+              "action": "ADD",
+              "role": "roles/recommender.billingAccountCudViewer",
+              "member": "user:tranxuantuan1522005@gmail.com"
+            },
+            {
+              "action": "ADD",
+              "role": "roles/servicemanagement.quotaViewer",
+              "member": "user:tranxuantuan1522005@gmail.com"
+            },
+            {
+              "action": "ADD",
+              "role": "roles/serviceusage.serviceUsageViewer",
+              "member": "user:tranxuantuan1522005@gmail.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "policy": {
+          "etag": "BwZVb22q4jk=",
+          "bindings": [
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/billing.projectManager"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/logging.viewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/monitoring.viewer"
+            },
+            {
+              "members": [
+                "user:letrunghieu4799@gmail.com",
+                "user:rangdongai@gmail.com"
+              ],
+              "role": "roles/owner"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/servicemanagement.quotaViewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/serviceusage.serviceUsageViewer"
+            },
+            {
+              "members": [
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/recommender.billingAccountCudViewer"
+            }
+          ]
+        },
+        "resource": "ai-chatbot-contract",
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest"
+      },
+      "response": {
+        "@type": "type.googleapis.com/google.iam.v1.Policy",
+        "bindings": [
+          {
+            "members": [
+              "user:nct18082004@gmail.com"
+            ],
+            "role": "roles/billing.projectManager"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/logging.viewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/monitoring.viewer"
+          },
+          {
+            "members": [
+              "user:letrunghieu4799@gmail.com",
+              "user:rangdongai@gmail.com"
+            ],
+            "role": "roles/owner"
+          },
+          {
+            "members": [
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/recommender.billingAccountCudViewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/servicemanagement.quotaViewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/serviceusage.serviceUsageViewer"
+          }
+        ],
+        "etag": "BwZXFnmdGoI="
+      }
+    },
+    "insertId": "-dk7i6ec4ew",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-07-21T03:18:20.807994Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-07-21T03:18:22.325026349Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "ADD",
+              "role": "roles/billing.projectManager",
+              "member": "user:tranxuantuan1522005@gmail.com"
+            },
+            {
+              "action": "REMOVE",
+              "role": "roles/recommender.billingAccountCudViewer",
+              "member": "user:tranxuantuan1522005@gmail.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest",
+        "resource": "ai-chatbot-contract",
+        "policy": {
+          "bindings": [
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/billing.projectManager"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/logging.viewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/monitoring.viewer"
+            },
+            {
+              "members": [
+                "user:letrunghieu4799@gmail.com",
+                "user:rangdongai@gmail.com"
+              ],
+              "role": "roles/owner"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/servicemanagement.quotaViewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/serviceusage.serviceUsageViewer"
+            }
+          ],
+          "etag": "BwZXFnmdGoI="
+        }
+      },
+      "response": {
+        "@type": "type.googleapis.com/google.iam.v1.Policy",
+        "etag": "BwZXL8YeFFc=",
+        "bindings": [
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/billing.projectManager"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/logging.viewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/monitoring.viewer"
+          },
+          {
+            "members": [
+              "user:letrunghieu4799@gmail.com",
+              "user:rangdongai@gmail.com"
+            ],
+            "role": "roles/owner"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/servicemanagement.quotaViewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/serviceusage.serviceUsageViewer"
+          }
+        ]
+      }
+    },
+    "insertId": "322zbodjp3a",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-07-22T09:29:18.433051Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-07-22T09:29:19.318686262Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "ADD",
+              "role": "roles/iam.supportUser",
+              "member": "user:nct18082004@gmail.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "resource": "ai-chatbot-contract",
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest",
+        "policy": {
+          "bindings": [
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/billing.projectManager"
+            },
+            {
+              "role": "roles/logging.viewer",
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ]
+            },
+            {
+              "role": "roles/monitoring.viewer",
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ]
+            },
+            {
+              "members": [
+                "user:letrunghieu4799@gmail.com",
+                "user:rangdongai@gmail.com"
+              ],
+              "role": "roles/owner"
+            },
+            {
+              "role": "roles/servicemanagement.quotaViewer",
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ]
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/serviceusage.serviceUsageViewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com"
+              ],
+              "role": "roles/iam.supportUser"
+            }
+          ],
+          "etag": "BwZXL8YeFFc="
+        }
+      },
+      "response": {
+        "etag": "BwZXL+o7Azs=",
+        "bindings": [
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/billing.projectManager"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com"
+            ],
+            "role": "roles/iam.supportUser"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/logging.viewer"
+          },
+          {
+            "role": "roles/monitoring.viewer",
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ]
+          },
+          {
+            "members": [
+              "user:letrunghieu4799@gmail.com",
+              "user:rangdongai@gmail.com"
+            ],
+            "role": "roles/owner"
+          },
+          {
+            "role": "roles/servicemanagement.quotaViewer",
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ]
+          },
+          {
+            "role": "roles/serviceusage.serviceUsageViewer",
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ]
+          }
+        ],
+        "@type": "type.googleapis.com/google.iam.v1.Policy"
+      }
+    },
+    "insertId": "ptdcqwdlee6",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-07-22T09:39:24.371319Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-07-22T09:39:25.555774841Z"
+  },
+  {
+    "protoPayload": {
+      "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+      "status": {},
+      "authenticationInfo": {
+        "principalEmail": "letrunghieu4799@gmail.com"
+      },
+      "requestMetadata": {
+        "callerIp": "118.71.204.174",
+        "callerSuppliedUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
+        "requestAttributes": {},
+        "destinationAttributes": {}
+      },
+      "serviceName": "cloudresourcemanager.googleapis.com",
+      "methodName": "SetIamPolicy",
+      "authorizationInfo": [
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        },
+        {
+          "resource": "projects/ai-chatbot-contract",
+          "permission": "resourcemanager.projects.setIamPolicy",
+          "granted": true,
+          "resourceAttributes": {
+            "service": "cloudresourcemanager.googleapis.com",
+            "name": "projects/ai-chatbot-contract",
+            "type": "cloudresourcemanager.googleapis.com/Project"
+          },
+          "permissionType": "ADMIN_WRITE"
+        }
+      ],
+      "resourceName": "projects/ai-chatbot-contract",
+      "serviceData": {
+        "@type": "type.googleapis.com/google.iam.v1.logging.AuditData",
+        "policyDelta": {
+          "bindingDeltas": [
+            {
+              "action": "ADD",
+              "role": "roles/iam.supportUser",
+              "member": "user:tranxuantuan1522005@gmail.com"
+            }
+          ]
+        }
+      },
+      "request": {
+        "@type": "type.googleapis.com/google.iam.v1.SetIamPolicyRequest",
+        "policy": {
+          "bindings": [
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/billing.projectManager"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/iam.supportUser"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/logging.viewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/monitoring.viewer"
+            },
+            {
+              "members": [
+                "user:letrunghieu4799@gmail.com",
+                "user:rangdongai@gmail.com"
+              ],
+              "role": "roles/owner"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/servicemanagement.quotaViewer"
+            },
+            {
+              "members": [
+                "user:nct18082004@gmail.com",
+                "user:tranxuantuan1522005@gmail.com"
+              ],
+              "role": "roles/serviceusage.serviceUsageViewer"
+            }
+          ],
+          "etag": "BwZXL+o7Azs="
+        },
+        "resource": "ai-chatbot-contract"
+      },
+      "response": {
+        "etag": "BwZXL+q27U0=",
+        "bindings": [
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/billing.projectManager"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/iam.supportUser"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/logging.viewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/monitoring.viewer"
+          },
+          {
+            "members": [
+              "user:letrunghieu4799@gmail.com",
+              "user:rangdongai@gmail.com"
+            ],
+            "role": "roles/owner"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/servicemanagement.quotaViewer"
+          },
+          {
+            "members": [
+              "user:nct18082004@gmail.com",
+              "user:tranxuantuan1522005@gmail.com"
+            ],
+            "role": "roles/serviceusage.serviceUsageViewer"
+          }
+        ],
+        "@type": "type.googleapis.com/google.iam.v1.Policy"
+      }
+    },
+    "insertId": "-sirvndjuky",
+    "resource": {
+      "type": "project",
+      "labels": {
+        "project_id": "ai-chatbot-contract"
+      }
+    },
+    "timestamp": "2026-07-22T09:39:32.653153Z",
+    "severity": "NOTICE",
+    "logName": "projects/ai-chatbot-contract/logs/cloudaudit.googleapis.com%2Factivity",
+    "receiveTimestamp": "2026-07-22T09:39:33.630392934Z"
+  }
+]

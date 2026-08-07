@@ -2479,6 +2479,25 @@ body.light-theme .insight-normal .metric-insight .insight-status {
     letter-spacing: .3px;
 }
 
+/* Giá trị của kỳ gốc, đặt ngay sau KT/CK: "▲ 75% KT · 4".
+   Cố tình KHÔNG ăn theo màu xanh/đỏ của dòng — màu đó dành cho chiều biến
+   động, còn đây chỉ là con số tham chiếu; tô cùng màu sẽ khiến mắt đọc nhầm
+   nó cũng là một chỉ báo tăng/giảm. */
+.delta-base-val {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.delta-base-val::before {
+    content: "·";
+    margin-right: 4px;
+    opacity: .55;
+}
+
+body.light-theme .delta-base-val {
+    color: #64748b;
+}
+
 /* Executive overview inspired by the AI Operations Center reference. */
 .source-panel {
     padding: 0 !important;
