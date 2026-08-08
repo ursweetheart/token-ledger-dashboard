@@ -55,7 +55,7 @@ Trích bằng `test/trich_yeu_cau_dashboard.py`, không đọc bằng mắt.
 
 ## 2. ⭐ BẢNG XÁC ĐỊNH CHỨC NĂNG → BACKEND → DỮ LIỆU
 
-Đây là bảng chị Thu Trang yêu cầu: *xác định chức năng → để làm backend → xác định data nào cần dùng*.
+Đây là bảng được yêu cầu: *xác định chức năng → để làm backend → xác định data nào cần dùng*.
 
 **Cách đọc:** mỗi dòng là **một endpoint backend**. Cột "Phục vụ ô nào" cho biết nó nuôi những
 ô nào trên màn hình. Cột "Dữ liệu cần" ghi bảng và cột cụ thể trong database.
