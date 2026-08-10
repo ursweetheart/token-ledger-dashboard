@@ -23,3 +23,12 @@ build/
 .env
 .env.*
 *.log
+
+# CSDL SQLite (qua lon cho GitHub, gui rieng)
+*.sqlite
+*.sqlite3
+*.db
+
+# Python cache
+__pycache__/
+*.pyc

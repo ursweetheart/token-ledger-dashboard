@@ -204,7 +204,13 @@ Hậu tố `1m` khiến người đọc hiểu là bản cào chỉ có 1 tháng
 
 Đã gây ra một kết luận sai thật trong bản đầu của tài liệu dữ liệu: ghi rằng *"Monitoring chỉ có 1 tháng, cần cào lại gấp với cửa sổ rộng hơn"*. Sai hoàn toàn — bản cào đã đầy đủ tối đa, và cào lại hôm nay **còn mất thêm dữ liệu** vì phần đuôi đã rụng.
 
-**Việc cần làm:** đổi tên thành `2026-08-06-196d`, hoặc bỏ hậu tố và ghi phạm vi vào một file `README` bên trong.
+**Việc cần làm:** ~~đổi tên thành `2026-08-06-196d`~~ → **đính chính 08/08:** đề xuất này sai. Đọc `scripts/pull_monitoring.py:291` thì `1m` là **độ mịn 1 phút** (`align=60`), không phải khoảng thời gian:
+
+```python
+label = f"{args.align // 60}m" if args.align < 3600 else f"{args.align // 3600}h"
+```
+
+Đổi thành `196d` sẽ **mất thông tin độ mịn**. Tên đúng mang cả hai: **`2026-08-06-196d-1m`**. Xem `M4` trong [`mui-gio-2026-08-08.md`](mui-gio-2026-08-08.md).
 
 ---
 

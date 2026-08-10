@@ -90,11 +90,13 @@ Con số 97% "không rõ phòng ban" của Ralli còn tính được bằng **ha
 
 ## 📌 5. Câu hỏi cần trả lời ngay (chặn tiến độ)
 
-1. Tài khoản `admin` của TLA Hợp đồng là tài khoản kỹ thuật dùng chung hay của một người cụ thể? *(quyết định 53,6% dữ liệu — xem lưu ý ở mục 🔴)*
-2. Tỷ giá VNĐ lấy theo nguồn nào, cập nhật khi nào?
-3. Ngân sách tháng của Ralli là bao nhiêu?
-4. Ai chốt/duyệt bảng giá model?
-5. Chốt danh sách 8 agent chính thức và project Google tương ứng — có bỏ `tool-quiz` không?
+> **Cập nhật chiều 08/08: 4/5 câu đã có câu trả lời.** Chi tiết ở §0b của [`plan-xay-dung-database-2026-08-07.md`](plan-xay-dung-database-2026-08-07.md).
+
+1. ~~Tài khoản `admin` của TLA Hợp đồng là tài khoản kỹ thuật dùng chung hay của một người?~~ → ✅ **Không cần phân biệt. Mỗi tài khoản tính là một user.** Hệ quả: 53,6% token dồn vào 2 tài khoản là **chuyện có thật về mức độ tập trung sử dụng**, không phải khuyết tật dữ liệu — và phải trình bày như vậy trong báo cáo.
+2. ~~Tỷ giá VNĐ lấy theo nguồn nào?~~ → ✅ **Gõ cứng theo tỷ giá hiện tại**, kéo API sau.
+3. ~~Ngân sách tháng của Ralli?~~ → ✅ **50 triệu token/tháng**, đọc từ `data/ctda/token-usage-budget.json`. ⚠️ Đơn vị là **token**, không phải USD — `ref_budget` cần thêm cột.
+4. ~~Ai chốt/duyệt bảng giá model?~~ → ✅ **Sếp duyệt. Bảng giá hiện tại giữ nguyên.**
+5. ❗ **CÒN LẠI:** Chốt danh sách 8 agent chính thức và project Google tương ứng — có bỏ `tool-quiz` không?
 
 **Không chặn tiến độ nhưng cần biết:**
 
@@ -102,7 +104,7 @@ Con số 97% "không rõ phòng ban" của Ralli còn tính được bằng **ha
 7. Hai dự án `tla-ralli` và `gen-lang-client-*` có phục vụ nghiệp vụ thật không?
 8. `test1` và `Test1` (khác đúng một chữ hoa) là hai tài khoản thật hay một tài khoản bị tạo trùng?
 9. Năm tài khoản `test1`–`test4` và `Nghiệp vụ BH1` có phải tài khoản chạy thử không? Nếu phải thì có loại khỏi thống kê không?
-10. Trường thời gian của Ralli là giờ UTC hay giờ Việt Nam?
+10. ~~Trường thời gian của Ralli là giờ UTC hay giờ Việt Nam?~~ → **ĐÃ TRẢ LỜI 08/08: là UTC.** Xem `M2` trong [`mui-gio-2026-08-08.md`](mui-gio-2026-08-08.md)
 
 ---
 
@@ -117,3 +119,5 @@ Con số 97% "không rõ phòng ban" của Ralli còn tính được bằng **ha
 | 5 | Xác nhận hai dự án Google chưa rõ | Có thể có lưu lượng ngoài mọi báo cáo (`D1`) |
 
 > Ngoài ra còn một nhóm vấn đề **thuộc về script và cách làm việc của đội** (không phải khuyết tật dữ liệu) được ghi riêng ở `van-de-xu-ly-du-lieu-2026-08-08.md`. Nhóm đó đội **tự sửa được ngay**, không phải chờ ai trả lời — trong đó có một việc gấp hơn tất cả những việc trên vì liên quan đến nguy cơ mất dữ liệu vĩnh viễn.
+
+> **Bổ sung chiều 08/08 —** [`mui-gio-2026-08-08.md`](mui-gio-2026-08-08.md): bốn nguồn dữ liệu cắt ranh giới "một ngày" theo **ba quy ước khác nhau**. Đáng chú ý nhất: **hoá đơn Google tính ngày theo giờ Mỹ**, tức một "ngày" trên hoá đơn bắt đầu lúc 14–15h giờ Việt Nam hôm trước. Không phải lỗi khi tải dữ liệu — là quy ước của Google. File đó cũng trả lời xong câu hỏi số 10 và thu hẹp được câu hỏi số 6.
