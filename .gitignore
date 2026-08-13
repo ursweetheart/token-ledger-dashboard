@@ -22,6 +22,9 @@ dist/
 build/
 .env
 .env.*
+# Rieng file mau thi PHAI len git, khong thi nguoi clone ve khong biet can dien gi.
+# No chi chua ten bien, khong chua gia tri nao.
+!.env.example
 *.log
 
 # CSDL SQLite (qua lon cho GitHub, gui rieng)
