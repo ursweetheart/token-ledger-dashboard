@@ -4687,15 +4687,18 @@ function presetRange(n){
   return { start:toISO(start), end:toISO(end) };
 }
 /* ─── Ô ngày: gõ tay hoặc chọn lịch ───
-   Ô text nhận mm/dd/yyyy (kiểu hiển thị chung của dashboard) và cũng chấp nhận
-   yyyy-mm-dd cho ai quen ISO. Nhập sai thì giữ nguyên khoảng đang xem và báo lỗi
-   ngay tại chỗ, không âm thầm nhảy về một ngày bất kỳ. */
+   Riêng hai ô text của bộ lọc nhận dd/mm/yyyy và cũng chấp nhận yyyy-mm-dd.
+   Nhập sai thì giữ nguyên khoảng đang xem và báo lỗi ngay tại chỗ. */
+function fmtRangeDateVI(iso){
+  var p=String(iso==null?"":iso).split("-");
+  return p.length===3 ? (p[2]+"/"+p[1]+"/"+p[0]) : String(iso);
+}
 function parseTypedDate(text){
   var t=String(text==null?"":text).trim();
   if(!t) return null;
-  var m=t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);      // mm/dd/yyyy
+  var m=t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);      // dd/mm/yyyy
   var y,mo,d;
-  if(m){ mo=+m[1]; d=+m[2]; y=+m[3]; }
+  if(m){ d=+m[1]; mo=+m[2]; y=+m[3]; }
   else {
     m=t.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);        // yyyy-mm-dd
     if(!m) return null;
@@ -4724,7 +4727,7 @@ function bindRangeField(edge){
   text.onchange=function(){
     var iso=parseTypedDate(this.value);
     if(iso) applyRangeEdge(edge,iso);
-    else { rangeHint("Ngày không hợp lệ — nhập theo mm/dd/yyyy."); renderRange(); }
+    else { rangeHint("Ngày không hợp lệ — nhập theo dd/mm/yyyy."); renderRange(); }
   };
   text.onkeydown=function(ev){ if(ev.key==="Enter"){ ev.preventDefault(); this.blur(); } };
 }
@@ -4733,8 +4736,8 @@ function renderRange(){
   if(s) s.value = state.range.start;
   if(e) e.value = state.range.end;
   var st=document.getElementById("range-start-text"), et=document.getElementById("range-end-text");
-  if(st) st.value = fmtDateUS(state.range.start);
-  if(et) et.value = fmtDateUS(state.range.end);
+  if(st) st.value = fmtRangeDateVI(state.range.start);
+  if(et) et.value = fmtRangeDateVI(state.range.end);
   var host=document.getElementById("range-presets"); if(!host) return;
   host.innerHTML="";
   RANGE_PRESETS.forEach(function(p){
@@ -5022,7 +5025,7 @@ function init(){
 
   document.getElementById("f-reset").onclick=function(){ state.filters={dept:"",user:"",provider:"",model:"",agent:""}; renderAll(); };
 
-  // global time range — mỗi mốc có 1 ô gõ tay (mm/dd/yyyy) + 1 ô lịch, luôn đồng bộ.
+  // global time range — mỗi mốc có 1 ô gõ tay (dd/mm/yyyy) + 1 ô lịch, luôn đồng bộ.
   bindRangeField("start"); bindRangeField("end");
   document.getElementById("co-groupby").onchange=function(){ var rows=scopedRows(); renderCostTable(rows); if(activeTab==="cost") chartsCost(rows); };
 
