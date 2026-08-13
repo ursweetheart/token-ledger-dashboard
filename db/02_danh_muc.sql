@@ -9,7 +9,7 @@ INSERT INTO dim_agent (agent_id, ma, ten, gcp_project_id, co_cay_to_chuc,
                        ngay_ket_thuc_du_lieu, dang_van_hanh, co_nguon_doi_chung) VALUES
   (1, 'contact-center', 'Chatbot Contact Center', 'pro-tuner-454203-v3', FALSE, '2025-03-19', '2026-01-13', NULL, TRUE, TRUE),
   (2, 'sale-agent', 'Sale Agent', 'tranquil-post-471401-c1', FALSE, '2025-09-07', '2026-01-01', NULL, TRUE, TRUE),
-  (3, 'invoice', 'Multi modal AI Invoice', 'multimodal-invoice', FALSE, '2025-09-15', '2026-01-22', '2026-07-25', FALSE, TRUE),
+  (3, 'invoice', 'Multi modal AI Invoice', 'multimodal-invoice', FALSE, '2025-09-15', '2026-01-22', '2026-08-13', FALSE, TRUE),
   (4, 'tools-quizzer', 'Tools Quizzer', 'tools-quizz', FALSE, '2026-04-10', '2026-06-17', '2026-07-01', FALSE, TRUE),
   (5, 'tla-hd', 'Trợ Lý Ảo Hợp Đồng', 'ai-chatbot-contract', TRUE, '2026-06-20', '2026-07-02', NULL, TRUE, TRUE),
   (6, 'dms-feedback', 'Phân Loại Phản Hồi Tiếp Thị', 'feedback-dms-tiep-thi', FALSE, '2026-06-25', '2026-07-06', NULL, TRUE, TRUE),
@@ -29,7 +29,7 @@ INSERT INTO dim_model (model_id, ten, ho, provider) VALUES
   (9, 'gemini-embedding-1.0', 'embedding', 'Google'),
   (10, 'gemini-embedding-2', 'embedding', 'Google');
 
--- 43 anh xa. Ba nguon goi ten model theo ba kieu khac nhau:
+-- 44 anh xa. Ba nguon goi ten model theo ba kieu khac nhau:
 --   billing 'gemini-embedding-001'  <->  monitoring 'gemini-embedding-1.0'
 INSERT INTO dim_model_alias (nguon, ten_goc, model_id) VALUES
   ('billing_sku', '07D6-73CA-C859', 5),
@@ -69,6 +69,7 @@ INSERT INTO dim_model_alias (nguon, ten_goc, model_id) VALUES
   ('app', 'gemini-2.5-pro', 4),
   ('monitoring', 'gemini-2.0-flash', 1),
   ('monitoring', 'gemini-2.5-flash', 2),
+  ('monitoring', 'gemini-2.5-flash-lite', 3),
   ('monitoring', 'gemini-2.5-pro', 4),
   ('monitoring', 'gemini-3-flash', 5),
   ('monitoring', 'gemini-3.1-flash-lite', 7),

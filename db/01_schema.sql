@@ -247,3 +247,31 @@ SELECT *
 FROM fact_monitoring
 WHERE dich_vu = 'generativelanguage.googleapis.com'
   AND la_han_muc = FALSE;
+
+-- account - danh sach TAI KHOAN, da loai trung. Mot dong = mot tai khoan,
+-- KHONG phai mot con nguoi ngoai doi. Hai tai khoan cua cung mot nguoi o hai app
+-- van la HAI dong, vi do la hai tai khoan.
+--
+-- Vi sao la VIEW chu khong phai xoa bot dim_user:
+--   dim_user co khoa (agent_id, user_id) - moi dong la mot luot CAP tai khoan
+--   cho mot agent, va fact_call noi vao no qua user_id. Xoa dong trung se bo roi
+--   19 dong, trong do 14 dong dang gan voi fact_call (rieng 'admin' 162 luot).
+--   Khong co khoa ngoai nen se KHONG co loi nao bao - hong trong im lang.
+--
+-- Trung o dau ra:
+--   a) 13 dong: log Ralli doi khi ghi user_id la USERNAME thay vi ObjectId, nen
+--      cung mot tai khoan vao dim_user hai lan, hai dang khoa khac nhau.
+--   b)  5 dong: cung mot ten dang nhap ton tai o ca Ralli lan TLA Hop Dong.
+--   c)  1 dong: hai tai khoan TLA Hop Dong dung chung email long.nt@rangdong.com.vn
+--
+-- MIN(email) bo qua NULL o ca hai he, nen dong co email luon thang dong khong co.
+-- Bo 6 dong ky thuat vi chung do pipeline tu sinh, khong phai tai khoan that.
+CREATE VIEW account AS
+SELECT LOWER(TRIM(username))    AS username,
+       MIN(ho_ten)              AS ho_ten,
+       MIN(email)               AS email,
+       COUNT(*)                 AS so_dong_goc,
+       COUNT(DISTINCT agent_id) AS so_agent
+FROM dim_user
+WHERE NOT la_dong_ky_thuat
+GROUP BY LOWER(TRIM(username));

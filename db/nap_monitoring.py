@@ -41,12 +41,32 @@ import ket_noi  # noqa: E402
 from quy_tac import la_han_muc, suy_dich_vu  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-MON = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat" / "2026-08-06-1m"
 
-DONG_MONG_DOI = 525639
-SACH_MONG_DOI = 85166
-PROJECT_MONG_DOI = 7
+
+def _monitoring_moi_nhat() -> Path:
+    """Uu tien thu muc da GOP (scripts/gop_monitoring.py).
+
+    Cua so luu giu cua Google truot rat nhanh - do 06/08 thay 196 ngay, do 13/08
+    chi con 112. Mot dot keo don le KHONG con phu het dai ngay, nen nguon dung
+    cho nap la ban gop nhieu dot.
+    """
+    cha = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"
+    con = sorted(p for p in cha.glob("*") if p.is_dir())
+    if not con:
+        raise SystemExit(f"Khong co thu muc nao trong {cha}."
+                         f" Chay scripts/gop_monitoring.py truoc.")
+    gop = [p for p in con if p.name.endswith("-gop")]
+    return (gop or con)[-1]
+
+
+MON = _monitoring_moi_nhat()
 LO = 20000
+
+# KHONG ghim so mong doi nua (truoc: 525639 / 85166 / 7). Chung dung cho dot keo
+# 06/08 va sai ngay khi keo dot moi. Nay so dong va so du an SUY TU CHINH FILE
+# NGUON. Rieng mon_sach la VIEW - suy lai so mong doi cua no la chep lai dinh
+# nghia view, nen thay bang kiem bien: phai > 0 va < tong. Hai gia tri bien do
+# bat dung hai kieu hong that su (bo loc chet, hoac bo loc khong chay).
 
 
 def main() -> None:
@@ -68,9 +88,9 @@ def main() -> None:
     cur = cn.cursor()
     cur.execute("DELETE FROM fact_monitoring")
 
-    cau = (f"INSERT INTO fact_monitoring (thoi_diem_utc, thoi_diem_ict, project, phep_do,"
-           f" model_id, ma_tra_ve, dich_vu, phuong_thuc, credential_id, la_han_muc,"
-           f" gia_tri, don_vi) VALUES ({','.join([dc] * 12)})")
+    COT = ["thoi_diem_utc", "thoi_diem_ict", "project", "phep_do", "model_id",
+           "ma_tra_ve", "dich_vu", "phuong_thuc", "credential_id", "la_han_muc",
+           "gia_tri", "don_vi"]
 
     tong = 0
     thieu_model = collections.Counter()
@@ -97,12 +117,10 @@ def main() -> None:
                     r["unit"] or None,
                 ))
                 if len(lo) >= LO:
-                    cur.executemany(cau, lo)
-                    tong += len(lo)
+                    tong += ket_noi.chen(cn, dc, "fact_monitoring", COT, lo)
                     lo = []
     if lo:
-        cur.executemany(cau, lo)
-        tong += len(lo)
+        tong += ket_noi.chen(cn, dc, "fact_monitoring", COT, lo)
 
     # Kiem TRUOC commit. Neu de sau thi du lieu sai da kip ghi xuong dia, va
     # nguoi chay se co mot database trong nhu binh thuong nhung thieu model.
@@ -128,16 +146,21 @@ def main() -> None:
     if args.gioi_han:
         print("  (lat mong - bo qua nghiem thu)")
         return
+    du_an_nguon = len({Path(f).stem for f in files})
+
     loi = []
-    if n != DONG_MONG_DOI:
-        loi.append(f"so dong {n} != {DONG_MONG_DOI}")
-    if du_an != PROJECT_MONG_DOI:
-        loi.append(f"so du an {du_an} != {PROJECT_MONG_DOI}")
-    if sach != SACH_MONG_DOI:
-        loi.append(f"mon_sach {sach} != {SACH_MONG_DOI}")
+    if n != tong:
+        loi.append(f"so dong trong DB {n} != {tong} dong da doc tu file nguon")
+    if du_an != du_an_nguon:
+        loi.append(f"so du an {du_an} != {du_an_nguon} file nguon")
+    if sach == 0:
+        loi.append("mon_sach = 0 - bo loc dich vu chet, khong con dong nao di qua")
+    elif sach >= n:
+        loi.append(f"mon_sach {sach} >= tong {n} - bo loc khong chay, "
+                   f"luu luong Drive/Sheets dang bi tinh chung")
     if loi:
         raise SystemExit("NGHIEM THU KHONG DAT: " + " | ".join(loi))
-    print("  NGHIEM THU DAT")
+    print(f"  NGHIEM THU DAT (nguon: {MON.name})")
 
 
 if __name__ == "__main__":

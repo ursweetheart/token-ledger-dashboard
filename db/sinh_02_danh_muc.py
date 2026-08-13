@@ -30,9 +30,31 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from quy_tac import MA_MODEL, MODELS, suy_loai, suy_model  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-BILLING = ROOT / "data" / "billing" / "billing_gop_tru_CTDA.csv"
-MON = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat" / "2026-08-06-1m"
-RALLI_RAW = ROOT / "data" / "ctda" / "db-token_usage-raw.json"
+def _moi_nhat_thu_muc(cha: Path, uu_tien_hau_to: str = "") -> Path:
+    con = sorted(p for p in cha.glob("*") if p.is_dir())
+    if not con:
+        raise SystemExit(f"Khong co thu muc thu thap nao trong {cha}")
+    if uu_tien_hau_to:
+        khop = [p for p in con if p.name.endswith(uu_tien_hau_to)]
+        if khop:
+            return khop[-1]
+    return con[-1]
+
+
+def _moi_nhat_file(cha: Path, mau: str) -> Path:
+    ung_vien = sorted(cha.glob(mau))
+    if not ung_vien:
+        raise SystemExit(f"Khong co file nao khop {cha / mau}")
+    return ung_vien[-1]
+
+
+# Ba nguon cu deu da lac hau: ban gop tay bi xoa, dot keo Monitoring 06/08 khong
+# con phu het dai ngay, va data/ctda la ban cao tay 05/08. Nay lay ban moi nhat.
+BILLING = _moi_nhat_file(ROOT / "data" / "da_xu_ly" / "billing", "billing_*.csv")
+MON = _moi_nhat_thu_muc(ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat", "-gop")
+RALLI_DIR = _moi_nhat_thu_muc(ROOT / "data" / "raw_web" / "ralli")
+TLA_DIR = _moi_nhat_thu_muc(ROOT / "data" / "raw_web" / "tla-hd")
+RALLI_RAW = RALLI_DIR / "db-token_usage-raw.json"
 RA = ROOT / "db" / "02_danh_muc.sql"
 
 # id, ma, ten, project, co_cay_to_chuc, ngay_tao_project, dang_van_hanh
@@ -69,7 +91,7 @@ def khoang_du_lieu() -> dict[str, tuple[str, str]]:
     ngay: dict[str, list[str]] = collections.defaultdict(list)
     with open(BILLING, encoding="utf-8-sig") as h:
         for r in csv.DictReader(h):
-            ngay[r["project"]].append(r["date"])
+            ngay[r["project"]].append(r["ngay"])
     for f in sorted(glob.glob(str(MON / "*.csv"))):
         with open(f, encoding="utf-8-sig") as h:
             for r in csv.DictReader(h):
@@ -91,7 +113,7 @@ def anh_xa_model() -> list[tuple[str, str, int]]:
     sku: dict[str, str] = {}
     with open(BILLING, encoding="utf-8-sig") as h:
         for r in csv.DictReader(h):
-            sku[r["sku_id"]] = r["sku"]
+            sku[r["sku_id"]] = r["sku_ten"]
     for sid, ten in sorted(sku.items()):
         m, l = suy_model(ten), suy_loai(ten)
         if not m or not l:
@@ -105,12 +127,14 @@ def anh_xa_model() -> list[tuple[str, str, int]]:
             for r in csv.DictReader(h):
                 if r["model"]:
                     nhan.add(("monitoring", r["model"]))
-    for f in (ROOT / "data/ctda/by-model-2026.csv", ROOT / "data/tla-hd/by-model-2026.csv"):
-        with open(f, encoding="utf-8-sig") as h:
-            for r in csv.DictReader(h):
-                # 'none' cua TLA HD la 2 luot goi 0 token, KHONG phai mot model.
-                if r["model"] and r["model"] != "none":
-                    nhan.add(("app", r["model"]))
+    # Nguon cu la by-model-2026.csv cua hai app - file PHAI SINH, dot keo moi
+    # khong co. `costs.by_model` trong stats ca nam la thu API tra ve truc tiep
+    # va co dung bo truong do.
+    for f in (RALLI_DIR / "token-usage-year.json", TLA_DIR / "token-usage-year.json"):
+        for r in json.loads(f.read_text(encoding="utf-8-sig"))["costs"].get("by_model") or []:
+            # 'none' cua TLA HD la 2 luot goi 0 token, KHONG phai mot model.
+            if r.get("model") and r["model"] != "none":
+                nhan.add(("app", r["model"]))
     for nguon, ten in sorted(nhan):
         if ten not in MA_MODEL:
             hong.append(f"nhan {nguon} '{ten}' khong co trong danh sach model chuan")

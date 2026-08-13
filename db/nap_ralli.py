@@ -35,13 +35,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ket_noi  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-NHAT_KY = ROOT / "data" / "ctda" / "db-token_usage-raw.json"
+
+
+def _ralli_moi_nhat() -> Path:
+    """Dot keo Ralli moi nhat. Nguon cu data/ctda/ la ban cao tay 05/08."""
+    cha = ROOT / "data" / "raw_web" / "ralli"
+    con = sorted(p for p in cha.glob("*") if p.is_dir())
+    if not con:
+        raise SystemExit(f"Khong co dot keo nao trong {cha}."
+                         f" Chay scripts/pull_web_apps.py truoc.")
+    return con[-1]
+
+
+RALLI_DIR = _ralli_moi_nhat()
+NHAT_KY = RALLI_DIR / "db-token_usage-raw.json"
+# Stats ca nam do CHINH APP tong hop - doc lap voi bang tho. Dung lam doi chung
+# cho so luot khong quy duoc ve don vi.
+STATS_NAM = RALLI_DIR / "token-usage-year.json"
 
 RALLI = 8
-DONG_MONG_DOI = 7924
-TOKEN_MONG_DOI = 44692501
-THIEU_CACHED_MONG_DOI = 6871
 DINH_DANG = {8: 1, 14: 2, 16: 3}          # so truong -> ma dinh dang
+
+# KHONG ghim so mong doi nua (truoc: 7924 / 44.692.501 / 6871 / {1:6871,2:542,3:511}
+# / 7660). Ca nam so deu dung cho dot du lieu 05/08 va lam script DUNG ngay khi
+# co ban ghi moi - tuc chan dung viec chung phai bao ve. Nay:
+#   - bon so dau  SUY TU CHINH BANG THO, bat duoc dong roi rot khi nap
+#   - so cuoi     lay tu STATS_NAM, van la doi chung DOC LAP nhu y ban dau
 
 
 def main() -> None:
@@ -54,8 +73,8 @@ def main() -> None:
     cur = cn.cursor()
 
     tra_model = ket_noi.tra_model(cn)
-    unit_cua = dict(cur.execute(
-        "SELECT user_id, unit_id FROM dim_user WHERE agent_id = ?", (RALLI,)).fetchall())
+    unit_cua = dict(ket_noi.truy(
+        cn, f"SELECT user_id, unit_id FROM dim_user WHERE agent_id = {dc}", (RALLI,)))
     chua_quy = f"__chua_quy_duoc_{RALLI}__"
 
     calls = json.loads(NHAT_KY.read_text(encoding="utf-8-sig"))
@@ -106,30 +125,46 @@ def main() -> None:
         f" completion_tokens, total_tokens, cached_tokens, dinh_dang_ban_ghi)"
         f" VALUES ({','.join([dc] * 14)})", ban_ghi)
 
-    n, tok = cur.execute("SELECT COUNT(*), SUM(total_tokens) FROM fact_call").fetchone()
-    thieu = cur.execute("SELECT COUNT(*) FROM fact_call"
-                        " WHERE cached_tokens IS NULL").fetchone()[0]
-    theo_dd = dict(cur.execute("SELECT dinh_dang_ban_ghi, COUNT(*) FROM fact_call"
-                               " GROUP BY 1 ORDER BY 1").fetchall())
-    kh_ai = cur.execute("SELECT COUNT(*) FROM fact_call WHERE unit_id = ?",
-                        (chua_quy,)).fetchone()[0]
+    n, tok = ket_noi.mot(cn, "SELECT COUNT(*), SUM(total_tokens) FROM fact_call")
+    thieu = ket_noi.mot(cn, "SELECT COUNT(*) FROM fact_call"
+                            " WHERE cached_tokens IS NULL")[0]
+    theo_dd = dict(ket_noi.truy(cn, "SELECT dinh_dang_ban_ghi, COUNT(*) FROM fact_call"
+                                    " GROUP BY 1 ORDER BY 1"))
+    kh_ai = ket_noi.mot(cn, f"SELECT COUNT(*) FROM fact_call WHERE unit_id = {dc}",
+                        (chua_quy,))[0]
 
     print(f"  {n} dong | {tok:,} token | dinh dang {theo_dd}")
     print(f"  cached_tokens NULL {thieu} | khong quy duoc ve don vi {kh_ai}")
 
+    # ── so mong doi suy tu chinh bang tho ──
+    dong_nguon = len(ban_ghi)
+    token_nguon = sum(c["total_tokens"] for c in calls if DINH_DANG.get(len(c)))
+    thieu_nguon = sum(1 for c in calls
+                      if DINH_DANG.get(len(c)) and "cached_tokens" not in c)
+    dd_nguon = collections.Counter(DINH_DANG[len(c)] for c in calls if DINH_DANG.get(len(c)))
+
+    # ── so doi chung DOC LAP: app tu tong hop ra muc 'Khong xac dinh' ──
+    # Ta phai ra dung con so do. Lech nghia la khau gan don vi sai - xem chu
+    # thich o nap_to_chuc.py.
+    kh_ai_app = None
+    for u in json.loads(STATS_NAM.read_text(encoding="utf-8-sig")).get("by_unit", []):
+        if str(u.get("unit_name", "")).strip().lower() in ("không xác định", "khong xac dinh"):
+            kh_ai_app = u.get("calls")
+
     loi = []
-    if n != DONG_MONG_DOI:
-        loi.append(f"so dong {n} != {DONG_MONG_DOI}")
-    if tok != TOKEN_MONG_DOI:
-        loi.append(f"token {tok} != {TOKEN_MONG_DOI}")
-    if thieu != THIEU_CACHED_MONG_DOI:
-        loi.append(f"cached NULL {thieu} != {THIEU_CACHED_MONG_DOI}")
-    if theo_dd != {1: 6871, 2: 542, 3: 511}:
-        loi.append(f"dinh dang {theo_dd} != {{1: 6871, 2: 542, 3: 511}}")
-    # So doc lap: app tu tong hop ra 'Khong xac dinh' = 7.660 luot. Ta phai ra dung
-    # con so do. Lech nghia la khau gan don vi sai - xem chu thich o nap_to_chuc.py.
-    if kh_ai != 7660:
-        loi.append(f"khong quy duoc {kh_ai} != 7660 (so app tu tinh doc lap)")
+    if n != dong_nguon:
+        loi.append(f"so dong {n} != {dong_nguon} dong dung tu bang tho")
+    if tok != token_nguon:
+        loi.append(f"token {tok} != {token_nguon} trong bang tho")
+    if thieu != thieu_nguon:
+        loi.append(f"cached NULL {thieu} != {thieu_nguon} ban ghi thieu truong")
+    if theo_dd != dict(dd_nguon):
+        loi.append(f"dinh dang {theo_dd} != {dict(dd_nguon)} dem tu bang tho")
+    if kh_ai_app is None:
+        loi.append(f"khong tim thay muc 'Khong xac dinh' trong {STATS_NAM.name}"
+                   f" - mat doi chung doc lap, khong nap mu")
+    elif kh_ai != kh_ai_app:
+        loi.append(f"khong quy duoc {kh_ai} != {kh_ai_app} (so app tu tinh doc lap)")
     if loi:
         cn.rollback()
         raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(loi))

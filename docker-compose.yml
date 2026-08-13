@@ -1,0 +1,65 @@
+# PostgreSQL + pgAdmin cho token-ledger, chay cuc bo.
+#
+#     docker compose up -d
+#     docker compose logs -f postgres     # xem log
+#     docker compose down                 # dung, GIU du lieu
+#     docker compose down -v              # dung va XOA sach du lieu
+#
+# Sau khi len:
+#     Postgres   localhost:5432
+#     pgAdmin    http://localhost:5050
+#
+# Doi cong / mat khau thi dat bien trong file .env (da nam trong .gitignore).
+# Khong dat thi dung gia tri mac dinh duoi day - chap nhan duoc vi CHI mo tren
+# 127.0.0.1, khong ra mang.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: token-ledger-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-token_ledger}
+      POSTGRES_USER: ${PGUSER:-token}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-token_local}
+      # Sap xep theo C cho ket qua ORDER BY on dinh, khong phu thuoc locale may.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      # Gan vao 127.0.0.1, KHONG phai 0.0.0.0: database nay khong duoc ra mang.
+      - "127.0.0.1:${PGPORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # pgAdmin cho khoe roi moi len, va script chuyen du lieu cung doi cai nay.
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-token} -d ${PGDATABASE:-token_ledger}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: token-ledger-pgadmin
+    restart: unless-stopped
+    environment:
+      # PHAI la email dung dinh dang co phan duoi mien. pgAdmin tu chuc nang
+      # kiem dinh dang va THOAT neu sai - 'admin@local' bi tu choi, container
+      # restart-loop mai ma khong bao gi ra ngoai ngoai log.
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin_local}
+      # Bo man hinh dang nhap master password - day la may cuc bo, khong dang.
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin:/var/lib/pgadmin
+      # Khai bao san may chu, khoi phai go tay thong tin ket noi moi lan.
+      - ./docker/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  pgadmin:

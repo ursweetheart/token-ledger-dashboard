@@ -78,6 +78,63 @@ def dung_lai(dsn: str):
     return cn, dat_cho
 
 
+def truy(cn, cau: str, tham=()) -> list:
+    """Chay mot cau SELECT, tra ve toan bo ket qua. Dung duoc ca hai he.
+
+    SQLite cho `cur.execute(...)` tra ve CHINH cursor, nen viet
+    `cur.execute(...).fetchall()` hoac lap thang `for r in cur.execute(...)`
+    deu chay. psycopg2 thi `execute()` tra ve None.
+
+    Hai loi viet tien tay do la cai bay kinh dien: chay tren SQLite thi ngon,
+    doi sang Postgres moi nem AttributeError - tuc lo ra o dung luc chuyen he,
+    la luc it muon gap bat ngo nhat. Ham nay bit han no lai.
+    """
+    cur = cn.cursor()
+    # KHONG truyen tuple rong xuong. psycopg2 chi dien giai '%' khi doi so tham
+    # so KHAC None - dua () xuong thi cau `LIKE '%token_count'` bi hieu la dau
+    # dinh dang va nem IndexError. SQLite khong co van de nay, nen loi chi lo ra
+    # tren Postgres.
+    if tham:
+        cur.execute(cau, tham)
+    else:
+        cur.execute(cau)
+    return cur.fetchall()
+
+
+def mot(cn, cau: str, tham=()):
+    """Nhu truy() nhung tra ve dong dau tien, hoac None."""
+    kq = truy(cn, cau, tham)
+    return kq[0] if kq else None
+
+
+def chen(cn, dc: str, bang: str, cot: list[str], dong: list) -> int:
+    """Chen nhieu dong, dung duong nhanh cua tung he.
+
+    executemany cua psycopg2 gui MOT vong mang cho MOI dong. Voi 562.307 dong
+    cua fact_monitoring thi do la hang chuc phut - va no khong hong, chi cham,
+    nen rat de tuong la binh thuong. execute_values gom nhieu dong vao mot cau
+    INSERT, nhanh hon vai chuc lan.
+
+    SQLite thi executemany von da nhanh vi khong qua mang.
+    """
+    if not dong:
+        return 0
+    cur = cn.cursor()
+    ten_cot = ",".join(cot)
+    if dc == "%s":
+        try:
+            from psycopg2.extras import execute_values
+        except ImportError:
+            execute_values = None
+        if execute_values is not None:
+            execute_values(cur, f"INSERT INTO {bang} ({ten_cot}) VALUES %s",
+                           dong, page_size=1000)
+            return len(dong)
+    cur.executemany(
+        f"INSERT INTO {bang} ({ten_cot}) VALUES ({','.join([dc] * len(cot))})", dong)
+    return len(dong)
+
+
 def dem(cn, bang: str) -> int:
     cur = cn.cursor()
     cur.execute(f"SELECT COUNT(*) FROM {bang}")

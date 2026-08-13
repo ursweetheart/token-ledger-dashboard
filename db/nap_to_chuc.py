@@ -32,7 +32,6 @@ NGHIEM THU
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import sys
 from pathlib import Path
@@ -42,8 +41,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ket_noi  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-CTDA = ROOT / "data" / "ctda"
-TLA = ROOT / "data" / "tla-hd"
+
+
+def _moi_nhat(cha: Path) -> Path:
+    """Dot thu thap moi nhat. Ten thu muc la ngay nen sap xep chu la du."""
+    con = sorted(p for p in cha.glob("*") if p.is_dir())
+    if not con:
+        raise SystemExit(f"Khong co dot thu thap nao trong {cha}."
+                         f" Chay scripts/pull_web_apps.py truoc.")
+    return con[-1]
+
+
+# Nguon cu la data/ctda va data/tla-hd - ban cao TAY ngay 05/08, khong cap nhat
+# nua. Nay doc dot keo moi nhat do scripts/pull_web_apps.py sinh ra.
+CTDA = _moi_nhat(ROOT / "data" / "raw_web" / "ralli")
+TLA = _moi_nhat(ROOT / "data" / "raw_web" / "tla-hd")
 
 RALLI, TLA_HD = 8, 5
 AGENT_MOT_USER = (1, 2, 3, 4, 6, 7)          # quyet dinh A1
@@ -51,17 +63,15 @@ AGENT_MOT_USER = (1, 2, 3, 4, 6, 7)          # quyet dinh A1
 # Nhan tieng Viet da biet, phat hien khi doi chieu giao dien web 07/08
 NHAN_HAM = {"analyze": "Phân tích hợp đồng", "chat": "Hỏi đáp AI"}
 
-DV_MONG_DOI = 136
-HAM_MONG_DOI = 8
+# KHONG ghim so mong doi nua. Truoc day la DV_MONG_DOI=136 / HAM_MONG_DOI=8 -
+# dung cho dot du lieu 05/08 va sai ngay khi to chuc doi (Ralli vua bo 6 don vi:
+# 108 -> 102). Ghim so bien phep nghiem thu thanh cai chan viec, trong khi thu
+# no phai bat la "co dong nao roi rot giua file nguon va database khong".
+# Nay so mong doi duoc SUY TU CHINH FILE NGUON o moi lan chay.
 
 
 def doc_json(p: Path):
     return json.loads(p.read_text(encoding="utf-8-sig"))
-
-
-def doc_csv(p: Path) -> list[dict]:
-    with open(p, encoding="utf-8-sig") as h:
-        return list(csv.DictReader(h))
 
 
 def lan_len(nid: str, cha: dict[str, str], ten: dict[str, str]) -> list[str]:
@@ -125,7 +135,7 @@ def main() -> None:
     cn, dc = ket_noi.mo(args.db)
     cur = cn.cursor()
 
-    ten_agent = dict(cur.execute("SELECT agent_id, ten FROM dim_agent").fetchall())
+    ten_agent = dict(ket_noi.truy(cn, "SELECT agent_id, ten FROM dim_agent"))
 
     # ================================================== (2) dim_unit
     dong_dv = gom_don_vi()
@@ -152,7 +162,7 @@ def main() -> None:
 
     # ================================================== (3) dim_user tu danh ba
     dong_nd: list[tuple] = []
-    co_dv = {r[0] for r in cur.execute("SELECT unit_id FROM dim_unit")}
+    co_dv = {r[0] for r in ket_noi.truy(cn, "SELECT unit_id FROM dim_unit")}
 
     for x in doc_json(CTDA / "users-list.json"):
         dv = x.get("unit_id") or None
@@ -161,10 +171,16 @@ def main() -> None:
         dong_nd.append((x["id"], RALLI, x["username"], x.get("full_name"),
                         x.get("email"), dv, x.get("is_active"), None, False, "danh ba"))
 
-    for r in doc_csv(TLA / "users-by-unit.csv"):
-        dv = r["unit_id"] if r["unit_id"] in co_dv else f"__chua_quy_duoc_{TLA_HD}__"
-        dong_nd.append((r["user_id"], TLA_HD, r["username"], r.get("full_name") or None,
-                        r.get("email") or None, dv, None, None, False, "danh ba"))
+    # Nguon cu la users-by-unit.csv - file PHAI SINH, dot keo moi khong co.
+    # Dung units-members.json (GET /api/units/{id}/members cho tung don vi):
+    # day la nguon DUY NHAT co email. token-usage/filter-options tuy cung liet ke
+    # nguoi dung nhung khong co email, nap tu do la mat truong ma khong ai bao.
+    for khoi in doc_json(TLA / "units-members.json"):
+        dv_goc = khoi.get("unit_id")
+        dv = dv_goc if dv_goc in co_dv else f"__chua_quy_duoc_{TLA_HD}__"
+        for r in khoi.get("members") or []:
+            dong_nd.append((r["id"], TLA_HD, r["username"], r.get("full_name") or None,
+                            r.get("email") or None, dv, None, None, False, "danh ba"))
 
     for aid in AGENT_MOT_USER:
         dong_nd.append((f"__ky_thuat_{aid}__", aid, f"Người dùng sử dụng {ten_agent[aid]}",
@@ -207,36 +223,44 @@ def main() -> None:
     dong_ham: list[tuple] = []
     for f in sorted({c.get("function") for c in calls if c.get("function")}):
         dong_ham.append((RALLI, f, NHAN_HAM.get(f), None))
-    for r in doc_csv(TLA / "by-function-2026.csv"):
+    # Nguon cu la by-function-2026.csv (phai sinh). Nay lay tu chinh phan
+    # `by_function` cua stats ca nam, la thu API tra ve truc tiep.
+    for r in doc_json(TLA / "token-usage-year.json").get("by_function") or []:
         dong_ham.append((TLA_HD, r["function"], NHAN_HAM.get(r["function"]), None))
     cur.executemany(
         f"INSERT INTO dim_function (agent_id, ma, nhan, la_nguoi_dung)"
         f" VALUES ({','.join([dc] * 4)})", dong_ham)
 
     # ================================================== nghiem thu
-    n_dv = cur.execute("SELECT COUNT(*) FROM dim_unit").fetchone()[0]
-    n_nd = cur.execute("SELECT COUNT(*) FROM dim_user").fetchone()[0]
-    n_ky = cur.execute("SELECT COUNT(*) FROM dim_user WHERE la_dong_ky_thuat").fetchone()[0]
-    n_ham = cur.execute("SELECT COUNT(*) FROM dim_function").fetchone()[0]
-    theo_nguon = dict(cur.execute("SELECT nguon_gap, COUNT(*) FROM dim_user"
-                                  " GROUP BY nguon_gap").fetchall())
+    n_dv = ket_noi.mot(cn, "SELECT COUNT(*) FROM dim_unit")[0]
+    n_nd = ket_noi.mot(cn, "SELECT COUNT(*) FROM dim_user")[0]
+    n_ky = ket_noi.mot(cn, "SELECT COUNT(*) FROM dim_user WHERE la_dong_ky_thuat")[0]
+    n_ham = ket_noi.mot(cn, "SELECT COUNT(*) FROM dim_function")[0]
+    theo_nguon = dict(ket_noi.truy(cn, "SELECT nguon_gap, COUNT(*) FROM dim_user"
+                                       " GROUP BY nguon_gap"))
 
+    print(f"  nguon        {CTDA.parent.name}/{CTDA.name} + {TLA.parent.name}/{TLA.name}")
     print(f"  dim_unit     {n_dv:>4}  ({len(dong_dv) - 8} that + 6 ky thuat + 2 chua quy duoc)")
     print(f"  dim_user     {n_nd:>4}  {theo_nguon}")
     print(f"  dim_function {n_ham:>4}")
 
     # Moi user_id trong nhat ky PHAI co cho tro toi - neu khong, fact_call se hong
-    co_nd = {r[0] for r in cur.execute("SELECT user_id FROM dim_user WHERE agent_id = ?",
-                                       (RALLI,))}
+    co_nd = {r[0] for r in ket_noi.truy(
+        cn, f"SELECT user_id FROM dim_user WHERE agent_id = {dc}", (RALLI,))}
     mo_coi = {c.get("user_id") for c in calls} - co_nd - {None}
 
+    # So mong doi SUY TU NGUON, khong ghim. Phep kiem nay bat dung cai no sinh ra
+    # de bat: dong roi rot giua file nguon va database (khoa trung, khoa ngoai
+    # truot, executemany nuot dong). No khong con keu khi to chuc thay doi.
     loi = []
-    if n_dv != DV_MONG_DOI:
-        loi.append(f"dim_unit {n_dv} != {DV_MONG_DOI}")
+    if n_dv != len(dong_dv):
+        loi.append(f"dim_unit {n_dv} != {len(dong_dv)} dong dung tu nguon")
+    if n_nd != len(dong_nd):
+        loi.append(f"dim_user {n_nd} != {len(dong_nd)} dong dung tu nguon")
     if n_ky != len(AGENT_MOT_USER):
         loi.append(f"dong ky thuat {n_ky} != {len(AGENT_MOT_USER)}")
-    if n_ham != HAM_MONG_DOI:
-        loi.append(f"dim_function {n_ham} != {HAM_MONG_DOI}")
+    if n_ham != len(dong_ham):
+        loi.append(f"dim_function {n_ham} != {len(dong_ham)} dong dung tu nguon")
     if mo_coi:
         loi.append(f"{len(mo_coi)} user_id trong nhat ky khong co trong dim_user: "
                    f"{sorted(mo_coi)[:3]}")

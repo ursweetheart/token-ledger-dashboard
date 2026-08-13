@@ -35,10 +35,29 @@ import ket_noi  # noqa: E402
 from quy_tac import suy_loai  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-BILLING = ROOT / "data" / "billing" / "billing_gop_tru_CTDA.csv"
 
-TONG_MONG_DOI = 270.9517
-DONG_MONG_DOI = 2259
+
+def _billing_moi_nhat() -> Path:
+    """File gop moi nhat do scripts/gop_billing.py sinh ra.
+
+    Nguon cu la data/billing/billing_gop_tru_CTDA.csv - ban gop TAY, khong con
+    ton tai. File moi mang cung du lieu nhung KHAC TEN COT:
+        date -> ngay | sku -> sku_ten | amount -> so_luong | cost -> chi_phi_usd
+    """
+    thu_muc = ROOT / "data" / "da_xu_ly" / "billing"
+    ung_vien = sorted(thu_muc.glob("billing_*.csv"))
+    if not ung_vien:
+        raise SystemExit(f"Khong co file gop nao trong {thu_muc}."
+                         f" Chay scripts/gop_billing.py truoc.")
+    return ung_vien[-1]
+
+
+BILLING = _billing_moi_nhat()
+
+# KHONG con TONG_MONG_DOI/DONG_MONG_DOI ghim cung (270.9517 / 2259). Hai so do
+# dung cho dot du lieu 05/08 va lam script DUNG moi khi co hoa don moi - tuc no
+# chan dung viec no phai bao ve. Nay so mong doi lay tu CHINH FILE NGUON, nen
+# phep kiem van bat duoc dong roi rot giua file va database ma khong lo thoi.
 
 
 def main() -> None:
@@ -66,15 +85,15 @@ def main() -> None:
     khong_model = collections.Counter()
     khong_loai = collections.Counter()
     for r in rows:
-        loai = suy_loai(r["sku"])
+        loai = suy_loai(r["sku_ten"])
         if loai is None:
             khong_loai[r["sku_id"]] += 1
             continue
         model_id = tra.get(("billing_sku", r["sku_id"]))
         if model_id is None:
             khong_model[r["sku_id"]] += 1
-        ban_ghi.append((r["date"], r["project"], r["sku_id"], r["sku"], model_id,
-                        loai, int(float(r["amount"])), float(r["cost"])))
+        ban_ghi.append((r["ngay"], r["project"], r["sku_id"], r["sku_ten"], model_id,
+                        loai, int(float(r["so_luong"])), float(r["chi_phi_usd"])))
 
     # Mot SKU khong tra ra model nghia la danh muc da cu so voi hoa don. Dung han:
     # nap tiep se cho ra mot bang co dong model_id NULL trong im lang, va moi bieu
@@ -98,17 +117,22 @@ def main() -> None:
     cur.execute("SELECT loai, COUNT(*) FROM fact_billing_daily GROUP BY loai ORDER BY loai")
     theo_loai = cur.fetchall()
 
+    print(f"  nguon: {Path(args.file).name}")
     print(f"  {n} dong | ${float(tong):.4f}")
     print(f"  theo loai: {dict(theo_loai)}")
 
+    # So mong doi SUY TU FILE NGUON o moi lan chay, khong ghim.
+    dong_nguon = len(ban_ghi)
+    tien_nguon = sum(float(r["chi_phi_usd"]) for r in rows)
+
     loi = []
-    if n != DONG_MONG_DOI:
-        loi.append(f"so dong {n} != {DONG_MONG_DOI}")
-    if abs(float(tong) - TONG_MONG_DOI) > 0.0001:
-        loi.append(f"tong ${float(tong):.4f} != ${TONG_MONG_DOI}")
+    if n != dong_nguon:
+        loi.append(f"so dong {n} != {dong_nguon} dong dung tu file nguon")
+    if abs(float(tong) - tien_nguon) > 0.0001:
+        loi.append(f"tong ${float(tong):.6f} != ${tien_nguon:.6f} trong file nguon")
     if loi:
         raise SystemExit("NGHIEM THU KHONG DAT: " + " | ".join(loi))
-    print("  NGHIEM THU DAT")
+    print("  NGHIEM THU DAT (doi chieu voi chinh file nguon)")
 
 
 if __name__ == "__main__":
