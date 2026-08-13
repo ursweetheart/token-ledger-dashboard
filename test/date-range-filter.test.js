@@ -97,3 +97,13 @@ test("range rendering changes without changing other dashboard dates", () => {
   assert.equal(document.ids["status-period"].innerHTML, "07/01/2026 → 08/09/2026");
   assert.equal(document.ids["header-data-date"].innerHTML, "08/13/2026");
 });
+
+test("both range text inputs advertise dd/mm/yyyy", () => {
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  for (const id of ["range-start-text", "range-end-text"]) {
+    const tag = html.match(new RegExp(`<input[^>]+id=["']${id}["'][^>]*>`));
+    assert.ok(tag, `missing ${id}`);
+    assert.match(tag[0], /placeholder="dd\/mm\/yyyy"/);
+    assert.match(tag[0], /aria-label="[^"]+\(dd\/mm\/yyyy\)"/);
+  }
+});
