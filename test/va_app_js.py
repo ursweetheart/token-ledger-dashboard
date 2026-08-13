@@ -30,6 +30,11 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app.js"
 SEED = Path(__file__).parent / "seed-days-that.js"
 
+# Hau to mo ta dot cap nhat nay, gan sau so phien ban trong khoa localStorage.
+NHAN_PHIEN_BAN = "du-lieu-13-08"
+MO_TA_PHIEN_BAN = ("dữ liệu tới 13/08/2026 "
+                   "(billing + monitoring gộp 2 đợt + Ralli/TLA HĐ)")
+
 # USD / 1 trieu token, suy tu hoa don: chi phi thuc chia cho so token thuc.
 GIA = """/* ─── Bảng giá (USD / 1 triệu token) ───
    Mọi đơn giá dưới đây suy từ HOÁ ĐƠN Google: lấy số tiền thật chia cho số token
@@ -98,16 +103,47 @@ def main() -> None:
                  r"/\* ═+\n   SEED_DAYS — sinh tự động.*?\nvar SEED_DAYS = \{.*?\n\};"],
                 khoi, "SEED_DAYS")
 
-    # 3. bump phien ban localStorage
+    # 3. khoang ngay mac dinh — suy TU DU LIEU, khong ghim ngay chet
+    #
+    # defaultState() dang ghim range 01/07-31/07. Du lieu chay toi 13/08 nhung
+    # nguoi mo dashboard van thay thang 7, tuc phan cap nhat khong nhin thay
+    # duoc. Ghim mot ngay moi chi doi cho cu ky han: lay thang cua NGAY CUOI
+    # CUNG co du lieu thi lan sinh sau tu dung.
+    moc = sorted(re.findall(r'^\s*"(\d{4}-\d{2}-\d{2})":\s*\[', khoi, re.M))
+    if not moc:
+        raise SystemExit("DUNG: khong doc duoc ngay nao trong khoi seed.")
+    cuoi = moc[-1]
+    dau_thang = cuoi[:8] + "01"
+    so_thay = len(re.findall(r'\{\s*start:"\d{4}-\d{2}-\d{2}",\s*end:"\d{4}-\d{2}-\d{2}"\s*\}', text))
+    text = re.sub(r'\{\s*start:"\d{4}-\d{2}-\d{2}",\s*end:"\d{4}-\d{2}-\d{2}"\s*\}',
+                  f'{{start:"{dau_thang}",end:"{cuoi}"}}', text)
+    if so_thay == 0:
+        raise SystemExit("DUNG: khong tim thay range mac dinh nao de sua.")
+
+    # 4. bump phien ban localStorage
+    #
+    # PHAI tang so, khong duoc ghim cung mot chuoi dich. Ban truoc ghim
+    # "...v18-ma-loi-that" trong khi app.js DA la v18, nen phep thay thanh vo
+    # hieu: trinh duyet cu tiep tuc doc du lieu cu tu localStorage va toan bo
+    # dot cap nhat khong hien ra man hinh - hong mot cach hoan toan im lang.
     cu = re.search(r'var STORE = "([^"]+)"', text)
     if not cu:
         raise SystemExit("DUNG: khong tim thay STORE.")
-    text = text.replace(f'"{cu.group(1)}"', '"agent-dash-state-v18-ma-loi-that"', 1)
+    so = re.search(r"-v(\d+)-", cu.group(1))
+    if not so:
+        raise SystemExit(f"DUNG: STORE '{cu.group(1)}' khong co dang -v<so>-.")
+    so_moi = int(so.group(1)) + 1
+    moi_ten = f"agent-dash-state-v{so_moi}-{NHAN_PHIEN_BAN}"
+    # Thay ca dong ke ca chu thich: de nguyen chu thich cu thi dong nay se ghi
+    # "v19" o gia tri nhung "v18" o loi giai thich, va nguoi doc sau tin cai sai.
+    text = re.sub(r'var STORE = "[^"]+";[^\n]*',
+                  f'var STORE = "{moi_ten}"; // v{so_moi}: {MO_TA_PHIEN_BAN}',
+                  text, count=1)
 
     APP.write_text(text, encoding="utf-8")
     print(f"  Sao luu : {APP.with_suffix('.js.bak').name}")
     print(f"  app.js  : {truoc:,} -> {len(text):,} ky tu")
-    print(f"  STORE   : {cu.group(1)}  ->  agent-dash-state-v18-ma-loi-that")
+    print(f"  STORE   : {cu.group(1)}  ->  {moi_ten}")
 
 
 if __name__ == "__main__":

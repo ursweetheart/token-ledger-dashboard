@@ -36,6 +36,34 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 OUT = Path(__file__).parent / "seed-days-that.js"
 
+
+# ─── Chon nguon: luon lay ban thu thap MOI NHAT ────────────────────────────
+# Moi dot thu thap ghi vao mot thu muc rieng ten theo ngay (scripts/pull_*.py),
+# khong bao gio ghi de dot truoc. Nen o day chi viec chon ten lon nhat, va khong
+# ghim ngay chet vao code - lan thu thap sau tu dong duoc dung.
+
+def moi_nhat_thu_muc(cha: Path, uu_tien_hau_to: str = "") -> Path:
+    """Thu muc con moi nhat. Neu co hau to uu tien thi chon no truoc."""
+    con = sorted(p for p in cha.glob("*") if p.is_dir())
+    if not con:
+        raise SystemExit(f"Khong co thu muc thu thap nao trong {cha}")
+    if uu_tien_hau_to:
+        khop = [p for p in con if p.name.endswith(uu_tien_hau_to)]
+        if khop:
+            return khop[-1]
+    return con[-1]
+
+
+def moi_nhat_file(cha: Path, mau: str) -> Path:
+    ung_vien = sorted(cha.glob(mau))
+    if not ung_vien:
+        raise SystemExit(f"Khong co file nao khop {cha / mau}")
+    return ung_vien[-1]
+
+
+RALLI_DIR = moi_nhat_thu_muc(DATA / "raw_web" / "ralli")
+TLA_HD_DIR = moi_nhat_thu_muc(DATA / "raw_web" / "tla-hd")
+
 GEMINI = "generativelanguage.googleapis.com"
 ASK = ("GenerativeService.GenerateContent", "GenerativeService.StreamGenerateContent")
 
@@ -136,20 +164,25 @@ def sku_kind(sku: str) -> str:
 def from_billing() -> dict:
     """(ngay, project, model) -> {ti, to, cached}"""
     out: dict = defaultdict(lambda: {"ti": 0.0, "to": 0.0, "cached": 0.0})
-    for row in read_csv(DATA / "billing" / "billing_gop_tru_CTDA.csv"):
-        day = as_date(row.get("date"))
+    # Nguon cu la data/billing/billing_gop_tru_CTDA.csv - ban gop TAY, nay khong
+    # con. Thay bang dau ra cua scripts/gop_billing.py: cung du lieu nhung sinh
+    # tu 7 file Console va co nghiem thu, khac ten cot.
+    #     date -> ngay | sku -> sku_ten | amount -> so_luong
+    nguon = moi_nhat_file(DATA / "da_xu_ly" / "billing", "billing_*.csv")
+    for row in read_csv(nguon):
+        day = as_date(row.get("ngay"))
         if not day:
             continue
-        model = sku_to_model(str(row.get("sku")))
-        kind = sku_kind(str(row.get("sku")))
+        model = sku_to_model(str(row.get("sku_ten")))
+        kind = sku_kind(str(row.get("sku_ten")))
         entry = out[(day, row.get("project"), model)]
         if kind == "cached":
             # Billing bills cached separately; the two other sources already
             # fold it into the input side, so it is added to ti AND kept apart.
-            entry["cached"] += num(row.get("amount"))
-            entry["ti"] += num(row.get("amount"))
+            entry["cached"] += num(row.get("so_luong"))
+            entry["ti"] += num(row.get("so_luong"))
         elif kind in ("ti", "to"):
-            entry[kind] += num(row.get("amount"))
+            entry[kind] += num(row.get("so_luong"))
     return out
 
 
@@ -162,15 +195,18 @@ def from_monitoring() -> tuple[dict, dict]:
     request into a bucket named "" and the join against billing would match
     nothing, silently producing a dashboard with zero requests everywhere.
     """
+    # Uu tien thu muc "-gop" (scripts/gop_monitoring.py). Cua so luu giu cua
+    # Google truot rat nhanh - do 06/08 thay 196 ngay, do 13/08 chi con 112 -
+    # nen mot dot keo don le KHONG con phu het dai ngay. Ban gop moi phu du.
     folder = DATA / "da_xu_ly" / "du_lieu_giam_sat"
-    pulls = sorted(p for p in folder.glob("*") if p.is_dir()) if folder.exists() else []
     calls: dict = defaultdict(lambda: {"r": 0.0, "loi": 0.0,
                                        "e4": 0.0, "e5": 0.0, "e429": 0.0})
     lat: dict = defaultdict(lambda: {"p95": [], "p99": []})
-    if not pulls:
+    if not folder.exists() or not any(p.is_dir() for p in folder.glob("*")):
         return calls, lat
+    dot = moi_nhat_thu_muc(folder, uu_tien_hau_to="-gop")
 
-    for path in sorted(pulls[-1].glob("*.csv")):
+    for path in sorted(dot.glob("*.csv")):
         if path.name == "_tat-ca.csv":
             continue
         for row in read_csv(path):
@@ -231,9 +267,9 @@ def from_ralli() -> dict:
     Ralli has no invoice, so its own raw table is the only source. Unit comes
     from the user's department, resolved through users-list.
     """
-    raw = read_json(DATA / "ctda" / "db-token_usage-raw.json")
-    users = read_json(DATA / "ctda" / "users-list.json")
-    units = {u["id"]: u for u in read_json(DATA / "ctda" / "units.json")["data"]}
+    raw = read_json(RALLI_DIR / "db-token_usage-raw.json")
+    users = read_json(RALLI_DIR / "users-list.json")
+    units = {u["id"]: u for u in read_json(RALLI_DIR / "units.json")["data"]}
     by_user = {u["id"]: u for u in users}
 
     out: dict = defaultdict(lambda: {"ti": 0.0, "to": 0.0, "cached": 0.0, "r": 0.0})
@@ -261,7 +297,7 @@ def tla_unit_share() -> list[tuple[str, float]]:
     the only proportion that exists. Flagged in the generated file so nobody
     later mistakes it for a measurement.
     """
-    year = read_json(DATA / "tla-hd" / "token-usage-year.json")
+    year = read_json(TLA_HD_DIR / "token-usage-year.json")
     rows = [(str(u.get("unit_name") or "Chưa xác định"), num(u.get("total_tokens")))
             for u in year["by_unit"]]
     tong = sum(t for _, t in rows)
@@ -387,8 +423,8 @@ def build() -> tuple[dict, list[str]]:
     # again -- but putting it at the start means the "7 ngay" preset reports zero
     # accounts, which is the more visible wrong answer.
     moc = max(days) if days else "2026-01-01"
-    users = read_json(DATA / "ctda" / "users-list.json")
-    units = {u["id"]: u for u in read_json(DATA / "ctda" / "units.json")["data"]}
+    users = read_json(RALLI_DIR / "users-list.json")
+    units = {u["id"]: u for u in read_json(RALLI_DIR / "units.json")["data"]}
     dem: dict[str, int] = defaultdict(int)
     for user in users:
         unit = units.get(user.get("unit_id"))
@@ -397,10 +433,14 @@ def build() -> tuple[dict, list[str]]:
         add(date.fromisoformat(moc), RALLI, ten_unit, "Gemini 2.5 Flash Lite",
             "Nhóm Kinh doanh", 0, 0, 0, 0, latency=0.0, users=so)
 
-    tla_users = read_csv(DATA / "tla-hd" / "users-by-unit.csv")
+    # Nguon cu la data/tla-hd/users-by-unit.csv - file PHAI SINH, dot keo moi
+    # khong co. Dung thang endpoint goc: token-usage/filter-options tra ve
+    # users[] (moi user co unit_id) va units[] (id -> ten), du de dem lai.
+    tla = read_json(TLA_HD_DIR / "token-usage-filter-options.json")
+    ten_don_vi = {u["id"]: u.get("name") for u in tla.get("units", [])}
     dem2: dict[str, int] = defaultdict(int)
-    for user in tla_users:
-        dem2[str(user.get("unit_name") or "Chưa xác định")] += 1
+    for user in tla.get("users", []):
+        dem2[ten_don_vi.get(user.get("unit_id")) or "Chưa xác định"] += 1
     for ten_unit, so in sorted(dem2.items()):
         add(date.fromisoformat(moc), "Trợ Lý Ảo Hợp Đồng", ten_unit, "Gemini 2.5 Pro",
             "Nhóm Kinh doanh", 0, 0, 0, 0, latency=0.0, users=so)
