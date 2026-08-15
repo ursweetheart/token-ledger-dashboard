@@ -57,121 +57,124 @@ var SEED_DAY = "2026-07-01";                   // ngày gắn dữ liệu tổng
    C4LED / TT C4LED.
    ═══════════════════════════════════════════ */
 var ORG_UNITS = [
-  {id:"company",name:"Toàn công ty",parent:null,level:1,provisioned:887},
-  {id:"rd-corp",name:"Tổng công ty Rạng Đông",parent:"company",level:2,provisioned:807},
-  {id:"pbh1",name:"PBH1",parent:"rd-corp",level:3,provisioned:262},
-  {id:"perm-004",name:"Vùng 1",parent:"pbh1",level:4,provisioned:58},
-  {id:"perm-005",name:"Đội chuyên trách - Vùng 1",parent:"perm-004",level:5,provisioned:7},
-  {id:"perm-006",name:"Đội 1 - Nam Định",parent:"perm-004",level:5,provisioned:6},
-  {id:"perm-007",name:"Đội 2 - Thái Bình",parent:"perm-004",level:5,provisioned:6},
-  {id:"perm-008",name:"Đội 3 - Hà Nam - Ninh Bình",parent:"perm-004",level:5,provisioned:5},
-  {id:"perm-009",name:"Đội 4 - Thanh Hoá",parent:"perm-004",level:5,provisioned:13},
-  {id:"perm-010",name:"Đội 5 - Nghệ An - Hà Tĩnh",parent:"perm-004",level:5,provisioned:11},
-  {id:"perm-011",name:"Vùng 2",parent:"pbh1",level:4,provisioned:87},
-  {id:"perm-012",name:"Đội chuyên trách - Vùng 2",parent:"perm-011",level:5,provisioned:4},
-  {id:"perm-013",name:"Đội 1 - Hà Nội",parent:"perm-011",level:5,provisioned:10},
-  {id:"perm-014",name:"Đội 2 - Hà Nội",parent:"perm-011",level:5,provisioned:8},
-  {id:"perm-015",name:"Đội 3 - Hà Nội",parent:"perm-011",level:5,provisioned:10},
-  {id:"perm-016",name:"Đội 4 - Bắc Ninh",parent:"perm-011",level:5,provisioned:8},
-  {id:"perm-017",name:"Đội 5 - Bắc Giang - Lạng Sơn",parent:"perm-011",level:5,provisioned:10},
-  {id:"perm-018",name:"Đội 6 - Hưng Yên",parent:"perm-011",level:5,provisioned:6},
-  {id:"perm-019",name:"Đội 7 - Hải Dương - Hải Phòng",parent:"perm-011",level:5,provisioned:12},
-  {id:"perm-020",name:"Đội 8 - Quảng Ninh",parent:"perm-011",level:5,provisioned:6},
-  {id:"perm-021",name:"Vùng 3",parent:"pbh1",level:4,provisioned:73},
-  {id:"perm-022",name:"Đội chuyên trách - Vùng 3",parent:"perm-021",level:5,provisioned:3},
-  {id:"perm-023",name:"Đội 1 - HN2 - Sơn La - Điện Biên",parent:"perm-021",level:5,provisioned:18},
-  {id:"perm-024",name:"Đội 2 - HN2 - Hoà Bình",parent:"perm-021",level:5,provisioned:8},
-  {id:"perm-025",name:"Đội 3 - Vĩnh Phúc",parent:"perm-021",level:5,provisioned:5},
-  {id:"perm-026",name:"Đội 4 - Thái Nguyên - Cao Bằng",parent:"perm-021",level:5,provisioned:5},
-  {id:"perm-027",name:"Đội 5 - Phú Thọ",parent:"perm-021",level:5,provisioned:5},
-  {id:"perm-028",name:"Đội 6 - Yên Bái - Tuyên Quang - Hà Giang - Lào Cai - Lai Châu",parent:"perm-021",level:5,provisioned:19},
-  {id:"perm-029",name:"TT1",parent:"pbh1",level:4,provisioned:15},
-  {id:"perm-030",name:"TT1",parent:"perm-029",level:5,provisioned:0},
-  {id:"perm-031",name:"Đội chuyên trách 1 - trung tâm 1",parent:"perm-029",level:5,provisioned:4},
-  {id:"perm-032",name:"Đội Chuyên Trách 2",parent:"perm-029",level:5,provisioned:0},
-  {id:"pbh2",name:"PBH2",parent:"rd-corp",level:3,provisioned:155},
-  {id:"perm-034",name:"CN Đà Nẵng",parent:"pbh2",level:4,provisioned:51},
-  {id:"perm-035",name:"Đội Bình Định",parent:"perm-034",level:5,provisioned:6},
-  {id:"perm-036",name:"Đội Đà Nẵng",parent:"perm-034",level:5,provisioned:6},
-  {id:"perm-037",name:"Đội Huế",parent:"perm-034",level:5,provisioned:3},
-  {id:"perm-038",name:"Đội Quảng Bình",parent:"perm-034",level:5,provisioned:5},
-  {id:"perm-039",name:"Đội Quảng Nam",parent:"perm-034",level:5,provisioned:4},
-  {id:"perm-040",name:"Đội Quảng Trị",parent:"perm-034",level:5,provisioned:5},
-  {id:"perm-041",name:"Đội chuyên trách - CN Đà Nẵng",parent:"perm-034",level:5,provisioned:6},
-  {id:"perm-042",name:"CN Nha Trang",parent:"pbh2",level:4,provisioned:41},
-  {id:"perm-043",name:"Đội Khánh Hòa",parent:"perm-042",level:5,provisioned:11},
-  {id:"perm-044",name:"Đội Lâm Đồng",parent:"perm-042",level:5,provisioned:7},
-  {id:"perm-045",name:"Đội Ninh Thuận",parent:"perm-042",level:5,provisioned:4},
-  {id:"perm-046",name:"Đội Phú Yên",parent:"perm-042",level:5,provisioned:3},
-  {id:"perm-047",name:"Đội chuyên trách - CN Nha Trang",parent:"perm-042",level:5,provisioned:4},
-  {id:"perm-048",name:"Tây Nguyên",parent:"pbh2",level:4,provisioned:39},
-  {id:"perm-049",name:"Đội Đắk Lắk",parent:"perm-048",level:5,provisioned:8},
-  {id:"perm-050",name:"Đội Đắk Nông",parent:"perm-048",level:5,provisioned:4},
-  {id:"perm-051",name:"Đội Gia Lai",parent:"perm-048",level:5,provisioned:9},
-  {id:"perm-052",name:"Đội Kon Tum",parent:"perm-048",level:5,provisioned:4},
-  {id:"perm-053",name:"Đội chuyên trách - Tây Nguyên",parent:"perm-048",level:5,provisioned:0},
-  {id:"perm-054",name:"TT2",parent:"pbh2",level:4,provisioned:12},
-  {id:"perm-055",name:"TT2",parent:"perm-054",level:5,provisioned:0},
-  {id:"perm-056",name:"Đội 1 - TT2",parent:"perm-054",level:5,provisioned:2},
-  {id:"perm-057",name:"Đội 2 - TT2",parent:"perm-054",level:5,provisioned:2},
-  {id:"perm-058",name:"Đội 3 - TT2",parent:"perm-054",level:5,provisioned:1},
-  {id:"perm-059",name:"Đội 4 - TT2",parent:"perm-054",level:5,provisioned:2},
-  {id:"perm-060",name:"Đội 5 - TT2",parent:"perm-054",level:5,provisioned:1},
-  {id:"perm-061",name:"Đội 6 - TT2",parent:"perm-054",level:5,provisioned:1},
-  {id:"pbh3",name:"PBH3",parent:"rd-corp",level:3,provisioned:257},
-  {id:"perm-063",name:"CN Hồ Chí Minh",parent:"pbh3",level:4,provisioned:74},
-  {id:"perm-064",name:"Đội 1",parent:"perm-063",level:5,provisioned:9},
-  {id:"perm-065",name:"Đội 2",parent:"perm-063",level:5,provisioned:7},
-  {id:"perm-066",name:"Đội 3",parent:"perm-063",level:5,provisioned:8},
-  {id:"perm-067",name:"Đội 4",parent:"perm-063",level:5,provisioned:8},
-  {id:"perm-068",name:"Đội 5",parent:"perm-063",level:5,provisioned:11},
-  {id:"perm-069",name:"Đội Siêu Thị",parent:"perm-063",level:5,provisioned:2},
-  {id:"perm-070",name:"Đội chuyên trách - CN Hồ Chí Minh",parent:"perm-063",level:5,provisioned:10},
-  {id:"perm-071",name:"CN Biên Hòa",parent:"pbh3",level:4,provisioned:54},
-  {id:"perm-072",name:"Đội Bình Dương",parent:"perm-071",level:5,provisioned:6},
-  {id:"perm-073",name:"Đội Bình Phước",parent:"perm-071",level:5,provisioned:8},
-  {id:"perm-074",name:"Đội Bình Thuận",parent:"perm-071",level:5,provisioned:6},
-  {id:"perm-075",name:"Đội Đồng Nai",parent:"perm-071",level:5,provisioned:9},
-  {id:"perm-076",name:"Đội Vũng Tàu",parent:"perm-071",level:5,provisioned:9},
-  {id:"perm-077",name:"Đội chuyên trách - CN Biên Hòa",parent:"perm-071",level:5,provisioned:4},
-  {id:"perm-078",name:"CN Cần Thơ",parent:"pbh3",level:4,provisioned:67},
-  {id:"perm-079",name:"Đội An Giang",parent:"perm-078",level:5,provisioned:5},
-  {id:"perm-080",name:"Đội Kiên Giang",parent:"perm-078",level:5,provisioned:13},
-  {id:"perm-081",name:"Đội Cần Thơ",parent:"perm-078",level:5,provisioned:11},
-  {id:"perm-082",name:"Đội Sóc Trăng",parent:"perm-078",level:5,provisioned:7},
-  {id:"perm-083",name:"Đội Cà Mau",parent:"perm-078",level:5,provisioned:7},
-  {id:"perm-084",name:"Đội Bạc Liêu",parent:"perm-078",level:5,provisioned:6},
-  {id:"perm-085",name:"Đội Campuchia",parent:"perm-078",level:5,provisioned:0},
-  {id:"perm-086",name:"Đội chuyên trách - CN Cần Thơ",parent:"perm-078",level:5,provisioned:7},
-  {id:"perm-087",name:"CN Tiền Giang",parent:"pbh3",level:4,provisioned:39},
-  {id:"perm-088",name:"Đội Vĩnh Long",parent:"perm-087",level:5,provisioned:11},
-  {id:"perm-089",name:"Đội Đồng Tháp",parent:"perm-087",level:5,provisioned:8},
-  {id:"perm-090",name:"Đội Long An",parent:"perm-087",level:5,provisioned:5},
-  {id:"perm-091",name:"Đội chuyên trách - CN Tiền Giang",parent:"perm-087",level:5,provisioned:4},
-  {id:"perm-092",name:"TT3",parent:"pbh3",level:4,provisioned:14},
-  {id:"perm-093",name:"TT4",parent:"pbh3",level:4,provisioned:5},
-  {id:"pxk",name:"Xuất khẩu",parent:"rd-corp",level:3,provisioned:25},
-  {id:"truyenthong",name:"Truyền thông",parent:"rd-corp",level:3,provisioned:7},
-  {id:"ketoan",name:"Kế toán",parent:"rd-corp",level:3,provisioned:1},
-  {id:"ecom",name:"TMĐT",parent:"rd-corp",level:3,provisioned:27},
-  {id:"c4led",name:"C4LED",parent:"company",level:2,provisioned:13},
-  {id:"nctt2",name:"Nghiên cứu thị trường",parent:"company",level:2,provisioned:12},
-  {id:"kehoach",name:"Kế hoạch",parent:"company",level:2,provisioned:7},
-  {id:"rnd",name:"Trung tâm R&D",parent:"company",level:2,provisioned:20},
-  {id:"qths",name:"Quản trị hệ thống",parent:"company",level:2,provisioned:18},
+  {id:"company",name:"Toàn công ty",parent:null,level:1},
+  {id:"rd-corp",name:"Tổng công ty Rạng Đông",parent:"company",level:2},
+  {id:"pbh1",name:"PBH1",parent:"rd-corp",level:3},
+  {id:"perm-004",name:"Vùng 1",parent:"pbh1",level:4},
+  {id:"perm-005",name:"Đội chuyên trách - Vùng 1",parent:"perm-004",level:5},
+  {id:"perm-006",name:"Đội 1 - Nam Định",parent:"perm-004",level:5},
+  {id:"perm-007",name:"Đội 2 - Thái Bình",parent:"perm-004",level:5},
+  {id:"perm-008",name:"Đội 3 - Hà Nam - Ninh Bình",parent:"perm-004",level:5},
+  {id:"perm-009",name:"Đội 4 - Thanh Hoá",parent:"perm-004",level:5},
+  {id:"perm-010",name:"Đội 5 - Nghệ An - Hà Tĩnh",parent:"perm-004",level:5},
+  {id:"perm-011",name:"Vùng 2",parent:"pbh1",level:4},
+  {id:"perm-012",name:"Đội chuyên trách - Vùng 2",parent:"perm-011",level:5},
+  {id:"perm-013",name:"Đội 1 - Hà Nội",parent:"perm-011",level:5},
+  {id:"perm-014",name:"Đội 2 - Hà Nội",parent:"perm-011",level:5},
+  {id:"perm-015",name:"Đội 3 - Hà Nội",parent:"perm-011",level:5},
+  {id:"perm-016",name:"Đội 4 - Bắc Ninh",parent:"perm-011",level:5},
+  {id:"perm-017",name:"Đội 5 - Bắc Giang - Lạng Sơn",parent:"perm-011",level:5},
+  {id:"perm-018",name:"Đội 6 - Hưng Yên",parent:"perm-011",level:5},
+  {id:"perm-019",name:"Đội 7 - Hải Dương - Hải Phòng",parent:"perm-011",level:5},
+  {id:"perm-020",name:"Đội 8 - Quảng Ninh",parent:"perm-011",level:5},
+  {id:"perm-021",name:"Vùng 3",parent:"pbh1",level:4},
+  {id:"perm-022",name:"Đội chuyên trách - Vùng 3",parent:"perm-021",level:5},
+  {id:"perm-023",name:"Đội 1 - HN2 - Sơn La - Điện Biên",parent:"perm-021",level:5},
+  {id:"perm-024",name:"Đội 2 - HN2 - Hoà Bình",parent:"perm-021",level:5},
+  {id:"perm-025",name:"Đội 3 - Vĩnh Phúc",parent:"perm-021",level:5},
+  {id:"perm-026",name:"Đội 4 - Thái Nguyên - Cao Bằng",parent:"perm-021",level:5},
+  {id:"perm-027",name:"Đội 5 - Phú Thọ",parent:"perm-021",level:5},
+  {id:"perm-028",name:"Đội 6 - Yên Bái - Tuyên Quang - Hà Giang - Lào Cai - Lai Châu",parent:"perm-021",level:5},
+  {id:"perm-029",name:"TT1",parent:"pbh1",level:4},
+  {id:"perm-030",name:"TT1",parent:"perm-029",level:5},
+  {id:"perm-031",name:"Đội chuyên trách 1 - trung tâm 1",parent:"perm-029",level:5},
+  {id:"perm-032",name:"Đội Chuyên Trách 2",parent:"perm-029",level:5},
+  {id:"pbh2",name:"PBH2",parent:"rd-corp",level:3},
+  {id:"perm-034",name:"CN Đà Nẵng",parent:"pbh2",level:4},
+  {id:"perm-035",name:"Đội Bình Định",parent:"perm-034",level:5},
+  {id:"perm-036",name:"Đội Đà Nẵng",parent:"perm-034",level:5},
+  {id:"perm-037",name:"Đội Huế",parent:"perm-034",level:5},
+  {id:"perm-038",name:"Đội Quảng Bình",parent:"perm-034",level:5},
+  {id:"perm-039",name:"Đội Quảng Nam",parent:"perm-034",level:5},
+  {id:"perm-040",name:"Đội Quảng Trị",parent:"perm-034",level:5},
+  {id:"perm-041",name:"Đội chuyên trách - CN Đà Nẵng",parent:"perm-034",level:5},
+  {id:"perm-042",name:"CN Nha Trang",parent:"pbh2",level:4},
+  {id:"perm-043",name:"Đội Khánh Hòa",parent:"perm-042",level:5},
+  {id:"perm-044",name:"Đội Lâm Đồng",parent:"perm-042",level:5},
+  {id:"perm-045",name:"Đội Ninh Thuận",parent:"perm-042",level:5},
+  {id:"perm-046",name:"Đội Phú Yên",parent:"perm-042",level:5},
+  {id:"perm-047",name:"Đội chuyên trách - CN Nha Trang",parent:"perm-042",level:5},
+  {id:"perm-048",name:"Tây Nguyên",parent:"pbh2",level:4},
+  {id:"perm-049",name:"Đội Đắk Lắk",parent:"perm-048",level:5},
+  {id:"perm-050",name:"Đội Đắk Nông",parent:"perm-048",level:5},
+  {id:"perm-051",name:"Đội Gia Lai",parent:"perm-048",level:5},
+  {id:"perm-052",name:"Đội Kon Tum",parent:"perm-048",level:5},
+  {id:"perm-053",name:"Đội chuyên trách - Tây Nguyên",parent:"perm-048",level:5},
+  {id:"perm-054",name:"TT2",parent:"pbh2",level:4},
+  {id:"perm-055",name:"TT2",parent:"perm-054",level:5},
+  {id:"perm-056",name:"Đội 1 - TT2",parent:"perm-054",level:5},
+  {id:"perm-057",name:"Đội 2 - TT2",parent:"perm-054",level:5},
+  {id:"perm-058",name:"Đội 3 - TT2",parent:"perm-054",level:5},
+  {id:"perm-059",name:"Đội 4 - TT2",parent:"perm-054",level:5},
+  {id:"perm-060",name:"Đội 5 - TT2",parent:"perm-054",level:5},
+  {id:"perm-061",name:"Đội 6 - TT2",parent:"perm-054",level:5},
+  {id:"pbh3",name:"PBH3",parent:"rd-corp",level:3},
+  {id:"perm-063",name:"CN Hồ Chí Minh",parent:"pbh3",level:4},
+  {id:"perm-064",name:"Đội 1",parent:"perm-063",level:5},
+  {id:"perm-065",name:"Đội 2",parent:"perm-063",level:5},
+  {id:"perm-066",name:"Đội 3",parent:"perm-063",level:5},
+  {id:"perm-067",name:"Đội 4",parent:"perm-063",level:5},
+  {id:"perm-068",name:"Đội 5",parent:"perm-063",level:5},
+  {id:"perm-069",name:"Đội Siêu Thị",parent:"perm-063",level:5},
+  {id:"perm-070",name:"Đội chuyên trách - CN Hồ Chí Minh",parent:"perm-063",level:5},
+  {id:"perm-071",name:"CN Biên Hòa",parent:"pbh3",level:4},
+  {id:"perm-072",name:"Đội Bình Dương",parent:"perm-071",level:5},
+  {id:"perm-073",name:"Đội Bình Phước",parent:"perm-071",level:5},
+  {id:"perm-074",name:"Đội Bình Thuận",parent:"perm-071",level:5},
+  {id:"perm-075",name:"Đội Đồng Nai",parent:"perm-071",level:5},
+  {id:"perm-076",name:"Đội Vũng Tàu",parent:"perm-071",level:5},
+  {id:"perm-077",name:"Đội chuyên trách - CN Biên Hòa",parent:"perm-071",level:5},
+  {id:"perm-078",name:"CN Cần Thơ",parent:"pbh3",level:4},
+  {id:"perm-079",name:"Đội An Giang",parent:"perm-078",level:5},
+  {id:"perm-080",name:"Đội Kiên Giang",parent:"perm-078",level:5},
+  {id:"perm-081",name:"Đội Cần Thơ",parent:"perm-078",level:5},
+  {id:"perm-082",name:"Đội Sóc Trăng",parent:"perm-078",level:5},
+  {id:"perm-083",name:"Đội Cà Mau",parent:"perm-078",level:5},
+  {id:"perm-084",name:"Đội Bạc Liêu",parent:"perm-078",level:5},
+  {id:"perm-085",name:"Đội Campuchia",parent:"perm-078",level:5},
+  {id:"perm-086",name:"Đội chuyên trách - CN Cần Thơ",parent:"perm-078",level:5},
+  {id:"perm-087",name:"CN Tiền Giang",parent:"pbh3",level:4},
+  {id:"perm-088",name:"Đội Vĩnh Long",parent:"perm-087",level:5},
+  {id:"perm-089",name:"Đội Đồng Tháp",parent:"perm-087",level:5},
+  {id:"perm-090",name:"Đội Long An",parent:"perm-087",level:5},
+  {id:"perm-091",name:"Đội chuyên trách - CN Tiền Giang",parent:"perm-087",level:5},
+  {id:"perm-092",name:"TT3",parent:"pbh3",level:4},
+  {id:"perm-093",name:"TT4",parent:"pbh3",level:4},
+  {id:"pxk",name:"Xuất khẩu",parent:"rd-corp",level:3},
+  {id:"truyenthong",name:"Truyền thông",parent:"rd-corp",level:3},
+  {id:"ketoan",name:"Kế toán",parent:"rd-corp",level:3},
+  {id:"ecom",name:"TMĐT",parent:"rd-corp",level:3},
+  {id:"c4led",name:"C4LED",parent:"company",level:2},
+  {id:"nctt2",name:"Nghiên cứu thị trường",parent:"company",level:2},
+  {id:"kehoach",name:"Kế hoạch",parent:"company",level:2},
+  {id:"rnd",name:"Trung tâm R&D",parent:"company",level:2},
+  {id:"qths",name:"Quản trị hệ thống",parent:"company",level:2},
   /* Đơn vị của các agent khác không nằm trong workbook phân quyền Ralli. */
-  {id:"aemkt",name:"Anh Em tiếp thị",parent:null,level:1,provisioned:40},
-  {id:"cskh",name:"Chăm sóc khách hàng",parent:null,level:1,provisioned:28},
-  {id:"nctt",name:"P.NCTT",parent:null,level:1,provisioned:30},
-  {id:"cpbd",name:"Công ty CPBĐ PN Rạng Đông",parent:null,level:1,provisioned:18},
-  {id:"ttdl",name:"TTDL&ĐHS",parent:null,level:1,provisioned:6},
-  {id:"tttmdt",name:"TT&TMĐT",parent:null,level:1,provisioned:3}
+  {id:"aemkt",name:"Anh Em tiếp thị",parent:null,level:1},
+  {id:"cskh",name:"Chăm sóc khách hàng",parent:null,level:1},
+  {id:"nctt",name:"P.NCTT",parent:null,level:1},
+  {id:"cpbd",name:"Công ty CPBĐ PN Rạng Đông",parent:null,level:1},
+  {id:"ttdl",name:"TTDL&ĐHS",parent:null,level:1},
+  {id:"tttmdt",name:"TT&TMĐT",parent:null,level:1}
 ];
 var UNIT_ALIASES = {
   "Toàn công ty":"company", "Tổng công ty Rạng Đông":"rd-corp",
-  "PBH1":"pbh1", "Phòng Bán hàng 1":"pbh1",              // danh mục chuẩn: BH1
-  "PBH2":"pbh2", "Phòng Bán hàng 2":"pbh2",              // danh mục chuẩn: BH2
-  "PBH3":"pbh3", "Phòng Bán hàng 3":"pbh3",
+  // "Phòng BH1" là cách cây tổ chức của app TLA Hợp Đồng gọi, "PBH1" là cách
+  // Ralli gọi. Cùng một phòng. Thiếu ba dòng này thì người của Hợp Đồng rơi vào
+  // đơn vị tự sinh và không gộp chung với người của Ralli cùng phòng.
+  "PBH1":"pbh1", "Phòng Bán hàng 1":"pbh1", "Phòng BH1":"pbh1",
+  "PBH2":"pbh2", "Phòng Bán hàng 2":"pbh2", "Phòng BH2":"pbh2",
+  "PBH3":"pbh3", "Phòng Bán hàng 3":"pbh3", "Phòng BH3":"pbh3",
   "TMĐT":"ecom", "Thương mại điện tử":"ecom",            // danh mục chuẩn: TMDT
   "TT C4LED":"c4led", "C4LED":"c4led",
   "Cty CPBĐ PN Rạng Đông":"cpbd", "Công ty CPBĐ PN Rạng Đông":"cpbd",
@@ -185,29 +188,50 @@ var UNIT_ALIASES = {
 /* Số tài khoản được cấp sẽ được dựng lại từ danh sách user Ralli đã làm sạch.
    Không dùng số demo hoặc số của agent khác cho các KPI/bảng người dùng. */
 var DEPT_PROVISIONED = {};
-var MODALITY = [["TEXT",86,"#667eea"],["IMAGE",9,"#10b981"],["AUDIO",4,"#f59e0b"],["VIDEO",1,"#8b5cf6"]];
-var USER_HEAT = {
-  cols: ["Sale Agent","Chatbot CC","CRM","Phản Hồi TT","Ralli","Hợp Đồng"],
-  rows: ["Nhóm Sales","Nhóm CSKH","Nhóm Data","Nhóm Vận hành"],
-  matrix: [[480,40,10,20,110,60],[30,400,5,8,0,4],[12,6,300,85,2,0],[88,13,4,0,8,24]]
-};
+/* Tỷ lệ áp dụng theo agent, do /api/adoption trả về. Rỗng khi không có backend —
+   khi đó biểu đồ tự quay về cách tính cũ theo phòng ban. */
+var ADOPTION_BY_AGENT = [];
+/* Số liệu sử dụng ĐO ĐƯỢC theo từng tài khoản, từ /api/usage-by-account.
+   Rỗng khi không có backend — khi đó mới quay về cách rải cũ. */
+var REAL_BY_ACCOUNT = [];
+/* Danh bạ thật từ /api/accounts - 937 tài khoản, cả Ralli lẫn TLA Hợp Đồng.
+   Rỗng khi không có backend, khi đó mới quay về ralli-users.js. */
+var REAL_ACCOUNTS = [];
+/* Đã xoá 15/08: MODALITY (86/9/4/1 % theo loại nội dung) và USER_HEAT (ma trận
+   4x6 lượt dùng theo nhóm). Cả hai là số GÕ TAY, không nguồn nào đo được chúng,
+   và không nơi nào trong file này đọc tới - code chết từ lâu. Để lại thì sớm
+   muộn có người nối vào một biểu đồ và số bịa lên thẳng màn hình.
+   Cần thật thì phải có nguồn đo trước, không phải khai lại hằng số. */
 var palette = ["#667eea","#3b82f6","#f59e0b","#10b981","#8b5cf6","#06b6d4","#ef4444","#64748b","#ec4899","#14b8a6"];
 
-/* ═══════════════ DANH MỤC TÀI KHOẢN RALLI ═══════════════
-   Nguồn usage KHÔNG có userId (mỗi dòng là tổng theo agent × phòng ban), nên không thể
-   quy số liệu về từng tài khoản thật. Danh tính, tên và phòng ban lấy từ TLA Ralli;
-   request/token chỉ được PHÂN BỔ từ tổng thật của phòng để các cấp drilldown cộng khớp.
+/* ═══════════════ DANH MỤC TÀI KHOẢN ═══════════════
+   HAI CHẾ ĐỘ, và nhãn phải nói đúng chế độ đang chạy.
 
-   Vì vậy: số của từng tài khoản là SỐ PHÂN BỔ, không phải số đo. Mọi khối UI hiển thị
-   số ở cấp tài khoản phải mang nhãn ALLOCATED_DATA_LABEL.
+   CÓ DATABASE  danh bạ từ /api/accounts (937 tài khoản), số từng người từ
+                /api/usage-by-account. Là SỐ ĐO, không phải phân bổ.
+   KHÔNG CÓ     danh bạ từ ralli-users.js, số từng người rải từ tổng của phòng
+                theo hàm băm tên đăng nhập. Là SỐ PHÂN BỔ.
 
-   Tách hai phần để tổng luôn khớp ở MỌI kỳ:
-     buildAccountCatalogue()      → danh tính, tĩnh (không chứa số liệu)
-     applyAccountAllocation(rows) → phân bổ theo kỳ + bộ lọc đang xem, chạy mỗi lượt render
+   Nhãn dưới đây trước 15/08 luôn nói "số phân bổ" ở cả hai chế độ. Sau khi nối
+   database, nó thành lời cảnh báo NGƯỢC: bảo người xem đừng tin những con số
+   giờ đã là số đo thật. Một cảnh báo sai chỗ cũng nguy hiểm như thiếu cảnh báo.
+
+     buildAccountCatalogue()      → danh tính
+     applyAccountAllocation(rows) → chọn một trong hai chế độ trên
    ═════════════════════════════════════════════════════════ */
-var ALLOCATED_DATA_LABEL = "Số liệu phân bổ theo phòng ban";
-var ALLOCATED_DATA_HINT = "Nguồn usage hiện tại không có định danh user. Số theo tài khoản là "
-  + "số phân bổ từ tổng thật của phòng ban, không phải số đo theo từng tài khoản.";
+function accountDataLabel(){
+  return REAL_BY_ACCOUNT.length
+    ? "Số đo theo từng tài khoản"
+    : "Số liệu phân bổ theo phòng ban";
+}
+function accountDataHint(){
+  return REAL_BY_ACCOUNT.length
+    ? "Số của từng tài khoản lấy trực tiếp từ nhật ký của Ralli và TLA Hợp Đồng,"
+      + " không phải phân bổ. Sáu agent còn lại gọi bằng tài khoản dịch vụ nên"
+      + " không có chiều người dùng."
+    : "Nguồn usage hiện tại không có định danh user. Số theo tài khoản là số phân"
+      + " bổ từ tổng thật của phòng ban, không phải số đo theo từng tài khoản.";
+}
 var USER_ACCOUNTS = [];
 
 /* Băm tiền định: cùng chuỗi luôn cho cùng số. Không dùng Math.random để mọi lần
@@ -239,7 +263,38 @@ function unitAgentProfiles(){
 }
 /* Tỷ lệ tài khoản có khả năng hoạt động của một đơn vị — cố định theo unitId. */
 function adoptionRatio(unitId){ return 0.55 + (stableHash("adopt:"+unitId)%36)/100; }
+/* Danh bạ dựng từ DATABASE (/api/accounts).
+
+   Thay cho ralli-users.js - bản Excel 622 dòng, chỉ có người của Ralli. Hậu quả
+   đo được trước khi đổi: kỳ 01-13/08 có 15 người phát sinh request mà bảng chỉ
+   hiện 7, vì 8 người kia (phần lớn của TLA Hợp Đồng) không có dòng trong file.
+
+   `weight` để 0 vì nhánh này KHÔNG rải số - applyRealAccountUsage() điền số đo
+   thật. Trường đó chỉ còn nghĩa ở nhánh dữ liệu nhúng.
+
+   Tài khoản dùng chung (admin, system, guest, test*) vẫn có mặt để tổng token
+   không hụt, nhưng mang cờ `shared` để chỉ tiêu tỷ lệ áp dụng loại ra. */
+function buildAccountCatalogueFromDb(){
+  return REAL_ACCOUNTS.map(function(a){
+    var unit=unitOf(a.unit_name)||null;
+    return {
+      user:a.email||a.username, login:a.username, email:a.email||"",
+      n:a.full_name||a.username,
+      unitId:unit?unit.id:"", d:a.unit_name||"—",
+      a:a.agent||"", m:"", ug:"",
+      weight:0,
+      role:a.role||"", accountType:a.is_shared?"service":"person",
+      sourceStatus:a.is_enabled===false?"Đã khoá":"Hoạt động",
+      created:a.created_at||"",
+      disabled:a.is_enabled===false,
+      shared:!!a.is_shared, inDirectory:!!a.in_directory,
+      req:0, ti:0, to:0, last:"", active:false, quotaPct:0
+    };
+  }).filter(function(u){ return u.unitId && !isExcludedUnit(unitById(u.unitId)); });
+}
+
 function buildAccountCatalogue(){
+  if(REAL_ACCOUNTS.length) return buildAccountCatalogueFromDb();
   var out=[], byUnit={};
   (window.RALLI_USERS||[]).forEach(function(entry){
     var unit=unitOf(entry.department);
@@ -273,12 +328,60 @@ function buildAccountCatalogue(){
   });
   return out;
 }
+/* Số liệu ĐO ĐƯỢC của từng tài khoản, từ /api/usage-by-account.
+
+   Thay cho cách rải bằng hàm băm ở applyAccountAllocation() bên dưới. Cách cũ
+   ra đời khi chưa nguồn nào ghi ai gọi, nên nó chia tổng của phòng xuống từng
+   người theo `weight = 1 + hash(login) % 9`. Con số hiện ra trông y hệt số đo:
+   có người 40 request, người 7 request, xếp hạng được, vẽ biểu đồ được — mà
+   toàn bộ đến từ băm tên đăng nhập.
+
+   Nay Ralli và TLA Hợp Đồng đều ghi danh tính, và database giữ ở mức
+   (ngày, người, agent, model). Ai có số thì lấy số thật; ai không có thì để 0
+   chứ KHÔNG rải phần còn lại xuống — "không đo được" và "bằng không" phải
+   trông khác nhau.
+
+   Hệ quả phải biết: danh bạ hiển thị đang lấy từ ralli-users.js (622 dòng
+   Excel) trong khi database có 937 tài khoản thật. Người của TLA Hợp Đồng
+   phần lớn không có dòng trong danh bạ đó nên số của họ không hiện lên được ở
+   tab này — con số bị bỏ lại được đếm và ghi vào console. */
+function applyRealAccountUsage(){
+  var byKey={};
+  USER_ACCOUNTS.forEach(function(u){
+    u.req=0; u.ti=0; u.to=0; u.active=false; u.last=""; u.quotaPct=0; u.byAgent={};
+    if(u.login) byKey[String(u.login).trim().toLowerCase()]=u;
+    if(u.email) byKey[String(u.email).trim().toLowerCase()]=u;
+  });
+  var r=state&&state.range, bo=0, boLuot=0;
+  REAL_BY_ACCOUNT.forEach(function(x){
+    if(r&&(x.day<r.start||x.day>r.end)) return;
+    var u=byKey[String(x.username||"").trim().toLowerCase()]
+        ||byKey[String(x.full_name||"").trim().toLowerCase()];
+    if(!u){ bo++; boLuot+=x.calls||0; return; }
+    var req=x.calls||0, ti=x.input_tokens||0, to=x.output_tokens||0;
+    u.req+=req; u.ti+=ti; u.to+=to;
+    var ag=x.agent||u.a, b=u.byAgent[ag]||(u.byAgent[ag]={req:0,ti:0,to:0});
+    b.req+=req; b.ti+=ti; b.to+=to;
+    if(!u.last||x.day>u.last) u.last=x.day;
+  });
+  USER_ACCOUNTS.forEach(function(u){ u.active=num(u.req)>0; });
+  // quotaPct để 0: trước đây nó là 12+(hash%80), tức thẻ trạng thái "Cảnh báo"
+  // bật lên theo hàm băm. Không nguồn nào có khái niệm hạn mức theo người, nên
+  // để 0 và không ai bị gắn cảnh báo sai.
+  if(bo) console.warn("[TokenLedgerAPI] "+bo+" dong su dung ("+boLuot
+    +" luot) khong khop tai khoan nao trong ralli-users.js - danh ba hien thi"
+    +" van la ban Excel 622 dong, database co 937 tai khoan.");
+}
+
 /* Phân bổ số liệu THẬT xuống tài khoản, khoá theo CẶP (đơn vị, agent).
    Phải theo cặp, không chỉ theo đơn vị: nếu phân bổ tổng của phòng cho mọi tài khoản
    bất kể agent, thì một agent có 0 request trong kỳ vẫn nhận số khi drilldown, và
    ma trận cấp 1 (0 request) sẽ nói ngược với ma trận cấp 2. Khoá theo cặp giữ đồng
    thời hai bất biến: tổng theo phòng khớp, và tổng theo phòng × agent cũng khớp. */
 function applyAccountAllocation(rows){
+  // Có số đo thật thì dùng số đo. Cách rải bên dưới chỉ còn cho trường hợp mở
+  // dashboard không có backend, khi dữ liệu nhúng vốn không có chiều người dùng.
+  if(REAL_BY_ACCOUNT.length){ applyRealAccountUsage(); return; }
   var totals={};
   (rows||[]).forEach(function(r){
     var unit=unitOf(r.d);
@@ -2336,7 +2439,20 @@ function toISO(d){ return d.getUTCFullYear()+"-"+pad2(d.getUTCMonth()+1)+"-"+pad
 function addDays(d,n){ return new Date(d.getTime()+n*86400000); }
 function dayDiff(aISO,bISO){ return Math.round((parseISO(bISO)-parseISO(aISO))/86400000); }
 function dayLabel(iso){ var p=String(iso).split("-"); return p.length===3? (p[2]+"/"+p[1]) : iso; }
-function cost(r){ var p = state.pricing[r.m]; if(!p) return 0; return num(r.ti)/1e6*num(p.i) + num(r.to)/1e6*num(p.o); }
+/* Tiền: LẤY TỪ HOÁ ĐƠN nếu có, chỉ ước tính khi chưa có.
+   Trước 15/08 hàm này luôn nhân lại token với đơn giá, kể cả ở những ngày đã có
+   hoá đơn thật trong database. Nhân lại thì sai theo hai hướng cùng lúc: bảng
+   giá là giá niêm yết nên không có chiết khấu cam kết, và token cache bị tính
+   theo giá input đầy đủ. Đã đo trên 66 dòng có hoá đơn kỳ 01-13/08: hoá đơn
+   $26,9370, còn nhân lại ra $26,36 - lệch 2,1% ngay cả khi bảng giá đúng.
+   `cached` chỉ được cộng ở nhánh ước tính, và chỉ khi nó nằm NGOÀI input
+   (api.js đã lọc sẵn) - xem ghi chú "ba nghĩa của cached" ở đó. */
+function cost(r){
+  if(r.cost!=null) return num(r.cost);
+  var p = state.pricing[r.m]; if(!p) return 0;
+  return num(r.ti)/1e6*num(p.i) + num(r.to)/1e6*num(p.o)
+       + num(r.cached)/1e6*num(p.c||0);
+}
 function isExcludedDepartment(name){ return !!EXCLUDED_DEPARTMENTS[String(name||"").trim()]; }
 function isExcludedAgent(name){ return !!EXCLUDED_AGENTS[String(name||"").trim().toLowerCase()]; }
 /* File nguồn đang gộp P.NCTT và TTDL&ĐHS trong một nhãn. Tách theo đúng agent nghiệp vụ
@@ -2430,8 +2546,15 @@ function isExcludedUnit(unit){ return !unit || isExcludedDepartment(unit.name); 
    Nhờ đó company/PBH/vùng/đội đều có mẫu số đúng nhưng mỗi tài khoản chỉ tồn tại một lần. */
 function rebuildRalliProvisioned(){
   DEPT_PROVISIONED={};
-  (window.RALLI_USERS||[]).forEach(function(entry){
-    var unit=unitOf(entry.department);
+  // Có database thì đếm từ danh bạ THẬT: chỉ người có trong danh bạ của app
+  // (in_directory) và không phải tài khoản dùng chung. Đó đúng là định nghĩa
+  // "được cấp quyền". Không có backend thì quay về file Excel như cũ.
+  var phong = REAL_ACCOUNTS.length
+    ? REAL_ACCOUNTS.filter(function(a){ return a.in_directory && !a.is_shared; })
+                   .map(function(a){ return a.unit_name; })
+    : (window.RALLI_USERS||[]).map(function(e){ return e.department; });
+  phong.forEach(function(dept){
+    var unit=unitOf(dept);
     if(!unit||isExcludedUnit(unit)) return;
     unitPath(unit.id).forEach(function(node){
       DEPT_PROVISIONED[node.id]=(DEPT_PROVISIONED[node.id]||0)+1;
@@ -2690,7 +2813,11 @@ function aggregate(rows){
     a.eKnown+=num(row.eKnown);
     if(num(row.lat99)>0&&num(row.r)>0){a.lat99W+=num(row.lat99)*num(row.r);a.lat99R+=num(row.r);}
   });
-  a.tokens = a.ti + a.to;
+  // CỘNG CẢ `cached`. Với nguồn hoá đơn, token cache là một SKU riêng nằm NGOÀI
+  // input, nên ti + to bỏ sót nó: 224,6/851,9 triệu = 26% tổng token. api.js chỉ
+  // truyền `cached` khi nó nằm ngoài input, nên cộng ở đây không bao giờ đếm hai
+  // lần - xem ghi chú "ba nghĩa của cached" trong api.js.
+  a.tokens = a.ti + a.to + a.cached;
   a.er = a.r ? a.erW/a.r : 0;
   a.latAvailable = a.latR>0;
   a.lat = a.latAvailable ? a.latW/a.latR : 0;
@@ -3321,16 +3448,19 @@ function buildDeptUsageIndex(rows){
   (rows||[]).forEach(function(r){
     var u=unitOf(r.d);
     if(!u||isExcludedUnit(u)) return;
-    var rq=num(r.r), c=cost(r), ti=num(r.ti), to=num(r.to), erW=num(r.er)*rq;
+    var rq=num(r.r), c=cost(r), ti=num(r.ti), to=num(r.to), ca=num(r.cached),
+        erW=num(r.er)*rq;
     unitPath(u.id).forEach(function(n){
-      var m=map[n.id]||(map[n.id]={r:0,ti:0,to:0,tokens:0,cost:0,erW:0,rowCount:0,agentSet:{}});
-      m.r+=rq; m.ti+=ti; m.to+=to; m.cost+=c; m.erW+=erW; m.rowCount++;
+      var m=map[n.id]||(map[n.id]={r:0,ti:0,to:0,cached:0,tokens:0,cost:0,erW:0,rowCount:0,agentSet:{}});
+      m.r+=rq; m.ti+=ti; m.to+=to; m.cached+=ca; m.cost+=c; m.erW+=erW; m.rowCount++;
       if(r.a) m.agentSet[r.a]=1;
     });
   });
   Object.keys(map).forEach(function(id){
     var m=map[id];
-    m.tokens=m.ti+m.to; m.er=m.r?m.erW/m.r:0; m.agents=Object.keys(m.agentSet).length;
+    // Cùng lý do với aggregate(): token cache của hoá đơn nằm ngoài input.
+    m.tokens=m.ti+m.to+m.cached; m.er=m.r?m.erW/m.r:0;
+    m.agents=Object.keys(m.agentSet).length;
   });
   return map;
 }
@@ -3512,7 +3642,7 @@ function renderDepartments(rows){
 
   renderDeptTree(rows);
   bindDeptToolbar();
-  set("dep-alloc-note","<span title='"+esc(ALLOCATED_DATA_HINT)+"'>· "+ALLOCATED_DATA_LABEL+"</span>");
+  set("dep-alloc-note","<span title='"+esc(accountDataHint())+"'>· "+accountDataLabel()+"</span>");
 }
 function chartsDepartments(rows){
   // Gom theo đơn vị chuẩn hoá để mỗi phòng chỉ có MỘT lát bánh.
@@ -3531,21 +3661,46 @@ function chartsDepartments(rows){
   if(!costLabels.length) emptyChart("c-dep-cost","lg-dep-cost","Chưa có phòng ban nào phát sinh chi phí trong kỳ.");
   else mkDonut("c-dep-cost",costLabels,costValues,"lg-dep-cost",money);
 
-  // Tỷ lệ tài khoản được sử dụng = tài khoản có request / tài khoản được cấp, khoá theo
-  // unitId. Đây là tỷ lệ NỘI BỘ từng phòng, các phòng KHÔNG cộng lại thành 100% — nên vẽ
-  // bằng thanh ngang thang 0–100%, không dùng biểu đồ chia phần (tròn/polar).
-  // Đơn vị chưa khai báo số cấp không được suy ra thành 100%: tách ra ghi chú bên dưới.
-  var pool=filterAccounts(), missing=[];
-  var adoption=units.map(function(g){
-    var prov=provisionedOf(g.unit.id);
-    if(prov==null||prov<=0){ missing.push(g.unit.name); return null; }
-    var active=accountsUnderUnit(g.unit.id,pool).filter(function(u){return u.active;}).length;
-    return {key:g.unit.name, active:active, prov:prov,
-            value:Math.min(100,Math.round(active/prov*100))};
-  }).filter(Boolean).sort(function(a,b){return a.value-b.value;}).slice(0,8);
-  var missingNote=missing.length
-    ? "Chưa tính được "+missing.length+" phòng do nguồn TLA Ralli chưa có số tài khoản được cấp: "+missing.join(", ")+"."
-    : "";
+  // Tỷ lệ tài khoản được sử dụng = tài khoản có request / tài khoản được cấp.
+  // Đây là tỷ lệ NỘI BỘ từng dòng, các dòng KHÔNG cộng lại thành 100% — nên vẽ bằng
+  // thanh ngang thang 0–100%, không dùng biểu đồ chia phần (tròn/polar).
+  //
+  // KHOÁ THEO AGENT, không theo phòng ban. Mẫu số "số tài khoản được cấp" là khái
+  // niệm của từng agent: Ralli và TLA HĐ cấp cho người, sáu agent còn lại chạy bằng
+  // một tài khoản dịch vụ nên mẫu số là 1. Ép nó vào cây phòng ban thì sáu agent kia
+  // vĩnh viễn không có mẫu số, và trước 14/08 biểu đồ này trắng vì đúng lý do đó.
+  //
+  // Số lấy từ /api/adoption và là chỉ tiêu TÍCH LUỸ trên toàn bộ dữ liệu, KHÔNG đổi
+  // theo thanh trượt ngày — "đã từng dùng chưa" không phải câu hỏi theo ngày. Ghi chú
+  // dưới biểu đồ nói rõ khoảng thời gian để không ai đọc nhầm thành số của kỳ đang xem.
+  var pool=filterAccounts(), missing=[], adoption, missingNote;
+  if(ADOPTION_BY_AGENT.length){
+    adoption=ADOPTION_BY_AGENT.map(function(r){
+      return {key:r.agent, active:r.active, prov:r.provisioned,
+              value:Math.min(100,Math.round(r.rate_pct))};
+    }).sort(function(a,b){return a.value-b.value;}).slice(0,12);
+    var moc=ADOPTION_BY_AGENT.filter(function(r){return r.from_day;});
+    var tu=moc.length?moc.map(function(r){return r.from_day;}).sort()[0]:"";
+    var den=moc.length?moc.map(function(r){return r.to_day;}).sort().pop():"";
+    var chung=ADOPTION_BY_AGENT.reduce(function(s,r){return s+(r.shared_excluded||0);},0);
+    var ngoai=ADOPTION_BY_AGENT.reduce(function(s,r){return s+(r.outside_directory||0);},0);
+    missingNote="Tỷ lệ tích luỹ trên toàn bộ dữ liệu ("+tu+" → "+den+"), không đổi theo kỳ đang chọn."
+      +(chung?" Đã loại "+chung+" tài khoản dùng chung và tài khoản thử.":"")
+      +(ngoai?" "+ngoai+" tài khoản có phát sinh request nhưng không còn trong danh bạ, chưa tính vào tử số.":"");
+  }else{
+    // Không có backend: giữ nguyên cách tính cũ theo phòng ban để dashboard mở bằng
+    // dữ liệu nhúng vẫn chạy như trước.
+    adoption=units.map(function(g){
+      var prov=provisionedOf(g.unit.id);
+      if(prov==null||prov<=0){ missing.push(g.unit.name); return null; }
+      var active=accountsUnderUnit(g.unit.id,pool).filter(function(u){return u.active;}).length;
+      return {key:g.unit.name, active:active, prov:prov,
+              value:Math.min(100,Math.round(active/prov*100))};
+    }).filter(Boolean).sort(function(a,b){return a.value-b.value;}).slice(0,8);
+    missingNote=missing.length
+      ? "Chưa tính được "+missing.length+" phòng do nguồn TLA Ralli chưa có số tài khoản được cấp: "+missing.join(", ")+"."
+      : "";
+  }
   if(!adoption.length){
     emptyChart("c-dep-adopt","lg-dep-adopt",
       missingNote||"Chưa có phòng ban nào khai báo số tài khoản được cấp.");
@@ -4076,7 +4231,7 @@ function renderMatrixNote(rows, scopeRows, idleAgents){
     if(r.noAccounts) blind++;
   });
   // Dưới cấp mà file usage ghi nhận, phần chia cho từng đơn vị/tài khoản là số PHÂN BỔ.
-  var allocated=" · <span title='"+esc(ALLOCATED_DATA_HINT)+"'>ⓘ "+ALLOCATED_DATA_LABEL+"</span>";
+  var allocated=" · <span title='"+esc(accountDataHint())+"'>ⓘ "+accountDataLabel()+"</span>";
   // Nêu tên project cột rỗng, để không ai phải đoán cột trắng là lỗi hay là không dùng.
   if(idleAgents&&idleAgents.length) allocated=" · <span class='mx-warn'>"+
     idleAgents.length+" project không phát sinh request trong kỳ: "+
@@ -4308,11 +4463,24 @@ function renderUsers(rows){
      nếu không người đọc sẽ cộng 25% với 465 tài khoản. Phần trăm nhóm bỏ không lấy
      bằng 100 − nhóm đang dùng (đã làm tròn) để hai thẻ luôn cộng đúng 100%. */
   var activePctRounded=accounts.length?Math.round(pct(active.length,accounts.length)):0;
-  set("m-us-adoption",activePctRounded+"%");
-  set("m-us-adoption-def","<b>"+fmt(active.length)+"/"+fmt(accounts.length)+"</b> tài khoản đã dùng.");
-  set("m-us-inactive",(accounts.length?100-activePctRounded:0)+"%");
-  set("m-us-inactive-def","<b>"+fmt(inactive.length)+"/"+fmt(accounts.length)+"</b> tài khoản · chưa từng dùng: "+
-    fmt(neverUsed)+" · ngừng >30 ngày: "+fmt(dormant)+".");
+  /* KHÔNG hiện 0%/100% cho kỳ không có chiều người dùng. Chiều "ai gọi" chỉ có
+     từ 14/03/2026; chọn kỳ trước đó thì hoá đơn vẫn có token thật nhưng không
+     ai quy được về người - hiện "0% đang dùng" là nói ngược sự thật. */
+  var ir=identityRange();
+  var ngoaiTam=!!(ir && (state.range.end<ir.from || state.range.start>ir.to));
+  if(ngoaiTam){
+    set("m-us-adoption","—");
+    set("m-us-adoption-def","Kỳ đang chọn nằm ngoài khoảng có dữ liệu định danh ("
+      +dayLabel(ir.from)+" → "+dayLabel(ir.to)+").");
+    set("m-us-inactive","—");
+    set("m-us-inactive-def","Chưa đo được ai đã dùng trong kỳ này, không phải không ai dùng.");
+  }else{
+    set("m-us-adoption",activePctRounded+"%");
+    set("m-us-adoption-def","<b>"+fmt(active.length)+"/"+fmt(accounts.length)+"</b> tài khoản đã dùng.");
+    set("m-us-inactive",(accounts.length?100-activePctRounded:0)+"%");
+    set("m-us-inactive-def","<b>"+fmt(inactive.length)+"/"+fmt(accounts.length)+"</b> tài khoản · chưa từng dùng: "+
+      fmt(neverUsed)+" · ngừng >30 ngày: "+fmt(dormant)+".");
+  }
   set("m-us-new",datedAccounts.length?fmtCompactNum(newInRange):"—");
   set("m-us-new-def",datedAccounts.length
     ?"Tài khoản được tạo trong khoảng thời gian đang chọn."
@@ -4397,18 +4565,116 @@ function renderInactiveAccounts(accounts){
     "xuất cột ngày cấp; bổ sung cột đó vào nguồn thì bảng tự điền.");
   set("user-inactive-note", note.join(" "));
 }
-/* Ước lượng người dùng hoạt động theo ngày. Nguồn usage chưa có userId nên DAU là số
-   suy ra từ lưu lượng ngày đó — dùng để nhìn xu hướng, không phải số đo tuyệt đối. */
+/* Người dùng hoạt động theo ngày.
+
+   CÓ DATABASE thì đây là số ĐẾM ĐƯỢC: bao nhiêu tài khoản khác nhau phát sinh
+   request trong ngày đó, lấy từ /api/usage-by-account.
+
+   Trước 15/08 nó là một công thức:
+       dau = tổng_tài_khoản × (0,10 + 0,16 × lượt_ngày / lượt_lớn_nhất)
+   Công thức ấy hợp lý ở thời điểm viết - không nguồn nào ghi userId - nhưng nó
+   cho ra đường cong mượt trông y hệt số đo. Đã đo lại: thực tế 1–5 người/ngày,
+   trong khi công thức vẽ 133–244. Sai gấp khoảng 50 lần.
+
+   Không có backend thì vẫn dùng công thức cũ, vì dữ liệu nhúng không có chiều
+   người dùng - và cờ `estimated` nói rõ đang ở nhánh nào. */
 function dauSeries(){
   var accounts=filterAccounts(), total=accounts.length;
-  var dates=state.dayOrder.filter(function(d){return d>=state.range.start&&d<=state.range.end;}).slice(-30);
+  /* 30 ngày LỊCH tính lùi từ ngày cuối kỳ, KHÔNG phải "30 ngày có dữ liệu".
+     Trước 15/08 nó lọc dayOrder rồi slice(-30) - ngày không có lưu lượng bị bỏ
+     hẳn khỏi trục, nên cửa sổ lặng lẽ kéo dài quá 30 ngày và trục hoành nhảy
+     cóc qua những ngày trống. Nay ngày trống vẫn đứng đúng chỗ với giá trị 0,
+     và nhãn "30 ngày tính đến <ngày cuối>" nói đúng thứ đang vẽ. */
+  var dates=[], _end=parseISO(state.range.end);
+  for(var _i=29;_i>=0;_i--){
+    var _d=toISO(addDays(_end,-_i));
+    if(_d>=state.range.start&&_d<=state.range.end) dates.push(_d);
+  }
+  if(REAL_BY_ACCOUNT.length){
+    // Chỉ đếm tài khoản nằm trong bộ lọc đang xem, để biểu đồ khớp với các thẻ
+    // KPI ngay trên nó thay vì luôn đếm toàn công ty.
+    var trongLoc={};
+    accounts.forEach(function(u){ if(u.login) trongLoc[String(u.login).toLowerCase()]=1; });
+    var theoNgay={};
+    REAL_BY_ACCOUNT.forEach(function(x){
+      var k=String(x.username||"").toLowerCase();
+      if(!trongLoc[k]) return;
+      (theoNgay[x.day]=theoNgay[x.day]||{})[k]=1;
+    });
+    return {dates:dates, total:total, estimated:false,
+            dau:dates.map(function(d){ return Object.keys(theoNgay[d]||{}).length; })};
+  }
   var requests=dates.map(function(d){return aggregate(applyFilters(state.days[d]||[])).r;});
   var maxReq=Math.max.apply(null,requests.concat([1]));
   var dau=requests.map(function(r){return Math.min(total,Math.round(total*(0.10+0.16*r/maxReq)));});
-  return {dates:dates, total:total, dau:dau};
+  return {dates:dates, total:total, dau:dau, estimated:true};
 }
+/* Khoảng ngày CÓ chiều người dùng, đọc từ chính dữ liệu đã nạp.
+   Ralli và TLA Hợp Đồng bắt đầu ghi danh tính từ 14/03/2026; trước đó hoá đơn
+   vẫn ghi nhận lưu lượng nhưng KHÔNG nguồn nào ghi ai gọi. */
+function identityRange(){
+  if(!REAL_BY_ACCOUNT.length) return null;
+  var min=null, max=null;
+  REAL_BY_ACCOUNT.forEach(function(x){
+    if(!min||x.day<min) min=x.day;
+    if(!max||x.day>max) max=x.day;
+  });
+  return {from:min, to:max};
+}
+
 function chartsUsers(rows){
   var s=dauSeries(), labels=s.dates.map(dayLabel);
+  var kyLabel=dayLabel(state.range.start)+" → "+dayLabel(state.range.end);
+
+  /* KỲ KHÔNG CÓ CHIỀU NGƯỜI DÙNG thì KHÔNG vẽ 0.
+     Đây là cái bẫy đắt nhất của bộ dữ liệu này: "không đo được" và "bằng không"
+     trông giống hệt nhau trên biểu đồ. Chọn kỳ 29/01–28/02 thì hoá đơn ghi
+     85.040.150 token thật, nhưng chiều danh tính chỉ có từ 14/03 - vẽ ra sẽ
+     thành "0% nhân viên dùng AI", tức nói ngược hẳn sự thật.
+     Mẫu số cũng sai theo: 937 là số tài khoản HÔM NAY, mà tài khoản Ralli sớm
+     nhất mới được tạo 02/04/2026. */
+  var ir=identityRange();
+  var coDinhDanh=s.dau.some(function(v){ return v>0; });
+  var coLuuLuong=aggregate(rows).tokens>0 || aggregate(rows).r>0;
+  if(REAL_BY_ACCOUNT.length && !coDinhDanh && coLuuLuong){
+    /* Nói ĐÚNG lý do, vì hai lý do dẫn tới cùng một biểu đồ rỗng:
+         (a) kỳ này chỉ có agent chạy bằng tài khoản dịch vụ - khái niệm "người
+             dùng" không tồn tại, chứ không phải đo hụt
+         (b) có agent cấp quyền cho người, nhưng không dòng nào quy được về ai
+       Kỳ 29/01–28/02 là trường hợp (a): ba agent chạy đều has_org_tree = 0. */
+    var agentKy={}; (rows||[]).forEach(function(r){ if(r.a) agentKy[r.a]=1; });
+    var agentNguoi=ADOPTION_BY_AGENT.filter(function(x){return x.kind==="people";});
+    var chayTrongKy=agentNguoi.filter(function(x){return agentKy[x.agent];});
+    var tenDichVu=Object.keys(agentKy).sort().join(", ");
+    var vi = chayTrongKy.length
+      ? "Kỳ đang chọn ("+kyLabel+") có agent cấp quyền cho người dùng nhưng không"
+        + " dòng nào quy được về ai."
+      : "Kỳ đang chọn ("+kyLabel+") chưa có agent nào cấp quyền cho người dùng."
+        + (tenDichVu?" Chỉ "+tenDichVu+" chạy, và chúng gọi bằng tài khoản dịch"
+           +" vụ nên không có khái niệm \"người dùng\".":"")
+        + (agentNguoi.length?" Hai agent có chiều người dùng ("
+           +agentNguoi.map(function(x){return x.agent;}).join(", ")+")":"")
+        + (ir?" chỉ có dữ liệu từ "+dayLabel(ir.from)+" đến "+dayLabel(ir.to)+".":".");
+    vi += " Hoá đơn vẫn ghi nhận lưu lượng trong kỳ này — 0 ở đây nghĩa là KHÔNG"
+        + " ÁP DỤNG, không phải không ai dùng.";
+    emptyChart("c-us-dau","nt-us-dau",vi);
+    emptyChart("c-us-idle","nt-us-idle",vi);
+    emptyChart("c-us-adopt-all","lg-us-adopt-all",vi);
+    set("nt-us-adopt-all","");
+    return;
+  }
+  /* Biểu đồ chỉ vẽ 30 ngày CUỐI của kỳ (dauSeries slice(-30)), nên ghi chú phải
+     nói đúng cửa sổ ĐANG VẼ chứ không phải cả kỳ - chọn kỳ 6 tháng mà ghi chú
+     đề tên cả 6 tháng thì người đọc tưởng đường cong phủ hết. */
+  var veLabel=s.dates.length
+    ? dayLabel(s.dates[0])+" → "+dayLabel(s.dates[s.dates.length-1]) : kyLabel;
+  var thieu=s.dates.length&&veLabel!==kyLabel
+    ? " ("+s.dates.length+" ngày cuối của kỳ "+kyLabel+")" : "";
+  set("nt-us-dau","Đang vẽ "+veLabel+thieu
+      +(ir?" · chiều người dùng có từ "+dayLabel(ir.from)+" đến "+dayLabel(ir.to):"")
+      +(s.estimated?" · SỐ ƯỚC LƯỢNG (không có backend)":""));
+  set("nt-us-idle","Đang vẽ "+veLabel+thieu+" · = tổng đã cấp − người hoạt động trong ngày.");
+
   var avg=s.dau.length?s.dau.reduce(function(a,b){return a+b;},0)/s.dau.length:0;
   mkLine("c-us-dau",labels,[
     {label:"Người dùng hoạt động",data:s.dau,borderColor:"#3b82f6",backgroundColor:"rgba(59,130,246,.12)",fill:true,tension:.35,pointRadius:2},
@@ -4432,7 +4698,7 @@ function chartsUsers(rows){
       "lg-us-adopt-all",
       function(v){ return fmt(v)+"/"+fmt(accounts.length)+" tài khoản"; },
       ["#10b981","#f59e0b"]);
-    set("nt-us-adopt-all","Mẫu số là "+fmt(accounts.length)+" tài khoản đã cấp"+
+    set("nt-us-adopt-all","Kỳ "+kyLabel+" · mẫu số là "+fmt(accounts.length)+" tài khoản đã cấp"+
       (state.filters.dept?" trong phạm vi đang lọc":"")+
       "; đang dùng = có ≥1 request trong kỳ và tài khoản chưa bị khoá.");
   }
@@ -5050,6 +5316,53 @@ function init(){
   applyTheme(savedTheme);
 
   renderAll();
+  napTuBackend();
+}
+
+/* ─── Nạp dữ liệu thật từ backend đọc database ───────────────────────────
+   CHỈ THAY DỮ LIỆU. Không đụng vào giao diện: không thêm phần tử, không đổi
+   chữ, không đổi màu. Dashboard trông y hệt như trước, chỉ khác là số bên
+   trong đến từ database thay vì từ khối nhúng sẵn.
+
+   Chạy SAU renderAll(): dashboard hiện ra ngay bằng dữ liệu nhúng, rồi số
+   thật thay vào khi backend trả lời. Không có backend thì không có gì xảy ra.
+
+   KHÔNG gọi saveState() ở đây. Ghi dữ liệu backend vào localStorage sẽ khiến
+   lần mở sau dùng bản cũ mà tưởng là mới; để nguyên thì mỗi lần tải trang là
+   một lần hỏi lại database. */
+function napTuBackend(){
+  if(!window.TokenLedgerAPI) return;
+  window.TokenLedgerAPI.load().then(function(kq){
+    if(!kq || !kq.dayOrder.length) return;
+    state.days=kq.days;
+    state.dayOrder=kq.dayOrder;
+    if(Object.keys(kq.pricing||{}).length) state.pricing=kq.pricing;
+    if(kq.fxRate && kq.fxRate.vnd_per_usd) VND_RATE=kq.fxRate.vnd_per_usd;
+    state.activeDay=kq.dayOrder[kq.dayOrder.length-1];
+    // Kỳ đang chọn có thể nằm ngoài khoảng dữ liệu vừa nạp — kéo về cuối kỳ.
+    if(!state.range || state.range.end>state.activeDay || state.range.start<kq.dayOrder[0]){
+      state.range={start:kq.dayOrder[Math.max(0,kq.dayOrder.length-30)], end:state.activeDay};
+    }
+    // Tỷ lệ áp dụng theo agent, tính TÍCH LUỸ trên toàn bộ dữ liệu (không đổi
+    // theo thanh trượt ngày). Không có backend thì để rỗng và biểu đồ tự quay
+    // về cách tính cũ theo phòng ban.
+    // Ngân sách từ ref_budget. Giữ nguyên `aliases` đang cấu hình cho những
+    // agent nào còn khớp được, để tên cũ trong dữ liệu nhúng vẫn tra ra.
+    if(kq.budgets&&kq.budgets.length){
+      var aliasCu={};
+      AGENT_MONTHLY_BUDGETS.forEach(function(x){ aliasCu[x.agent]=x.aliases||[]; });
+      AGENT_MONTHLY_BUDGETS=kq.budgets.map(function(b){
+        return {agent:b.agent, usd:b.usd, aliases:aliasCu[b.agent]||[]};
+      });
+      MONTHLY_BUDGET=AGENT_MONTHLY_BUDGETS.reduce(function(s,x){return s+x.usd;},0);
+    }
+    ADOPTION_BY_AGENT=kq.adoption||[];
+    REAL_BY_ACCOUNT=kq.byAccount||[];
+    REAL_ACCOUNTS=kq.accounts||[];
+    rebuildRalliProvisioned();
+    USER_ACCOUNTS=buildAccountCatalogue();
+    renderAll();
+  });
 }
 
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", init);

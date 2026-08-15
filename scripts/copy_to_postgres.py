@@ -6,7 +6,7 @@
 
 VI SAO CHEP BANG, KHONG CHAY LAI CAC SCRIPT NAP
 -----------------------------------------------
-Chay lai db/nap_*.py voi --db <dsn postgres> cung ra database dung, nhung no
+Chay lai db/load_*.py voi --db <dsn postgres> cung ra database dung, nhung no
 dung lai tu DU LIEU NGUON. Neu mai kia thu muc data/ khong con day du thi khong
 tai tao duoc nua. Chep thang tu file SQLite cho ra ban sao dung bang cai dang co
 o day, va doi chieu duoc tung bang mot.
@@ -18,7 +18,7 @@ THU TU NAP
 ----------
 Suy bang topo tu khoa ngoai luc chay, khong go tay: them mot bang moi vao schema
 thi script tu xep dung cho. Rieng dim_unit tu tro vao chinh no (parent_id) nen
-trong bang do phai nap theo `cap` tang dan.
+trong bang do phai nap theo `level` tang dan.
 
 KIEU DU LIEU
 ------------
@@ -41,7 +41,23 @@ SCHEMA = ROOT / "db" / "01_schema.sql"
 SQLITE_MAC_DINH = ROOT / "db" / "token_ledger.sqlite"
 
 # Kieu duoc coi la so - dung de doi chieu tong sau khi chep.
-KIEU_SO = ("BIGINT", "NUMERIC", "DOUBLE PRECISION", "INTEGER", "REAL")
+#
+# SO KHOP THEO TIEN TO, KHONG SO BANG TUYET DOI.
+# PRAGMA tra ve kieu Y NGUYEN NHU DA KHAI, ke ca phan trong ngoac: schema viet
+# `NUMERIC(14,6)` va `INT`, khong phai `NUMERIC` va `INTEGER`. Ban truoc so bang
+# `kieu in KIEU_SO` nen bo qua HET:
+#     chi_phi_usd  NUMERIC(14,6)   <- cot TIEN, thu quan trong nhat
+#     ref_price    ca ba cot gia
+#     moi cot INT  agent_id, model_id, so_luot...
+# Nghia la phep "doi chieu tong moi cot so" van bao khop trong khi khong he cong
+# thu cot nao trong so do. Bao dam gia, dung kieu nguy hiem nhat.
+KIEU_SO = ("BIGINT", "NUMERIC", "DOUBLE PRECISION", "INTEGER", "INT", "REAL",
+           "SMALLINT", "DECIMAL", "FLOAT")
+
+
+def la_kieu_so(kieu: str) -> bool:
+    goc = kieu.split("(", 1)[0].strip().upper()
+    return goc in KIEU_SO
 LO = 5000
 
 
@@ -126,7 +142,7 @@ def cau_truc(cn_lite) -> tuple[list[str], dict, dict]:
 
 def doc_dong(cn_lite, bang: str, cot: list[str], bool_cot: list[int]):
     # dim_unit tu tro vao chinh no -> cha phai vao truoc con.
-    sap = " ORDER BY cap" if bang == "dim_unit" else ""
+    sap = " ORDER BY level" if bang == "dim_unit" else ""
     cau = f"SELECT {','.join(cot)} FROM {bang}{sap}"
     for dong in cn_lite.execute(cau):
         if not bool_cot:
@@ -211,7 +227,7 @@ def main() -> None:
             lech.append(f"{bang}: so dong {a} != {b}")
             continue
 
-        cot_so = [c for c in cot[bang] if kieu[bang][c] in KIEU_SO]
+        cot_so = [c for c in cot[bang] if la_kieu_so(kieu[bang][c])]
         for c in cot_so:
             # 1) SUM voi sai so TUONG DOI, khong tuyet doi.
             #    fact_monitoring.gia_tri chua han muc quota = int64 max (9,2e18);

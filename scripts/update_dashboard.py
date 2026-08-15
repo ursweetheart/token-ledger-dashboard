@@ -1,8 +1,8 @@
 """Mot lenh: thu thap moi nguon roi cap nhat du lieu hardcode cua dashboard.
 
-    python scripts/cap_nhat_dashboard.py
+    python scripts/update_dashboard.py
 
-Chay tuan tu 7 buoc. HONG BUOC NAO LA DUNG NGAY - khong buoc nao chay tiep tren
+Chay tuan tu 9 buoc. HONG BUOC NAO LA DUNG NGAY - khong buoc nao chay tiep tren
 dau ra dang do cua buoc truoc.
 
     0  Kiem hoa don da moi chua        (viec TAY duy nhat con lai)
@@ -11,8 +11,10 @@ dau ra dang do cua buoc truoc.
     3  Gop cac dot keo Monitoring
     4  Keo Ralli + TLA Hop Dong
     5  Gop hoa don tu 7 file Console
-    6  Sinh khoi du lieu cho dashboard
-    7  Va vao app.js
+    6  Gop histogram do tre theo ngay
+    7  Dung lai database          (schema + 6 khau nap, ~15 giay)
+    8  Soi database               (25 phep kiem)
+    9  Va du lieu du phong vao app.js  - ban offline, backend da thay the
 
 VI SAO BUOC 0 VA 1 DUNG DAU
 ---------------------------
@@ -110,28 +112,39 @@ def main() -> None:
     print("=" * 72)
 
     try:
-        print("\n[0/7] Kiem hoa don")
+        print("\n[0/9] Kiem hoa don")
         kiem_billing(args.hoa_don_cu)
 
         # Buoc nay dang nhap mot lan roi vut token di; buoc 4 dang nhap lai.
         # Doi lai la biet ngay tu giay thu 5 rang xac thuc co chay duoc khong,
         # thay vi biet sau 15 phut. Hai lan dang nhap re hon nhieu so voi mot
         # lan keo Monitoring bi vut bo.
-        chay("[1/7] Kiem token 2 web app",
+        chay("[1/9] Kiem token 2 web app",
              [PY, "scripts/pull_web_apps.py", "--chi-kiem-token"])
 
         if args.bo_monitoring:
-            print("\n[2/7] Keo Monitoring - BO QUA theo yeu cau")
+            print("\n[2/9] Keo Monitoring - BO QUA theo yeu cau")
         else:
-            chay("[2/7] Keo Cloud Monitoring",
+            chay("[2/9] Keo Cloud Monitoring",
                  [PY, "scripts/pull_monitoring.py",
                   "--days", str(args.ngay_monitoring), "--align", "60"])
 
-        chay("[3/7] Gop cac dot keo Monitoring", [PY, "scripts/gop_monitoring.py"])
-        chay("[4/7] Keo Ralli + TLA Hop Dong", [PY, "scripts/pull_web_apps.py"])
-        chay("[5/7] Gop hoa don", [PY, "scripts/gop_billing.py"])
-        chay("[6/7] Sinh khoi du lieu dashboard", [PY, "test/sinh_du_lieu_dashboard.py"])
-        chay("[7/7] Va vao app.js", [PY, "test/va_app_js.py"])
+        chay("[3/9] Gop cac dot keo Monitoring", [PY, "scripts/merge_monitoring.py"])
+        chay("[4/9] Keo Ralli + TLA Hop Dong", [PY, "scripts/pull_web_apps.py"])
+        chay("[5/9] Gop hoa don", [PY, "scripts/merge_billing.py"])
+        chay("[6/9] Gop histogram do tre theo ngay",
+             [PY, "scripts/merge_latency_daily.py",
+              "--out", "data/raw_google_console/do_tre_phan_bo/latency-daily.csv"])
+        chay("[7/9] Dung lai database", [PY, "scripts/rebuild_db.py"])
+        chay("[8/9] Soi database", [PY, "scripts/audit_db.py"])
+
+        # Hai buoc duoi day va so lieu THANG VAO app.js. Duong nay da bi backend
+        # thay the - dashboard gio doc database qua api.js. Van giu vi no la ban
+        # DU PHONG NGOAI TUYEN: bam dup index.html khi khong chay backend thi
+        # van thay so moi nhat.
+        chay("[9/9] Va du lieu du phong vao app.js",
+             [PY, "test/sinh_du_lieu_dashboard.py"])
+        chay("      Va vao app.js", [PY, "test/va_app_js.py"])
 
     except Hong as e:
         print(f"\n{'=' * 72}\nDUNG: {e}\n{'=' * 72}")
@@ -139,7 +152,8 @@ def main() -> None:
 
     print(f"\n{'=' * 72}")
     print(f"XONG sau {(time.time() - tong) / 60:.1f} phut.")
-    print("Mo index.html de xem. Neu so khong doi, xoa localStorage cua trang")
+    print("Mo index.html de xem (nho bat backend:")
+    print("  python -m uvicorn backend.main:app --port 8000). Neu so khong doi, xoa localStorage cua trang")
     print("(F12 > Application > Local Storage) - app.js co bump phien ban nhung")
     print("trinh duyet doi khi con giu ban cu.")
     print("=" * 72)

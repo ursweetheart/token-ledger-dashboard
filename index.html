@@ -610,7 +610,7 @@
     </div>
     <div class="wf-chart">
       <span class="wf-type">Thanh</span>
-      <div class="wf-title">Tỷ lệ tài khoản được sử dụng của các phòng ban</div>
+      <div class="wf-title">Tỷ lệ tài khoản được sử dụng theo Agent</div>
       <div class="canvas-box"><canvas id="c-dep-adopt"></canvas></div>
       <div class="wf-note" id="lg-dep-adopt"></div>
     </div>
@@ -669,14 +669,16 @@
   <div class="user-bottom-grid">
     <div class="wf-chart">
       <span class="wf-type">Line</span>
-      <div class="wf-title">Người dùng hoạt động theo ngày (khoảng đang xét: 30 ngày gần nhất)</div>
+      <div class="wf-title">Người dùng hoạt động theo ngày</div>
       <div class="wf-q">Khoảng cách giữa tài khoản được cấp và số người dùng thực tế.</div>
       <div class="canvas-box user-dau-canvas"><canvas id="c-us-dau"></canvas></div>
+      <div class="wf-note" id="nt-us-dau"></div>
     </div>
     <div class="wf-chart">
       <span class="wf-type">Cột</span>
       <div class="wf-title">Tài khoản không sử dụng theo ngày (tài khoản)</div>
       <div class="canvas-box user-dau-canvas"><canvas id="c-us-idle"></canvas></div>
+      <div class="wf-note" id="nt-us-idle"></div>
     </div>
   </div>
 
@@ -1135,6 +1137,9 @@
 </div>
 
 <script src="ralli-users.js"></script>
+<!-- Nạp TRƯỚC app.js. Chỉ bơm dữ liệu từ backend vào, không đụng giao diện.
+     Không chạy backend thì tự rút lui, dashboard chạy như cũ. -->
+<script src="api.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

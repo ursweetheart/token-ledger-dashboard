@@ -1,5 +1,18 @@
 # Dữ liệu nguồn (không đưa lên git)
-data/
+#
+# Viết `data/*` chứ không phải `data/`: git KHÔNG đi vào thư mục đã bị loại, nên
+# với `data/` thì mọi dòng `!data/...` bên dưới đều vô hiệu — và vô hiệu trong im
+# lặng, `git status` vẫn sạch y như khi ngoại lệ có tác dụng. Phải mở khoá từng
+# cấp một xuống tới thư mục cần giữ.
+data/*
+
+# Ngoại lệ: danh mục SKU + bảng giá của Google (620 KB). Đây là dữ liệu THAM
+# CHIẾU công khai, không phải dữ liệu thu thập được, và db/sinh_02_danh_muc.py
+# cần nó để sinh dim_metric_alias + ref_price. Không đưa lên git thì đồng nghiệp
+# clone về sẽ không sinh lại được danh mục nếu chưa có tài khoản GCP.
+!data/raw_google_console/
+data/raw_google_console/*
+!data/raw_google_console/danh_muc/
 
 # File dữ liệu bảng tính / dữ liệu thô
 *.xlsx

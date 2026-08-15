@@ -204,9 +204,9 @@ def main() -> None:
     print(f"  o cuoi cung bat dau tu {bien[-1]:.1f}s", file=sys.stderr)
     print(f"  -> {len(gop)} dong ket qua", file=sys.stderr)
 
-    cot = ["ngay_ict", "project"] + (["res_method"] if args.theo_method else []) + [
-        "so_luot", "p50_s", "p95_s", "p99_s", "p95_o_tu", "p95_o_den",
-        "p95_cach_cu_trung_binh", "lech_phan_tram"]
+    cot = ["day", "project"] + (["res_method"] if args.theo_method else []) + [
+        "samples", "p50_s", "p95_s", "p99_s", "p95_bucket_from",
+        "p95_bucket_to", "p95_old_method_avg", "diff_percent"]
 
     dong = []
     for khoa in sorted(gop):
@@ -233,7 +233,7 @@ def main() -> None:
             round(lech, 1) if lech is not None else "",
         ])))
 
-    tong_luot = sum(d["so_luot"] for d in dong)
+    tong_luot = sum(d["samples"] for d in dong)
     print(f"  tong so luot goi: {tong_luot:,}", file=sys.stderr)
 
     if args.out:

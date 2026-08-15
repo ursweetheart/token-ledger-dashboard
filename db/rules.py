@@ -1,0 +1,88 @@
+"""Quy tắc dùng chung cho mọi script nạp - một bản duy nhất.
+
+Vì sao tách file: quy tắc phân loại SKU được dùng ở CẢ HAI chỗ - lúc sinh bảng
+danh mục và lúc nạp hoá đơn. Nếu mỗi chỗ một bản thì đến lúc sửa sẽ chỉ sửa một
+bên, và không có gì báo lỗi: tổng tiền vẫn đúng, chỉ tỷ lệ giữa các model sai.
+
+Nguồn: docs/plan-xay-dung-database-2026-08-07.md mục 4.6 (quy tắc 1-9)
+"""
+
+from __future__ import annotations
+
+import re
+
+# Tên CHUẨN. Mỗi nguồn gọi một kiểu, đây là kiểu ta chọn.
+MODELS = [
+    (1, "gemini-2.0-flash", "gemini-2.0"),
+    (2, "gemini-2.5-flash", "gemini-2.5"),
+    (3, "gemini-2.5-flash-lite", "gemini-2.5"),
+    (4, "gemini-2.5-pro", "gemini-2.5"),
+    (5, "gemini-3-flash", "gemini-3"),
+    (6, "gemini-3-pro", "gemini-3"),
+    (7, "gemini-3.1-flash-lite", "gemini-3"),
+    (8, "gemini-3.5-flash", "gemini-3"),
+    (9, "gemini-embedding-1.0", "embedding"),
+    (10, "gemini-embedding-2", "embedding"),
+]
+MODEL_ID = {name: i for i, name, _ in MODELS}
+
+# Thứ tự QUAN TRỌNG: mẫu dài hơn phải đứng trước. '2.5 flash lite' phải được thử
+# trước '2.5 flash', nếu không Flash Lite bị gán nhầm thành Flash.
+MODEL_PATTERNS = [
+    ("embedding 001", "gemini-embedding-1.0"),
+    ("embedding 1.0", "gemini-embedding-1.0"),
+    ("embedding 2", "gemini-embedding-2"),
+    ("3.1 flash lite", "gemini-3.1-flash-lite"),
+    ("3.5 flash", "gemini-3.5-flash"),
+    ("3 pro", "gemini-3-pro"),
+    ("3 flash", "gemini-3-flash"),
+    ("2.5 flash lite", "gemini-2.5-flash-lite"),
+    ("2.5 pro", "gemini-2.5-pro"),
+    ("2.5 flash", "gemini-2.5-flash"),
+    ("2.0 flash", "gemini-2.0-flash"),
+]
+
+
+def guess_model(sku_name: str) -> str | None:
+    t = " " + re.sub(r"[^a-z0-9.]+", " ", sku_name.lower()) + " "
+    for pattern, model in MODEL_PATTERNS:
+        if pattern in t:
+            return model
+    return None
+
+
+def guess_kind(sku_name: str) -> str | None:
+    """QUY TẮC 8. Thứ tự BẮT BUỘC: cached -> output -> input.
+
+    SKU 911A-8880-A243 tên đầy đủ là:
+        "Generate content OUTPUT token count gemini 2.5 flash short INPUT text"
+
+    Kiểm 'input' trước 'output' thì 346 dòng / $105,42 = 38,9% chi phí nhảy sai
+    cột. Tổng vẫn đúng $270,9517 nên mọi phép nghiệm thu tổng VẪN XANH - chỉ có
+    tỷ lệ input/output là sai hết.
+
+    'cached' phải trước 'input' vì "cached input token" chứa cả "input token".
+    """
+    t = sku_name.lower()
+    if "cached" in t:
+        return "cached"
+    if "output" in t:
+        return "output"
+    if "input" in t:
+        return "input"
+    return None
+
+
+def guess_service(res_service: str, metric_type: str) -> str:
+    """QUY TẮC 9. res_service, rỗng thì lấy tiền tố của metric_type.
+
+    Đúng các dòng TOKEN của generativelanguage lại có res_service RỖNG - dịch vụ
+    của chúng nằm ở tiền tố metric_type. Gán thẳng service = res_service rồi lọc
+    `WHERE service='generativelanguage...'` sẽ trả về 0 DÒNG TOKEN, không báo lỗi.
+    """
+    return res_service or metric_type.split("/")[0]
+
+
+def is_quota_limit(metric_nickname: str) -> bool:
+    """*_limit là ALIGN_MAX - hạn mức quota, KHÔNG phải số đếm. Không được SUM."""
+    return metric_nickname.endswith("_limit")
