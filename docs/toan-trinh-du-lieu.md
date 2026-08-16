@@ -18,7 +18,7 @@
    Cloud Monitoring ──►  merge_monitor ─┤
    (API, ~12 phút)                       │
                                          ├──►  DATABASE  ──►  BACKEND  ──►  Dashboard
-   Histogram độ trễ ──►  merge_latency ──┤     17 bảng        FastAPI       index.html
+   Histogram độ trễ ──►  merge_latency ──┤     18 bảng        FastAPI       index.html
    (API)                                 │     3 view         chỉ đọc
                                          │
    App Ralli + TLA  ──►  (dùng thẳng)  ──┤
@@ -40,14 +40,15 @@
 
 ---
 
-## Chạy lại tất cả — hai lệnh
+## Chạy lại tất cả — một lệnh
 
-Nếu chỉ muốn làm cho nó chạy, đây là toàn bộ:
+Nếu chỉ muốn làm cho nó chạy, đây là toàn bộ. **Không cần gọi tay script gộp
+nào** — `update_dashboard.py` chạy đủ 10 bước, gồm cả chặng ② và chặng ③:
 
 ```bash
-python scripts/update_dashboard.py      # ① + ②   (~15 phút, có bước tay)
-python scripts/rebuild_db.py             # ③        (~10 giây)
+python scripts/update_dashboard.py                # ① + ② + ③  (~15 phút, có 1 bước tay)
 python -m uvicorn backend.main:app --port 8000   # ④  (chạy nền)
+python -m http.server 8080                       # phục vụ index.html
 ```
 
 Rồi mở `index.html`. Xong.
@@ -114,6 +115,26 @@ Phép kiểm đăng nhập mất vài giây.
 ---
 
 # ② GỘP DỮ LIỆU
+
+## Bạn KHÔNG cần chạy tay chặng này
+
+`update_dashboard.py` đã gọi cả ba script gộp — bước 3, 6 và 7 trong mười bước
+của nó. Chạy `update_dashboard.py` là xong chặng ① lẫn ②.
+
+Chỉ chạy tay khi một script gộp hỏng và bạn muốn chạy lại riêng nó, hoặc khi
+bạn vừa tải thêm hoá đơn mà không muốn kéo lại Monitoring (mất 10–15 phút):
+
+```bash
+python scripts/merge_billing.py                 # sau khi tải thêm hoá đơn
+python scripts/merge_monitoring.py              # sau khi kéo thêm đợt Monitoring
+python scripts/merge_latency_daily.py \
+  --out data/raw_google_console/do_tre_phan_bo/latency-daily.csv
+python scripts/rebuild_db.py                    # rồi nạp lại
+```
+
+Thứ tự giữa ba script gộp không quan trọng — chúng đọc ba thư mục khác nhau và
+không script nào đọc đầu ra của script kia. Nhưng cả ba đều phải xong **trước**
+`rebuild_db.py`.
 
 ## Vì sao phải có chặng này
 
@@ -212,7 +233,7 @@ tức hỏng ở chỗ có người nhìn thấy.
 python scripts/audit_db.py
 ```
 
-25 phép kiểm chia 4 nhóm: **cấu trúc** (khoá ngoại, cây đơn vị), **số khớp**
+30 phép kiểm chia 5 nhóm: **cấu trúc** (khoá ngoại, cây đơn vị), **số khớp**
 (tiền và token qua mọi tầng), **phân loại** (mọi tên lạ đều có chỗ), **lỗ im
 lặng** (bảng rỗng, độ phủ).
 
@@ -259,7 +280,7 @@ set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger
 python -m uvicorn backend.main:app --port 8000
 ```
 
-## Bảy endpoint
+## Tám endpoint
 
 | Đường | Trả về |
 |---|---|

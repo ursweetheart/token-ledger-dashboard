@@ -498,7 +498,7 @@ Nguồn là thư mục `data/` — thứ các script `pull_*` thu thập về. `
 python scripts/audit_db.py
 ```
 
-25 phép kiểm: khoá ngoại, cây đơn vị, tiền/token khớp qua mọi tầng, mọi tên lạ đều có chỗ trong bảng alias, và các lỗ im lặng. Ba mức: `ok` / `luu y` (dữ liệu thiếu đã biết) / `HONG` (cấu trúc sai, mã thoát ≠ 0).
+30 phép kiểm: khoá ngoại, cây đơn vị, tiền/token khớp qua mọi tầng, mọi tên lạ đều có chỗ trong bảng alias, và các lỗ im lặng. Ba mức: `ok` / `luu y` (dữ liệu thiếu đã biết) / `HONG` (cấu trúc sai, mã thoát ≠ 0).
 
 ## Đọc thêm
 
