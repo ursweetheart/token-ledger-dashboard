@@ -180,17 +180,17 @@
 
 ## 7. Nghiệm thu toàn phần
 
-- [ ] 7.1 Chạy lại cả 5 hạng mục vào `$BASE/sau/`
-- [ ] 7.2 Diff A — mã băm database phải trùng
-- [ ] 7.3 Diff B — 30 phép kiểm, diff rỗng, vẫn đúng số đạt và số cảnh báo
-- [ ] 7.4 Diff C — cả 8 endpoint, từng file một, tất cả rỗng
-- [ ] 7.5 Diff D — số phép kiểm đạt của `check_api --compare` không đổi
-- [ ] 7.6 So E — số canvas bằng nhau, không lỗi JS mới, không yêu cầu nào 404
-- [ ] 7.7 Phép kiểm tiêu cực lần cuối — 4 đường dẫn nhạy cảm đều 404, đối chiếu với
+- [x] 7.1 Chạy lại cả 5 hạng mục vào `$BASE/sau/`
+- [x] 7.2 Diff A — mã băm database phải trùng
+- [x] 7.3 Diff B — 30 phép kiểm, diff rỗng, vẫn đúng số đạt và số cảnh báo
+- [x] 7.4 Diff C — cả 8 endpoint, từng file một, tất cả rỗng
+- [x] 7.5 Diff D — số phép kiểm đạt của `check_api --compare` không đổi
+- [x] 7.6 So E — số canvas bằng nhau, không lỗi JS mới, không yêu cầu nào 404
+- [x] 7.7 Phép kiểm tiêu cực lần cuối — 4 đường dẫn nhạy cảm đều 404, đối chiếu với
       `$BASE/truoc/lo-ho.txt` để thấy rõ 200 → 404
-- [ ] 7.8 `git log --follow web/js/app.js` — lịch sử phải xuyên qua chỗ dời
-- [ ] 7.9 `git status` sạch; `git ls-files` không còn `.pyc`, không còn file frontend ở gốc
-- [ ] 7.10 **Nếu bất kỳ diff nào khác rỗng**: ghi lại nguyên nhân. Chỉ bỏ qua khi giải
+- [x] 7.8 `git log --follow web/js/app.js` — lịch sử phải xuyên qua chỗ dời
+- [x] 7.9 `git status` sạch; `git ls-files` không còn `.pyc`, không còn file frontend ở gốc
+- [x] 7.10 **Nếu bất kỳ diff nào khác rỗng**: ghi lại nguyên nhân. Chỉ bỏ qua khi giải
       thích được là vô hại; không giải thích được thì hoàn tác về commit trước
 
 ## 8. Đóng change
