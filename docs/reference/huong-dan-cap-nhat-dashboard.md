@@ -9,7 +9,7 @@
 ## Chạy
 
 ```bash
-python scripts/cap_nhat_dashboard.py
+python scripts/update_dashboard.py
 ```
 
 Hết. Khoảng 12–17 phút, phần lớn là bước kéo Cloud Monitoring.
@@ -77,13 +77,13 @@ Hỏng bước nào là **dừng ngay**. Không bước nào chạy tiếp trên
 
 | Script | Vai trò | Chạy riêng được |
 |---|---|---|
-| `scripts/cap_nhat_dashboard.py` | Điều phối cả 7 bước | — |
+| `scripts/update_dashboard.py` | Điều phối cả 7 bước | — |
 | `scripts/pull_monitoring.py` | Kéo time series từ Cloud Monitoring qua `gcloud` | ✓ |
-| `scripts/gop_monitoring.py` | Gộp nhiều đợt kéo, khử trùng lặp | ✓ |
+| `scripts/merge_monitoring.py` | Gộp nhiều đợt kéo, khử trùng lặp | ✓ |
 | `scripts/pull_web_apps.py` | Kéo Ralli + TLA HĐ qua API của chúng | ✓ |
-| `scripts/gop_billing.py` | Gộp 7 CSV Console thành một file chuẩn hoá | ✓ |
-| `test/sinh_du_lieu_dashboard.py` | Sinh `test/seed-days-that.js` từ mọi nguồn | ✓ |
-| `test/va_app_js.py` | Vá `seed-days-that.js` vào `app.js` | ✓ |
+| `scripts/merge_billing.py` | Gộp 7 CSV Console thành một file chuẩn hoá | ✓ |
+| `scripts/sinh_du_lieu_dashboard.py` | Sinh `scripts/seed-days-that.js` từ mọi nguồn | ✓ |
+| `scripts/va_app_js.py` | Vá `seed-days-that.js` vào `web/js/app.js` | ✓ |
 
 Cả ba script `pull_*` và `gop_*` đều **ghi vào thư mục mới theo ngày, không bao giờ ghi đè đợt cũ**. Xem §"Đừng xoá thư mục kéo cũ" để biết vì sao đó không phải sự cẩn thận thừa.
 
@@ -101,7 +101,7 @@ Bước 0 đọc cột `Date` trong các file đó. Ngày mới nhất cũ hơn 
 
 **Không được chạy tiếp với hoá đơn cũ.** Khi đó dashboard sẽ có request của hôm nay nhưng token của tuần trước — sai mà trông như thật.
 
-⚠️ **Tên file mang tên hiển thị, không phải project ID.** `AI-sale_agent` ↔ `tranquil-post-471401-c1`, không chữ nào chung. Bảng ánh xạ 7 dòng khai báo cứng trong `scripts/gop_billing.py`. Tên lạ ⇒ script dừng và in tên đó ra. Đoán gần đúng sẽ trúng 5/7 và trượt đúng 2 project chiếm **81% số tiền**.
+⚠️ **Tên file mang tên hiển thị, không phải project ID.** `AI-sale_agent` ↔ `tranquil-post-471401-c1`, không chữ nào chung. Bảng ánh xạ 7 dòng khai báo cứng trong `scripts/merge_billing.py`. Tên lạ ⇒ script dừng và in tên đó ra. Đoán gần đúng sẽ trúng 5/7 và trượt đúng 2 project chiếm **81% số tiền**.
 
 ---
 
@@ -125,7 +125,7 @@ TLA HĐ không phơi `openapi.json` nên kiểu body là **suy đoán**. Script 
 ### Dashboard mở lên vẫn hiện số cũ
 `app.js` lưu state trong `localStorage`. `va_app_js.py` có tăng số phiên bản khoá mỗi lần chạy, nhưng nếu bạn chạy nó nhiều lần rồi khôi phục file thì hai lần chạy khác nhau có thể trùng số. Mở F12 → Application → Local Storage → xoá các khoá `agent-dash-state-*` rồi tải lại.
 
-### `gop_monitoring.py` báo "lech gia tri"
+### `merge_monitoring.py` báo "lech gia tri"
 Cùng một phép đo, cùng mốc thời gian, hai đợt kéo cho số khác nhau. Script giữ giá trị của **đợt mới** và in ví dụ ra. Đo ngày 13/08: 3 khoá lệch trên 500.879 khoá chồng nhau (0,0006%), và đợt mới đều cho số **nhỏ hơn** — dấu hiệu Google hạ độ phân giải dữ liệu cũ theo thời gian. Số ít thì bỏ qua được; nhiều lên thì phải xem lại quy tắc ưu tiên.
 
 ---

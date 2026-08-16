@@ -195,7 +195,7 @@ def from_monitoring() -> tuple[dict, dict]:
     request into a bucket named "" and the join against billing would match
     nothing, silently producing a dashboard with zero requests everywhere.
     """
-    # Uu tien thu muc "-gop" (scripts/gop_monitoring.py). Cua so luu giu cua
+    # Uu tien thu muc "-gop" (scripts/merge_monitoring.py). Cua so luu giu cua
     # Google truot rat nhanh - do 06/08 thay 196 ngay, do 13/08 chi con 112 -
     # nen mot dot keo don le KHONG con phu het dai ngay. Ban gop moi phu du.
     folder = DATA / "da_xu_ly" / "du_lieu_giam_sat"
@@ -452,7 +452,7 @@ def emit(days: dict, thieu_gia: list[str]) -> None:
     lines = [
         "/* ═══════════════════════════════════════════════════════════════════",
         "   SEED_DAYS — sinh tự động từ dữ liệu THẬT đã thu thập.",
-        f"   Sinh bởi test/sinh_du_lieu_dashboard.py. KHÔNG sửa tay file này.",
+        f"   Sinh bởi scripts/sinh_du_lieu_dashboard.py. KHÔNG sửa tay file này.",
         "",
         "   Nguồn từng cột:",
         "     ti / to / cached   Google Billing   (số tiền thật đã bị thu)",

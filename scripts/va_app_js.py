@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = ROOT / "app.js"
+APP = ROOT / "web" / "js" / "app.js"
 SEED = Path(__file__).parent / "seed-days-that.js"
 
 # Hau to mo ta dot cap nhat nay, gan sau so phien ban trong khoa localStorage.
@@ -82,7 +82,7 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     if not SEED.exists():
-        raise SystemExit(f"Chua co {SEED}. Chay test/sinh_du_lieu_dashboard.py truoc.")
+        raise SystemExit(f"Chua co {SEED}. Chay scripts/sinh_du_lieu_dashboard.py truoc.")
 
     text = APP.read_text(encoding="utf-8")
     truoc = len(text)

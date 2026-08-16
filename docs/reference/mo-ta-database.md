@@ -3,7 +3,7 @@
 > Dành cho người mở pgAdmin lên và không biết mình đang nhìn gì.
 > 18 bảng + 3 view, 577.819 dòng. Chạy được trên cả SQLite lẫn PostgreSQL.
 >
-> Muốn biết dữ liệu **đến đây bằng đường nào**: `docs/toan-trinh-du-lieu.md`.
+> Muốn biết dữ liệu **đến đây bằng đường nào**: `toan-trinh-du-lieu.md`.
 >
 > **Chỉ cần đọc một chỗ thì đọc view `usage_resolved`.** Nó đã gộp sẵn ba nguồn
 > dữ liệu rời rạc lại thành một con số cho mỗi câu hỏi.
@@ -498,12 +498,12 @@ Nguồn là thư mục `data/` — thứ các script `pull_*` thu thập về. `
 python scripts/audit_db.py
 ```
 
-25 phép kiểm: khoá ngoại, cây đơn vị, tiền/token khớp qua mọi tầng, mọi tên lạ đều có chỗ trong bảng alias, và các lỗ im lặng. Ba mức: `ok` / `luu y` (dữ liệu thiếu đã biết) / `HONG` (cấu trúc sai, mã thoát ≠ 0).
+30 phép kiểm: khoá ngoại, cây đơn vị, tiền/token khớp qua mọi tầng, mọi tên lạ đều có chỗ trong bảng alias, và các lỗ im lặng. Ba mức: `ok` / `luu y` (dữ liệu thiếu đã biết) / `HONG` (cấu trúc sai, mã thoát ≠ 0).
 
 ## Đọc thêm
 
 | File | Nội dung |
 |---|---|
-| `docs/toan-trinh-du-lieu.md` | **Lấy → gộp → nạp → backend.** Đọc cái này nếu muốn tự chạy lại |
+| `toan-trinh-du-lieu.md` | **Lấy → gộp → nạp → backend.** Đọc cái này nếu muốn tự chạy lại |
 | `db/01_schema.sql` | Schema — mỗi quyết định đều có ghi chú lý do |
 | `backend/store.py` | Mọi câu SQL của backend |

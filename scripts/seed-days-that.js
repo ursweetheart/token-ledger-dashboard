@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════
    SEED_DAYS — sinh tự động từ dữ liệu THẬT đã thu thập.
-   Sinh bởi test/sinh_du_lieu_dashboard.py. KHÔNG sửa tay file này.
+   Sinh bởi scripts/sinh_du_lieu_dashboard.py. KHÔNG sửa tay file này.
 
    Nguồn từng cột:
      ti / to / cached   Google Billing   (số tiền thật đã bị thu)
