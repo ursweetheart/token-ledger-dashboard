@@ -110,23 +110,29 @@
 
 ## 5. Tách `test/` thành `tests/` và `tools/`
 
-- [ ] 5.1 `git rm -r --cached test/__pycache__` — gỡ 10 file `.pyc` khỏi git index
+- [x] 5.1 `git rm -r --cached test/__pycache__` — gỡ 10 file `.pyc` khỏi git index
       (`.gitignore` không có tác dụng với file đã được add)
-- [ ] 5.2 `git mv` phần test thật sang `tests/`: `date-range-filter.test.js`, và
+- [x] 5.2 `git mv` phần test thật sang `tests/`: `date-range-filter.test.js`, và
       `ui-snapshot-2026-08-07.json` → `tests/fixtures/`
-- [ ] 5.3 `git mv` 9 script chẩn đoán còn lại sang `tools/`: `chan_doan_loi.py`,
+- [x] 5.3 `git mv` 9 script chẩn đoán còn lại sang `tools/`: `chan_doan_loi.py`,
       `doi_chieu_tla_hd.py`, `doi_chieu_web_vs_file.py`, `kiem_ke_de_len_plan.py`,
       `kiem_tra_du_lieu.py`, `kiem_tu_raw.py`, `pham_vi_moi.py`, `soat_ctda.py`,
       `trich_yeu_cau_dashboard.py`
-- [ ] 5.4 `mv test/ket-qua-kiem-tra.csv tools/` — dùng `mv` **thường**, không `git mv`:
+- [x] 5.4 `mv test/ket-qua-kiem-tra.csv tools/` — dùng `mv` **thường**, không `git mv`:
       file này bị `.gitignore` chặn theo đuôi `*.csv` nên không có trong git index
-- [ ] 5.5 Xoá thư mục `test/` rỗng
-- [ ] 5.6 Xác nhận `ROOT = parents[1]` trong 9 script vẫn đúng — `tools/` cũng ở một
+- [x] 5.5 Xoá thư mục `test/` rỗng
+- [x] 5.6 Xác nhận `ROOT = parents[1]` trong 9 script vẫn đúng — `tools/` cũng ở một
       cấp dưới gốc, nên không file nào phải sửa
-- [ ] 5.7 Chạy `tests/date-range-filter.test.js`, xác nhận vẫn đạt
-- [ ] 5.8 Chạy thử 2–3 script trong `tools/` để xác nhận đường dẫn `ROOT` còn đúng
-- [ ] 5.9 `git ls-files | grep __pycache__` phải không ra dòng nào
-- [ ] 5.10 Commit
+- [x] 5.7 Chạy `tests/date-range-filter.test.js`, xác nhận vẫn đạt
+- [x] 5.8 Chạy thử 3 script trong `tools/` để xác nhận đường dẫn `ROOT` còn đúng.
+      `soat_ctda.py` và `trich_yeu_cau_dashboard.py` chạy bình thường.
+      `pham_vi_moi.py` báo `FileNotFoundError` cho
+      `data/billing/billing_gop_tru_CTDA.csv` — **hỏng sẵn từ trước, không do dời**:
+      file nằm dưới `data/`, thư mục change này không đụng tới, và `ROOT/"data"` giải
+      ra y hệt trước lẫn sau. Đúng minh hoạ cho lý do tách `tools/`: script chẩn đoán
+      được phép mục, `tests/` thì không
+- [x] 5.9 `git ls-files | grep __pycache__` phải không ra dòng nào
+- [x] 5.10 Commit
 
 ## 6. Dọn gốc repo
 
