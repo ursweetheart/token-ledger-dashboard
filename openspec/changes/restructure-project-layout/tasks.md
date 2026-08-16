@@ -195,8 +195,8 @@
 
 ## 8. Đóng change
 
-- [ ] 8.1 Rà lại `proposal.md` — có mục nào làm khác kế hoạch thì ghi rõ
-- [ ] 8.2 Trả lời 4 Open Question trong `design.md`, hoặc chuyển sang change khác
+- [x] 8.1 Rà lại `proposal.md` — có mục nào làm khác kế hoạch thì ghi rõ
+- [x] 8.2 Trả lời 4 Open Question trong `design.md`, hoặc chuyển sang change khác
 - [ ] 8.3 Merge vào `main`
 - [ ] 8.4 Báo đồng nghiệp: mọi nhánh đang mở sẽ xung đột, và lệnh chạy dashboard đã đổi
 - [ ] 8.5 `openspec archive restructure-project-layout`

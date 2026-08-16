@@ -122,3 +122,51 @@ kiểm giữ nguyên tên và nguyên kết quả — đó chính là điều ki
 - `.gitignore` phải được cập nhật **cùng lúc** với việc dời: `var/` là thư mục mới chứa
   database, mà quy tắc hiện tại chặn `*.sqlite` theo đuôi file nên vẫn có tác dụng —
   cần xác nhận lại chứ không giả định.
+
+---
+
+## Đã thực thi ngày 16/08 — những chỗ làm khác kế hoạch
+
+Tám chỗ. Không chỗ nào thu hẹp phạm vi; sáu chỗ là kế hoạch thiếu, hai chỗ là quyết
+định của người dùng.
+
+**1. Bung stash sớm, không phải ở cuối.** Người dùng chọn "stash rồi bung sau", nhưng
+bung ở cuối sẽ xung đột chắc chắn — nhóm 6 dời chính hai file `docs/` đó và nhóm 4 sửa
+chính `update_dashboard.py`. Đã bung ngay sau khi chụp ảnh chuẩn, trước lệnh `git mv`
+đầu tiên, rồi commit làm nền. Không xung đột.
+
+**2. Phép quét ở task 2.6 bắt được hai lỗ hổng của chính kế hoạch này.**
+`tests/date-range-filter.test.js` dòng 8 và 102 — **bộ test phải luôn xanh** — cùng
+`tools/trich_yeu_cau_dashboard.py` dòng 26–27 đều đọc `index.html` ở gốc, mà không nhóm
+nào định sửa. Nguyên nhân: mẫu quét đầu viết theo cú pháp Python (`ROOT / "x"`) nên sót
+cách viết JavaScript (`path.join(ROOT, "x")`). **Phải quét bằng tên file, không bằng
+hình dạng biểu thức.**
+
+**3. Hạng mục E là bản thay thế tự động, không phải chụp Chrome.** Extension không kết
+nối. Đã đo: 7/7 tài nguyên HTTP 200, 22 canvas, 22 id giống hệt, `node tests/` 6 đạt.
+Còn thiếu: bằng chứng biểu đồ vẽ ra đúng và console không lỗi. Rủi ro thấp vì `app.js`
+và `api.js` không đổi một ký tự, nhưng **chưa được chứng minh**.
+
+**4. Chạy thử `va_app_js.py` rồi hoàn tác `app.js`.** Script bump phiên bản STORE
+v19→v20 — hành vi bình thường của đường ống, nhưng làm nhiễu bằng chứng tương đương.
+Đã `git checkout` về đúng băm cũ. Điều cần chứng minh là *script tìm đúng file*, không
+phải *dữ liệu mới*.
+
+**5. Xoá thêm hai thư mục rỗng** không có trong kế hoạch: `assets/` (còn lại sau khi
+ảnh logo đi vào `web/assets/`) và `.agents/`.
+
+**6. `tools/pham_vi_moi.py` hỏng — nhưng hỏng sẵn từ trước.** Nó tìm
+`data/billing/billing_gop_tru_CTDA.csv`, file không tồn tại. Nằm dưới `data/`, thư mục
+change này không đụng tới, và `ROOT/"data"` giải ra y hệt trước lẫn sau.
+
+**7–8. Hai quyết định của người dùng** (16/08): xoá hẳn `matrix-drilldown-demo.html`
+thay vì lưu trữ; xoá hẳn `TLA Ralli.xlsx` dù đã được cảnh báo nó không nằm trong git.
+`header-with-logo.png` vẫn theo kế hoạch cũ — vào `docs/archive/`.
+
+### Còn nợ
+
+- Hạng mục E chưa có bản chụp Chrome thật (mục 3 ở trên).
+- Lịch sử git vẫn chứa `downloaded-logs-*.json` với 3 email người thật. Việc gỡ khỏi
+  index chỉ chặn từ nay về sau. Viết lại lịch sử nằm ngoài phạm vi change này.
+- Open Question 2 (`data/` có nên vào `var/`) và 4 (`gateway/` ở đâu) chưa trả lời —
+  không chặn gì, nhưng câu 4 nên chốt trước khi bắt đầu API Gateway.
