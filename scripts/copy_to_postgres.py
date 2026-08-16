@@ -38,7 +38,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "db" / "01_schema.sql"
-SQLITE_MAC_DINH = ROOT / "db" / "token_ledger.sqlite"
+SQLITE_MAC_DINH = ROOT / "var" / "token_ledger.sqlite"
 
 # Kieu duoc coi la so - dung de doi chieu tong sau khi chep.
 #

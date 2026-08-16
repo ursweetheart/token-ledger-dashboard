@@ -14,8 +14,9 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_DIR = ROOT / "db"
-DEFAULT_DSN = str(DB_DIR / "token_ledger.sqlite")
+DB_DIR = ROOT / "db"                # ma: schema .sql + cac module nap
+VAR_DIR = ROOT / "var"              # du lieu chay: dung lai duoc bang rebuild_db.py
+DEFAULT_DSN = str(VAR_DIR / "token_ledger.sqlite")
 
 
 def is_sqlite(dsn: str) -> bool:

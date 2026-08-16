@@ -71,27 +71,27 @@
 
 ## 3. Dời database sang `var/`
 
-- [ ] 3.1 `mkdir var && mv db/token_ledger.sqlite var/` — dùng **`mv` thường**, không
+- [x] 3.1 `mkdir var && mv db/token_ledger.sqlite var/` — dùng **`mv` thường**, không
       `git mv`. Đã chạy khô: `git mv` trả `fatal: not under version control` với mọi
       file bị ignore, và `.gitignore:44 *.sqlite` chặn file này
-- [ ] 3.2 **Băm ngay sau khi dời** và so với `$BASE/truoc/db.sha256`. Phải trùng. Không
+- [x] 3.2 **Băm ngay sau khi dời** và so với `$BASE/truoc/db.sha256`. Phải trùng. Không
       trùng thì dừng lại tại đây
-- [ ] 3.3 `db/connect.py:18` — `DEFAULT_DSN = str(ROOT / "var" / "token_ledger.sqlite")`
+- [x] 3.3 `db/connect.py:18` — `DEFAULT_DSN = str(ROOT / "var" / "token_ledger.sqlite")`
       (chú ý: hiện dùng `DB_DIR`, phải đổi cả cách tính, không chỉ tên file)
-- [ ] 3.4 `scripts/rebuild_db.py:99` — mặc định `--db` → `ROOT / "var" / …`
-- [ ] 3.5 `scripts/merge_billing.py:73` — `DB_MAC_DINH` → `ROOT / "var" / …`
-- [ ] 3.6 `scripts/copy_to_postgres.py:41` — `SQLITE_MAC_DINH` → `ROOT / "var" / …`
-- [ ] 3.7 Xác nhận lại bằng `git check-ignore -v var/token_ledger.sqlite` — đã đo trước
+- [x] 3.4 `scripts/rebuild_db.py:99` — mặc định `--db` → `ROOT / "var" / …`
+- [x] 3.5 `scripts/merge_billing.py:73` — `DB_MAC_DINH` → `ROOT / "var" / …`
+- [x] 3.6 `scripts/copy_to_postgres.py:41` — `SQLITE_MAC_DINH` → `ROOT / "var" / …`
+- [x] 3.7 Xác nhận lại bằng `git check-ignore -v var/token_ledger.sqlite` — đã đo trước
       và ra `.gitignore:44 *.sqlite`, tức quy tắc theo đuôi đã phủ. Kiểm lại sau khi dời
       để chắc, **bằng lệnh chứ không bằng suy đoán**
-- [ ] 3.8 Kiểm A: băm lại, so với ảnh chụp chuẩn
-- [ ] 3.9 Kiểm B: chạy lại `audit_db.py`, diff với `$BASE/truoc/audit.txt` — phải rỗng
-- [ ] 3.10 Kiểm C: bật lại backend, chụp lại 8 endpoint vào `$BASE/sau/api/`, diff từng
+- [x] 3.8 Kiểm A: băm lại, so với ảnh chụp chuẩn
+- [x] 3.9 Kiểm B: chạy lại `audit_db.py`, diff với `$BASE/truoc/audit.txt` — phải rỗng
+- [x] 3.10 Kiểm C: bật lại backend, chụp lại 8 endpoint vào `$BASE/sau/api/`, diff từng
       cặp một — cả 8 phải rỗng
-- [ ] 3.11 Kiểm D: chạy lại `check_api.py --compare`, so số phép kiểm đạt
-- [ ] 3.12 Kiểm chống hỏng-âm-thầm: xác nhận **không có** file `.sqlite` nào mới xuất
+- [x] 3.11 Kiểm D: chạy lại `check_api.py --compare`, so số phép kiểm đạt
+- [x] 3.12 Kiểm chống hỏng-âm-thầm: xác nhận **không có** file `.sqlite` nào mới xuất
       hiện ở `db/` hay gốc repo. Có nghĩa là còn chỗ nào đó trỏ sai và vừa tạo database rỗng
-- [ ] 3.13 Commit
+- [x] 3.13 Commit
 
 ## 4. Hai script sản xuất rời `test/`
 

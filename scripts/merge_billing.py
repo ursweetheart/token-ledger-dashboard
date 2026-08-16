@@ -70,7 +70,7 @@ from rules import guess_kind  # noqa: E402
 THU_MUC_THO = ROOT / "data" / "billing"
 MAU_FILE = "*GMSSub*.csv"
 THU_MUC_RA = ROOT / "data" / "da_xu_ly" / "billing"
-DB_MAC_DINH = ROOT / "db" / "token_ledger.sqlite"
+DB_MAC_DINH = ROOT / "var" / "token_ledger.sqlite"
 
 # Ten hien thi (duoi ten file Console) -> project ID (cot `project` cua database).
 #

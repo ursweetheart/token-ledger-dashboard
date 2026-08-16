@@ -96,7 +96,7 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--db", default=str(ROOT / "db" / "token_ledger.sqlite"),
+    p.add_argument("--db", default=str(ROOT / "var" / "token_ledger.sqlite"),
                    help="DSN. Duoi .sqlite/.db -> SQLite, con lai -> PostgreSQL")
     p.add_argument("--from-step", type=int, default=1,
                    help=f"Bat dau tu buoc N (1-{len(STEPS)}). Dung khi mot buoc hong va da sua xong.")
