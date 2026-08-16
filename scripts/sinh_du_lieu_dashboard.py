@@ -195,7 +195,7 @@ def from_monitoring() -> tuple[dict, dict]:
     request into a bucket named "" and the join against billing would match
     nothing, silently producing a dashboard with zero requests everywhere.
     """
-    # Uu tien thu muc "-gop" (scripts/gop_monitoring.py). Cua so luu giu cua
+    # Uu tien thu muc "-gop" (scripts/merge_monitoring.py). Cua so luu giu cua
     # Google truot rat nhanh - do 06/08 thay 196 ngay, do 13/08 chi con 112 -
     # nen mot dot keo don le KHONG con phu het dai ngay. Ban gop moi phu du.
     folder = DATA / "da_xu_ly" / "du_lieu_giam_sat"

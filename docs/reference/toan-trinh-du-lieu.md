@@ -441,7 +441,7 @@ trong khi hoá đơn thì có. Ngày nào hoá đơn chưa kịp về, khoá đ�
 
 | File | Nội dung |
 |---|---|
-| `docs/mo-ta-database.md` | Từng bảng, từng cột, và các bẫy khi truy vấn |
+| `mo-ta-database.md` | Từng bảng, từng cột, và các bẫy khi truy vấn |
 | `db/01_schema.sql` | Schema — mỗi quyết định đều có ghi chú lý do |
-| `docs/mui-gio-2026-08-08.md` | Các quyết định về múi giờ |
+| `../decisions/mui-gio-2026-08-08.md` | Các quyết định về múi giờ |
 | `backend/store.py` | Mọi câu SQL của backend nằm gọn ở đây |
