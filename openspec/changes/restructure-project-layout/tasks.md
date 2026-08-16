@@ -136,7 +136,7 @@
 
 ## 6. Dọn gốc repo
 
-- [ ] 6.1 `docs/` chia ba — **16 file `.md`, phải xếp hết, không sót cái nào**:
+- [x] 6.1 `docs/` chia ba — **16 file `.md`, phải xếp hết, không sót cái nào**:
       `reference/` nhận 4 (`toan-trinh-du-lieu.md`, `mo-ta-database.md`,
       `api-map-tla-hd.md`, `huong-dan-cap-nhat-dashboard.md`);
       `decisions/` nhận 2 (`mui-gio-2026-08-08.md`, `quyet-dinh-ngay-2-2026-08-09.md`);
@@ -144,39 +144,39 @@
       `dashboard-metrics-and-backend-plan.md`**, tài liệu mô tả kiến trúc từ trước khi
       có backend nên phần lớn nội dung đã lỗi thời — cùng thư mục `superpowers/`.
       Kiểm bằng phép cộng: 4 + 2 + 10 = 16
-- [ ] 6.2 Tạo `planning/`, chuyển vào đó **4** file `.xlsx` (`2026.T4.09 DS Đội`,
+- [x] 6.2 Tạo `planning/`, chuyển vào đó **4** file `.xlsx` (`2026.T4.09 DS Đội`,
       `Master Plan AI Radar`, `Master Plan - API Gateway`,
       `Master Plan - Token Ledger Dashboard`), `Tài_liệu_triển_khai_API_Gateway.docx`,
       `nội_dung_cuộc_họp_25_7.txt`, `token-ledger-billing-export-test-log.md`.
       Dùng **`mv` thường** cho các `.xlsx`: đã chạy khô và `git mv` trả về
       `fatal: not under version control` vì `.gitignore:18 *.xlsx` chặn chúng
-- [ ] 6.3 **Xoá `TLA Ralli.xlsx`** — đã chốt 16/08. ⚠️ File **không nằm trong git**
+- [x] 6.3 **Xoá `TLA Ralli.xlsx`** — đã chốt 16/08. ⚠️ File **không nằm trong git**
       (`.gitignore:18 *.xlsx`), xoá là mất vĩnh viễn. Hỏi lại người quyết một lần nữa
       ngay trước khi xoá; nếu còn phân vân thì chuyển ra ngoài repo thay vì xoá
-- [ ] 6.4 **Xoá `scripts/export_ralli_users.py`** cùng lúc — nguồn của nó vừa mất nên
+- [x] 6.4 **Xoá `scripts/export_ralli_users.py`** cùng lúc — nguồn của nó vừa mất nên
       nó không bao giờ chạy được nữa. Xoá một mà giữ một là để lại rác
-- [ ] 6.5 **Giữ `ralli-users.js`** — nó có trong git và vẫn là dữ liệu dự phòng ngoại
+- [x] 6.5 **Giữ `ralli-users.js`** — nó có trong git và vẫn là dữ liệu dự phòng ngoại
       tuyến thật sự dùng được. Nó chỉ mất khả năng *sinh lại*, không mất tác dụng
-- [ ] 6.6 Sau khi xoá, xác nhận không còn tham chiếu treo: grep `export_ralli_users`
+- [x] 6.6 Sau khi xoá, xác nhận không còn tham chiếu treo: grep `export_ralli_users`
       và `TLA Ralli` trên toàn repo (trừ `docs/archive/`) phải sạch
-- [ ] 6.7 `downloaded-logs-20260804-165359.json` → `data/` **kèm `git rm --cached`**.
+- [x] 6.7 `downloaded-logs-20260804-165359.json` → `data/` **kèm `git rm --cached`**.
       File chứa 43 bản ghi Cloud Audit Log với **3 email người thật** và 3 địa chỉ IP,
       hiện đang được git theo dõi và nằm trong tầm phục vụ của máy chủ tĩnh. Không gỡ
       khỏi index thì git vẫn theo dõi ở vị trí mới, vì `data/` chỉ bị `.gitignore` chặn
       với file chưa được add
-- [ ] 6.8 Xác nhận `git status` không còn thấy file đó, và `git ls-files | grep
+- [x] 6.8 Xác nhận `git status` không còn thấy file đó, và `git ls-files | grep
       downloaded-logs` không ra dòng nào
-- [ ] 6.9 `git mv README.txt README.md`
-- [ ] 6.10 Xoá `.agents/` (rỗng)
-- [ ] 6.11 `docs/reference/toan-trinh-du-lieu.md` dòng 51 và 317 — đổi lệnh máy chủ tĩnh
+- [x] 6.9 `git mv README.txt README.md`
+- [x] 6.10 Xoá `.agents/` (rỗng)
+- [x] 6.11 `docs/reference/toan-trinh-du-lieu.md` dòng 51 và 317 — đổi lệnh máy chủ tĩnh
       thành `cd web && python -m http.server 8080 --bind 127.0.0.1`, và giải thích ngắn
       **vì sao** hai vế đều cần: `cd web` chặn *cái gì* lộ, `--bind` chặn *ai* vào được
-- [ ] 6.12 `docs/reference/toan-trinh-du-lieu.md` dòng 38 và mọi chỗ trong
+- [x] 6.12 `docs/reference/toan-trinh-du-lieu.md` dòng 38 và mọi chỗ trong
       `docs/reference/` nhắc `db/token_ledger.sqlite` → `var/token_ledger.sqlite`
-- [ ] 6.13 **Không sửa `docs/archive/`** — nội dung phải y nguyên, chỉ đổi vị trí
-- [ ] 6.14 Thêm vào `docs/reference/` phần mô tả cây thư mục mới kèm quy tắc "gốc repo
+- [x] 6.13 **Không sửa `docs/archive/`** — nội dung phải y nguyên, chỉ đổi vị trí
+- [x] 6.14 Thêm vào `docs/reference/` phần mô tả cây thư mục mới kèm quy tắc "gốc repo
       chỉ nhận ba loại mục"
-- [ ] 6.15 Commit
+- [x] 6.15 Commit
 
 ## 7. Nghiệm thu toàn phần
 

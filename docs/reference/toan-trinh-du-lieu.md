@@ -35,7 +35,7 @@
 |---|---|---|
 | ① Lấy | Internet | `data/billing/`, `data/raw_web/`, `data/raw_google_console/` |
 | ② Gộp | `data/` thô | `data/da_xu_ly/` |
-| ③ Nạp | `data/da_xu_ly/` + `data/raw_web/` | `db/token_ledger.sqlite` |
+| ③ Nạp | `data/da_xu_ly/` + `data/raw_web/` | `var/token_ledger.sqlite` |
 | ④ Dọn | database | JSON qua HTTP |
 
 ---
@@ -48,7 +48,7 @@ nào** — `update_dashboard.py` chạy đủ 10 bước, gồm cả chặng ②
 ```bash
 python scripts/update_dashboard.py                # ① + ② + ③  (~15 phút, có 1 bước tay)
 python -m uvicorn backend.main:app --port 8000   # ④  (chạy nền)
-python -m http.server 8080                       # phục vụ index.html
+cd web && python -m http.server 8080 --bind 127.0.0.1   # phục vụ dashboard
 ```
 
 Rồi mở `index.html`. Xong.
@@ -314,7 +314,19 @@ lấy từ hoá đơn. Không có hai cột này thì không phân biệt đư�
 ## Nối với dashboard
 
 ```bash
-python -m http.server 8080        # phục vụ index.html
+cd web && python -m http.server 8080 --bind 127.0.0.1   # phục vụ dashboard
+```
+
+Hai vế của lệnh này giải hai vấn đề khác nhau, thiếu vế nào cũng hở:
+
+- **`cd web`** chặn *cái gì* phục vụ được. Trước đây lệnh chạy tại gốc repo, mà gốc
+  repo là document root thì `.env`, `var/token_ledger.sqlite` (937 nhân viên kèm email),
+  `data/` và `.git/` đều tải được — đã đo, cả sáu đường dẫn trả 200 và `.env` về nguyên
+  nội dung. Chạy trong `web/` thì không có đường đi ngược lên, kể cả `..%2f` hay `%2e%2e/`.
+- **`--bind 127.0.0.1`** chặn *ai* truy cập được. Mặc định của `http.server` là
+  *all interfaces*, tức cả mạng LAN công ty.
+
+```bash
 ```
 
 `api.js` (nạp trước `app.js`) tự gọi backend và thay dữ liệu vào. **Không chạy
