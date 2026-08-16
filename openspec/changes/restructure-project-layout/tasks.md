@@ -197,6 +197,6 @@
 
 - [x] 8.1 Rà lại `proposal.md` — có mục nào làm khác kế hoạch thì ghi rõ
 - [x] 8.2 Trả lời 4 Open Question trong `design.md`, hoặc chuyển sang change khác
-- [ ] 8.3 Merge vào `main`
-- [ ] 8.4 Báo đồng nghiệp: mọi nhánh đang mở sẽ xung đột, và lệnh chạy dashboard đã đổi
-- [ ] 8.5 `openspec archive restructure-project-layout`
+- [x] 8.3 Merge vào `main` — commit merge `dfe7c0f`, dùng `--no-ff` để có một điểm hoàn tác duy nhất (`git revert -m 1 dfe7c0f`)
+- [ ] 8.4 **CÒN LẠI — việc của bạn.** Báo đồng nghiệp: mọi nhánh đang mở sẽ xung đột, và lệnh chạy dashboard đã đổi
+- [x] 8.5 `openspec archive restructure-project-layout`
