@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-APP = ROOT / "app.js"
+APP = ROOT / "web" / "js" / "app.js"
 SEED = Path(__file__).parent / "seed-days-that.js"
 
 # Hau to mo ta dot cap nhat nay, gan sau so phien ban trong khoa localStorage.

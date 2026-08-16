@@ -5,7 +5,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
-const APP_PATH = path.join(ROOT, "app.js");
+const APP_PATH = path.join(ROOT, "web", "js", "app.js");
 
 function createDocument() {
   const ids = {};
@@ -99,7 +99,7 @@ test("range rendering changes without changing other dashboard dates", () => {
 });
 
 test("both range text inputs advertise dd/mm/yyyy", () => {
-  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const html = fs.readFileSync(path.join(ROOT, "web", "index.html"), "utf8");
   for (const id of ["range-start-text", "range-end-text"]) {
     const tag = html.match(new RegExp(`<input[^>]+id=["']${id}["'][^>]*>`));
     assert.ok(tag, `missing ${id}`);

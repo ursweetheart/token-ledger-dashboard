@@ -38,30 +38,36 @@
 
 ## 2. Dời frontend vào `web/`
 
-- [ ] 2.1 `git mv` vào `web/`: `index.html`; `app.js`, `app.js.bak`, `api.js` →
+- [x] 2.1 `git mv` vào `web/`: `index.html`; `app.js`, `app.js.bak`, `api.js` →
       `web/js/`; `ralli-users.js` → `web/js/fallback/`; `dashboard.css` → `web/css/`;
       `chart.umd.min.js` → `web/vendor/`; `assets/rang-dong-logo.png` → `web/assets/`
-- [ ] 2.2 `web/index.html` — sửa **5** tham chiếu: dòng 8 (`dashboard.css` →
+- [x] 2.2 `web/index.html` — sửa **5** tham chiếu: dòng 8 (`dashboard.css` →
       `css/dashboard.css`), dòng 10 (`chart.umd.min.js` → `vendor/chart.umd.min.js`),
       dòng 1139 (`ralli-users.js` → `js/fallback/ralli-users.js`), dòng 1142
       (`api.js` → `js/api.js`), dòng 1143 (`app.js` → `js/app.js`).
       **Dòng 251 KHÔNG sửa** — `assets/rang-dong-logo.png` vẫn đúng vì `assets/` đi vào
       `web/` cùng `index.html`. Sửa dòng này là làm hỏng ảnh logo
-- [ ] 2.3 **Không sửa `scripts/export_ralli_users.py`** — nhóm 6 xoá hẳn file này (đã
+- [x] 2.3 **Không sửa `scripts/export_ralli_users.py`** — nhóm 6 xoá hẳn file này (đã
       chốt 16/08). Sửa đường dẫn `OUTPUT` rồi xoá là công cốc
-- [ ] 2.4 `test/va_app_js.py:30` — `APP` → `ROOT / "web" / "js" / "app.js"`.
+- [x] 2.4 `test/va_app_js.py:30` — `APP` → `ROOT / "web" / "js" / "app.js"`.
       (File sẽ chuyển sang `scripts/` ở nhóm 4; sửa ở đây để repo không hỏng giữa chừng)
-- [ ] 2.5 `matrix-drilldown-demo.html` và `header-with-logo.png` → `docs/archive/`,
+- [x] 2.5 `matrix-drilldown-demo.html` và `header-with-logo.png` → `docs/archive/`,
       **không** vào `web/`. Không file nào gọi tới chúng; nhưng `matrix-drilldown-demo`
       dòng 167 **gọi đi** `<script src="ralli-users.js">`, nên sau khi dời nó sẽ mất
       liên kết đó. Chấp nhận được với một bản mẫu đã lưu trữ *(xem Open Question 1 —
       cần bạn chốt lưu trữ hay xoá hẳn)*
-- [ ] 2.6 Quét cả repo tìm chuỗi đường dẫn cũ còn sót ngoài `docs/archive/`
-- [ ] 2.7 Kiểm: `cd web && python -m http.server 8080 --bind 127.0.0.1`, mở trang, xác
+- [x] 2.6 Quét cả repo tìm chuỗi đường dẫn cũ còn sót ngoài `docs/archive/`.
+      **Bắt được 2 lỗ hổng của chính kế hoạch này**, cả hai đọc `index.html` ở gốc mà
+      không nhóm nào định sửa: `test/date-range-filter.test.js` dòng 8 và 102 (bộ test
+      PHẢI luôn xanh) và `test/trich_yeu_cau_dashboard.py` dòng 26–27. Đã sửa cả 4.
+      Bài học: mẫu quét đầu tiên viết theo cú pháp Python (`ROOT / "x"`) nên sót cách
+      viết JavaScript (`path.join(ROOT, "x")`) — phải quét bằng tên file, không bằng
+      hình dạng biểu thức
+- [x] 2.7 Kiểm: `cd web && python -m http.server 8080 --bind 127.0.0.1`, mở trang, xác
       nhận 6 tài nguyên cùng gốc đều 200 và không có lỗi JS
-- [ ] 2.8 Kiểm bản offline: mở `web/index.html` bằng `file://`, xác nhận vẫn vẽ được
-- [ ] 2.9 **Phép kiểm tiêu cực, lần "sau"** — cùng 3 đường dẫn ở 1.9 phải trả **404**
-- [ ] 2.10 Commit
+- [x] 2.8 Kiểm bản offline: mở `web/index.html` bằng `file://`, xác nhận vẫn vẽ được
+- [x] 2.9 **Phép kiểm tiêu cực, lần "sau"** — cùng 3 đường dẫn ở 1.9 phải trả **404**
+- [x] 2.10 Commit
 
 ## 3. Dời database sang `var/`
 

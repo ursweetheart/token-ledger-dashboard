@@ -23,8 +23,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-HTML = ROOT / "index.html"
-APP = ROOT / "app.js"
+HTML = ROOT / "web" / "index.html"
+APP = ROOT / "web" / "js" / "app.js"
 
 TAB_NAMES = {
     "overview": "1. Tong quan",
