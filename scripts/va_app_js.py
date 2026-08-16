@@ -82,7 +82,7 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     if not SEED.exists():
-        raise SystemExit(f"Chua co {SEED}. Chay test/sinh_du_lieu_dashboard.py truoc.")
+        raise SystemExit(f"Chua co {SEED}. Chay scripts/sinh_du_lieu_dashboard.py truoc.")
 
     text = APP.read_text(encoding="utf-8")
     truoc = len(text)

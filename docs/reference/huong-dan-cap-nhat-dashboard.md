@@ -82,8 +82,8 @@ Hỏng bước nào là **dừng ngay**. Không bước nào chạy tiếp trên
 | `scripts/gop_monitoring.py` | Gộp nhiều đợt kéo, khử trùng lặp | ✓ |
 | `scripts/pull_web_apps.py` | Kéo Ralli + TLA HĐ qua API của chúng | ✓ |
 | `scripts/gop_billing.py` | Gộp 7 CSV Console thành một file chuẩn hoá | ✓ |
-| `test/sinh_du_lieu_dashboard.py` | Sinh `test/seed-days-that.js` từ mọi nguồn | ✓ |
-| `test/va_app_js.py` | Vá `seed-days-that.js` vào `app.js` | ✓ |
+| `scripts/sinh_du_lieu_dashboard.py` | Sinh `scripts/seed-days-that.js` từ mọi nguồn | ✓ |
+| `scripts/va_app_js.py` | Vá `seed-days-that.js` vào `web/js/app.js` | ✓ |
 
 Cả ba script `pull_*` và `gop_*` đều **ghi vào thư mục mới theo ngày, không bao giờ ghi đè đợt cũ**. Xem §"Đừng xoá thư mục kéo cũ" để biết vì sao đó không phải sự cẩn thận thừa.
 

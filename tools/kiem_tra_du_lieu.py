@@ -19,9 +19,9 @@ not checking the thing that would actually hurt.
 Nothing here writes to data/. The only file written is the report under test/.
 
 Usage
-    python test/kiem_tra_du_lieu.py
-    python test/kiem_tra_du_lieu.py --bo-qua-monitoring   # bo qua 335 MB, chay nhanh
-    python test/kiem_tra_du_lieu.py --bao-cao ""          # chi in ra man hinh
+    python tools/kiem_tra_du_lieu.py
+    python tools/kiem_tra_du_lieu.py --bo-qua-monitoring   # bo qua 335 MB, chay nhanh
+    python tools/kiem_tra_du_lieu.py --bao-cao ""          # chi in ra man hinh
 """
 
 from __future__ import annotations
