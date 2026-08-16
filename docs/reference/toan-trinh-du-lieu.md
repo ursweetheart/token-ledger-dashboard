@@ -348,13 +348,17 @@ ra bằng hệ số — số suy ra trông y hệt số đo.
 ## Kiểm backend
 
 ```bash
-python backend/check_api.py
-python backend/check_api.py --doi-chieu http://127.0.0.1:8001   # so hai hệ
+python backend/check_api.py                                   # 16 phép kiểm
+python backend/check_api.py --compare http://127.0.0.1:8001   # 24, so hai hệ
 ```
 
-21 phép kiểm: số khớp database, tham số rác bị từ chối bằng 400 (**không** âm
+**16 phép kiểm**: số khớp database, tham số rác bị từ chối bằng 400 (**không** âm
 thầm trả bảng rỗng), và **thử ghi thật** qua chính kết nối của backend để chắc
 là nó bị từ chối.
+
+Thêm `--compare` thì thành **24**: 8 phép so nữa, đối chiếu **từng byte JSON** giữa
+máy chủ chạy SQLite và máy chủ chạy PostgreSQL trên cả 8 endpoint. Cờ là
+`--compare`, không phải `--doi-chieu`.
 
 ---
 

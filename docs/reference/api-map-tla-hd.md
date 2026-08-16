@@ -1,7 +1,11 @@
 # Bản đồ API — TLA Hợp Đồng
 
 > Dò ngày 05/08/2026 bằng cách đọc network request của chính giao diện admin.
-> Đây là **1 trong 8 agent**. Bảy agent còn lại chưa biết địa chỉ.
+> Cập nhật 16/08/2026 — bốn mục từng ghi "chưa xác minh" nay đã có câu trả lời,
+> đánh dấu ✅ bên dưới.
+>
+> Đây là **1 trong 8 agent**. Tính cả Trợ lý ảo Ralli thì đã biết địa chỉ **2/8**;
+> sáu agent còn lại vẫn chưa. Cả hai đều được `scripts/pull_web_apps.py` gọi.
 
 **Gốc:** `https://chatbothd.rangdong.com.vn:10001`
 
@@ -15,14 +19,20 @@ Máy chủ **không** chấp nhận cookie — mở thẳng URL API trong trình
 đăng nhập trả về `{"detail":"Authentication required"}`.
 
 JWT chứa: `sub`, `role`, `company_id`, `unit_id`, `username`, `exp`.
-Token quan sát được có `exp` rất ngắn (~1 ngày) ⇒ **không dùng để tự động hoá**,
-phải xin token dài hạn từ đơn vị làm phần mềm.
+Token quan sát được có `exp` rất ngắn (~1 ngày).
+
+✅ **Đã giải quyết theo hướng khác, không cần token dài hạn.** Đường ống tự đăng
+nhập bằng `POST /auth/login` mỗi lần chạy rồi vứt token đi — xem
+[`huong-dan-cap-nhat-dashboard.md`](huong-dan-cap-nhat-dashboard.md#kỷ-luật-chỉ-đọc).
+Đây là **ngoại lệ POST duy nhất** được cho phép; mọi endpoint dữ liệu vẫn là GET
+trên danh sách trắng khai báo cứng. Token không bao giờ in ra màn hình hay ghi
+xuống đĩa.
 
 ## Endpoint
 
 | Method | Path | Trả về | Ghi chú |
 |---|---|---|---|
-| GET | `/api/admin/token-usage/stats?period=` | token · chi phí · lượt gọi · prompt · completion | ⭐ quan trọng nhất. `period` = `day`\|`week`\|`month`\|`year`. Giao diện còn lọc theo phòng ban + người dùng ⇒ nhiều khả năng nhận thêm `unit_id`/`user_id`/`from`/`to` (chưa xác minh) |
+| GET | `/api/admin/token-usage/stats?period=` | token · chi phí · lượt gọi · prompt · completion | ⭐ quan trọng nhất. ✅ Đã dò xong tham số — xem bảng ngay dưới |
 | GET | `/api/units/tree` | cây tổ chức, 20 đơn vị, 3 cấp | thay `ORG_UNITS` hardcode |
 | GET | `/api/units/{uuid}/members` | thành viên của 1 đơn vị | tên · vai trò · email · SĐT |
 | GET | `/api/history/sessions` | 181 phiên chat | mỗi phiên có `Người tạo (@username)` |
@@ -34,6 +44,24 @@ phải xin token dài hạn từ đơn vị làm phần mềm.
 | GET | `/api/permissions/me` | quyền của tài khoản hiện tại | kiểm quyền trước khi gọi |
 | GET | `/api/notifications?limit=` | thông báo | |
 | GET | `/api/notifications/stream?token=<JWT>` | SSE | ⚠️ endpoint duy nhất nhận JWT qua query string |
+
+### Tham số của `/api/admin/token-usage/stats` — đã dò tay 14/08
+
+| Cách gọi | Kết quả |
+|---|---|
+| `?period=custom&date_from=A&date_to=B` | ✅ **Được.** Trả đúng khoảng xin |
+| `?period=day&date=…` | ❌ Bị **bỏ qua im lặng**, trả về hôm nay |
+| `?date_from=…&date_to=…` (thiếu `period`) | ❌ Bị bỏ qua, trả về cả tháng |
+| `&user_id=<uuid>` | ✅ **Được.** Khớp chính xác `by_user` |
+
+⚠️ **Tham số lạ không báo lỗi — nó bị bỏ qua và máy chủ vẫn trả 200.** Nghĩa là gọi
+sai vẫn nhận được số liệu trông hợp lệ nhưng của khoảng khác. `pull_hd_usage.py` vì
+thế kiểm lại `date_from`/`date_to` trong phản hồi và ném lỗi nếu không khớp yêu cầu.
+
+Một chi tiết dễ đọc nhầm: **`by_model` nằm trong khối `costs`, không ở gốc phản hồi.**
+Đọc sai chỗ sẽ thấy "0 model" ở mọi dòng và tưởng API không hỗ trợ chiều model.
+
+Chi tiết đầy đủ: docstring của `scripts/pull_hd_usage.py`.
 
 ## Vai trò
 
@@ -57,8 +85,15 @@ Token theo phòng ban: **Chưa xác định 2,02M (59%)** · TT C4LED 963K · Ph
 
 ## Việc cần hỏi đơn vị làm phần mềm
 
-1. Token chỉ-đọc dài hạn cho `/api/admin/token-usage/stats` và `/api/units/tree`
-2. Địa chỉ + tài khoản admin của **7 agent còn lại**
-3. `/api/admin/token-usage/stats` có nhận `unit_id` / `user_id` / `from` / `to` không
-4. Vì sao 59% token rơi vào "Chưa xác định"
-5. Bản ghi user có trường `created_at` (thời gian được cấp) không — giao diện không hiện
+**Còn phải hỏi:**
+
+1. Địa chỉ + tài khoản admin của **6 agent còn lại** (đã có TLA HĐ và Ralli)
+2. Vì sao 59% token rơi vào "Chưa xác định"
+
+**Đã tự trả lời được, không cần hỏi nữa:**
+
+3. ✅ ~~Token chỉ-đọc dài hạn~~ — đường ống tự đăng nhập mỗi lần chạy, xem §Xác thực
+4. ✅ ~~`stats` có nhận `unit_id`/`user_id`/`from`/`to` không~~ — xem bảng tham số ở trên
+5. ✅ ~~Bản ghi user có `created_at` không~~ — **có**. Database hiện có
+   `account.created_at`, phủ 891/953 tài khoản; 62 tài khoản còn NULL là nhóm đến từ
+   nguồn Ralli, vốn không xuất cột ngày cấp
