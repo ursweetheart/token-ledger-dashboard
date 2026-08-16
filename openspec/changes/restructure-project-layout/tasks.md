@@ -95,18 +95,18 @@
 
 ## 4. Hai script sản xuất rời `test/`
 
-- [ ] 4.1 `git mv test/sinh_du_lieu_dashboard.py test/va_app_js.py
+- [x] 4.1 `git mv test/sinh_du_lieu_dashboard.py test/va_app_js.py
       test/seed-days-that.js scripts/` — cả ba đi cùng nhau vì hai script đầu trỏ tới
       file thứ ba bằng `Path(__file__).parent`
-- [ ] 4.2 `scripts/update_dashboard.py:153-154` — hai lệnh bước 10 đổi từ `test/…` sang
+- [x] 4.2 `scripts/update_dashboard.py:153-154` — hai lệnh bước 10 đổi từ `test/…` sang
       `scripts/…`
-- [ ] 4.3 Kiểm: `python scripts/update_dashboard.py --help` hiện đủ 10 bước
-- [ ] 4.4 Chạy riêng bước 10 (`sinh_du_lieu_dashboard.py` rồi `va_app_js.py`), xác nhận
+- [x] 4.3 Kiểm: `python scripts/update_dashboard.py --help` hiện đủ 10 bước
+- [x] 4.4 Chạy riêng bước 10 (`sinh_du_lieu_dashboard.py` rồi `va_app_js.py`), xác nhận
       nó vá được vào `web/js/app.js`
-- [ ] 4.5 Xác nhận `web/js/app.js.bak` **vẫn mang dấu thời gian 02/08**, không bị ghi đè
+- [x] 4.5 Xác nhận `web/js/app.js.bak` **vẫn mang dấu thời gian 02/08**, không bị ghi đè
       — nếu nó thành hôm nay thì mốc gốc đã mất, phải khôi phục từ git
-- [ ] 4.6 Mở lại dashboard, xác nhận vẫn vẽ được sau khi vá
-- [ ] 4.7 Commit
+- [x] 4.6 Mở lại dashboard, xác nhận vẫn vẽ được sau khi vá
+- [x] 4.7 Commit
 
 ## 5. Tách `test/` thành `tests/` và `tools/`
 

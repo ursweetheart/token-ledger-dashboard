@@ -150,8 +150,8 @@ def main() -> None:
         # DU PHONG NGOAI TUYEN: bam dup index.html khi khong chay backend thi
         # van thay so moi nhat.
         chay("[10/10] Va du lieu du phong vao app.js",
-             [PY, "test/sinh_du_lieu_dashboard.py"])
-        chay("      Va vao app.js", [PY, "test/va_app_js.py"])
+             [PY, "scripts/sinh_du_lieu_dashboard.py"])
+        chay("      Va vao app.js", [PY, "scripts/va_app_js.py"])
 
     except Hong as e:
         print(f"\n{'=' * 72}\nDUNG: {e}\n{'=' * 72}")
