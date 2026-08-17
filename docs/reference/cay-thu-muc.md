@@ -23,7 +23,7 @@ token-ledger-dashboard/
 │   │                          Máy chủ tĩnh chạy TRONG đây. Không gì bên ngoài
 │   │                          ra được mạng. Xem "Ranh giới phục vụ" bên dưới.
 │   ├── index.html
-│   ├── js/       app.js · api.js · fallback/ralli-users.js
+│   ├── js/       app.js · api.js          KHÔNG chứa dữ liệu số liệu
 │   ├── css/      dashboard.css
 │   ├── vendor/   chart.umd.min.js        ← mã đi mượn, tách khỏi mã tự viết
 │   └── assets/   rang-dong-logo.png
@@ -109,3 +109,13 @@ vẻ "chỉ bị 404"; quên `cd` thì `http.server` không tìm thấy `index.h
 
 Một script được `update_dashboard.py` gọi thì **phải** ở `scripts/`. Đường ống sản xuất
 không bao giờ gọi vào `tests/` hay `tools/`.
+
+⚠️ **`scripts/` chỉ chứa `.py`.** Một file dữ liệu do script sinh ra KHÔNG được nằm cạnh
+script sinh ra nó. Đã dính: `scripts/seed-days-that.js` — 281 KB số liệu nhúng, sinh bởi
+`sinh_du_lieu_dashboard.py` và đọc bởi `va_app_js.py`. Khi cả hai script bị xoá
+(17/08/2026) thì nó ở lại, mồ côi hoàn toàn, và không phép kiểm nào phát hiện — vì nó nằm
+đúng chỗ mà quy ước không nói tới. File dữ liệu trung gian thuộc `var/`.
+
+⚠️ **`web/` cũng chỉ chứa mã.** Đường ống MUST NOT ghi vào `web/`; chạy trọn xong thì
+`git status web/` phải trống. Trước 17/08/2026 có một bước vá số liệu thẳng vào
+`web/js/app.js` — đó là lý do dashboard từng hiện số cũ mà trông y hệt số mới.

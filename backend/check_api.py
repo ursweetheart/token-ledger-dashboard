@@ -17,6 +17,20 @@ BA VIỆC NÀY KIỂM
 
 Với --compare: gọi cả hai máy chủ và so từng byte JSON. Hai hệ quản trị phải trả
 về giống hệt nhau, kể cả thứ tự dòng.
+
+LƯU Ý VỀ --compare (từ 17/08/2026)
+----------------------------------
+PostgreSQL là mặc định và var/token_ledger.sqlite đã bị xoá, nên --compare cần
+DỰNG một bản SQLite trước:
+
+    python scripts/rebuild_db.py --db var/token_ledger.sqlite
+    TOKEN_LEDGER_DSN=var/token_ledger.sqlite \\
+        python -m uvicorn backend.main:app --port 8001
+
+Hai chênh lệch KIỂU đã biết giữa hai hệ, cả hai vô hại tới JSON - xem
+docs/reference/mo-ta-database.md:
+    token       Decimal (pg) vs int (sqlite) -> jsonable_encoder cho ra so nguyen
+    is_technical  true (pg) vs 1 (sqlite)    -> khong thanh phan nao doc cot nay
 """
 
 from __future__ import annotations

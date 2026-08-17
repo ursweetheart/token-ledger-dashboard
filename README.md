@@ -89,14 +89,18 @@ thế hoàn toàn bởi đường ống dữ liệu. Giữ lại để đối ch
 <details>
 <summary>Hướng dẫn cũ (nhập liệu tay)</summary>
 
-**Nhập liệu theo ngày:** Bấm ✎ Dữ liệu nguồn → chọn Ngày nhập liệu → nhập
-token/request cho từng agent → 💾 Lưu ngày này. Xoá một ngày: chọn ngày rồi 🗑 Xoá ngày.
+**Nhập liệu theo ngày:** panel `✎ Dữ liệu nguồn` (nút, form, và cả hai nút 💾 Lưu ngày
+này / 🗑 Xoá ngày) **đã bị xoá 17/08/2026**. Nó trở thành cái bẫy khi dashboard chỉ đọc
+database: người dùng gõ số, số hiện lên và cộng vào tổng — trộn với số từ database mà
+không gì nói ra — rồi tải lại trang là mất sạch.
 
-**Cấu hình giá:** ⚙ Cấu hình giá → sửa đơn giá input/output theo model → 💾 Lưu bảng giá.
+**Cấu hình giá:** `⚙ Cấu hình giá` **vẫn còn và vẫn dùng được** — sửa đơn giá
+input/output theo model để thử "nếu giá khác thì tiền bao nhiêu". Nó chỉ đổi trong phiên,
+không ghi xuống đâu, và không giả vờ là số đo.
 
-**Lưu ý cũ:** Dữ liệu nhập lưu trong `localStorage` của máy đang mở; gửi thư mục sang
-máy khác thì máy đó bắt đầu từ dữ liệu Excel tháng 6 và tháng 7. Cây phòng ban và số
-user Ralli chuẩn hoá từ `data/phong_ban_phan_quyen.xlsx` rồi nhúng vào `app.js`.
+**Lưu ý cũ:** `localStorage` từng giữ cả số liệu; nay nó **chỉ giữ lựa chọn** (tab, giao
+diện, khoảng ngày, cây đang bung). Cây phòng ban còn nhúng trong `app.js`, nhưng danh bạ
+937 tài khoản thì đến từ `/api/accounts` — bản Excel 622 dòng nhúng cứng đã bỏ.
 
 </details>
 

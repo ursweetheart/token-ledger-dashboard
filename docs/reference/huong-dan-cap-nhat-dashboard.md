@@ -303,20 +303,24 @@ python scripts/audit_db.py        # 30 phep kiem, 5 nhom
 
 Kỳ vọng hiện tại: `26 dat | 4 luu y | 0 hong`.
 
-### Bản dự phòng ngoại tuyến
+### Frontend
 
-Bước 10 chỉ đổi **3 loại literal** trong `web/js/app.js`: khối `SEED_DAYS`, hằng `STORE`,
-và khoảng ngày mặc định. Không hàm nào, không thẻ HTML nào bị đụng. Kiểm nhanh:
+Đường ống **không ghi vào `web/`**: chạy trọn xong thì `git status web/` phải trống.
+Không còn bước nào sinh dữ liệu rồi vá vào `app.js` — bản dự phòng ngoại tuyến đã bỏ
+(17/08/2026), vì nó không tự biết mình cũ nên số cũ hiện lên trông y hệt số mới.
+
+Khoảng ngày mặc định **suy từ ngày cuối cùng có dữ liệu trong database**, không ghim cứng.
 
 ```bash
 node --check web/js/app.js
-git diff --stat web/js/app.js
+node --check web/js/api.js
+node --test tests/date-range-filter.test.js      # 6 phep kiem
+node --test tests/load-failure-states.test.js    # 7 phep kiem, KHONG can backend
 ```
 
-Khoảng ngày mặc định được **suy từ ngày cuối cùng có dữ liệu**, không ghim cứng — nên
-dashboard mở ra luôn ở tháng hiện tại mà không cần sửa gì thêm.
-
-Đường ống **không ghi vào `web/`** nữa: chạy trọn xong thì `git status web/` phải trống.
+Bộ thứ hai nạp trọn `api.js` + `app.js` trong `vm` với DOM giả lấy đúng danh sách `id` từ
+`index.html`, nên nó bắt được **tham chiếu treo** — đúng loại lỗi mà xoá code hoặc đổi tên
+sinh ra. Nó cũng khẳng định frontend không còn khai báo dữ liệu số liệu nào.
 
 ### API
 

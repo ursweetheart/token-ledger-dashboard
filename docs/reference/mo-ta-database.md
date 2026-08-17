@@ -338,7 +338,20 @@ Cột `don_vi_xung_dot = 1` **giữ lại dấu vết**: các nguồn đã khôn
 Tỷ giá USD → VND.
 
 ### `ref_budget` — 7 dòng
-Ngân sách theo `(agent_id, thang)`. Tools Quizzer và Ralli không có ngân sách.
+Hạn mức theo `(agent_id, thang)`. **Ba trạng thái, không phải hai** — đã đối chiếu 8 agent
+trong `dim_agent` với 7 dòng ở đây:
+
+| Trạng thái | Agent | Cột có giá trị |
+|---|---|---|
+| Có hạn mức **USD** | 6 agent (30 · 50 · 20 · 20 · 20 · 20 US$) | `budget_usd` |
+| Có hạn mức, nhưng theo **TOKEN** | `Trợ lý ảo Ralli` — 50.000.000 token | `budget_tokens` |
+| **Chưa đặt** hạn mức | `Tools Quizzer` — không có dòng nào | — |
+
+⚠️ Ralli **có** hạn mức, chỉ là bằng đơn vị khác. Gộp nó vào nhóm "chưa đặt" là nói sai, và
+suy cả hai về `0` thì sai nặng hơn: `0` nghĩa là *hết hạn mức*, khác hẳn *chưa đặt*.
+
+⚠️ Không có hạn mức USD **không** đồng nghĩa với bị loại khỏi báo cáo. Cả Ralli lẫn Tools
+Quizzer đều xuất hiện đầy đủ trong mọi số liệu sử dụng.
 
 ---
 

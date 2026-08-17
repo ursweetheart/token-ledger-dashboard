@@ -91,12 +91,21 @@ SKU_CATALOG = ROOT / "data" / "raw_google_console" / "danh_muc" / "sku-gemini-ap
 # Thư mục kéo monitoring THÔ - nơi chứa {project}.descriptors.json.
 MONITORING_RAW = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"
 
-# app.js dòng 15-22. Tools Quizzer và Ralli KHÔNG có trong danh sách đó.
+# Hạn mức USD theo cấu hình Google Cloud. ĐÂY là nguồn sự thật: nó vào
+# 02_catalog.sql -> ref_budget -> /api/catalog -> dashboard.
+#
+# Trước 17/08/2026 chú thích ở đây trỏ vào "app.js dòng 15-22", vì lúc đó app.js
+# cũng giữ một bản gõ tay. Bản đó đã bỏ - hai nguồn cho một con số thì sớm muộn
+# lệch nhau mà không gì báo.
+#
+# Tools Quizzer không có hạn mức, Ralli đặt theo TOKEN (xem RALLI_BUDGET_TOKENS
+# dưới). Cả hai vẫn XUẤT HIỆN đầy đủ trong báo cáo - không có hạn mức USD khác
+# với bị loại khỏi báo cáo.
 BUDGET_USD = {
     "Trợ Lý Ảo Hợp Đồng": 20, "Chatbot Contact Center": 30, "Phân Loại Dữ Liệu CRM": 20,
     "Phân Loại Phản Hồi Tiếp Thị": 20, "Multi modal AI Invoice": 20, "Sale Agent": 50,
 }
-VND_RATE = 25200                    # app.js dòng 25
+VND_RATE = 25200                    # quyet dinh M-F, khong keo tu API
 RALLI_BUDGET_TOKENS = 50_000_000    # data/ctda/token-usage-budget.json
 BUDGET_MONTH = "2026-08-01"
 FX_DAY = "2026-08-08"
