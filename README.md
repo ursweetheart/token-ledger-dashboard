@@ -6,14 +6,35 @@ và hai web app nội bộ, gom vào một database rồi hiển thị qua API c
 ## Cách chạy
 
 ```bash
-# 1. Backend chỉ-đọc — phục vụ dữ liệu từ database
+# 1. Database — PHẢI lên trước, PostgreSQL là mặc định từ 17/08/2026
+docker compose up -d
+
+# 2. Backend chỉ-đọc — phục vụ dữ liệu từ database
 python -m uvicorn backend.main:app --port 8000
 
-# 2. Dashboard — LƯU Ý cả hai vế của lệnh này đều cần thiết
+# 3. Dashboard — LƯU Ý cả hai vế của lệnh này đều cần thiết
 cd web && python -m http.server 8080 --bind 127.0.0.1
 ```
 
 Mở `http://127.0.0.1:8080`.
+
+**Vì sao PostgreSQL, không phải SQLite:** SQLite là *một file* — không đi qua mạng nên
+container khác không đọc được, và không có schema riêng lẫn `GRANT` theo user nên không
+chia quyền theo service được. Cả hai chặn đường việc chạy nhiều bản sau một load balancer.
+
+Đổi database bằng **một** biến, có hiệu lực cho cả backend và mọi script:
+
+```bash
+export TOKEN_LEDGER_DSN=var/token_ledger.sqlite     # quay về SQLite để đối chiếu
+```
+
+Thông số kết nối lấy từ `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` —
+**cùng tên** với `docker-compose.yml`, nên đặt trong `.env` là cả container lẫn script đều
+theo.
+
+> ⚠️ `docker compose down -v` **xoá sạch** volume `pgdata`, tức mất database đang chạy.
+> Dựng lại được bằng `python scripts/rebuild_db.py` (~1 phút) **miễn là `data/` còn** —
+> `data/` là thứ duy nhất mất là mất vĩnh viễn.
 
 **`cd web`** chặn *cái gì* lộ ra: chạy ở gốc repo thì `.env`, database (937 nhân viên
 kèm email) và `data/` đều tải được qua HTTP. **`--bind 127.0.0.1`** chặn *ai* vào được:

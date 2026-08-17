@@ -1,13 +1,19 @@
-"""Dung lai toan bo database tu DU LIEU DA THU THAP, cho SQLite hoac PostgreSQL.
+"""Dung lai toan bo database tu DU LIEU DA THU THAP, cho PostgreSQL hoac SQLite.
 
-    python scripts/rebuild_db.py                          # SQLite mac dinh
-    python scripts/rebuild_db.py --db "postgresql://token:token_local@127.0.0.1:5432/token_ledger"
+    docker compose up -d                                  # PHAI len truoc
+    python scripts/rebuild_db.py                          # PostgreSQL mac dinh
+    python scripts/rebuild_db.py --db var/token_ledger.sqlite   # ban doi chieu
 
 DSN la gi
 ---------
 Chuoi ket noi. connect.py phan biet bang duoi file: `.sqlite`/`.db` thi mo
 SQLite, con lai coi la chuoi PostgreSQL. Nho vay cung mot bo script nap chay
 duoc ca hai he ma khong sua dong SQL nao.
+
+Mac dinh lay tu connect.DEFAULT_DSN, KHONG khai rieng o day. Truoc 17/08/2026
+file nay co hang so DSN cua rieng no, va scripts/update_dashboard.py goi no
+khong truyen --db - nen doi connect.py xong ma duong ong van dung lai database
+cu, khong loi nao bao ra.
 
 NGUON DU LIEU
 -------------
@@ -62,6 +68,7 @@ source='app'. Chi tiet o db/load_hd.py.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import time
@@ -69,6 +76,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
+
+sys.path.insert(0, str(ROOT / "db"))
+
+import connect  # noqa: E402
 
 # (nhan, ten file, tham so rieng)
 STEPS = [
@@ -82,21 +93,11 @@ STEPS = [
 ]
 
 
-def che(dsn: str) -> str:
-    """Giau mat khau khi in DSN ra man hinh."""
-    if "://" not in dsn or "@" not in dsn:
-        return dsn
-    dau, sau = dsn.split("://", 1)
-    thong_tin, may = sau.split("@", 1)
-    nguoi = thong_tin.split(":", 1)[0]
-    return f"{dau}://{nguoi}:***@{may}"
-
-
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--db", default=str(ROOT / "var" / "token_ledger.sqlite"),
+    p.add_argument("--db", default=connect.DEFAULT_DSN,
                    help="DSN. Duoi .sqlite/.db -> SQLite, con lai -> PostgreSQL")
     p.add_argument("--from-step", type=int, default=1,
                    help=f"Bat dau tu buoc N (1-{len(STEPS)}). Dung khi mot buoc hong va da sua xong.")
@@ -105,7 +106,7 @@ def main() -> None:
     print("=" * 72)
     print("DUNG LAI DATABASE TU DU LIEU DA THU THAP")
     print("=" * 72)
-    print(f"Dich: {che(args.db)}")
+    print(f"Dich: {connect.mask_dsn(args.db)}")
     if args.from_step > 1:
         print(f"Bat dau tu buoc {args.from_step} - CAC BUOC TRUOC BI BO QUA.")
         if args.from_step > 1 and "--rebuild" in STEPS[0][2]:
@@ -120,8 +121,16 @@ def main() -> None:
         # Tien trinh con ghi thang ra terminal con print() o day qua bo dem;
         # khong flush thi loi cua con hien truoc tieu de buoc.
         sys.stdout.flush()
-        ket_qua = subprocess.run([PY, str(ROOT / "db" / ten_file), "--db", args.db,
-                                  *rieng], cwd=ROOT)
+        # DSN di qua BIEN MOI TRUONG, khong qua dong lenh: dong lenh cua mot
+        # tien trinh nhin thay duoc tu ngoai (ps / Task Manager), nen dat DSN
+        # Postgres o day la phoi mat khau ra ca 7 tien trinh con. Truoc
+        # 17/08/2026 DSN la duong dan file nen khong co gi de lo.
+        #
+        # Con doc duoc vi connect.DEFAULT_DSN uu tien TOKEN_LEDGER_DSN, va --db
+        # cua moi script nap mac dinh bang connect.DEFAULT_DSN.
+        ket_qua = subprocess.run([PY, str(ROOT / "db" / ten_file), *rieng],
+                                 cwd=ROOT, env={**os.environ,
+                                                "TOKEN_LEDGER_DSN": args.db})
         if ket_qua.returncode != 0:
             print(f"\n{'=' * 72}")
             print(f"DUNG o buoc {i} ({ten_file}), ma thoat {ket_qua.returncode}.")

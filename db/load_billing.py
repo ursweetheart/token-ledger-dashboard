@@ -64,7 +64,7 @@ def main() -> None:
 
     if args.rebuild:
         cn, ph = connect.rebuild(args.db)
-        print(f"Da dung lai schema + danh muc tren {args.db}")
+        print(f"Da dung lai schema + danh muc tren {connect.mask_dsn(args.db)}")
     else:
         cn, ph = connect.open_db(args.db)
 

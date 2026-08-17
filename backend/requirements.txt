@@ -2,8 +2,9 @@
 #
 #     pip install -r backend/requirements.txt
 #
-# psycopg2 chi can khi doc PostgreSQL. Chay tren SQLite thi bo qua duoc - sqlite3
-# nam san trong Python.
+# psycopg2 BAT BUOC tu 17/08/2026: PostgreSQL la database mac dinh, khong con la
+# tuy chon. Chay tren SQLite van duoc (sqlite3 nam san trong Python) nhung phai
+# chi dinh tuong minh qua TOKEN_LEDGER_DSN hoac --db, va do chi la ban doi chieu.
 fastapi>=0.110
 uvicorn>=0.27
 psycopg2-binary>=2.9

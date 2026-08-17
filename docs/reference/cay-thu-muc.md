@@ -40,8 +40,9 @@ token-ledger-dashboard/
 │   01_schema.sql · 02_catalog.sql · load_*.py · build_*.py · connect.py · rules.py
 │
 ├── data/                   Kho dữ liệu THÔ — mất là mất vĩnh viễn
-├── var/                    Dữ liệu CHẠY — dựng lại được trong 15 giây
-│   token_ledger.sqlite
+├── var/                    Dữ liệu CHẠY — dựng lại được từ data/
+│   (trống: database nằm trong volume Docker `pgdata` từ 17/08/2026.
+│    Đây vẫn là nơi DUY NHẤT được phép chứa .sqlite nếu dựng bản đối chiếu)
 │
 ├── tests/                  Phải LUÔN xanh
 ├── tools/                  Chẩn đoán một lần — ĐƯỢC PHÉP mục

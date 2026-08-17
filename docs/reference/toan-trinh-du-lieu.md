@@ -35,7 +35,7 @@
 |---|---|---|
 | ① Lấy | Internet | `data/billing/`, `data/raw_web/`, `data/raw_google_console/` |
 | ② Gộp | `data/` thô | `data/da_xu_ly/` |
-| ③ Nạp | `data/da_xu_ly/` + `data/raw_web/` | `var/token_ledger.sqlite` |
+| ③ Nạp | `data/da_xu_ly/` + `data/raw_web/` | PostgreSQL (volume `pgdata`) |
 | ④ Dọn | database | JSON qua HTTP |
 
 ---
@@ -174,9 +174,15 @@ Ba cái bẫy script này đã xử:
 # ③ NẠP VÀO DATABASE
 
 ```bash
-python scripts/rebuild_db.py                    # SQLite (mặc định)
-python scripts/rebuild_db.py --db "postgresql://token:token_local@127.0.0.1:5432/token_ledger"
+docker compose up -d                            # PHẢI lên trước
+python scripts/rebuild_db.py                    # PostgreSQL (mặc định từ 17/08/2026)
+python scripts/rebuild_db.py --db var/token_ledger.sqlite   # bản SQLite để đối chiếu
 ```
+
+Đích mặc định lấy từ `connect.DEFAULT_DSN` — **một** chỗ duy nhất, dựng từ `PG*` khớp
+`docker-compose.yml`, và `TOKEN_LEDGER_DSN` ghi đè được cho cả hệ thống. Trước 17/08/2026
+`rebuild_db.py` có hằng số DSN riêng, mà `update_dashboard.py` gọi nó không truyền `--db`
+— nên đổi `connect.py` xong đường ống vẫn dựng lại database cũ, không lỗi nào báo.
 
 ## Bảy bước, và thứ tự là bắt buộc
 

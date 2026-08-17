@@ -65,12 +65,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "db"))
 
+import connect  # noqa: E402
 from rules import guess_kind  # noqa: E402
 
 THU_MUC_THO = ROOT / "data" / "billing"
 MAU_FILE = "*GMSSub*.csv"
 THU_MUC_RA = ROOT / "data" / "da_xu_ly" / "billing"
-DB_MAC_DINH = ROOT / "var" / "token_ledger.sqlite"
 
 # Ten hien thi (duoi ten file Console) -> project ID (cot `project` cua database).
 #
@@ -190,30 +190,43 @@ def tra_project(f: Path) -> str:
     return ANH_XA_PROJECT[ten]
 
 
-def project_id_trong_dim_agent(db: Path) -> set[str]:
-    """Doc dim_agent.gcp_project_id o che do CHI DOC.
+def project_id_trong_dim_agent(dsn: str) -> set[str]:
+    """Doc dim_agent.gcp_project_id o che do CHI DOC, ca PostgreSQL lan SQLite.
+
+    Truoc 17/08/2026 ham nay goi sqlite3 THANG va nhan mot Path, nen no ghim
+    cung vao SQLite. Sau khi PostgreSQL thanh mac dinh thi no la buoc [6/10] cua
+    duong ong se DUNG HAN - loi hien ra la "khong thay database", tuc trong nhu
+    loi thieu file chu khong phai loi ghim cung he quan tri.
 
     URI SQLite coi '\\' cua Windows la ky tu thoat -> phai dung Path.as_posix().
     """
-    if not db.is_file():
-        dung(f"Khong thay database {db}.",
-             "  Can no de kiem cheo ANH_XA_PROJECT voi dim_agent.gcp_project_id.",
-             "  Dung --db de tro toi file khac.")
-    cn = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    if connect.is_sqlite(dsn):
+        p = Path(dsn)
+        if not p.is_file():
+            dung(f"Khong thay database {p}.",
+                 "  Can no de kiem cheo ANH_XA_PROJECT voi dim_agent.gcp_project_id.",
+                 "  Dung --db de tro toi database khac.")
+        cn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
+    else:
+        cn, _ = connect.open_db(dsn)
+        # Chi doc o muc MAY CHU, khong phai loi hua trong tai lieu - giong
+        # backend/store.py. Script nay chi kiem cheo, khong duoc ghi gi.
+        cn.set_session(readonly=True)
     try:
-        return {r[0] for r in cn.execute(
-            "SELECT gcp_project_id FROM dim_agent WHERE gcp_project_id IS NOT NULL")}
+        return {r[0] for r in connect.query(
+            cn, "SELECT gcp_project_id FROM dim_agent"
+                " WHERE gcp_project_id IS NOT NULL")}
     finally:
         cn.close()
 
 
-def kiem_cheo_dim_agent(db: Path) -> None:
-    co = project_id_trong_dim_agent(db)
+def kiem_cheo_dim_agent(dsn: str) -> None:
+    co = project_id_trong_dim_agent(dsn)
     thieu = sorted(set(ANH_XA_PROJECT.values()) - co)
     if thieu:
         dung("Project ID trong ANH_XA_PROJECT khong tra duoc trong dim_agent:",
              *[f"    {p}" for p in thieu],
-             f"  Database: {db}",
+             f"  Database: {connect.mask_dsn(dsn)}",
              "  Hoac bang anh xa gõ sai, hoac dim_agent chua co agent nay.",
              "  Doi chieu: SELECT agent_id, ten, gcp_project_id FROM dim_agent;")
 
@@ -410,14 +423,14 @@ def main() -> int:
     p.add_argument("--ra", default=None,
                    help="Duong dan file dau ra (mac dinh "
                         "data/da_xu_ly/billing/billing_<hom-nay>.csv)")
-    p.add_argument("--db", default=str(DB_MAC_DINH),
-                   help="SQLite de kiem cheo ANH_XA_PROJECT voi dim_agent (chi doc)")
+    p.add_argument("--db", default=connect.DEFAULT_DSN,
+                   help="DSN de kiem cheo ANH_XA_PROJECT voi dim_agent (chi doc)")
     p.add_argument("--doi-chieu", default=None, metavar="DUONG_DAN",
                    help="TANG 3 (tuy chon): so trung khit voi ban gop tay")
     args = p.parse_args()
 
     try:
-        kiem_cheo_dim_agent(Path(args.db))
+        kiem_cheo_dim_agent(args.db)
 
         files = tim_file(Path(args.thu_muc))
         theo_file: dict[Path, list[dict]] = {}

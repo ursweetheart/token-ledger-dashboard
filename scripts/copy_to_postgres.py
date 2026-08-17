@@ -1,15 +1,30 @@
 """Tai tao database SQLite hien co sang PostgreSQL - ban sao 1:1.
 
+CONG CU PHU, KHONG NAM TREN DUONG CHINH
+---------------------------------------
+Tu 17/08/2026 PostgreSQL la mac dinh, va duong chinh de dung database la:
+
+    docker compose up -d
+    python scripts/rebuild_db.py        # nap THANG tu data/ vao PostgreSQL
+
+File nay chi con dung khi muon chep nhanh giua hai database ma KHONG nap lai tu
+data/. No doi hoi mot file SQLite lam nguon, nen sau khi var/token_ledger.sqlite
+bi xoa thi phai dung mot ban SQLite truoc da.
+
     docker compose up -d
     pip install "psycopg[binary]"
-    python scripts/tai_tao_postgres.py
+    python scripts/copy_to_postgres.py
 
 VI SAO CHEP BANG, KHONG CHAY LAI CAC SCRIPT NAP
 -----------------------------------------------
+(Ly do luc file nay duoc viet - GIO DA HET DUNG, giu lai de biet vi sao no ton tai.)
 Chay lai db/load_*.py voi --db <dsn postgres> cung ra database dung, nhung no
 dung lai tu DU LIEU NGUON. Neu mai kia thu muc data/ khong con day du thi khong
 tai tao duoc nua. Chep thang tu file SQLite cho ra ban sao dung bang cai dang co
 o day, va doi chieu duoc tung bang mot.
+
+Da do 17/08/2026: duong nap thang vao PostgreSQL CHAY DUOC - ca 7 buoc dat
+nghiem thu trong 56s, va ket qua khop tung dong voi ban sao chep tu SQLite.
 
 Bang tho SQLite chi duoc MO CHE DO CHI DOC. Khong co duong nao trong file nay
 ghi vao no.

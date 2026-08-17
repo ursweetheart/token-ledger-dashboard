@@ -114,7 +114,7 @@ không tìm thấy `usage-day-user-model.json`.
 | `pull_hd_usage.py` | Chiều ngày × người × model của TLA HĐ | 5 |
 | `merge_billing.py` | Gộp 7 CSV Console thành một file chuẩn hoá | 6 |
 | `merge_latency_daily.py` | Gộp histogram độ trễ, đọc ra p50/p95/p99 | 7 |
-| `rebuild_db.py` | Dựng lại `var/token_ledger.sqlite`: schema + 7 khâu nạp | 8 |
+| `rebuild_db.py` | Dựng lại database (PostgreSQL mặc định): schema + 7 khâu nạp | 8 |
 | `audit_db.py` | 30 phép kiểm chia 5 nhóm | 9 |
 | `sinh_du_lieu_dashboard.py` | Sinh `scripts/seed-days-that.js` từ mọi nguồn | 10 |
 | `va_app_js.py` | Vá seed vào `web/js/app.js` | 10 |
