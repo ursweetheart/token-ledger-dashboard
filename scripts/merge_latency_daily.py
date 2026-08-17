@@ -85,22 +85,22 @@ def percentile_from_histogram(counts: list[int], bounds: list[float], q: float):
     if total == 0:
         return None, None, None
 
-    muc_tieu = q * total
-    truoc = 0
+    target = q * total
+    prev = 0
     for i, c in enumerate(counts):
         if c == 0:
             continue
-        if truoc + c >= muc_tieu:
+        if prev + c >= target:
             # o 0 la duoi nguong: (0, bien[0]). o cuoi la tren nguong: [bien[-1], vo cuc).
             if i == 0:
-                lo, hi = 0.0, bounds[0]
+                warn, hi = 0.0, bounds[0]
             elif i >= len(bounds):
                 return bounds[-1], bounds[-1], None
             else:
-                lo, hi = bounds[i - 1], bounds[i]
-            trong_o = (muc_tieu - truoc) / c
-            return lo + (hi - lo) * trong_o, lo, hi
-        truoc += c
+                warn, hi = bounds[i - 1], bounds[i]
+            in_bucket = (target - prev) / c
+            return warn + (hi - warn) * in_bucket, warn, hi
+        prev += c
 
     # Chi den day neu tong > 0 nhung vong lap khong bat duoc muc tieu -> loi logic,
     # khong phai du lieu la. Dung han thay vi tra ve mot so trong.
@@ -111,31 +111,31 @@ def read_batch(folder: Path, by_method: bool):
     """Gop histogram theo khoa. Tra ve (gop, schema, so_diem, so_diem_rong)."""
     merged: dict[tuple, list[int]] = {}
     # Cach cu, de doi chung: p95 cua TUNG phut roi lay trung binh.
-    cach_cu: dict[tuple, list[float]] = defaultdict(list)
+    old_way: dict[tuple, list[float]] = defaultdict(list)
     schema = None
     schema_json = ""
     bounds: list[float] = []
     want = 0
-    so_diem = so_rong = 0
+    n_points = n_empty = 0
 
     files = sorted(glob.glob(str(folder / "*.jsonl")))
     if not files:
         raise SystemExit(f"Khong co file .jsonl nao trong {folder}")
 
-    def tung_dong():
+    def per_row():
         """Doc lan luot, dong file ngay khi doc xong - khong giu handle mo."""
         for f in files:
             with open(f, encoding="utf-8") as handle:
                 yield from handle
 
-    for row in tung_dong():
+    for row in per_row():
             r = json.loads(row)
-            so_diem += 1
+            n_points += 1
 
             # Diem khong co count la phut khong co luot goi nao (proto3 luoc bo
             # gia tri 0). Dong gop 0 vao histogram - bo qua, khong coi la loi.
             if r["count"] is None or r["bucketCounts"] is None:
-                so_rong += 1
+                n_empty += 1
                 continue
 
             opts = r["bucketOptions"]
@@ -163,11 +163,11 @@ def read_batch(folder: Path, by_method: bool):
             else:
                 merged[key] = o
 
-            uoc, _, _ = percentile_from_histogram(o, bounds, 0.95)
-            if uoc is not None:
-                cach_cu[key].append(uoc)
+            approx, _, _ = percentile_from_histogram(o, bounds, 0.95)
+            if approx is not None:
+                old_way[key].append(approx)
 
-    return merged, cach_cu, schema, so_diem, so_rong
+    return merged, old_way, schema, n_points, n_empty
 
 
 def main() -> None:
@@ -191,15 +191,15 @@ def main() -> None:
         folder = remaining[0]
 
     print(f"Doc: {folder}", file=sys.stderr)
-    merged, cach_cu, schema, so_diem, so_rong = read_batch(folder, args.by_method)
+    merged, old_way, schema, n_points, n_empty = read_batch(folder, args.by_method)
     if schema is None:
         raise SystemExit(
-            f"Doc {so_diem} diem nhung KHONG diem nao co histogram.\n"
+            f"Doc {n_points} diem nhung KHONG diem nao co histogram.\n"
             "Tat ca deu la phut khong co luot goi. Kiem lai thu muc dau vao."
         )
     bounds = bucket_bounds(schema)
 
-    print(f"  {so_diem} diem, trong do {so_rong} phut khong co luot goi", file=sys.stderr)
+    print(f"  {n_points} diem, trong do {n_empty} phut khong co luot goi", file=sys.stderr)
     print(f"  bucketOptions: {json.dumps(schema)}", file=sys.stderr)
     print(f"  o cuoi cung bat dau tu {bounds[-1]:.1f}s", file=sys.stderr)
     print(f"  -> {len(merged)} dong ket qua", file=sys.stderr)
@@ -214,13 +214,13 @@ def main() -> None:
         total = sum(counts)
         value = {}
         for q in PERCENTILES:
-            uoc, lo, hi = percentile_from_histogram(counts, bounds, q)
-            value[q] = (uoc, lo, hi)
+            approx, warn, hi = percentile_from_histogram(counts, bounds, q)
+            value[q] = (approx, warn, hi)
 
         p95, lo95, hi95 = value[0.95]
-        old_rows = cach_cu.get(key, [])
-        tb_cu = sum(old_rows) / len(old_rows) if old_rows else None
-        lech = ((tb_cu - p95) / p95 * 100) if (tb_cu is not None and p95) else None
+        old_rows = old_way.get(key, [])
+        old_avg = sum(old_rows) / len(old_rows) if old_rows else None
+        diff = ((old_avg - p95) / p95 * 100) if (old_avg is not None and p95) else None
 
         row.append(dict(zip(cols, list(key) + [
             total,
@@ -229,12 +229,12 @@ def main() -> None:
             round(value[0.99][0], 4) if value[0.99][0] is not None else "",
             round(lo95, 4) if lo95 is not None else "",
             round(hi95, 4) if hi95 is not None else "",
-            round(tb_cu, 4) if tb_cu is not None else "",
-            round(lech, 1) if lech is not None else "",
+            round(old_avg, 4) if old_avg is not None else "",
+            round(diff, 1) if diff is not None else "",
         ])))
 
-    tong_luot = sum(d["samples"] for d in row)
-    print(f"  tong so luot goi: {tong_luot:,}", file=sys.stderr)
+    total_calls = sum(d["samples"] for d in row)
+    print(f"  tong so luot goi: {total_calls:,}", file=sys.stderr)
 
     if args.out:
         with open(args.out, "w", encoding="utf-8", newline="") as h:

@@ -86,21 +86,21 @@ def get(url: str, tok: str) -> dict:
                          f"  {e.read()[:300].decode('utf-8', 'replace')}")
 
 
-def duyet(url: str, key: str, tok: str) -> list[dict]:
+def paged_get(url: str, key: str, tok: str) -> list[dict]:
     """Duyet het cac trang cua mot endpoint danh sach."""
     out_path: list[dict] = []
-    trang = ""
+    page = ""
     while True:
-        d = get(url + (f"&pageToken={trang}" if trang else ""), tok)
+        d = get(url + (f"&pageToken={page}" if page else ""), tok)
         out_path += d.get(key, [])
-        trang = d.get("nextPageToken") or ""
-        if not trang:
+        page = d.get("nextPageToken") or ""
+        if not page:
             return out_path
 
 
 def find_service(tok: str) -> None:
     """In ra cac dich vu co ten nghe giong AI - de doi chieu DICH_VU_GEMINI."""
-    svc = duyet(f"{CATALOG}/services?pageSize=5000", "services", tok)
+    svc = paged_get(f"{CATALOG}/services?pageSize=5000", "services", tok)
     print(f"{len(svc)} dich vu trong catalog. Cac ma nghe giong AI:")
     for s in svc:
         name = s.get("displayName", "")
@@ -123,7 +123,7 @@ def main() -> None:
         find_service(tok)
         return
 
-    skus = duyet(f"{CATALOG}/services/{GEMINI_SERVICE}/skus?pageSize=5000", "skus", tok)
+    skus = paged_get(f"{CATALOG}/services/{GEMINI_SERVICE}/skus?pageSize=5000", "skus", tok)
     if not skus:
         raise SystemExit(f"Catalog tra ve 0 SKU cho dich vu {GEMINI_SERVICE}."
                          " Ma dich vu co con dung khong? Chay --tim-dich-vu.")

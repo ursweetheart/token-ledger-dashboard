@@ -306,16 +306,16 @@ def group_e_adoption(a: Audit) -> None:
     # Dấu hiệu máy đọc được: có phát sinh request mà KHÔNG có họ tên lẫn email.
     # Một nhân viên thật luôn có ít nhất một trong hai. Không tự đánh dấu - việc
     # phân loại vẫn là quyết định của con người - nhưng phải kêu lên.
-    nghi = [r[0] for r in connect.query(a.cn, """
+    idle = [r[0] for r in connect.query(a.cn, """
         SELECT DISTINCT c.username FROM fact_usage_daily f
         JOIN account c ON c.account_id = f.account_id
         WHERE f.source = 'app' AND c.kind = 'real' AND c.is_shared = 0
           AND (c.full_name IS NULL OR c.full_name = '')
           AND (c.email IS NULL OR c.email = '')
         ORDER BY c.username""")]
-    a.check(not nghi, "Tai khoan co dung deu nhan dang duoc la nguoi",
-            f"{len(nghi)} tai khoan co request nhung khong ho ten khong email:"
-            f" {nghi} - kha nang la tai khoan he thong, xem SHARED_EXACT"
+    a.check(not idle, "Tai khoan co dung deu nhan dang duoc la nguoi",
+            f"{len(idle)} tai khoan co request nhung khong ho ten khong email:"
+            f" {idle} - kha nang la tai khoan he thong, xem SHARED_EXACT"
             f" trong db/load_org.py", WARN)
 
 

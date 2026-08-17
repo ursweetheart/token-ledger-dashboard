@@ -105,15 +105,15 @@ MONEY_COLS = [
 OUT_COLS = ["day", "project", "service", "sku_id", "sku_name", "kind", "quantity"] \
     + [name for name, _ in MONEY_COLS]
 
-MOT_XU = Decimal("0.01")
+ONE_CENT = Decimal("0.01")
 
 
-class LoiNghiemThu(Exception):
+class CheckFailed(Exception):
     """Moi loi khien script dung. Thong diep phai du de nguoi van hanh hanh dong."""
 
 
 def fail(*rows: str) -> None:
-    raise LoiNghiemThu("\n".join(rows))
+    raise CheckFailed("\n".join(rows))
 
 
 def money(text: str, where: str) -> Decimal:
@@ -221,8 +221,8 @@ def project_ids_in_dim_agent(dsn: str) -> set[str]:
 
 
 def crosscheck_dim_agent(dsn: str) -> None:
-    co = project_ids_in_dim_agent(dsn)
-    missing = sorted(set(PROJECT_MAP.values()) - co)
+    present = project_ids_in_dim_agent(dsn)
+    missing = sorted(set(PROJECT_MAP.values()) - present)
     if missing:
         fail("Project ID trong ANH_XA_PROJECT khong tra duoc trong dim_agent:",
              *[f"    {p}" for p in missing],
@@ -296,7 +296,7 @@ def check_tier1(records: list[dict]) -> None:
 
     for d in records:
         remainder = (d["cost_list_usd"] - d["discount_commit_usd"]
-                   - d["discount_other_usd"]).quantize(MOT_XU, rounding=ROUND_HALF_UP)
+                   - d["discount_other_usd"]).quantize(ONE_CENT, rounding=ROUND_HALF_UP)
         if remainder != d["cost_invoiced_usd"]:
             fail("TANG 1 TRUOT - dang thuc gia sai:",
                  f"  round(Cost - Savings - Other, 2) = {fmt_money(remainder)}",
@@ -310,20 +310,20 @@ def check_tier1(records: list[dict]) -> None:
         # TRUOC giam con Unrounded la tien SAU giam - hai ve tach nhau la DUNG.
         if d["discount_commit_usd"] == 0 and d["discount_other_usd"] == 0:
             if d["cost_list_usd"] != d["cost_usd"].quantize(
-                    MOT_XU, rounding=ROUND_HALF_UP):
+                    ONE_CENT, rounding=ROUND_HALF_UP):
                 fail("TANG 1 TRUOT - Cost khong khop Unrounded (dong khong co giam gia):",
                      f"  Cost                = {fmt_money(d['cost_list_usd'])}",
                      f"  round(Unrounded, 2) = "
-                     f"{fmt_money(d['cost_usd'].quantize(MOT_XU, rounding=ROUND_HALF_UP))}",
+                     f"{fmt_money(d['cost_usd'].quantize(ONE_CENT, rounding=ROUND_HALF_UP))}",
                      *detail_lines(d),
                      "  Dong khong co khoan giam nao thi hai ve phai bang nhau. Lech",
                      "  nghia la co khoan giam KHONG duoc ghi vao hai cot savings -",
                      "  doi chieu voi hoa don Gimasys.")
 
-        if d["cost_usd"].quantize(MOT_XU, rounding=ROUND_HALF_UP) != d["cost_invoiced_usd"]:
+        if d["cost_usd"].quantize(ONE_CENT, rounding=ROUND_HALF_UP) != d["cost_invoiced_usd"]:
             fail("TANG 1 TRUOT - dang thuc lam tron sai:",
                  f"  round(Unrounded, 2) = "
-                 f"{fmt_money(d['cost_usd'].quantize(MOT_XU, rounding=ROUND_HALF_UP))}",
+                 f"{fmt_money(d['cost_usd'].quantize(ONE_CENT, rounding=ROUND_HALF_UP))}",
                  f"  nhung Subtotal      = {fmt_money(d['cost_invoiced_usd'])}",
                  *detail_lines(d),
                  "  Co the Google doi quy tac lam tron (dang gia dinh ROUND_HALF_UP,",
@@ -332,14 +332,14 @@ def check_tier1(records: list[dict]) -> None:
 
 def warn_discount(records: list[dict]) -> None:
     """Khoan giam gia la SU KIEN HOP LE, khong phai loi - canh bao roi di tiep."""
-    co = [d for d in records
+    present = [d for d in records
           if d["discount_commit_usd"] != 0 or d["discount_other_usd"] != 0]
-    if not co:
+    if not present:
         return
-    total_by_project = sum((d["discount_commit_usd"] + d["discount_other_usd"] for d in co), Decimal(0))
+    total_by_project = sum((d["discount_commit_usd"] + d["discount_other_usd"] for d in present), Decimal(0))
     print("")
     print("  " + "!" * 68)
-    print(f"  !! LAN DAU XUAT HIEN KHOAN GIAM GIA: {len(co)} dong, tong ${fmt_money(total_by_project)}")
+    print(f"  !! LAN DAU XUAT HIEN KHOAN GIAM GIA: {len(present)} dong, tong ${fmt_money(total_by_project)}")
     print("  !! Tu day chi_phi_usd la tien SAU giam gia, khac chi_phi_niem_yet_usd.")
     print("  !! Moi con so chi phi phia sau doi nghia. Xem lai cac bao cao dang co.")
     print("  " + "!" * 68)
@@ -377,20 +377,20 @@ def recon_key(d: dict) -> tuple:
     return (d["day"], d["project"], d["sku_id"], d["quantity"], d["cost_usd"])
 
 
-def in_khoa(k: tuple) -> str:
+def fmt_key(k: tuple) -> str:
     return f"{k[0]}  {k[1]:24s}  {k[2]}  {k[3]:>10d} token  ${fmt_money(k[4])}"
 
 
-def doi_chieu(records: list[dict], moc: Path) -> None:
+def reconcile(records: list[dict], ref_path: Path) -> None:
     """Tang 3: trung khit ban gop tay - khong dong thua, khong thieu, khong lech."""
-    if not moc.is_file():
-        fail(f"Khong thay file moc doi chieu: {moc}")
-    with open(moc, encoding="utf-8-sig", newline="") as h:
+    if not ref_path.is_file():
+        fail(f"Khong thay file moc doi chieu: {ref_path}")
+    with open(ref_path, encoding="utf-8-sig", newline="") as h:
         old_rows = list(csv.DictReader(h))
 
     old_side = collections.Counter(
         (r["date"], r["project"], r["sku_id"],
-         to_int(r["amount"], f"{moc.name} (ban gop tay)"),
+         to_int(r["amount"], f"{ref_path.name} (ban gop tay)"),
          Decimal(r["cost"]))
         for r in old_rows)
     new_side = collections.Counter(recon_key(d) for d in records)
@@ -403,13 +403,13 @@ def doi_chieu(records: list[dict], moc: Path) -> None:
         print(f"  tang 3: TRUNG KHIT {len(records)} dong")
         return
 
-    vd = ([f"    THUA  {in_khoa(k)}" for k in sorted(extra, key=str)[:5]]
-          + [f"    THIEU {in_khoa(k)}" for k in sorted(missing, key=str)[:5]])
+    examples = ([f"    THUA  {fmt_key(k)}" for k in sorted(extra, key=str)[:5]]
+          + [f"    THIEU {fmt_key(k)}" for k in sorted(missing, key=str)[:5]])
     fail("TANG 3 TRUOT - khong trung khit ban gop tay:",
-         f"  Moc      : {moc}",
+         f"  Moc      : {ref_path}",
          f"  Dong thua: {sum(extra.values())}   Dong thieu: {sum(missing.values())}",
          "  Toi da 10 vi du (THUA = chi co o ket qua moi, THIEU = chi co o ban gop tay):",
-         *vd,
+         *examples,
          "  Neu chi thieu ma khong thua: dang tai thieu file tho. Doi chieu danh",
          "  sach file da chon o dau ban in nay.")
 
@@ -425,7 +425,7 @@ def main() -> int:
                         "data/da_xu_ly/billing/billing_<hom-nay>.csv)")
     p.add_argument("--db", default=connect.DEFAULT_DSN,
                    help="DSN de kiem cheo ANH_XA_PROJECT voi dim_agent (chi doc)")
-    p.add_argument("--doi-chieu", default=None, metavar="DUONG_DAN",
+    p.add_argument("--doi-chieu", dest="reconcile", default=None, metavar="DUONG_DAN",
                    help="TANG 3 (tuy chon): so trung khit voi ban gop tay")
     args = p.parse_args()
 
@@ -446,10 +446,10 @@ def main() -> int:
             fail("Khong doc duoc dong nao. Cac file tho deu rong?")
 
         check_tier1(records)
-        n_giam = sum(1 for d in records
+        n_discounted = sum(1 for d in records
                      if d["discount_commit_usd"] != 0 or d["discount_other_usd"] != 0)
-        print(f"  tang 1: DAT ({len(records)} dong, {len(records) - n_giam} dong "
-              f"kiem du 3 dang thuc, {n_giam} dong co giam gia kiem 2)")
+        print(f"  tang 1: DAT ({len(records)} dong, {len(records) - n_discounted} dong "
+              f"kiem du 3 dang thuc, {n_discounted} dong co giam gia kiem 2)")
         warn_discount(records)
         check_tier2(by_file, records)
         print(f"  tang 2: DAT ({len(by_file)} project)")
@@ -458,8 +458,8 @@ def main() -> int:
         # dieu kien de `diff` co y nghia.
         records.sort(key=lambda d: (d["project"], d["day"], d["sku_id"]))
 
-        if args.doi_chieu:
-            doi_chieu(records, Path(args.doi_chieu))
+        if args.reconcile:
+            reconcile(records, Path(args.reconcile))
 
         # Dung XONG toan bo noi dung trong bo nho roi moi mo file: khong bao gio
         # de lai file do dang khi co loi.
@@ -475,7 +475,7 @@ def main() -> int:
             w.writerow(OUT_COLS)
             w.writerows(out_rows)
 
-    except LoiNghiemThu as e:
+    except CheckFailed as e:
         sys.stdout.flush()  # de thong diep loi khong nhay len truoc phan da in
         print("")
         print(str(e), file=sys.stderr)

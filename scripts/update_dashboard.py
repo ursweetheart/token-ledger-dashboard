@@ -52,23 +52,23 @@ ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
 
 
-class Hong(Exception):
+class StepFailed(Exception):
     pass
 
 
-def run_step(nhan: str, lenh: list[str]) -> float:
-    print(f"\n{'─' * 72}\n{nhan}\n{'─' * 72}")
+def run_step(label: str, cmd: list[str]) -> float:
+    print(f"\n{'─' * 72}\n{label}\n{'─' * 72}")
     # Tien trinh con ghi thang ra terminal, con print() o day di qua bo dem.
     # Khong flush thi thong bao loi cua con HIEN TRUOC tieu de buoc, va nguoi
     # doc khong biet loi thuoc ve buoc nao.
     sys.stdout.flush()
     started = time.time()
-    result = subprocess.run(lenh, cwd=ROOT)
-    mat = time.time() - started
+    result = subprocess.run(cmd, cwd=ROOT)
+    elapsed = time.time() - started
     if result.returncode != 0:
-        raise Hong(f"{nhan} that bai (ma thoat {result.returncode}) sau {mat:.0f}s")
-    print(f"  [xong sau {mat:.0f}s]")
-    return mat
+        raise StepFailed(f"{label} that bai (ma thoat {result.returncode}) sau {elapsed:.0f}s")
+    print(f"  [xong sau {elapsed:.0f}s]")
+    return elapsed
 
 
 def check_billing(allow_stale: bool) -> str:
@@ -76,31 +76,31 @@ def check_billing(allow_stale: bool) -> str:
     folder = ROOT / "data" / "billing"
     files = sorted(folder.glob("*GMSSub*.csv"))
     if not files:
-        raise Hong(
+        raise StepFailed(
             f"Khong tim thay file hoa don nao trong {folder}\n"
             f"  Vao Google Cloud Console > Billing > Reports, tai ve 7 file GMSSub\n"
             f"  (moi project mot file) roi bo vao thu muc tren."
         )
 
-    lon_nhat = ""
+    newest = ""
     for f in files:
         with f.open(encoding="utf-8-sig", newline="") as h:
             for lines in csv.DictReader(h):
                 day = (lines.get("Date") or "").strip()
-                if day > lon_nhat:
-                    lon_nhat = day
+                if day > newest:
+                    newest = day
 
     yesterday = (date.today() - timedelta(days=1)).isoformat()
-    print(f"  {len(files)} file hoa don | ngay moi nhat: {lon_nhat}")
-    if lon_nhat < yesterday:
+    print(f"  {len(files)} file hoa don | ngay moi nhat: {newest}")
+    if newest < yesterday:
         if not allow_stale:
-            raise Hong(
-                f"Hoa don CU: ngay moi nhat {lon_nhat}, dang le phai >= {yesterday}.\n"
+            raise StepFailed(
+                f"Hoa don CU: ngay moi nhat {newest}, dang le phai >= {yesterday}.\n"
                 f"  Tai lai 7 file GMSSub tu Google Cloud Console vao {folder}\n"
                 f"  roi chay lai. Neu co y muon dung hoa don cu, them --hoa-don-cu."
             )
-        print(f"  CANH BAO: hoa don cu ({lon_nhat}), van chay tiep theo yeu cau.")
-    return lon_nhat
+        print(f"  CANH BAO: hoa don cu ({newest}), van chay tiep theo yeu cau.")
+    return newest
 
 
 def main() -> None:
@@ -153,7 +153,7 @@ def main() -> None:
         run_step("[8/9] Dung lai database", [PY, "scripts/rebuild_db.py"])
         run_step("[9/9] Soi database", [PY, "scripts/audit_db.py"])
 
-    except Hong as e:
+    except StepFailed as e:
         print(f"\n{'=' * 72}\nDUNG: {e}\n{'=' * 72}")
         sys.exit(1)
 

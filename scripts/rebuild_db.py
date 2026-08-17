@@ -113,11 +113,11 @@ def main() -> None:
             print("Luu y: bo qua buoc 1 nghia la KHONG dung lai schema.")
 
     started = time.time()
-    for i, (nhan, filename, rieng) in enumerate(STEPS, start=1):
+    for i, (label, filename, extra_args) in enumerate(STEPS, start=1):
         if i < args.from_step:
-            print(f"\n[{i}/{len(STEPS)}] {nhan} - bo qua")
+            print(f"\n[{i}/{len(STEPS)}] {label} - bo qua")
             continue
-        print(f"\n{'─' * 72}\n[{i}/{len(STEPS)}] {nhan}  ({filename})\n{'─' * 72}")
+        print(f"\n{'─' * 72}\n[{i}/{len(STEPS)}] {label}  ({filename})\n{'─' * 72}")
         # Tien trinh con ghi thang ra terminal con print() o day qua bo dem;
         # khong flush thi loi cua con hien truoc tieu de buoc.
         sys.stdout.flush()
@@ -128,7 +128,7 @@ def main() -> None:
         #
         # Con doc duoc vi connect.DEFAULT_DSN uu tien TOKEN_LEDGER_DSN, va --db
         # cua moi script nap mac dinh bang connect.DEFAULT_DSN.
-        result = subprocess.run([PY, str(ROOT / "db" / filename), *rieng],
+        result = subprocess.run([PY, str(ROOT / "db" / filename), *extra_args],
                                  cwd=ROOT, env={**os.environ,
                                                 "TOKEN_LEDGER_DSN": args.db})
         if result.returncode != 0:

@@ -39,10 +39,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _latest_ralli() -> Path:
     """Dot keo Ralli moi nhat. Nguon cu data/ctda/ la ban cao tay 05/08."""
-    cha = ROOT / "data" / "raw_web" / "ralli"
-    remaining = sorted(p for p in cha.glob("*") if p.is_dir())
+    parent_dir = ROOT / "data" / "raw_web" / "ralli"
+    remaining = sorted(p for p in parent_dir.glob("*") if p.is_dir())
     if not remaining:
-        raise SystemExit(f"Khong co dot keo nao trong {cha}."
+        raise SystemExit(f"Khong co dot keo nao trong {parent_dir}."
                          f" Chay scripts/pull_web_apps.py truoc.")
     return remaining[-1]
 

@@ -50,10 +50,10 @@ def _latest_monitoring() -> Path:
     chi con 112. Mot dot keo don le KHONG con phu het dai ngay, nen nguon dung
     cho nap la ban gop nhieu dot.
     """
-    cha = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"
-    remaining = sorted(p for p in cha.glob("*") if p.is_dir())
+    parent_dir = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"
+    remaining = sorted(p for p in parent_dir.glob("*") if p.is_dir())
     if not remaining:
-        raise SystemExit(f"Khong co thu muc nao tno_model {cha}."
+        raise SystemExit(f"Khong co thu muc nao tno_model {parent_dir}."
                          f" Chay scripts/merge_monitoring.py truoc.")
     merged = [p for p in remaining if p.name.endswith("-gop")]
     return (merged or remaining)[-1]

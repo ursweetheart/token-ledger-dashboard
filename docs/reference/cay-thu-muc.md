@@ -95,6 +95,71 @@ vẻ "chỉ bị 404"; quên `cd` thì `http.server` không tìm thấy `index.h
 | `/data/` | **200** | 404 |
 | 7 tài nguyên của dashboard | 200 | 200 |
 
+## Quy ước đặt tên: định danh tiếng Anh, ghi chú tiếng Việt
+
+**Định danh viết tiếng Anh. Ghi chú và mọi chữ người dùng đọc viết tiếng Việt.**
+
+Trước 17/08/2026 quy ước này chỉ tồn tại như một thói quen — chưa được ghi ở đâu — nên
+`backend/` và `db/connect.py` theo được, còn `scripts/` thì trôi hẳn: `chay()`, `dung()`,
+`tien()`, `ANH_XA_PROJECT`, `THU_MUC_THO`, `o_dau`, `ban_ghi`. Tiếng Việt **không dấu** là
+tệ nhất trong ba lựa chọn: nó không đọc được như tiếng nào, và nó đụng vào từ tiếng Anh.
+
+| Đổi sang tiếng Anh | Giữ tiếng Việt |
+|---|---|
+| Tên hàm, biến, tham số, hằng số, class | **Ghi chú** — mọi comment và docstring |
+| | **Chữ người dùng đọc** — thông báo lỗi, nhãn giao diện, tên cột báo cáo |
+| | **Cờ dòng lệnh** — `--thu-muc`, `--ra`, `--dot`, `--doi-chieu` |
+| | **Khoá chuỗi trong dict cấu hình** — ví dụ `SOURCES[...]["bien"]` |
+| | **Tên file** — chúng nằm trong tài liệu và spec đã archive |
+| | `tools/` — chẩn đoán một lần, được phép mục |
+
+### Hai cái bẫy khi đổi tên hàng loạt
+
+**① Tìm-thay thông thường sẽ phá code.** Định danh tiếng Việt không dấu **cũng là từ
+tiếng Việt** trong ghi chú và chuỗi in ra: `dung` là tên hàm, đồng thời là từ trong
+*"dung lai database"*, *"su dung"*, *"khong dung duoc"*. `\b` của regex không cứu được —
+đó thật sự là một từ trọn vẹn. Phải phân biệt ở mức **token**:
+
+```python
+# tokenize thấy NAME khác STRING và COMMENT — chỉ sửa NAME
+for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+    if tok.type == tokenize.NAME and tok.string in anh_xa: ...
+```
+
+Nhưng `tokenize` **chưa đủ**: trên Python 3.11 một f-string là **một token STRING duy
+nhất**, nên mã trong `{...}` vô hình với nó. Đã đo lúc dính: 310 chỗ còn sót trên 20 file,
+và **không chỗ nào lộ ra ở `--help`**. Trọng tài phải là `ast` — nó *có* phân tích nội
+dung f-string. Và khi sửa trong f-string thì phải bỏ qua **chuỗi hằng nằm trong biểu
+thức**, vì chúng thường là khoá dict: `f"{config['bien']}"`.
+
+**② `argparse` suy tên thuộc tính từ CHUỖI cờ.** `--thu-muc` cho ra `args.thu_muc` bất kể
+biến tên gì. Đổi biến mà không khai `dest=` là `AttributeError` lúc chạy — và `--help`
+không bắt được vì argparse thoát trước đó. Cờ giữ nguyên cho người dùng, thuộc tính theo
+tiếng Anh:
+
+```python
+p.add_argument("--thu-muc", dest="folder", default=str(RAW_DIR), ...)
+```
+
+Phép kiểm tĩnh cho cái bẫy này: với mỗi file có `add_argument`, mọi `args.<x>` phải khớp
+một `dest` — soi bằng `ast`, không cần chạy.
+
+### Nghiệm thu một đợt đổi tên
+
+Đổi tên **không được** làm đổi hành vi, nên phép kiểm rẻ nhất và chắc nhất là **đầu ra
+phải trùng khớp từng byte**:
+
+```bash
+python scripts/merge_billing.py --ra /tmp/x.csv        # so md5 với file trong data/da_xu_ly/
+python scripts/merge_latency_daily.py --out /tmp/y.csv
+PGDATABASE=<db tạm> python scripts/rebuild_db.py       # so 18 bảng + 8 mốc với database thật
+python scripts/audit_db.py && python backend/check_api.py
+node --test tests/load-failure-states.test.js          # bắt tham chiếu treo trong app.js
+```
+
+Số dòng thêm/xoá của một đợt đổi tên thuần phải **cân bằng** — thêm bao nhiêu thì xoá bấy
+nhiêu. Lệch nghĩa là có logic bị thay đổi kèm.
+
 ## Thêm file mới thì để đâu
 
 | File | Đi đâu | Vì sao |

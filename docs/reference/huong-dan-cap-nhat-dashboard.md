@@ -288,8 +288,17 @@ Ngoại lệ **duy nhất** là `POST /auth/login` để lấy token — đượ
 13/08/2026 để chạy được một lệnh. Token không bao giờ được in ra màn hình hay ghi xuống
 đĩa.
 
-Backend cũng chỉ-đọc: `store.py` mở SQLite bằng `mode=ro`, và kiểm `p.exists()` trước
-đó nên đường dẫn sai **báo lỗi** thay vì lặng lẽ tạo database rỗng.
+Backend cũng chỉ-đọc, và **do hệ điều hành / máy chủ database bảo đảm**, không phải lời
+hứa trong tài liệu (`backend/store.py`):
+
+| Hệ | Cách chặn ghi |
+|---|---|
+| PostgreSQL (mặc định) | `cn.set_session(readonly=True)` — máy chủ từ chối mọi lệnh ghi |
+| SQLite (bản đối chiếu) | mở bằng URI `?mode=ro`, và kiểm `p.exists()` trước nên đường dẫn sai **báo lỗi** thay vì lặng lẽ tạo database rỗng |
+
+`backend/check_api.py` không tin vào việc "không có endpoint ghi nào" — nó **thử ghi qua
+chính kết nối của backend** và đợi bị từ chối. Trên PostgreSQL phép kiểm đó bắt được
+`ReadOnlySqlTransaction`.
 
 ---
 

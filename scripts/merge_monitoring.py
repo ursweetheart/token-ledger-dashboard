@@ -42,8 +42,8 @@ VALUE_COL = "value"
 
 def row_key(row: dict, cols: list[str]) -> bytes:
     """Bam khoa thay vi giu nguyen chuoi - mot project co toi 456.000 dong."""
-    thanh_phan = "\x1f".join(str(row.get(c, "")) for c in cols if c != VALUE_COL)
-    return hashlib.blake2b(thanh_phan.encode("utf-8"), digest_size=16).digest()
+    parts = "\x1f".join(str(row.get(c, "")) for c in cols if c != VALUE_COL)
+    return hashlib.blake2b(parts.encode("utf-8"), digest_size=16).digest()
 
 
 def merge_project(name: str, paths: list[Path], dest: Path) -> dict:
@@ -51,17 +51,17 @@ def merge_project(name: str, paths: list[Path], dest: Path) -> dict:
     # Luu ca GIA TRI lan TEN DOT da cho gia tri do. Chi luu gia tri thi khi bao
     # lech se khong biet ben nao la ben nao - va vi vong lap chay MOI TRUOC CU
     # SAU nen truc giac "cai luu truoc la cai cu" bi nguoc.
-    da_thay: dict[bytes, tuple[str, str]] = {}
-    thong_ke = {"project": name, "vao": 0, "ra": 0, "trung": 0, "lech": 0}
+    seen: dict[bytes, tuple[str, str]] = {}
+    stats = {"project": name, "vao": 0, "ra": 0, "trung": 0, "lech": 0}
     cols: list[str] | None = None
-    lech_vi_du: list[tuple] = []
+    diff_example: list[tuple] = []
 
     dest.parent.mkdir(parents=True, exist_ok=True)
-    ghi = None
+    written = None
     handle = None
 
     try:
-        for chi_so, p in enumerate(paths):
+        for metric, p in enumerate(paths):
             # utf-8-sig: chiu duoc ca file co BOM lan khong. Doc bang utf-8 thuan
             # thi BOM se dinh vao ten cot dau tien va moi phep tra cot deu truot.
             with p.open(encoding="utf-8-sig", newline="") as h:
@@ -69,44 +69,44 @@ def merge_project(name: str, paths: list[Path], dest: Path) -> dict:
                 if cols is None:
                     cols = list(reader.fieldnames or [])
                     handle = dest.open("w", encoding="utf-8", newline="")
-                    ghi = csv.DictWriter(handle, fieldnames=cols, quoting=csv.QUOTE_ALL)
-                    ghi.writeheader()
+                    written = csv.DictWriter(handle, fieldnames=cols, quoting=csv.QUOTE_ALL)
+                    written.writeheader()
                 elif list(reader.fieldnames or []) != cols:
                     raise SystemExit(
                         f"DUNG: {p} co bo cot khac cac file truoc.\n"
                         f"  truoc: {cols}\n  file nay: {reader.fieldnames}")
 
-                dot = p.parent.name
+                batch = p.parent.name
                 for row in reader:
-                    thong_ke["vao"] += 1
+                    stats["vao"] += 1
                     k = row_key(row, cols)
-                    da_co = da_thay.get(k)
-                    if da_co is not None:
-                        gia_tri_cu, dot_cu = da_co
-                        thong_ke["trung"] += 1
-                        if gia_tri_cu != row.get(VALUE_COL):
-                            thong_ke["lech"] += 1
-                            if len(lech_vi_du) < 5:
-                                lech_vi_du.append(
+                    existing = seen.get(k)
+                    if existing is not None:
+                        old_value, old_batch = existing
+                        stats["trung"] += 1
+                        if old_value != row.get(VALUE_COL):
+                            stats["lech"] += 1
+                            if len(diff_example) < 5:
+                                diff_example.append(
                                     (row.get("metric_alias"), row.get("ts_utc"),
-                                     dot_cu, gia_tri_cu, dot, row.get(VALUE_COL)))
+                                     old_batch, old_value, batch, row.get(VALUE_COL)))
                         continue
-                    da_thay[k] = (row.get(VALUE_COL), dot)
-                    ghi.writerow(row)
-                    thong_ke["ra"] += 1
+                    seen[k] = (row.get(VALUE_COL), batch)
+                    written.writerow(row)
+                    stats["ra"] += 1
     finally:
         if handle is not None:
             handle.close()
 
-    thong_ke["lech_vi_du"] = lech_vi_du
-    return thong_ke
+    stats["lech_vi_du"] = diff_example
+    return stats
 
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--dot", default="",
+    p.add_argument("--dot", dest="batch", default="",
                    help="Danh sach ten thu muc dot keo, ngan cach dau phay. "
                         "De trong = lay tat ca trong data/raw_google_console/du_lieu_giam_sat")
     p.add_argument("--ra", dest="out_path", default="", help="Ten thu muc dau ra. Mac dinh <dot moi nhat>-gop")
@@ -114,28 +114,28 @@ def main() -> None:
     args = p.parse_args()
 
     base = Path(args.raw)
-    if args.dot:
-        dots = [base / t.strip() for t in args.dot.split(",") if t.strip()]
+    if args.batch:
+        batches = [base / t.strip() for t in args.batch.split(",") if t.strip()]
     else:
-        dots = sorted(d for d in base.glob("*") if d.is_dir())
-    missing = [d for d in dots if not d.is_dir()]
+        batches = sorted(d for d in base.glob("*") if d.is_dir())
+    missing = [d for d in batches if not d.is_dir()]
     if missing:
         raise SystemExit(f"Khong thay thu muc: {[str(t) for t in missing]}")
-    if not dots:
+    if not batches:
         raise SystemExit(f"Khong co dot keo nao trong {base}")
 
     # MOI TRUOC CU SAU: dot moi la nguon uu tien khi trung khoa.
-    dots = sorted(dots, key=lambda d: d.name, reverse=True)
-    out_name = args.out_path or (dots[0].name + "-gop")
+    batches = sorted(batches, key=lambda d: d.name, reverse=True)
+    out_name = args.out_path or (batches[0].name + "-gop")
     dest = Path(RA) / out_name
 
-    print(f"Gop {len(dots)} dot (uu tien tu tren xuong):")
-    for d in dots:
+    print(f"Gop {len(batches)} dot (uu tien tu tren xuong):")
+    for d in batches:
         print(f"    {d.name}")
     print(f"Ghi vao: {dest}\n")
 
     projects: dict[str, list[Path]] = {}
-    for d in dots:
+    for d in batches:
         for f in sorted(d.glob("*.csv")):
             if f.name == "_tat-ca.csv":
                 continue
@@ -148,10 +148,10 @@ def main() -> None:
             total[k] += tk[k]
         print(f"  {name:<28} {tk['vao']:>8,} vao -> {tk['out_path']:>8,} ra"
               f" | trung {tk['trung']:>7,} | lech gia tri {tk['lech']:,}")
-        for vd in tk["lech_vi_du"]:
-            print(f"        LECH {vd[0]} @ {vd[1]}:")
-            print(f"             {vd[2]} = {vd[3]}   (dot duoc GIU)")
-            print(f"             {vd[4]} = {vd[5]}   (dot bi BO)")
+        for example in tk["lech_vi_du"]:
+            print(f"        LECH {example[0]} @ {example[1]}:")
+            print(f"             {example[2]} = {example[3]}   (dot duoc GIU)")
+            print(f"             {example[4]} = {example[5]}   (dot bi BO)")
 
     print(f"\n  TONG {total['vao']:,} vao -> {total['out_path']:,} ra"
           f" | trung {total['trung']:,} | lech gia tri {total['lech']:,}")

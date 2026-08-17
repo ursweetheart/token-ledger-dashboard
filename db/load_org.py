@@ -273,9 +273,9 @@ def main() -> None:
     #
     # Chỉ dùng filter-options để VÁ chỗ thiếu, không dùng thay: nó không có
     # email, nạp từ đó cho tất cả là mất email của 43 người kia mà không ai báo.
-    da_co = {d[0] for d in user_rows if d[1] == TLA_HD}
+    existing = {d[0] for d in user_rows if d[1] == TLA_HD}
     for r in read_json(TLA_DIR / "token-usage-filter-options.json").get("users") or []:
-        if r["id"] in da_co:
+        if r["id"] in existing:
             continue
         raw_unit = r.get("unit_id")
         unit = raw_unit if raw_unit in known_units else f"__unattributed_{TLA_HD}__"

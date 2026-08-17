@@ -49,7 +49,7 @@ TLA_HD = 5
 SRC_FILE = "usage-day-user-model.json"
 
 # Ten API tra ve nhung KHONG phai model. Bo, nhung bo co ghi chep.
-KHONG_PHAI_MODEL = {
+NOT_A_MODEL = {
     "none": "app khong ghi duoc model cho luot goi nay (trung legacy_calls)",
 }
 
@@ -92,7 +92,7 @@ def main() -> None:
         cn, "SELECT username, account_id FROM account")}
     model_of = dict(connect.query(
         cn, "SELECT raw_name, model_id FROM dim_model_alias WHERE source = 'app'"))
-    chua_quy = connect.query_one(
+    unmapped = connect.query_one(
         cn, f"SELECT account_id FROM account WHERE username = {ph}",
         (f"__unattributed_{TLA_HD}__",))[0]
 
@@ -102,7 +102,7 @@ def main() -> None:
     unknown_models = sorted({r["model"] for r in rows
                  if r.get("model")
                  and r["model"] not in model_of
-                 and r["model"] not in KHONG_PHAI_MODEL})
+                 and r["model"] not in NOT_A_MODEL})
     if unknown_models:
         raise SystemExit(
             f"Ten model la, chua co trong dim_model_alias (source='app'): {unknown_models}\n"
@@ -114,17 +114,17 @@ def main() -> None:
     # nen khong duoc phu thuoc thu tu doc file.
     rows = sorted(rows, key=lambda r: (r["day"], (r.get("username") or "").lower(),
                                        r.get("model") or ""))
-    out_rows, khong_quy_duoc, skipped = [], {}, {}
+    out_rows, unmappable, skipped = [], {}, {}
     for i, r in enumerate(rows, start=1):
         name = (r.get("username") or "").strip()
         acc = by_uid.get(r.get("user_id")) or by_name.get(name.lower())
         if acc is None:
-            acc = chua_quy
-            khong_quy_duoc[name or "(khong ten)"] = \
-                khong_quy_duoc.get(name or "(khong ten)", 0) + (r["calls"] or 0)
+            acc = unmapped
+            unmappable[name or "(khong ten)"] = \
+                unmappable.get(name or "(khong ten)", 0) + (r["calls"] or 0)
 
         raw = r.get("model")
-        if raw in KHONG_PHAI_MODEL:
+        if raw in NOT_A_MODEL:
             skipped[raw] = skipped.get(raw, 0) + (r["calls"] or 0)
             mid = None
         else:
@@ -141,42 +141,42 @@ def main() -> None:
     errors = []
     want_calls = sum(r["calls"] or 0 for r in rows)
     want_tokens = sum(r["total_tokens"] or 0 for r in rows)
-    co = connect.query_one(cn, "SELECT COUNT(*), SUM(calls), SUM(total_tokens)"
+    actual = connect.query_one(cn, "SELECT COUNT(*), SUM(calls), SUM(total_tokens)"
                                " FROM fact_app_daily")
-    if co[0] != len(rows):
-        errors.append(f"nap {co[0]} dong != {len(rows)} dong trong file")
-    if int(co[1] or 0) != want_calls:
-        errors.append(f"luot {co[1]} != {want_calls} trong file")
-    if int(co[2] or 0) != want_tokens:
-        errors.append(f"token {co[2]} != {want_tokens} trong file")
+    if actual[0] != len(rows):
+        errors.append(f"nap {actual[0]} dong != {len(rows)} dong trong file")
+    if int(actual[1] or 0) != want_calls:
+        errors.append(f"luot {actual[1]} != {want_calls} trong file")
+    if int(actual[2] or 0) != want_tokens:
+        errors.append(f"token {actual[2]} != {want_tokens} trong file")
     if want_calls != payload["tong_luot"]:
         errors.append(f"file tu mau thuan: cong dong ra {want_calls}"
                    f" != tong_luot {payload['tong_luot']}")
 
     # Khoa tu nhien phai duy nhat, du khoa chinh la so thu tu. Trung o day nghia
     # la mot nguoi co hai dong cung ngay cung model - tuc da gop hut o khau keo.
-    trung = connect.query_one(cn, """
+    dupes = connect.query_one(cn, """
         SELECT COUNT(*) FROM (
             SELECT day, account_id, raw_model, COUNT(*) AS n
             FROM fact_app_daily GROUP BY day, account_id, raw_model
             HAVING COUNT(*) > 1) t""")[0]
-    if trung:
-        errors.append(f"{trung} bo (ngay, tai khoan, model) bi trung - keo hut")
+    if dupes:
+        errors.append(f"{dupes} bo (ngay, tai khoan, model) bi trung - keo hut")
 
-    print(f"  fact_app_daily: {n} dong, {int(co[1] or 0):,} luot,"
-          f" {int(co[2] or 0):,} token")
+    print(f"  fact_app_daily: {n} dong, {int(actual[1] or 0):,} luot,"
+          f" {int(actual[2] or 0):,} token")
     if skipped:
         for name, calls in sorted(skipped.items()):
-            print(f"  BO ({calls} luot): model {name!r} - {KHONG_PHAI_MODEL[name]}")
-    thieu_model = connect.query_one(
+            print(f"  BO ({calls} luot): model {name!r} - {NOT_A_MODEL[name]}")
+    missing_model = connect.query_one(
         cn, "SELECT COUNT(*), SUM(calls) FROM fact_app_daily WHERE model_id IS NULL")
-    if thieu_model[0]:
-        print(f"  {thieu_model[0]} dong khong co model_id"
-              f" ({int(thieu_model[1] or 0)} luot) - khong vao fact_usage_daily")
-    if khong_quy_duoc:
-        total = sum(khong_quy_duoc.values())
-        print(f"  {len(khong_quy_duoc)} nguoi khong quy duoc ve tai khoan"
-              f" ({total} luot): {sorted(khong_quy_duoc)}")
+    if missing_model[0]:
+        print(f"  {missing_model[0]} dong khong co model_id"
+              f" ({int(missing_model[1] or 0)} luot) - khong vao fact_usage_daily")
+    if unmappable:
+        total = sum(unmappable.values())
+        print(f"  {len(unmappable)} nguoi khong quy duoc ve tai khoan"
+              f" ({total} luot): {sorted(unmappable)}")
 
     if errors:
         cn.rollback()

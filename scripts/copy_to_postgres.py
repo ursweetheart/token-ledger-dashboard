@@ -73,7 +73,7 @@ NUMERIC_TYPES = ("BIGINT", "NUMERIC", "DOUBLE PRECISION", "INTEGER", "INT", "REA
 def is_numeric_type(sql_type: str) -> bool:
     base = sql_type.split("(", 1)[0].strip().upper()
     return base in NUMERIC_TYPES
-LO = 5000
+WARN = 5000
 
 
 def split_statements(sql: str) -> list[str]:
@@ -86,11 +86,11 @@ def split_statements(sql: str) -> list[str]:
     Tach bang dau ; la an toan voi file nay: 01_schema.sql chi co CREATE TABLE,
     CREATE INDEX va mot CREATE VIEW - khong co ham hay khoi DO $$ ... $$ nao.
     """
-    sach: list[str] = []
+    clean: list[str] = []
     for rows in sql.splitlines():
-        khong_chu_thich = rows.split("--", 1)[0]
-        sach.append(khong_chu_thich)
-    return [c.strip() for c in "\n".join(sach).split(";") if c.strip()]
+        no_comment = rows.split("--", 1)[0]
+        clean.append(no_comment)
+    return [c.strip() for c in "\n".join(clean).split(";") if c.strip()]
 
 
 def default_dsn() -> str:
@@ -116,9 +116,9 @@ def connect_postgres(dsn: str, wait_seconds: int):
                 "    pip install psycopg2-binary       (khuyen nghi)\n"
                 "    pip install \"psycopg[binary]\"")
 
-    het = time.time() + wait_seconds
+    done = time.time() + wait_seconds
     last_error = None
-    while time.time() < het:
+    while time.time() < done:
         try:
             return pg.connect(dsn), execute_values
         except Exception as e:                     # container chua san sang
@@ -134,32 +134,32 @@ def schema_of(cn_lite) -> tuple[list[str], dict, dict]:
     """(thu tu nap, cot moi bang, kieu moi cot)."""
     table = [r[0] for r in cn_lite.execute(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
-    cols, sql_type, phu = {}, {}, {}
+    cols, sql_type, covered = {}, {}, {}
     for b in table:
         info = list(cn_lite.execute(f"PRAGMA table_info({b})"))
         cols[b] = [r[1] for r in info]
         sql_type[b] = {r[1]: (r[2] or "").upper() for r in info}
-        phu[b] = {r[2] for r in cn_lite.execute(f"PRAGMA foreign_key_list({b})")}
+        covered[b] = {r[2] for r in cn_lite.execute(f"PRAGMA foreign_key_list({b})")}
 
-    xong, order = set(), []
+    finished, order = set(), []
     while len(order) < len(table):
         # `p == b` bo qua tu tham chieu: dim_unit tro vao chinh no, cho no chan
         # chinh no thi vong lap khong bao gio thoat.
-        money = [b for b in table if b not in xong
-                and all(p in xong or p == b for p in phu[b])]
+        money = [b for b in table if b not in finished
+                and all(p in finished or p == b for p in covered[b])]
         if not money:
-            raise SystemExit(f"Khoa ngoai co vong lap: {sorted(set(table) - xong)}")
+            raise SystemExit(f"Khoa ngoai co vong lap: {sorted(set(table) - finished)}")
         for b in money:
-            xong.add(b)
+            finished.add(b)
             order.append(b)
     return order, cols, sql_type
 
 
 def read_rows(cn_lite, table: str, cols: list[str], bool_cols: list[int]):
     # dim_unit tu tro vao chinh no -> cha phai vao truoc con.
-    sap = " ORDER BY level" if table == "dim_unit" else ""
-    cau = f"SELECT {','.join(cols)} FROM {table}{sap}"
-    for rows in cn_lite.execute(cau):
+    sorted_tables = " ORDER BY level" if table == "dim_unit" else ""
+    stmt = f"SELECT {','.join(cols)} FROM {table}{sorted_tables}"
+    for rows in cn_lite.execute(stmt):
         if not bool_cols:
             yield rows
             continue
@@ -198,52 +198,52 @@ def main() -> None:
     print("Dung lai schema tu db/01_schema.sql")
     cur.execute("DROP SCHEMA IF EXISTS public CASCADE")
     cur.execute("CREATE SCHEMA public")
-    cau_lenh = split_statements(SCHEMA.read_text(encoding="utf-8"))
-    for c in cau_lenh:
+    statements = split_statements(SCHEMA.read_text(encoding="utf-8"))
+    for c in statements:
         cur.execute(c)
     cn_pg.commit()
-    print(f"  {len(cau_lenh)} cau lenh DDL")
+    print(f"  {len(statements)} cau lenh DDL")
 
     total = 0
     for table in order:
         cols = cols[table]
         bool_cols = [i for i, c in enumerate(cols) if sql_type[table][c] == "BOOLEAN"]
-        cau = f'INSERT INTO {table} ({",".join(cols)}) VALUES %s'
-        cau_em = f'INSERT INTO {table} ({",".join(cols)}) VALUES ({",".join(["%s"] * len(cols))})'
+        stmt = f'INSERT INTO {table} ({",".join(cols)}) VALUES %s'
+        child_stmt = f'INSERT INTO {table} ({",".join(cols)}) VALUES ({",".join(["%s"] * len(cols))})'
 
-        n, lo = 0, []
+        n, warn = 0, []
         for rows in read_rows(cn_lite, table, cols, bool_cols):
-            lo.append(rows)
-            if len(lo) >= LO:
+            warn.append(rows)
+            if len(warn) >= WARN:
                 if execute_values:
-                    execute_values(cur, cau, lo)
+                    execute_values(cur, stmt, warn)
                 else:
-                    cur.executemany(cau_em, lo)
-                n += len(lo)
-                lo = []
-        if lo:
+                    cur.executemany(child_stmt, warn)
+                n += len(warn)
+                warn = []
+        if warn:
             if execute_values:
-                execute_values(cur, cau, lo)
+                execute_values(cur, stmt, warn)
             else:
-                cur.executemany(cau_em, lo)
-            n += len(lo)
+                cur.executemany(child_stmt, warn)
+            n += len(warn)
         cn_pg.commit()
         total += n
         print(f"  {table:<22} {n:>8,} dong")
 
     # ── doi chieu tung bang: so dong VA tong moi cot so ──
     print("\nDoi chieu SQLite <-> PostgreSQL")
-    lech: list[str] = []
+    diff: list[str] = []
     for table in order:
         a = cn_lite.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         cur.execute(f"SELECT COUNT(*) FROM {table}")
         b = cur.fetchone()[0]
         if a != b:
-            lech.append(f"{table}: so dong {a} != {b}")
+            diff.append(f"{table}: so dong {a} != {b}")
             continue
 
-        cot_so = [c for c in cols[table] if is_numeric_type(sql_type[table][c])]
-        for c in cot_so:
+        numeric_cols = [c for c in cols[table] if is_numeric_type(sql_type[table][c])]
+        for c in numeric_cols:
             # 1) SUM voi sai so TUONG DOI, khong tuyet doi.
             #    fact_monitoring.gia_tri chua han muc quota = int64 max (9,2e18);
             #    tong len toi 8e22, ma o thang do buoc nho nhat cua double da la
@@ -254,11 +254,11 @@ def main() -> None:
             cur.execute(f"SELECT SUM({c}) FROM {table}")
             y = cur.fetchone()[0]
             if (x is None) != (y is None):
-                lech.append(f"{table}.{c}: mot ben NULL ({x} / {y})")
+                diff.append(f"{table}.{c}: mot ben NULL ({x} / {y})")
             elif x is not None:
-                lon = max(abs(float(x)), abs(float(y)), 1.0)
-                if abs(float(x) - float(y)) / lon > 1e-9:
-                    lech.append(f"{table}.{c}: tong {x} != {y}")
+                big = max(abs(float(x)), abs(float(y)), 1.0)
+                if abs(float(x) - float(y)) / big > 1e-9:
+                    diff.append(f"{table}.{c}: tong {x} != {y}")
 
             # 2) So gia tri KHAC NHAU - khong phu thuoc thu tu cong chut nao.
             #    Bat duoc kieu hong ma SUM co the che giau (vi du hai dong doi
@@ -268,8 +268,8 @@ def main() -> None:
             cur.execute(f"SELECT COUNT(DISTINCT {c}) FROM {table}")
             y = cur.fetchone()[0]
             if x != y:
-                lech.append(f"{table}.{c}: so gia tri khac nhau {x} != {y}")
-        print(f"  {table:<22} {a:>8,} dong, {len(cot_so)} cot so - khop")
+                diff.append(f"{table}.{c}: so gia tri khac nhau {x} != {y}")
+        print(f"  {table:<22} {a:>8,} dong, {len(numeric_cols)} cot so - khop")
 
     # Moi VIEW phai chay duoc tren Postgres, khong chi bang. Danh sach view doc
     # tu chinh schema chu KHONG go tay: ghim ten view thi them view moi la phep
@@ -281,12 +281,12 @@ def main() -> None:
         cur.execute(f"SELECT COUNT(*) FROM {v}")
         b = cur.fetchone()[0]
         if a != b:
-            lech.append(f"view {v}: {a} != {b}")
+            diff.append(f"view {v}: {a} != {b}")
         print(f"  {v + ' (view)':<22} {b:>8,} dong - {'khop' if a == b else 'LECH'}")
 
-    if lech:
+    if diff:
         print("\nKHONG KHOP:")
-        for x in lech:
+        for x in diff:
             print(f"  {x}")
         raise SystemExit(1)
 

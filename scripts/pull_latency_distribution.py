@@ -207,9 +207,9 @@ def main() -> None:
 
         # r["count"] co the la None (quy tac 5). Dem rieng de biet co bao nhieu
         # diem khong do duoc, thay vi lang le coi chung bang 0.
-        do_duoc = [r for r in rows if r["count"] is not None]
-        calls = sum(int(r["count"]) for r in do_duoc)
-        missing = len(rows) - len(do_duoc)
+        measured = [r for r in rows if r["count"] is not None]
+        calls = sum(int(r["count"]) for r in measured)
+        missing = len(rows) - len(measured)
         print(f"  {len(rows):>7} diem | {calls:>9,} luot goi | {target.name}")
         if missing:
             print(f"          {missing} diem KHONG co truong count (ghi NULL, khong ghi 0)")
