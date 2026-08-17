@@ -278,14 +278,14 @@ def main() -> None:
     # gộp y hệt cách load_app() gộp, rồi đòi bảng dẫn xuất lệch ĐÚNG BẰNG THẾ.
     # Dung sai 0. Phép kiểm vẫn bắt đúng cái nó sinh ra để bắt - token rơi rớt
     # trong khâu gộp - mà không lỗi thời khi có dữ liệu mới.
-    lech_nguon = int(connect.query_one(cn, """
+    source_conflict = int(connect.query_one(cn, """
         SELECT SUM(t) - SUM(COALESCE(p, 0)) - SUM(COALESCE(c, 0)) FROM (
             SELECT SUM(total_tokens) AS t, SUM(prompt_tokens) AS p,
                    SUM(completion_tokens) AS c
             FROM fact_call WHERE model_id IS NOT NULL
             GROUP BY substr(CAST(ts_local AS TEXT), 1, 10), agent_id, model_id,
                      account_id) x""")[0] or 0)
-    lech_nguon += int(connect.query_one(cn, """
+    source_conflict += int(connect.query_one(cn, """
         SELECT SUM(t) - SUM(COALESCE(p, 0)) - SUM(COALESCE(c, 0)) FROM (
             SELECT SUM(total_tokens) AS t, SUM(prompt_tokens) AS p,
                    SUM(completion_tokens) AS c
@@ -299,12 +299,12 @@ def main() -> None:
             FROM fact_usage_daily WHERE source = {ph}""", (source,))
         total = int(r[0] or 0)
         parts = int(r[1] or 0) + int(r[2] or 0) + (int(r[3] or 0) if add_cached else 0)
-        cho_phep = lech_nguon if source == "app" else 0
-        if (total - parts) != cho_phep:
+        allowed = source_conflict if source == "app" else 0
+        if (total - parts) != allowed:
             errors.append(f"nguon {source}: tach {parts:,} != tong {total:,}"
-                          f" (lech {total - parts:,}, bang nguon lech {cho_phep:,})")
-    if lech_nguon:
-        print(f"  app lech {lech_nguon:,} token giua total va prompt+completion"
+                          f" (lech {total - parts:,}, bang nguon lech {allowed:,})")
+    if source_conflict:
+        print(f"  app lech {source_conflict:,} token giua total va prompt+completion"
               f" - do chinh app ghi vay, da doi chieu tu bang nguon")
 
     if errors:

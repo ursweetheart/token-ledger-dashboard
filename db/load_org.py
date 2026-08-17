@@ -56,10 +56,10 @@ def _latest(parent: Path, *required: str) -> Path:
     for p in children:
         if all((p / f).exists() for f in required):
             return p
-    thieu = [f for f in required if not (children[0] / f).exists()]
+    missing = [f for f in required if not (children[0] / f).exists()]
     raise SystemExit(
         f"Khong dot nao trong {parent} co du file can thiet."
-        f" Dot moi nhat ({children[0].name}) thieu: {', '.join(thieu)}."
+        f" Dot moi nhat ({children[0].name}) thieu: {', '.join(missing)}."
         f" Chay scripts/pull_web_apps.py truoc.")
 
 
@@ -329,12 +329,12 @@ def main() -> None:
     hd_ids = {d[0] for d in user_rows if d[1] == TLA_HD}
     hd_extra: dict[str, str] = {}
     for r in read_json(HD_USAGE_DIR / "usage-day-user-model.json")["rows"]:
-        ten = (r.get("username") or "").strip()
-        if not ten or ten.lower() in hd_names:
+        name = (r.get("username") or "").strip()
+        if not name or name.lower() in hd_names:
             continue
         # Không có user_id thì lấy chính username làm khoá - đúng cách Ralli đã
         # xử lý cho các bản ghi cũ ghi username vào ô user_id.
-        hd_extra[r.get("user_id") or ten] = ten
+        hd_extra[r.get("user_id") or name] = name
     for uid, display in sorted(hd_extra.items()):
         if uid in hd_ids:
             continue

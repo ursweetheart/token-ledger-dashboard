@@ -56,28 +56,28 @@ class Hong(Exception):
     pass
 
 
-def chay(nhan: str, lenh: list[str]) -> float:
+def run_step(nhan: str, lenh: list[str]) -> float:
     print(f"\n{'─' * 72}\n{nhan}\n{'─' * 72}")
     # Tien trinh con ghi thang ra terminal, con print() o day di qua bo dem.
     # Khong flush thi thong bao loi cua con HIEN TRUOC tieu de buoc, va nguoi
     # doc khong biet loi thuoc ve buoc nao.
     sys.stdout.flush()
-    bat_dau = time.time()
-    ket_qua = subprocess.run(lenh, cwd=ROOT)
-    mat = time.time() - bat_dau
-    if ket_qua.returncode != 0:
-        raise Hong(f"{nhan} that bai (ma thoat {ket_qua.returncode}) sau {mat:.0f}s")
+    started = time.time()
+    result = subprocess.run(lenh, cwd=ROOT)
+    mat = time.time() - started
+    if result.returncode != 0:
+        raise Hong(f"{nhan} that bai (ma thoat {result.returncode}) sau {mat:.0f}s")
     print(f"  [xong sau {mat:.0f}s]")
     return mat
 
 
-def kiem_billing(cho_phep_cu: bool) -> str:
+def check_billing(allow_stale: bool) -> str:
     """Ngay lon nhat trong cac file hoa don tho. Dung neu qua cu."""
-    thu_muc = ROOT / "data" / "billing"
-    files = sorted(thu_muc.glob("*GMSSub*.csv"))
+    folder = ROOT / "data" / "billing"
+    files = sorted(folder.glob("*GMSSub*.csv"))
     if not files:
         raise Hong(
-            f"Khong tim thay file hoa don nao trong {thu_muc}\n"
+            f"Khong tim thay file hoa don nao trong {folder}\n"
             f"  Vao Google Cloud Console > Billing > Reports, tai ve 7 file GMSSub\n"
             f"  (moi project mot file) roi bo vao thu muc tren."
         )
@@ -85,18 +85,18 @@ def kiem_billing(cho_phep_cu: bool) -> str:
     lon_nhat = ""
     for f in files:
         with f.open(encoding="utf-8-sig", newline="") as h:
-            for dong in csv.DictReader(h):
-                ngay = (dong.get("Date") or "").strip()
-                if ngay > lon_nhat:
-                    lon_nhat = ngay
+            for lines in csv.DictReader(h):
+                day = (lines.get("Date") or "").strip()
+                if day > lon_nhat:
+                    lon_nhat = day
 
-    hom_qua = (date.today() - timedelta(days=1)).isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
     print(f"  {len(files)} file hoa don | ngay moi nhat: {lon_nhat}")
-    if lon_nhat < hom_qua:
-        if not cho_phep_cu:
+    if lon_nhat < yesterday:
+        if not allow_stale:
             raise Hong(
-                f"Hoa don CU: ngay moi nhat {lon_nhat}, dang le phai >= {hom_qua}.\n"
-                f"  Tai lai 7 file GMSSub tu Google Cloud Console vao {thu_muc}\n"
+                f"Hoa don CU: ngay moi nhat {lon_nhat}, dang le phai >= {yesterday}.\n"
+                f"  Tai lai 7 file GMSSub tu Google Cloud Console vao {folder}\n"
                 f"  roi chay lai. Neu co y muon dung hoa don cu, them --hoa-don-cu."
             )
         print(f"  CANH BAO: hoa don cu ({lon_nhat}), van chay tiep theo yeu cau.")
@@ -115,50 +115,50 @@ def main() -> None:
                    help="So ngay keo ve. Google chi giu mot phan, keo rong khong hai gi.")
     args = p.parse_args()
 
-    tong = time.time()
+    total = time.time()
     print("=" * 72)
     print("CAP NHAT DU LIEU DASHBOARD")
     print("=" * 72)
 
     try:
         print("\n[0/9] Kiem hoa don")
-        kiem_billing(args.hoa_don_cu)
+        check_billing(args.hoa_don_cu)
 
         # Buoc nay dang nhap mot lan roi vut token di; buoc 4 dang nhap lai.
         # Doi lai la biet ngay tu giay thu 5 rang xac thuc co chay duoc khong,
         # thay vi biet sau 15 phut. Hai lan dang nhap re hon nhieu so voi mot
         # lan keo Monitoring bi vut bo.
-        chay("[1/9] Kiem token 2 web app",
+        run_step("[1/9] Kiem token 2 web app",
              [PY, "scripts/pull_web_apps.py", "--chi-kiem-token"])
 
         if args.bo_monitoring:
             print("\n[2/9] Keo Monitoring - BO QUA theo yeu cau")
         else:
-            chay("[2/9] Keo Cloud Monitoring",
+            run_step("[2/9] Keo Cloud Monitoring",
                  [PY, "scripts/pull_monitoring.py",
                   "--days", str(args.ngay_monitoring), "--align", "60"])
 
-        chay("[3/9] Gop cac dot keo Monitoring", [PY, "scripts/merge_monitoring.py"])
-        chay("[4/9] Keo Ralli + TLA Hop Dong", [PY, "scripts/pull_web_apps.py"])
+        run_step("[3/9] Gop cac dot keo Monitoring", [PY, "scripts/merge_monitoring.py"])
+        run_step("[4/9] Keo Ralli + TLA Hop Dong", [PY, "scripts/pull_web_apps.py"])
         # pull_web_apps chi lay cac trang tong hop san. Chieu NGAY x NGUOI x MODEL
         # cua TLA Hop Dong phai keo rieng - xem docstring pull_hd_usage.py.
         # Thieu buoc nay thi db/load_org.py dung han vi khong tim thay
         # usage-day-user-model.json, va do la hong DUNG cho: som va on ao.
-        chay("[5/9] Keo chieu nguoi dung TLA Hop Dong",
+        run_step("[5/9] Keo chieu nguoi dung TLA Hop Dong",
              [PY, "scripts/pull_hd_usage.py"])
-        chay("[6/9] Gop hoa don", [PY, "scripts/merge_billing.py"])
-        chay("[7/9] Gop histogram do tre theo ngay",
+        run_step("[6/9] Gop hoa don", [PY, "scripts/merge_billing.py"])
+        run_step("[7/9] Gop histogram do tre theo ngay",
              [PY, "scripts/merge_latency_daily.py",
               "--out", "data/raw_google_console/do_tre_phan_bo/latency-daily.csv"])
-        chay("[8/9] Dung lai database", [PY, "scripts/rebuild_db.py"])
-        chay("[9/9] Soi database", [PY, "scripts/audit_db.py"])
+        run_step("[8/9] Dung lai database", [PY, "scripts/rebuild_db.py"])
+        run_step("[9/9] Soi database", [PY, "scripts/audit_db.py"])
 
     except Hong as e:
         print(f"\n{'=' * 72}\nDUNG: {e}\n{'=' * 72}")
         sys.exit(1)
 
     print(f"\n{'=' * 72}")
-    print(f"XONG sau {(time.time() - tong) / 60:.1f} phut.")
+    print(f"XONG sau {(time.time() - total) / 60:.1f} phut.")
     print("Mo index.html de xem (nho bat backend:")
     print("  python -m uvicorn backend.main:app --port 8000). Neu so khong doi, xoa localStorage cua trang")
     print("(F12 > Application > Local Storage) - app.js co bump phien ban nhung")

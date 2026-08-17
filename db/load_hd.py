@@ -46,7 +46,7 @@ import connect  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 TLA_HD = 5
-TEN_FILE = "usage-day-user-model.json"
+SRC_FILE = "usage-day-user-model.json"
 
 # Ten API tra ve nhung KHONG phai model. Bo, nhung bo co ghi chep.
 KHONG_PHAI_MODEL = {
@@ -57,14 +57,14 @@ COLUMNS = ["row_id", "day", "agent_id", "account_id", "model_id", "raw_model",
            "calls", "total_tokens", "prompt_tokens", "completion_tokens"]
 
 
-def _latest(parent: Path, ten_file: str) -> Path:
+def _latest(parent: Path, filename: str) -> Path:
     """Dot keo moi nhat CO file can. Xem ghi chu cung ten trong load_org.py."""
-    con = sorted((p for p in parent.glob("*") if p.is_dir()), reverse=True)
-    for p in con:
-        if (p / ten_file).exists():
+    remaining = sorted((p for p in parent.glob("*") if p.is_dir()), reverse=True)
+    for p in remaining:
+        if (p / filename).exists():
             return p
     raise SystemExit(
-        f"Khong dot nao trong {parent} co {ten_file}."
+        f"Khong dot nao trong {parent} co {filename}."
         f" Chay scripts/pull_hd_usage.py truoc.")
 
 
@@ -75,11 +75,11 @@ def main() -> None:
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     args = p.parse_args()
 
-    thu_muc = _latest(ROOT / "data" / "raw_web" / "tla-hd", TEN_FILE)
-    goi = json.loads((thu_muc / TEN_FILE).read_text(encoding="utf-8"))
-    rows = goi["rows"]
-    print(f"  Nguon: {thu_muc.name}/{TEN_FILE}"
-          f" ({goi['tu_ngay']} -> {goi['den_ngay']}, keo luc {goi['keo_luc']})")
+    folder = _latest(ROOT / "data" / "raw_web" / "tla-hd", SRC_FILE)
+    payload = json.loads((folder / SRC_FILE).read_text(encoding="utf-8"))
+    rows = payload["rows"]
+    print(f"  Nguon: {folder.name}/{SRC_FILE}"
+          f" ({payload['tu_ngay']} -> {payload['den_ngay']}, keo luc {payload['keo_luc']})")
 
     cn, ph = connect.open_db(args.db)
     cn.cursor().execute("DELETE FROM fact_app_daily")
@@ -99,13 +99,13 @@ def main() -> None:
     # ── kiem TEN MODEL truoc khi nap dong nao ────────────────────────
     # `model` = None nghia la app khong noi model - da biet va chap nhan duoc,
     # khac han voi mot TEN LA chua ai thay bao gio. Chi ten la moi dung khau nap.
-    la = sorted({r["model"] for r in rows
+    unknown_models = sorted({r["model"] for r in rows
                  if r.get("model")
                  and r["model"] not in model_of
                  and r["model"] not in KHONG_PHAI_MODEL})
-    if la:
+    if unknown_models:
         raise SystemExit(
-            f"Ten model la, chua co trong dim_model_alias (source='app'): {la}\n"
+            f"Ten model la, chua co trong dim_model_alias (source='app'): {unknown_models}\n"
             f"  Them vao db/gen_catalog.py neu day la model that,\n"
             f"  hoac them vao KHONG_PHAI_MODEL trong file nay neu khong phai.")
 
@@ -114,44 +114,44 @@ def main() -> None:
     # nen khong duoc phu thuoc thu tu doc file.
     rows = sorted(rows, key=lambda r: (r["day"], (r.get("username") or "").lower(),
                                        r.get("model") or ""))
-    ra, khong_quy_duoc, bo_qua = [], {}, {}
+    out_rows, khong_quy_duoc, skipped = [], {}, {}
     for i, r in enumerate(rows, start=1):
-        ten = (r.get("username") or "").strip()
-        acc = by_uid.get(r.get("user_id")) or by_name.get(ten.lower())
+        name = (r.get("username") or "").strip()
+        acc = by_uid.get(r.get("user_id")) or by_name.get(name.lower())
         if acc is None:
             acc = chua_quy
-            khong_quy_duoc[ten or "(khong ten)"] = \
-                khong_quy_duoc.get(ten or "(khong ten)", 0) + (r["calls"] or 0)
+            khong_quy_duoc[name or "(khong ten)"] = \
+                khong_quy_duoc.get(name or "(khong ten)", 0) + (r["calls"] or 0)
 
         raw = r.get("model")
         if raw in KHONG_PHAI_MODEL:
-            bo_qua[raw] = bo_qua.get(raw, 0) + (r["calls"] or 0)
+            skipped[raw] = skipped.get(raw, 0) + (r["calls"] or 0)
             mid = None
         else:
             mid = model_of.get(raw)          # None khi app khong noi model
 
-        ra.append((i, r["day"], TLA_HD, acc, mid, raw, r["calls"],
+        out_rows.append((i, r["day"], TLA_HD, acc, mid, raw, r["calls"],
                    r["total_tokens"], r.get("prompt_tokens"),
                    r.get("completion_tokens")))
 
-    n = connect.insert_many(cn, ph, "fact_app_daily", COLUMNS, ra)
+    n = connect.insert_many(cn, ph, "fact_app_daily", COLUMNS, out_rows)
 
     # ── NGHIEM THU ───────────────────────────────────────────────────
     # Doi chieu voi CHINH FILE NGUON o moi lan chay, khong ghim so cung.
-    loi = []
-    mong_luot = sum(r["calls"] or 0 for r in rows)
-    mong_token = sum(r["total_tokens"] or 0 for r in rows)
+    errors = []
+    want_calls = sum(r["calls"] or 0 for r in rows)
+    want_tokens = sum(r["total_tokens"] or 0 for r in rows)
     co = connect.query_one(cn, "SELECT COUNT(*), SUM(calls), SUM(total_tokens)"
                                " FROM fact_app_daily")
     if co[0] != len(rows):
-        loi.append(f"nap {co[0]} dong != {len(rows)} dong trong file")
-    if int(co[1] or 0) != mong_luot:
-        loi.append(f"luot {co[1]} != {mong_luot} trong file")
-    if int(co[2] or 0) != mong_token:
-        loi.append(f"token {co[2]} != {mong_token} trong file")
-    if mong_luot != goi["tong_luot"]:
-        loi.append(f"file tu mau thuan: cong dong ra {mong_luot}"
-                   f" != tong_luot {goi['tong_luot']}")
+        errors.append(f"nap {co[0]} dong != {len(rows)} dong trong file")
+    if int(co[1] or 0) != want_calls:
+        errors.append(f"luot {co[1]} != {want_calls} trong file")
+    if int(co[2] or 0) != want_tokens:
+        errors.append(f"token {co[2]} != {want_tokens} trong file")
+    if want_calls != payload["tong_luot"]:
+        errors.append(f"file tu mau thuan: cong dong ra {want_calls}"
+                   f" != tong_luot {payload['tong_luot']}")
 
     # Khoa tu nhien phai duy nhat, du khoa chinh la so thu tu. Trung o day nghia
     # la mot nguoi co hai dong cung ngay cung model - tuc da gop hut o khau keo.
@@ -161,26 +161,26 @@ def main() -> None:
             FROM fact_app_daily GROUP BY day, account_id, raw_model
             HAVING COUNT(*) > 1) t""")[0]
     if trung:
-        loi.append(f"{trung} bo (ngay, tai khoan, model) bi trung - keo hut")
+        errors.append(f"{trung} bo (ngay, tai khoan, model) bi trung - keo hut")
 
     print(f"  fact_app_daily: {n} dong, {int(co[1] or 0):,} luot,"
           f" {int(co[2] or 0):,} token")
-    if bo_qua:
-        for ten, luot in sorted(bo_qua.items()):
-            print(f"  BO ({luot} luot): model {ten!r} - {KHONG_PHAI_MODEL[ten]}")
+    if skipped:
+        for name, calls in sorted(skipped.items()):
+            print(f"  BO ({calls} luot): model {name!r} - {KHONG_PHAI_MODEL[name]}")
     thieu_model = connect.query_one(
         cn, "SELECT COUNT(*), SUM(calls) FROM fact_app_daily WHERE model_id IS NULL")
     if thieu_model[0]:
         print(f"  {thieu_model[0]} dong khong co model_id"
               f" ({int(thieu_model[1] or 0)} luot) - khong vao fact_usage_daily")
     if khong_quy_duoc:
-        tong = sum(khong_quy_duoc.values())
+        total = sum(khong_quy_duoc.values())
         print(f"  {len(khong_quy_duoc)} nguoi khong quy duoc ve tai khoan"
-              f" ({tong} luot): {sorted(khong_quy_duoc)}")
+              f" ({total} luot): {sorted(khong_quy_duoc)}")
 
-    if loi:
+    if errors:
         cn.rollback()
-        raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(loi))
+        raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(errors))
     cn.commit()
     print("  NGHIEM THU DAT")
 

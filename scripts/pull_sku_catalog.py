@@ -40,23 +40,23 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DICH = ROOT / "data" / "raw_google_console" / "danh_muc"
+OUT_DIR = ROOT / "data" / "raw_google_console" / "danh_muc"
 
 CATALOG = "https://cloudbilling.googleapis.com/v1"
 # Ma dich vu "Gemini API" trong Cloud Billing Catalog. Tim bang cach duyet
 # /v1/services va loc displayName - xem --tim-dich-vu.
-DICH_VU_GEMINI = "AEFD-7695-64FA"
+GEMINI_SERVICE = "AEFD-7695-64FA"
 
 
-def tim_gcloud() -> str:
+def find_gcloud() -> str:
     """Duong dan gcloud.
 
     Tren Windows gcloud la `gcloud.cmd`, khong phai file .exe. subprocess.run
     voi danh sach doi so KHONG tra qua PATHEXT nen goi thang "gcloud" se nem
     FileNotFoundError du go trong terminal van chay. shutil.which thi co tra.
     """
-    for ten in ("gcloud", "gcloud.cmd", "gcloud.CMD"):
-        d = shutil.which(ten)
+    for name in ("gcloud", "gcloud.cmd", "gcloud.CMD"):
+        d = shutil.which(name)
         if d:
             return d
     raise SystemExit("Khong tim thay gcloud. Cai Google Cloud SDK truoc.")
@@ -65,7 +65,7 @@ def tim_gcloud() -> str:
 def token() -> str:
     """Access token tu gcloud. KHONG in ra, KHONG ghi xuong dia."""
     try:
-        r = subprocess.run([tim_gcloud(), "auth", "print-access-token"],
+        r = subprocess.run([find_gcloud(), "auth", "print-access-token"],
                            capture_output=True, text=True, timeout=60)
     except FileNotFoundError:
         raise SystemExit("Khong tim thay gcloud. Cai Google Cloud SDK truoc.")
@@ -86,57 +86,57 @@ def get(url: str, tok: str) -> dict:
                          f"  {e.read()[:300].decode('utf-8', 'replace')}")
 
 
-def duyet(url: str, khoa: str, tok: str) -> list[dict]:
+def duyet(url: str, key: str, tok: str) -> list[dict]:
     """Duyet het cac trang cua mot endpoint danh sach."""
-    ra: list[dict] = []
+    out_path: list[dict] = []
     trang = ""
     while True:
         d = get(url + (f"&pageToken={trang}" if trang else ""), tok)
-        ra += d.get(khoa, [])
+        out_path += d.get(key, [])
         trang = d.get("nextPageToken") or ""
         if not trang:
-            return ra
+            return out_path
 
 
-def tim_dich_vu(tok: str) -> None:
+def find_service(tok: str) -> None:
     """In ra cac dich vu co ten nghe giong AI - de doi chieu DICH_VU_GEMINI."""
     svc = duyet(f"{CATALOG}/services?pageSize=5000", "services", tok)
     print(f"{len(svc)} dich vu trong catalog. Cac ma nghe giong AI:")
     for s in svc:
-        ten = s.get("displayName", "")
-        if any(k in ten.lower() for k in ("generative", "gemini", "vertex")):
-            dau = "  <-- dang dung" if s["serviceId"] == DICH_VU_GEMINI else ""
-            print(f"  {s['serviceId']:<24} {ten}{dau}")
+        name = s.get("displayName", "")
+        if any(k in name.lower() for k in ("generative", "gemini", "vertex")):
+            marker = "  <-- dang dung" if s["serviceId"] == GEMINI_SERVICE else ""
+            print(f"  {s['serviceId']:<24} {name}{marker}")
 
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--tim-dich-vu", action="store_true",
+    p.add_argument("--tim-dich-vu", dest="find_service", action="store_true",
                    help="Chi liet ke ma dich vu roi thoat, khong ghi file")
-    p.add_argument("--dich", default=str(DICH))
+    p.add_argument("--dich", dest="dest", default=str(OUT_DIR))
     args = p.parse_args()
 
     tok = token()
-    if args.tim_dich_vu:
-        tim_dich_vu(tok)
+    if args.find_service:
+        find_service(tok)
         return
 
-    skus = duyet(f"{CATALOG}/services/{DICH_VU_GEMINI}/skus?pageSize=5000", "skus", tok)
+    skus = duyet(f"{CATALOG}/services/{GEMINI_SERVICE}/skus?pageSize=5000", "skus", tok)
     if not skus:
-        raise SystemExit(f"Catalog tra ve 0 SKU cho dich vu {DICH_VU_GEMINI}."
+        raise SystemExit(f"Catalog tra ve 0 SKU cho dich vu {GEMINI_SERVICE}."
                          " Ma dich vu co con dung khong? Chay --tim-dich-vu.")
 
-    dich = Path(args.dich)
-    dich.mkdir(parents=True, exist_ok=True)
-    f = dich / "sku-gemini-api.json"
+    dest = Path(args.dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    f = dest / "sku-gemini-api.json"
     f.write_text(json.dumps(skus, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    co_gia = sum(1 for s in skus if (s.get("pricingInfo") or [{}])[0]
+    with_price = sum(1 for s in skus if (s.get("pricingInfo") or [{}])[0]
                  .get("pricingExpression", {}).get("tieredRates"))
-    print(f"Dich vu {DICH_VU_GEMINI} (Gemini API)")
-    print(f"  {len(skus):,} SKU, {co_gia:,} SKU co bang gia")
+    print(f"Dich vu {GEMINI_SERVICE} (Gemini API)")
+    print(f"  {len(skus):,} SKU, {with_price:,} SKU co bang gia")
     print(f"  -> {f.relative_to(ROOT)}")
 
 

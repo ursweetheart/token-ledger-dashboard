@@ -208,11 +208,11 @@ def main() -> None:
         # r["count"] co the la None (quy tac 5). Dem rieng de biet co bao nhieu
         # diem khong do duoc, thay vi lang le coi chung bang 0.
         do_duoc = [r for r in rows if r["count"] is not None]
-        so_luot = sum(int(r["count"]) for r in do_duoc)
-        thieu = len(rows) - len(do_duoc)
-        print(f"  {len(rows):>7} diem | {so_luot:>9,} luot goi | {target.name}")
-        if thieu:
-            print(f"          {thieu} diem KHONG co truong count (ghi NULL, khong ghi 0)")
+        calls = sum(int(r["count"]) for r in do_duoc)
+        missing = len(rows) - len(do_duoc)
+        print(f"  {len(rows):>7} diem | {calls:>9,} luot goi | {target.name}")
+        if missing:
+            print(f"          {missing} diem KHONG co truong count (ghi NULL, khong ghi 0)")
         print()
         total += len(rows)
 

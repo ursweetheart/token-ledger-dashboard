@@ -181,7 +181,7 @@
          ti + to + cached là ra đúng tổng mà không cần biết nguồn nào.
          Trước 15/08 app.js chỉ cộng ti + to, tức đánh rơi toàn bộ token cache
          của hoá đơn: 224,6 / 851,9 triệu = 26% tổng token không lên màn hình. */
-      var cachedNgoai = x.token_source === "billing" ? (x.cached_tokens || 0) : 0;
+      var cachedOutsideInput = x.token_source === "billing" ? (x.cached_tokens || 0) : 0;
 
       days[x.day].push({
         a: x.agent || agentName[x.agent_id] || ("agent " + x.agent_id),
@@ -204,7 +204,7 @@
         /* eKnown là SỐ LƯỢT biết được mã trả về, không phải cờ 0/1 - app.js
            cộng nó lại rồi dùng làm mẫu số. Để cờ thì mẫu số thành "số dòng". */
         eKnown: (p.r || 0) * share,
-        cached: cachedNgoai,
+        cached: cachedOutsideInput,
         /* TIỀN LẤY TỪ HOÁ ĐƠN, không nhân lại token với đơn giá.
            NULL ở những ngày hoá đơn chưa về - khi đó app.js mới ước tính, và
            cột token_estimated nói rõ dòng nào là ước tính. */

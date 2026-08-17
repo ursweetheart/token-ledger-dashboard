@@ -70,7 +70,7 @@ def load_call_counts(cn, dc) -> int:
     la luu luong Google Drive. Va no se trong y nhu that: cung don vi, cung ma
     tra ve, cung do thi len xuong.
     """
-    dong = connect.query(cn, """
+    rows = connect.query(cn, """
         SELECT substr(CAST(m.ts_local AS TEXT), 1, 10), m.agent_id,
                m.method, m.response_code, SUM(m.value)
         FROM fact_monitoring m
@@ -84,7 +84,7 @@ def load_call_counts(cn, dc) -> int:
     """)
     return connect.insert_many(cn, dc, "fact_perf_daily",
                         ["day", "agent_id", "method", "response_code", "calls"],
-                        [(n, a, p, m, int(v)) for n, a, p, m, v in dong])
+                        [(n, a, p, m, int(v)) for n, a, p, m, v in rows])
 
 
 def load_latency(cn, dc) -> tuple[int, list[str]]:
@@ -178,7 +178,7 @@ def main() -> None:
 
     if errors:
         cn.rollback()
-        raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(loi))
+        raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(errors))
     cn.commit()
     print("  NGHIEM THU DAT")
 

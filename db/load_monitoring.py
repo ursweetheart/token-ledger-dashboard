@@ -51,12 +51,12 @@ def _latest_monitoring() -> Path:
     cho nap la ban gop nhieu dot.
     """
     cha = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"
-    con = sorted(p for p in cha.glob("*") if p.is_dir())
-    if not con:
+    remaining = sorted(p for p in cha.glob("*") if p.is_dir())
+    if not remaining:
         raise SystemExit(f"Khong co thu muc nao tno_model {cha}."
                          f" Chay scripts/merge_monitoring.py truoc.")
-    gop = [p for p in con if p.name.endswith("-gop")]
-    return (gop or con)[-1]
+    merged = [p for p in remaining if p.name.endswith("-gop")]
+    return (merged or remaining)[-1]
 
 
 MONITORING_DIR = _latest_monitoring()

@@ -51,7 +51,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-THU_MUC_RA = ROOT / "data" / "raw_web"
+OUT_DIR = ROOT / "data" / "raw_web"
 
 # (ten file dau ra, duong dan GET, bat buoc, nang)
 # "nang" = bo qua khi chay --lat-mong, de vong lap tu soat quay trong vai giay.
@@ -93,7 +93,7 @@ TLA_HD = [
     ("history-sessions.json",        "/api/history/sessions",                               True,  True),
 ]
 
-NGUON = {
+SOURCES = {
     "ralli": {
         "goc": "https://ralliai.rangdong.com.vn:9001",
         "bien": "RALLI_JWT", "bien_user": "RALLI_USER", "bien_pass": "RALLI_PASS",
@@ -124,106 +124,106 @@ class LoiKeo(Exception):
 
 # ───────────────────────── xac thuc ─────────────────────────
 
-def doc_env(duong_dan: Path) -> dict:
+def read_env(path: Path) -> dict:
     """Doc .env dang KEY=VALUE. Tu viet de khong them phu thuoc ngoai."""
-    ra: dict[str, str] = {}
-    if not duong_dan.exists():
-        return ra
-    for dong in duong_dan.read_text(encoding="utf-8-sig").splitlines():
-        dong = dong.strip()
-        if not dong or dong.startswith("#") or "=" not in dong:
+    out_path: dict[str, str] = {}
+    if not path.exists():
+        return out_path
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
             continue
-        khoa, gia_tri = dong.split("=", 1)
-        ra[khoa.strip()] = gia_tri.strip().strip('"').strip("'")
-    return ra
+        key, value = line.split("=", 1)
+        out_path[key.strip()] = value.strip().strip('"').strip("'")
+    return out_path
 
 
-def het_han(token: str) -> str:
+def expires_in(token: str) -> str:
     """Doc exp trong JWT de bao con bao lau. KHONG in token."""
     try:
-        than = token.split(".")[1]
-        than += "=" * (-len(than) % 4)
-        exp = json.loads(base64.urlsafe_b64decode(than)).get("exp")
+        body = token.split(".")[1]
+        body += "=" * (-len(body) % 4)
+        exp = json.loads(base64.urlsafe_b64decode(body)).get("exp")
         if not exp:
             return "khong co exp"
-        con = exp - time.time()
+        remaining = exp - time.time()
         moc = datetime.fromtimestamp(exp).strftime("%H:%M %d/%m")
-        return f"het han {moc} (con {con / 3600:.1f} gio)" if con > 0 else f"DA HET HAN luc {moc}"
+        return f"het han {moc} (con {remaining / 3600:.1f} gio)" if remaining > 0 else f"DA HET HAN luc {moc}"
     except Exception:
         return "khong doc duoc exp"
 
 
-def dang_nhap(cau_hinh: dict, nguoi_dung: str, mat_khau: str) -> str:
+def login(config: dict, username: str, password: str) -> str:
     """POST /auth/login lay JWT. Day la POST DUY NHAT trong ca script nay.
 
     Thu kieu body theo cau hinh truoc, roi thu kieu con lai: TLA HD khong phoi
     openapi nen kieu body la suy doan, va 422 chi co nghia "sai dang", khong co
     nghia "sai mat khau".
     """
-    url = cau_hinh["goc"] + cau_hinh["dang_nhap"]
-    thu_tu = [cau_hinh["kieu_body"]] + [k for k in ("json", "form") if k != cau_hinh["kieu_body"]]
-    loi_cuoi = ""
+    url = config["goc"] + config["dang_nhap"]
+    body_order = [config["kieu_body"]] + [k for k in ("json", "form") if k != config["kieu_body"]]
+    last_error = ""
 
-    for kieu in thu_tu:
-        if kieu == "form":
+    for body_kind in body_order:
+        if body_kind == "form":
             du_lieu = urllib.parse.urlencode(
-                {"grant_type": "password", "username": nguoi_dung, "password": mat_khau}
+                {"grant_type": "password", "username": username, "password": password}
             ).encode()
-            kieu_noi_dung = "application/x-www-form-urlencoded"
+            content_type = "application/x-www-form-urlencoded"
         else:
-            du_lieu = json.dumps({"username": nguoi_dung, "password": mat_khau}).encode()
-            kieu_noi_dung = "application/json"
+            du_lieu = json.dumps({"username": username, "password": password}).encode()
+            content_type = "application/json"
 
         req = urllib.request.Request(
             url, data=du_lieu, method="POST",
-            headers={"Content-Type": kieu_noi_dung, "Accept": "application/json"})
+            headers={"Content-Type": content_type, "Accept": "application/json"})
         try:
             with urllib.request.urlopen(req, timeout=60, context=CTX) as r:
-                goi = json.loads(r.read())
+                payload = json.loads(r.read())
         except urllib.error.HTTPError as e:
-            than = e.read(300).decode("utf-8", "replace")
+            body = e.read(300).decode("utf-8", "replace")
             # 401/403 = sai tai khoan. Doi kieu body cung vo ich, dung ngay.
             if e.code in (401, 403):
                 raise LoiKeo(f"HTTP {e.code} khi dang nhap - sai tai khoan/mat khau") from e
-            loi_cuoi = f"HTTP {e.code} ({kieu}): {than[:160]}"
+            last_error = f"HTTP {e.code} ({body_kind}): {body[:160]}"
             continue
         except Exception as e:
             raise LoiKeo(f"{type(e).__name__}: {e}") from e
 
-        for khoa in ("access_token", "token", "accessToken", "jwt"):
-            if isinstance(goi.get(khoa), str):
-                return goi[khoa]
-        trong = goi.get("data") if isinstance(goi.get("data"), dict) else {}
-        for khoa in ("access_token", "token", "accessToken"):
-            if isinstance(trong.get(khoa), str):
-                return trong[khoa]
-        loi_cuoi = f"dang nhap OK ({kieu}) nhung khong tim thay token; khoa: {list(goi)}"
+        for key in ("access_token", "token", "accessToken", "jwt"):
+            if isinstance(payload.get(key), str):
+                return payload[key]
+        trong = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+        for key in ("access_token", "token", "accessToken"):
+            if isinstance(trong.get(key), str):
+                return trong[key]
+        last_error = f"dang nhap OK ({body_kind}) nhung khong tim thay token; khoa: {list(payload)}"
 
-    raise LoiKeo(loi_cuoi or "khong dang nhap duoc")
+    raise LoiKeo(last_error or "khong dang nhap duoc")
 
 
-def lay_token(ten: str, cau_hinh: dict, env: dict) -> tuple[str, str]:
+def get_token(name: str, config: dict, env: dict) -> tuple[str, str]:
     """Tra (token, mo ta nguon). Khong bao gio tra ve chuoi rong."""
-    san = env.get(cau_hinh["bien"], "").strip()
+    san = env.get(config["bien"], "").strip()
     if san:
-        return san, f"{cau_hinh['bien']} co san"
+        return san, f"{config['bien']} co san"
 
-    nguoi_dung = env.get(cau_hinh["bien_user"], "").strip()
-    mat_khau = env.get(cau_hinh["bien_pass"], "").strip()
-    if not (nguoi_dung and mat_khau):
+    username = env.get(config["bien_user"], "").strip()
+    password = env.get(config["bien_pass"], "").strip()
+    if not (username and password):
         raise SystemExit(
-            f"[{ten}] khong co token va khong co tai khoan de dang nhap.\n"
-            f"  Dat {cau_hinh['bien']} trong moi truong,\n"
-            f"  HOAC dien {cau_hinh['bien_user']} va {cau_hinh['bien_pass']} vao {ENV_FILE}.\n"
+            f"[{name}] khong co token va khong co tai khoan de dang nhap.\n"
+            f"  Dat {config['bien']} trong moi truong,\n"
+            f"  HOAC dien {config['bien_user']} va {config['bien_pass']} vao {ENV_FILE}.\n"
             f"  Xem .env.example."
         )
-    return dang_nhap(cau_hinh, nguoi_dung, mat_khau), f"dang nhap {cau_hinh['dang_nhap']}"
+    return login(config, username, password), f"dang nhap {config['login']}"
 
 
-def lay(goc: str, duong_dan: str, token: str, so_lan: int = 3) -> bytes:
+def http_get(base: str, path: str, token: str, attempts: int = 3) -> bytes:
     """GET mot duong dan. Thu lai khi loi mang, KHONG thu lai khi 4xx."""
-    url = goc + duong_dan
-    for lan in range(1, so_lan + 1):
+    url = base + path
+    for attempt in range(1, attempts + 1):
         req = urllib.request.Request(
             url,
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
@@ -233,68 +233,68 @@ def lay(goc: str, duong_dan: str, token: str, so_lan: int = 3) -> bytes:
             with urllib.request.urlopen(req, timeout=180, context=CTX) as r:
                 return r.read()
         except urllib.error.HTTPError as e:
-            than = e.read(300).decode("utf-8", "replace")
+            body = e.read(300).decode("utf-8", "replace")
             # 401/403 = token het han hoac thieu quyen; thu lai vo nghia.
-            raise LoiKeo(f"HTTP {e.code} - {than}") from e
+            raise LoiKeo(f"HTTP {e.code} - {body}") from e
         except Exception as e:
-            if lan == so_lan:
+            if attempt == attempts:
                 raise LoiKeo(f"{type(e).__name__}: {e}") from e
-            time.sleep(2 * lan)
+            time.sleep(2 * attempt)
     raise LoiKeo("khong toi day duoc")
 
 
-def dem(doi_tuong: object) -> str:
+def describe(obj: object) -> str:
     """Mo ta ngan gon noi dung, de nhin ra ngay khi mot endpoint tra ve rong."""
-    if isinstance(doi_tuong, list):
-        return f"list[{len(doi_tuong)}]"
-    if isinstance(doi_tuong, dict):
-        for khoa in ("data", "items", "users", "units", "collections", "tree", "sessions"):
-            gt = doi_tuong.get(khoa)
+    if isinstance(obj, list):
+        return f"list[{len(obj)}]"
+    if isinstance(obj, dict):
+        for key in ("data", "items", "users", "units", "collections", "tree", "sessions"):
+            gt = obj.get(key)
             if isinstance(gt, list):
-                return f"{khoa}[{len(gt)}]"
-        return "{" + ",".join(list(doi_tuong)[:4]) + "}"
-    return type(doi_tuong).__name__
+                return f"{key}[{len(gt)}]"
+        return "{" + ",".join(list(obj)[:4]) + "}"
+    return type(obj).__name__
 
 
-def keo_mot_app(ten: str, thu_muc: Path, lat_mong: bool, token: str) -> list[dict]:
-    cau_hinh = NGUON[ten]
-    thu_muc.mkdir(parents=True, exist_ok=True)
-    ket_qua: list[dict] = []
+def pull_one_app(name: str, folder: Path, thin_slice: bool, token: str) -> list[dict]:
+    config = SOURCES[name]
+    folder.mkdir(parents=True, exist_ok=True)
+    result: list[dict] = []
 
-    for ten_file, duong_dan, bat_buoc, nang in cau_hinh["diem"]:
-        if lat_mong and nang:
-            ket_qua.append({"file": ten_file, "trang_thai": "BO QUA (lat mong)",
+    for filename, path, bat_buoc, nang in config["diem"]:
+        if thin_slice and nang:
+            result.append({"file": filename, "trang_thai": "BO QUA (lat mong)",
                             "bat_buoc": bat_buoc, "byte": 0, "noi_dung": "-"})
             continue
         try:
-            than = lay(cau_hinh["goc"], duong_dan, token)
+            body = http_get(config["goc"], path, token)
         except LoiKeo as e:
-            ket_qua.append({"file": ten_file, "trang_thai": f"HONG: {e}",
+            result.append({"file": filename, "trang_thai": f"HONG: {e}",
                             "bat_buoc": bat_buoc, "byte": 0, "noi_dung": "-"})
-            print(f"  {'X':<2} {ten_file:<34} {e}")
+            print(f"  {'X':<2} {filename:<34} {e}")
             continue
 
         try:
-            doi_tuong = json.loads(than)
+            obj = json.loads(body)
         except json.JSONDecodeError:
             # Tra ve HTML (thuong la trang SPA) nghia la duong dan khong ton tai
             # that su, du ma tra ve 200. Day la loi, khong duoc luu.
-            ket_qua.append({"file": ten_file, "trang_thai": "HONG: khong phai JSON",
-                            "bat_buoc": bat_buoc, "byte": len(than), "noi_dung": "-"})
-            print(f"  {'X':<2} {ten_file:<34} tra ve khong phai JSON ({len(than):,} byte)")
+            result.append({"file": filename, "trang_thai": "HONG: khong phai JSON",
+                            "bat_buoc": bat_buoc, "byte": len(body), "noi_dung": "-"})
+            print(f"  {'X':<2} {filename:<34} tra ve khong phai JSON ({len(body):,} byte)")
             continue
 
-        (thu_muc / ten_file).write_text(
-            json.dumps(doi_tuong, ensure_ascii=False, indent=1), encoding="utf-8")
-        mo_ta = dem(doi_tuong)
-        ket_qua.append({"file": ten_file, "trang_thai": "OK", "bat_buoc": bat_buoc,
-                        "byte": len(than), "noi_dung": mo_ta})
-        print(f"  {'v':<2} {ten_file:<34} {len(than):>10,} byte  {mo_ta}")
+        (folder / filename).write_text(
+            json.dumps(obj, ensure_ascii=False, indent=1), encoding="utf-8")
+        mo_ta = describe(obj)
+        result.append({"file": filename, "trang_thai": "OK", "bat_buoc": bat_buoc,
+                        "byte": len(body), "noi_dung": mo_ta})
+        print(f"  {'v':<2} {filename:<34} {len(body):>10,} byte  {mo_ta}")
 
-    return ket_qua
+    return result
 
 
-def keo_thanh_vien_tla(thu_muc: Path, token: str) -> str:
+def pull_tla_members(folder: Path, token: str) -> str:
     """Thanh vien tung don vi TLA HD -> units-members.json.
 
     Phai keo rieng vi duong dan co {unit_id} nen khong nam duoc trong danh sach
@@ -302,32 +302,32 @@ def keo_thanh_vien_tla(thu_muc: Path, token: str) -> str:
     token-usage/filter-options chi co id/username/full_name/unit_id, nap tu do
     se lang le mat email cua toan bo nguoi dung.
     """
-    f_units = thu_muc / "units.json"
+    f_units = folder / "units.json"
     if not f_units.exists():
         return "khong co units.json de duyet thanh vien"
 
     units = json.loads(f_units.read_text(encoding="utf-8"))
     danh_sach = units.get("units") if isinstance(units, dict) else units
-    goc = NGUON["tla-hd"]["goc"]
+    base = SOURCES["tla-hd"]["goc"]
     gom: list[dict] = []
     hong: list[str] = []
 
     for u in danh_sach:
         try:
-            than = lay(goc, f"/api/units/{u['id']}/members", token)
-            gom.append(json.loads(than))
+            body = http_get(base, f"/api/units/{u['id']}/members", token)
+            gom.append(json.loads(body))
         except (LoiKeo, json.JSONDecodeError) as e:
             hong.append(f"{u.get('name')}: {e}")
 
-    (thu_muc / "units-members.json").write_text(
+    (folder / "units-members.json").write_text(
         json.dumps(gom, ensure_ascii=False, indent=1), encoding="utf-8")
-    tong = sum(len(x.get("members") or []) for x in gom)
+    total = sum(len(x.get("members") or []) for x in gom)
     print(f"  {'v':<2} {'units-members.json':<34} {len(gom)}/{len(danh_sach)} don vi,"
-          f" {tong} thanh vien")
+          f" {total} thanh vien")
     return f"khong keo duoc thanh vien cua {len(hong)} don vi: {hong[:3]}" if hong else ""
 
 
-def kiem_cheo_ralli(thu_muc: Path) -> list[str]:
+def crosscheck_ralli(folder: Path) -> list[str]:
     """So so ban ghi tho voi so ma chinh API tu khai trong /api/database/collections.
 
     Day la phep kiem quan trong nhat cua Ralli: neu /export im lang cat bot thi
@@ -335,18 +335,18 @@ def kiem_cheo_ralli(thu_muc: Path) -> list[str]:
     nhu mot ban keo thanh cong.
     """
     canh_bao: list[str] = []
-    f_bo = thu_muc / "db-collections.json"
-    f_tho = thu_muc / "db-token_usage-raw.json"
-    if not (f_bo.exists() and f_tho.exists()):
+    f_collections = folder / "db-collections.json"
+    f_raw = folder / "db-token_usage-raw.json"
+    if not (f_collections.exists() and f_raw.exists()):
         return ["khong du file de kiem cheo so ban ghi token_usage"]
 
-    bo = json.loads(f_bo.read_text(encoding="utf-8"))
+    collections_json = json.loads(f_collections.read_text(encoding="utf-8"))
     khai = None
-    for c in bo.get("collections", []):
+    for c in collections_json.get("collections", []):
         if c.get("name") == "token_usage":
             khai = c.get("count")
-    tho = json.loads(f_tho.read_text(encoding="utf-8"))
-    that = len(tho) if isinstance(tho, list) else len(tho.get("data", []))
+    raw_json = json.loads(f_raw.read_text(encoding="utf-8"))
+    that = len(raw_json) if isinstance(raw_json, list) else len(raw_json.get("data", []))
 
     if khai is None:
         canh_bao.append("khong tim thay token_usage trong danh sach collection")
@@ -362,30 +362,30 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--app", default="ralli,tla-hd", help="ralli | tla-hd | ca hai")
-    p.add_argument("--ra", default=str(THU_MUC_RA))
-    p.add_argument("--lat-mong", action="store_true",
+    p.add_argument("--ra", dest="out_path", default=str(OUT_DIR))
+    p.add_argument("--lat-mong", dest="thin_slice", action="store_true",
                    help="Bo qua cac endpoint nang, de tu soat quay vong nhanh")
     p.add_argument("--chi-kiem-token", action="store_true",
                    help="Chi lay token roi thoat. De goi truoc cac buoc dai.")
     args = p.parse_args()
 
-    ngay = date.today().isoformat()
+    day = date.today().isoformat()
     apps = [a.strip() for a in args.app.split(",") if a.strip()]
-    la = [a for a in apps if a not in NGUON]
-    if la:
-        raise SystemExit(f"App khong biet: {la}. Chi co: {list(NGUON)}")
+    unknown = [a for a in apps if a not in SOURCES]
+    if unknown:
+        raise SystemExit(f"App khong biet: {unknown}. Chi co: {list(SOURCES)}")
 
     # Bien moi truong thang duoc uu tien hon .env, de dan tay van de.
-    env = {**doc_env(ENV_FILE), **{k: v for k, v in os.environ.items() if v}}
+    env = {**read_env(ENV_FILE), **{k: v for k, v in os.environ.items() if v}}
 
     # Lay token cho TAT CA app TRUOC khi keo bat cu thu gi: hong xac thuc o app
     # thu hai sau khi da keo xong app thu nhat la kieu that bai ton thoi gian
     # nhat, va o day no hoan toan tranh duoc.
     token_cua: dict[str, str] = {}
     for app in apps:
-        tk, nguon = lay_token(app, NGUON[app], env)
+        tk, source = get_token(app, SOURCES[app], env)
         token_cua[app] = tk
-        print(f"[{app}] token: {nguon} | {het_han(tk)}")
+        print(f"[{app}] token: {source} | {expires_in(tk)}")
     if args.chi_kiem_token:
         print("Chi kiem token - dung tai day.")
         return
@@ -394,15 +394,15 @@ def main() -> None:
     canh_bao: list[str] = []
 
     for app in apps:
-        thu_muc = Path(args.ra) / app / ngay
-        print(f"\n[{app}] -> {thu_muc}")
-        tat_ca[app] = keo_mot_app(app, thu_muc, args.lat_mong, token_cua[app])
-        if app == "ralli" and not args.lat_mong:
-            canh_bao += kiem_cheo_ralli(thu_muc)
-        if app == "tla-hd" and not args.lat_mong:
-            loi = keo_thanh_vien_tla(thu_muc, token_cua[app])
-            if loi:
-                canh_bao.append(loi)
+        folder = Path(args.out_path) / app / day
+        print(f"\n[{app}] -> {folder}")
+        tat_ca[app] = pull_one_app(app, folder, args.thin_slice, token_cua[app])
+        if app == "ralli" and not args.thin_slice:
+            canh_bao += crosscheck_ralli(folder)
+        if app == "tla-hd" and not args.thin_slice:
+            errors = pull_tla_members(folder, token_cua[app])
+            if errors:
+                canh_bao.append(errors)
 
     print("\n" + "=" * 70)
     hong_bat_buoc = []

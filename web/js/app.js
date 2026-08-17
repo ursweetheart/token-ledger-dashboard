@@ -18,7 +18,7 @@ var THEME_STORE = "agent-dash-theme";
 var RANGE_PRESETS = [["7 ngày",7],["30 ngày",30],["90 ngày",90],["Tất cả",null]]; // preset time-range (kiểu Open WebUI)
 
 /* Hạn mức CHỈ đến từ `ref_budget` qua /api/catalog — trước 17/08/2026 chỗ này
-   là hằng số gõ tay bị ghi đè ở napTuBackend() *nếu* backend trả lời, tức hai
+   là hằng số gõ tay bị ghi đè ở loadFromBackend() *nếu* backend trả lời, tức hai
    nguồn cho cùng một con số. Chúng trùng khớp lúc đó, nhưng trùng khớp hôm nay
    không phải bảo đảm: đổi hạn mức trên Google Cloud thì chỉ database biết.
 
@@ -433,7 +433,7 @@ function applyAccountAllocation(rows){
 
 /* ─── Bảng giá (USD / 1 triệu token) ───
    ĐÃ BỎ khối gõ tay ở đây (17/08/2026). Bảng giá chỉ đến từ `ref_price` qua
-   /api/catalog — xem `state.pricing`, do napTuBackend() điền.
+   /api/catalog — xem `state.pricing`, do loadFromBackend() điền.
 
    Khối cũ liệt kê 11 model với đơn giá suy từ hoá đơn Google. Nó đúng lúc viết,
    nhưng nó là nguồn thứ hai cho cùng một con số: `ref_price` trong database cũng
@@ -667,7 +667,7 @@ var state;
    VÌ SAO PHẢI LÀM VIỆC NÀY
    ------------------------
    Trước 17/08/2026, `saveState()` ghi TOÀN BỘ `state` gồm cả `state.days`.
-   napTuBackend() cố ý không gọi saveState(), nhưng 9 chỗ khác thì có (đổi bộ
+   loadFromBackend() cố ý không gọi saveState(), nhưng 9 chỗ khác thì có (đổi bộ
    lọc, sửa bảng giá, bung cây phòng ban), nên chỉ cần một cú bấm là dữ liệu
    backend nằm trong localStorage. Đã đo trên trình duyệt thật: 345 KB, 224
    ngày, 1.154 dòng. Và khi backend chết thì màn hình hiện CHÍNH cache đó -
@@ -679,7 +679,7 @@ var PREF_KEYS = ["range", "filters", "activeDay",
 
 /* State rỗng: KHÔNG dữ liệu, chỉ lựa chọn mặc định.
    `days`/`dayOrder` để rỗng và `pricing` để rỗng — cả ba chỉ được điền từ
-   database qua napTuBackend(). Trước đây hàm này trộn buildJuneExcelWeeks()
+   database qua loadFromBackend(). Trước đây hàm này trộn buildJuneExcelWeeks()
    với SEED_DAYS, tức mở trang là đã có số trên màn hình trước khi hỏi ai. */
 function defaultState(){
   return { days:{}, dayOrder:[], activeDay:null,
@@ -727,7 +727,7 @@ function loadState(){
     if(!unitById(String(id).split("::")[0])) delete s.matrixExpanded[id];
   });
   if(isExcludedDepartment(s.filters.dept)) s.filters.dept="";
-  // `range` để null nếu chưa hợp lệ: napTuBackend() sẽ đặt nó theo khoảng ngày
+  // `range` để null nếu chưa hợp lệ: loadFromBackend() sẽ đặt nó theo khoảng ngày
   // THẬT của database, thay vì gán một kỳ cứng có thể nằm ngoài dữ liệu.
   if(!s.range || !s.range.start || !s.range.end) s.range = null;
   return s;
@@ -3338,7 +3338,7 @@ function init(){
      nhất (request / token / tiền) trùng nhau giữa hai trạng thái, nên mắt không
      bắt được. Giờ chỉ vẽ khung, và renderAll() chỉ chạy khi đã có dữ liệu thật. */
   renderShell();
-  napTuBackend();
+  loadFromBackend();
 }
 
 /* ─── Trạng thái nạp dữ liệu ──────────────────────────────────────────────
@@ -3432,7 +3432,7 @@ function renderError(err){
    Ba lệnh `return` đó nghĩa là "không làm gì cả", nên số cũ ở lại trên màn
    hình và trông y hệt số mới. Dấu hiệu duy nhất là một dòng console.warn -
    phải mở DevTools mới thấy, mà không ai mở DevTools khi đang đọc báo cáo. */
-function napTuBackend(){
+function loadFromBackend(){
   if(!window.TokenLedgerAPI){
     renderError({ kind: "unknown",
                   message: "js/api.js không nạp được — kiểm thẻ <script> trong index.html" });

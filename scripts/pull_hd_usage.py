@@ -60,72 +60,72 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import pull_web_apps as P  # noqa: E402
 
 APP = "tla-hd"
-DUONG = "/api/admin/token-usage/stats"
-TEN_FILE = "usage-day-user-model.json"
+API_PATH = "/api/admin/token-usage/stats"
+OUT_FILE = "usage-day-user-model.json"
 
 # Ngay dau tien co du lieu, do bang tay 14/08: timeline ca nam bat dau 03/2026.
 # Lui them mot thang cho chac - thang rong chi ton mot luot GET.
-NGAY_DAU = date(2026, 2, 1)
+FIRST_DAY = date(2026, 2, 1)
 
-NGHI = 0.15   # giay giua hai luot GET. Lich su voi may chu noi bo.
+SLEEP_BETWEEN = 0.15   # giay giua hai luot GET. Lich su voi may chu noi bo.
 
 
 class KhongKhop(Exception):
     """Server tra ve khoang ngay khac khoang da xin - tham so bi bo qua."""
 
 
-def stats(cau_hinh: dict, token: str, tu: str, den: str, them: str = "") -> dict:
+def stats(config: dict, token: str, start: str, end: str, extra: str = "") -> dict:
     """Mot luot GET period=custom. Kiem luon khoang tra ve co dung khong.
 
     Kiem o DAY chu khong o cho goi: neu API doi cach nhan tham so thi moi loi
     goi deu hong cung mot kieu, va bat mot cho thi khong the quen cho nao.
     """
-    q = f"?period=custom&date_from={tu}&date_to={den}{them}"
-    goi = json.loads(P.lay(cau_hinh["goc"], DUONG + q, token))
-    time.sleep(NGHI)
-    if (goi.get("date_from"), goi.get("date_to")) != (tu, den):
+    q = f"?period=custom&date_from={start}&date_to={end}{extra}"
+    payload = json.loads(P.http_get(config["goc"], API_PATH + q, token))
+    time.sleep(SLEEP_BETWEEN)
+    if (payload.get("date_from"), payload.get("date_to")) != (start, end):
         raise KhongKhop(
-            f"xin {tu}..{den} nhung server tra {goi.get('date_from')}.."
-            f"{goi.get('date_to')} - tham so bi bo qua, KHONG duoc nap so nay")
-    return goi
+            f"xin {start}..{end} nhung server tra {payload.get('date_from')}.."
+            f"{payload.get('date_to')} - tham so bi bo qua, KHONG duoc nap so nay")
+    return payload
 
 
-def by_model(goi: dict) -> list:
+def by_model(payload: dict) -> list:
     """by_model nam trong `costs`. Doc nham tang tra ve [] mot cach im lang."""
-    return (goi.get("costs") or {}).get("by_model") or []
+    return (payload.get("costs") or {}).get("by_model") or []
 
 
-def cac_thang(tu: date, den: date):
+def month_spans(start: date, end: date):
     """Sinh (dau_thang, cuoi_thang) cat theo `den`."""
-    moc = tu.replace(day=1)
-    while moc <= den:
+    moc = start.replace(day=1)
+    while moc <= end:
         sau = (moc.replace(day=28) + timedelta(days=4)).replace(day=1)
-        yield moc, min(sau - timedelta(days=1), den)
+        yield moc, min(sau - timedelta(days=1), end)
         moc = sau
 
 
-def ngay_co_luot(cau_hinh: dict, token: str, tu: date, den: date) -> list[str]:
+def days_with_calls(config: dict, token: str, start: date, end: date) -> list[str]:
     """Hoi theo THANG de biet ngay nao co luot, thay vi hoi tung ngay mot.
 
     166 ngay -> 7 luot GET thay vi 166. Timeline cua khoang mot thang co
     bucket='day', da kiem: ca 6 thang deu tra bucket=day.
     """
-    ra = []
-    for dau, cuoi in cac_thang(tu, den):
-        goi = stats(cau_hinh, token, dau.isoformat(), cuoi.isoformat())
-        buc = goi.get("bucket")
+    out_path = []
+    for marker, cuoi in month_spans(start, end):
+        payload = stats(config, token, marker.isoformat(), cuoi.isoformat())
+        buc = payload.get("bucket")
         if buc != "day":
             raise SystemExit(
-                f"Thang {dau:%m/%Y} tra bucket={buc!r}, mong doi 'day'."
+                f"Thang {marker:%m/%Y} tra bucket={buc!r}, mong doi 'day'."
                 f" Khong suy ra duoc ngay nao co luot - dung lai.")
-        co = [t["timestamp"][:10] for t in (goi.get("timeline") or []) if t.get("calls")]
-        ra.extend(co)
-        print(f"  {dau:%m/%Y}  {goi['totals']['call_count']:>6,} luot"
+        co = [t["timestamp"][:10] for t in (payload.get("timeline") or []) if t.get("calls")]
+        out_path.extend(co)
+        print(f"  {marker:%m/%Y}  {payload['totals']['call_count']:>6,} luot"
               f"  {len(co):>3} ngay co du lieu")
-    return sorted(set(ra))
+    return sorted(set(out_path))
 
 
-def keo(cau_hinh: dict, token: str, ngay: str) -> tuple[list[dict], int]:
+def pull_day(config: dict, token: str, day: str) -> tuple[list[dict], int]:
     """Mot ngay -> danh sach dong (ngay, nguoi, model). Tra ca tong luot de doi chieu.
 
     TIET KIEM LUOT GOI: chi hoi rieng tung nguoi khi THAT SU can.
@@ -135,23 +135,23 @@ def keo(cau_hinh: dict, token: str, ngay: str) -> tuple[list[dict], int]:
     Hai loi tat tren khong phai uoc luong: chung dung ve mat toan hoc khi mot
     trong hai chieu chi co mot gia tri.
     """
-    goi = stats(cau_hinh, token, ngay, ngay)
-    tong = goi["totals"]["call_count"]
-    nguoi = goi.get("by_user") or []
-    models = by_model(goi)
-    dong = []
+    payload = stats(config, token, day, day)
+    total = payload["totals"]["call_count"]
+    nguoi = payload.get("by_user") or []
+    models = by_model(payload)
+    rows = []
 
     if len(nguoi) == 1:
         u = nguoi[0]
         for m in models:
-            dong.append(_dong(ngay, u, m))
+            rows.append(_make_row(day, u, m))
     elif len(models) == 1:
         m0 = models[0]
         for u in nguoi:
             # Chia theo NGUOI, khong theo model: model chi co mot nen moi token
             # cua nguoi nay deu thuoc no. Lay so tu by_user - do la so do that
             # cua chinh nguoi do, khong phai phan bo tu tong.
-            dong.append(_dong(ngay, u, {
+            rows.append(_make_row(day, u, {
                 "model": m0["model"], "calls": u["calls"],
                 "total_tokens": u["total_tokens"],
                 "prompt_tokens": u.get("prompt_tokens"),
@@ -163,20 +163,20 @@ def keo(cau_hinh: dict, token: str, ngay: str) -> tuple[list[dict], int]:
                 # Khong co user_id thi khong loc duoc. Giu nguyen dong nguoi do
                 # voi model rong - load_hd.py se doi no thanh tai khoan
                 # 'unattributed', chu khong am tham gan bua vao mot model.
-                dong.append(_dong(ngay, u, {"model": None, "calls": u["calls"],
+                rows.append(_make_row(day, u, {"model": None, "calls": u["calls"],
                                             "total_tokens": u["total_tokens"],
                                             "prompt_tokens": u.get("prompt_tokens"),
                                             "completion_tokens": u.get("completion_tokens")}))
                 continue
-            r = stats(cau_hinh, token, ngay, ngay, f"&user_id={uid}")
+            r = stats(config, token, day, day, f"&user_id={uid}")
             for m in by_model(r):
-                dong.append(_dong(ngay, u, m))
-    return dong, tong
+                rows.append(_make_row(day, u, m))
+    return rows, total
 
 
-def _dong(ngay: str, u: dict, m: dict) -> dict:
+def _make_row(day: str, u: dict, m: dict) -> dict:
     return {
-        "day": ngay,
+        "day": day,
         "user_id": u.get("user_id"),
         "username": u.get("username"),
         "model": m.get("model"),
@@ -192,59 +192,59 @@ def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--lat-mong", action="store_true",
+    p.add_argument("--lat-mong", dest="thin_slice", action="store_true",
                    help="Chi keo thang gan nhat. Dung cho vong tu soat.")
     p.add_argument("--den-ngay", default=date.today().isoformat(),
                    help="Ngay cuoi, mac dinh hom nay.")
     args = p.parse_args()
 
-    den = date.fromisoformat(args.den_ngay)
-    tu = den.replace(day=1) if args.lat_mong else NGAY_DAU
+    end = date.fromisoformat(args.den_ngay)
+    start = end.replace(day=1) if args.thin_slice else FIRST_DAY
 
-    cau_hinh = P.NGUON[APP]
-    env = {**P.doc_env(P.ENV_FILE), **os.environ}
-    token, nguon = P.lay_token(APP, cau_hinh, env)
-    print(f"Token: {nguon} - {P.het_han(token)}")
-    print(f"Khoang: {tu} -> {den}\n")
+    config = P.SOURCES[APP]
+    env = {**P.read_env(P.ENV_FILE), **os.environ}
+    token, source = P.get_token(APP, config, env)
+    print(f"Token: {source} - {P.expires_in(token)}")
+    print(f"Khoang: {start} -> {end}\n")
 
     print("Buoc 1/2  Hoi theo thang de biet ngay nao co luot")
-    ngay = ngay_co_luot(cau_hinh, token, tu, den)
-    print(f"  -> {len(ngay)} ngay co du lieu\n")
+    day = days_with_calls(config, token, start, end)
+    print(f"  -> {len(day)} ngay co du lieu\n")
 
-    print(f"Buoc 2/2  Keo tung ngay ({len(ngay)} ngay)")
+    print(f"Buoc 2/2  Keo tung ngay ({len(day)} ngay)")
     tat_ca, tong_ngay = [], {}
-    for i, d in enumerate(ngay, start=1):
-        dong, tong = keo(cau_hinh, token, d)
-        tat_ca.extend(dong)
-        tong_ngay[d] = tong
-        print(f"  [{i:>3}/{len(ngay)}] {d}  {tong:>5,} luot"
-              f"  {len(dong):>3} dong (nguoi x model)")
+    for i, d in enumerate(day, start=1):
+        rows, total = pull_day(config, token, d)
+        tat_ca.extend(rows)
+        tong_ngay[d] = total
+        print(f"  [{i:>3}/{len(day)}] {d}  {total:>5,} luot"
+              f"  {len(rows):>3} dong (nguoi x model)")
 
     # ── NGHIEM THU ────────────────────────────────────────────────────
     # Tong cong lai tu cac dong PHAI bang tong server bao cho tung ngay.
     # Khong ghim so cung: doi chieu voi chinh cau tra loi cua server o moi lan
     # chay, nen phep kiem nay khong loi thoi khi co du lieu moi.
-    loi = []
-    for d, tong in tong_ngay.items():
+    errors = []
+    for d, total in tong_ngay.items():
         co = sum(x["calls"] or 0 for x in tat_ca if x["day"] == d)
-        if co != tong:
-            loi.append(f"{d}: gop duoc {co} luot != {tong} server bao")
+        if co != total:
+            errors.append(f"{d}: gop duoc {co} luot != {total} server bao")
 
     thieu_model = [x for x in tat_ca if not x["model"]]
     if thieu_model:
         print(f"\n  LUU Y: {len(thieu_model)} dong khong xac dinh duoc model"
               f" ({sum(x['calls'] or 0 for x in thieu_model)} luot).")
 
-    if loi:
+    if errors:
         raise SystemExit("NGHIEM THU KHONG DAT - khong ghi file:\n  "
-                         + "\n  ".join(loi[:20]))
+                         + "\n  ".join(errors[:20]))
 
-    thu_muc = ROOT / "data" / "raw_web" / APP / date.today().isoformat()
-    thu_muc.mkdir(parents=True, exist_ok=True)
-    ra = thu_muc / TEN_FILE
-    ra.write_text(json.dumps({
+    folder = ROOT / "data" / "raw_web" / APP / date.today().isoformat()
+    folder.mkdir(parents=True, exist_ok=True)
+    out_path = folder / OUT_FILE
+    out_path.write_text(json.dumps({
         "keo_luc": datetime.now().isoformat(timespec="seconds"),
-        "tu_ngay": tu.isoformat(), "den_ngay": den.isoformat(),
+        "tu_ngay": start.isoformat(), "den_ngay": end.isoformat(),
         "tong_luot": sum(tong_ngay.values()),
         "rows": tat_ca,
     }, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -252,7 +252,7 @@ def main() -> None:
     print(f"\nNGHIEM THU DAT - {len(tat_ca)} dong,"
           f" {sum(tong_ngay.values()):,} luot,"
           f" {sum(x['total_tokens'] or 0 for x in tat_ca):,} token")
-    print(f"Da ghi: {ra.relative_to(ROOT)}")
+    print(f"Da ghi: {out_path.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

@@ -112,12 +112,12 @@ def main() -> None:
         if args.from_step > 1 and "--rebuild" in STEPS[0][2]:
             print("Luu y: bo qua buoc 1 nghia la KHONG dung lai schema.")
 
-    bat_dau = time.time()
-    for i, (nhan, ten_file, rieng) in enumerate(STEPS, start=1):
+    started = time.time()
+    for i, (nhan, filename, rieng) in enumerate(STEPS, start=1):
         if i < args.from_step:
             print(f"\n[{i}/{len(STEPS)}] {nhan} - bo qua")
             continue
-        print(f"\n{'─' * 72}\n[{i}/{len(STEPS)}] {nhan}  ({ten_file})\n{'─' * 72}")
+        print(f"\n{'─' * 72}\n[{i}/{len(STEPS)}] {nhan}  ({filename})\n{'─' * 72}")
         # Tien trinh con ghi thang ra terminal con print() o day qua bo dem;
         # khong flush thi loi cua con hien truoc tieu de buoc.
         sys.stdout.flush()
@@ -128,19 +128,19 @@ def main() -> None:
         #
         # Con doc duoc vi connect.DEFAULT_DSN uu tien TOKEN_LEDGER_DSN, va --db
         # cua moi script nap mac dinh bang connect.DEFAULT_DSN.
-        ket_qua = subprocess.run([PY, str(ROOT / "db" / ten_file), *rieng],
+        result = subprocess.run([PY, str(ROOT / "db" / filename), *rieng],
                                  cwd=ROOT, env={**os.environ,
                                                 "TOKEN_LEDGER_DSN": args.db})
-        if ket_qua.returncode != 0:
+        if result.returncode != 0:
             print(f"\n{'=' * 72}")
-            print(f"DUNG o buoc {i} ({ten_file}), ma thoat {ket_qua.returncode}.")
+            print(f"DUNG o buoc {i} ({filename}), ma thoat {result.returncode}.")
             print(f"Sua xong chay lai tu day:  python scripts/rebuild_db.py "
                   f"--db <dsn> --from-step {i}")
             print("=" * 72)
             sys.exit(1)
 
     print(f"\n{'=' * 72}")
-    print(f"XONG sau {time.time() - bat_dau:.0f}s."
+    print(f"XONG sau {time.time() - started:.0f}s."
           f" Ca {len(STEPS)} buoc deu dat nghiem thu.")
     print("=" * 72)
 
