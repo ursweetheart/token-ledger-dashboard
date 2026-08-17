@@ -5,10 +5,12 @@
    phần tử, không đổi chữ, không đổi màu. Dashboard trông y hệt như trước, chỉ
    khác là số bên trong đến từ database.
 
-   Không gọi được backend thì file này im lặng rút lui và dashboard chạy như cũ
-   bằng dữ liệu nhúng sẵn — bấm đúp index.html vẫn xem được, không cần cài gì.
+   Không gọi được backend thì file này trả về LÝ DO, không im lặng rút lui: xem
+   `load()` ở cuối file. app.js quyết định vẽ lý do đó thế nào — file này không
+   vẽ gì.
 
-   Bật backend:
+   Bật backend (PHẢI có, dashboard không còn dữ liệu dự phòng):
+       docker compose up -d
        python -m uvicorn backend.main:app --port 8000
 
    Đổi địa chỉ backend: thêm ?api=http://may-khac:8000 vào URL, hoặc sửa
@@ -45,11 +47,36 @@
     return DEFAULT_BASE;
   }
 
+  /* Lỗi mang theo ĐỦ THÔNG TIN để phân loại được, không chỉ một câu chữ.
+     `loai` là thứ app.js dùng để chọn thông báo; `endpoint` và `maHttp` là thứ
+     người đọc cần để biết phải sửa ở đâu. */
+  function makeError(kind, message, extra) {
+    var e = new Error(message);
+    e.kind = kind;
+    e.apiBase = base();
+    if (extra) for (var k in extra) if (extra.hasOwnProperty(k)) e[k] = extra[k];
+    return e;
+  }
+
   function fetchJson(path) {
-    return fetch(base() + path, { cache: "no-store" }).then(function (r) {
-      if (!r.ok) throw new Error(path + " → HTTP " + r.status);
-      return r.json();
-    });
+    return fetch(base() + path, { cache: "no-store" }).then(
+      function (r) {
+        /* Máy chủ trả lời nhưng trả mã lỗi - KHÁC HẲN không nối được. Giữ
+           riêng hai trường hợp này: một cái là "bật backend lên", cái kia là
+           "backend đang lỗi ở endpoint nào đó". */
+        if (!r.ok) {
+          throw makeError("endpoint-error", path + " → HTTP " + r.status,
+                          { endpoint: path, httpStatus: r.status });
+        }
+        return r.json();
+      },
+      function () {
+        /* fetch chỉ reject khi KHÔNG tới được máy chủ: chưa bật, sai cổng,
+           mạng chặn, hoặc CORS. Không phân biệt được sâu hơn từ trong trang -
+           trình duyệt cố ý không nói, nên đừng đoán. */
+        throw makeError("unreachable", "khong toi duoc " + base() + path,
+                        { endpoint: path });
+      });
   }
 
   /* Độ trễ và mã trả về đo ở mức (ngày, agent) — KHÔNG có chiều model.
@@ -221,15 +248,55 @@
   global.TokenLedgerAPI = {
     base: base,
 
-    /* Trả về Promise. Hỏng thì resolve(null) chứ không reject: backend không
-       chạy là chuyện bình thường (mở file bằng cách bấm đúp), không phải lỗi. */
+    /* Trả về Promise, LUÔN resolve - không bao giờ reject.
+       Hình dạng kết quả:
+           { ok: true,  data: <state> }
+           { ok: false, error: { kind, message, apiBase, endpoint?, httpStatus? } }
+
+       VÌ SAO KHÔNG resolve(null) NHƯ TRƯỚC
+       ------------------------------------
+       Trước 17/08/2026 mọi thất bại đều thành `null`, nên bốn tình huống rất
+       khác nhau trông y hệt nhau ở phía gọi:
+
+           backend chưa bật            -> null
+           một endpoint trả 500        -> null
+           database chưa có dữ liệu    -> null
+           mở bằng file://             -> null
+
+       Bốn cái đó cần bốn câu trả lời khác nhau cho người xem, mà `null` thì
+       không mang nổi thông tin nào. Kết quả là dashboard giữ nguyên số cũ trên
+       màn hình và chỉ ghi một dòng console.warn - phải mở DevTools mới thấy.
+
+       VÌ SAO VẪN KHÔNG reject
+       -----------------------
+       Backend chưa chạy là chuyện thường, không phải ngoại lệ chương trình. Nếu
+       reject thì mọi chỗ gọi phải bọc try/catch, và một lần quên là quay lại
+       đúng chỗ cũ: thất bại im lặng. */
     load: function () {
       var health;
+      /* Mở bằng file:// thì fetch tới http://127.0.0.1:8000 sẽ hỏng vì lý do
+         khác hẳn (origin 'null', CORS), và cách khắc phục cũng khác - phải chạy
+         máy chủ tĩnh, không phải bật backend. Bắt trường hợp này TRƯỚC khi thử
+         gọi, để không báo sai nguyên nhân. */
+      if (global.location && global.location.protocol === "file:") {
+        return Promise.resolve({
+          ok: false,
+          error: {
+            kind: "file-protocol",
+            message: "dang mo bang file://, khong goi duoc API",
+            apiBase: base()
+          }
+        });
+      }
       return fetchJson("/api/health")
         .then(function (h) {
           health = h;
           var r = (h.ranges && h.ranges.usage) || {};
-          if (!r.from) throw new Error("database chua co du lieu su dung");
+          if (!r.from) {
+            throw makeError("empty-database",
+                            "database chua co du lieu su dung",
+                            { endpoint: "/api/health" });
+          }
           var q = "?start=" + r.from + "&end=" + r.to;
           return Promise.all([fetchJson("/api/usage" + q),
                               fetchJson("/api/performance" + q),
@@ -245,12 +312,26 @@
           state.adoption = (r[4] && r[4].rows) || [];
           state.accounts = (r[5] && r[5].rows) || [];
           state.byAccount = (r[6] && r[6].rows) || [];
-          return state;
+          /* Cảnh báo độ phủ đi KÈM bảng theo người dùng, không để app.js phải
+             nhớ sang hỏi /api/health - xem ghi chú ở backend/main.py. */
+          state.accountWarnings = (r[6] && r[6].warnings) || [];
+          return { ok: true, data: state };
         })
         .catch(function (e) {
-          console.warn("[TokenLedgerAPI] khong nap duoc tu " + base() + ": "
-                       + e.message + " — dashboard dung du lieu nhung san.");
-          return null;
+          /* Vẫn ghi console cho người đang mở DevTools, NHƯNG console không còn
+             là chỗ duy nhất biết chuyện: lý do được trả về để app.js hiện lên
+             màn hình. File này KHÔNG vẽ gì - đó là hợp đồng ghi ở đầu file. */
+          console.warn("[TokenLedgerAPI] " + (e.kind || "loi") + ": " + e.message);
+          return {
+            ok: false,
+            error: {
+              kind: e.kind || "unknown",
+              message: e.message,
+              apiBase: e.apiBase || base(),
+              endpoint: e.endpoint,
+              httpStatus: e.httpStatus
+            }
+          };
         });
     }
   };

@@ -43,7 +43,7 @@
 ## Chạy lại tất cả — một lệnh
 
 Nếu chỉ muốn làm cho nó chạy, đây là toàn bộ. **Không cần gọi tay script gộp
-nào** — `update_dashboard.py` chạy đủ 10 bước, gồm cả chặng ② và chặng ③:
+nào** — `update_dashboard.py` chạy đủ 9 bước, gồm cả chặng ② và chặng ③:
 
 ```bash
 python scripts/update_dashboard.py                # ① + ② + ③  (~15 phút, có 1 bước tay)

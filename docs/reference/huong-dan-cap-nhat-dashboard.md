@@ -107,7 +107,7 @@ không tìm thấy `usage-day-user-model.json`.
 
 | Script | Vai trò | Bước |
 |---|---|---|
-| `update_dashboard.py` | Điều phối cả 10 bước | — |
+| `update_dashboard.py` | Điều phối cả 9 bước | — |
 | `pull_monitoring.py` | Kéo time series từ Cloud Monitoring qua `gcloud` | 2 |
 | `merge_monitoring.py` | Gộp nhiều đợt kéo, khử trùng lặp | 3 |
 | `pull_web_apps.py` | Kéo Ralli + TLA HĐ qua API của chúng | 4 |
@@ -116,8 +116,6 @@ không tìm thấy `usage-day-user-model.json`.
 | `merge_latency_daily.py` | Gộp histogram độ trễ, đọc ra p50/p95/p99 | 7 |
 | `rebuild_db.py` | Dựng lại database (PostgreSQL mặc định): schema + 7 khâu nạp | 8 |
 | `audit_db.py` | 30 phép kiểm chia 5 nhóm | 9 |
-| `sinh_du_lieu_dashboard.py` | Sinh `scripts/seed-days-that.js` từ mọi nguồn | 10 |
-| `va_app_js.py` | Vá seed vào `web/js/app.js` | 10 |
 
 **Chạy tay khi cần** — không nằm trong đường ống:
 
@@ -179,22 +177,24 @@ TLA HĐ không phơi `openapi.json` nên kiểu body là **suy đoán**. Script 
 form-encoded. Hỏng cả hai thì mở DevTools → Network, đăng nhập tay một lần, xem request
 thật gửi gì.
 
-### "Chua co scripts/seed-days-that.js"
-Bước 10 gồm hai script chạy nối nhau. Chạy `sinh_du_lieu_dashboard.py` trước.
-
 ### `load_org.py` báo thiếu `usage-day-user-model.json`
 Bước 5 chưa chạy. Xem §"Vì sao bước 5 tách khỏi bước 4".
 
-### Dashboard mở lên vẫn hiện số cũ
-Hai nguyên nhân, kiểm theo thứ tự:
+### Dashboard mở lên không hiện số
+Từ 17/08/2026 dashboard **không còn dữ liệu dự phòng**: nạp không được thì nó báo lỗi
+trên màn hình kèm địa chỉ đã thử, chứ không lặng lẽ hiện số cũ. Đọc đúng dòng thông báo
+đó — nó phân biệt bốn trường hợp:
 
-1. **Backend không chạy** → dashboard rơi về bản dự phòng vá cứng trong `app.js`. Mở
-   F12 → Network xem có lời gọi nào tới `127.0.0.1:8000/api/` không. Không có ⇒ bật
-   uvicorn.
-2. **Trình duyệt giữ bản cũ.** `app.js` lưu state trong `localStorage`; `va_app_js.py`
-   có tăng số phiên bản khoá mỗi lần chạy, nhưng chạy nhiều lần rồi khôi phục file thì
-   hai lần có thể trùng số. F12 → Application → Local Storage → xoá các khoá
-   `agent-dash-state-*` rồi tải lại. Nhớ cả bộ đệm của chính `api.js`.
+| Thông báo | Nghĩa | Làm gì |
+|---|---|---|
+| Không nối được backend | không tới được máy chủ | `docker compose ps` · bật uvicorn · kiểm cổng |
+| Backend trả về lỗi | máy chủ trả mã HTTP lỗi | xem log uvicorn, thông báo có nói endpoint nào |
+| Database chưa có dữ liệu sử dụng | nối được, `/api/health` không có khoảng ngày | `rebuild_db.py` rồi `audit_db.py` |
+| Đang mở bằng `file://` | thiếu máy chủ tĩnh | chạy `http.server` từ trong `web/` |
+
+`localStorage` từ nay **chỉ giữ lựa chọn người dùng** (tab, giao diện, khoảng ngày, cây
+đang bung) — không giữ số liệu, nên nó không còn là nguồn số cũ. Không cần bump khoá theo
+mỗi lần cập nhật dữ liệu nữa.
 
 ### `merge_monitoring.py` báo "lech gia tri"
 Cùng một phép đo, cùng mốc thời gian, hai đợt kéo cho số khác nhau. Script giữ giá trị
@@ -316,12 +316,7 @@ git diff --stat web/js/app.js
 Khoảng ngày mặc định được **suy từ ngày cuối cùng có dữ liệu**, không ghim cứng — nên
 dashboard mở ra luôn ở tháng hiện tại mà không cần sửa gì thêm.
 
-Chạy hai lần liên tiếp phải cho `app.js` giống hệt nhau về nội dung (chỉ khác `STORE`).
-Nếu khác, có nguồn nào đó không xác định — dừng lại tìm hiểu trước khi tin kết quả.
-
-`web/js/app.js.bak` là ảnh chụp `app.js` **trước lần vá đầu tiên** (02/08), chụp một lần
-duy nhất bởi `va_app_js.py:89`. Xoá nó thì lần chạy sau sẽ chụp lại bản *đã vá* — mất
-mốc gốc vĩnh viễn.
+Đường ống **không ghi vào `web/`** nữa: chạy trọn xong thì `git status web/` phải trống.
 
 ### API
 

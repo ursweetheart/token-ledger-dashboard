@@ -158,7 +158,7 @@ def main() -> None:
     if tong["lech"]:
         print("\n  CANH BAO: co khoa trung nhung gia tri khac nhau giua hai dot keo.")
         print("  Da giu gia tri cua dot MOI. Xem vi du o tren truoc khi tin ket qua.")
-    print(f"\nXong. Buoc tiep: tro scripts/sinh_du_lieu_dashboard.py vao {ten_ra}")
+    print(f"\nXong. Buoc tiep: db/load_monitoring.py doc {ten_ra} khi dung lai database")
 
 
 if __name__ == "__main__":

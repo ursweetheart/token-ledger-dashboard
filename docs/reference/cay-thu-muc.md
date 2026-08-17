@@ -32,9 +32,8 @@ token-ledger-dashboard/
 │   main.py · store.py (mọi câu SQL) · check_api.py
 │
 ├── scripts/                ① KÉO + ② GỘP + điều phối
-│   pull_*.py (6) · merge_*.py (3) · update_dashboard.py (10 bước)
+│   pull_*.py (6) · merge_*.py (3) · update_dashboard.py (9 bước)
 │   rebuild_db.py · audit_db.py (30 phép kiểm) · copy_to_postgres.py
-│   sinh_du_lieu_dashboard.py · va_app_js.py    ← bước 10, LÀ script sản xuất
 │
 ├── db/                     ③ SCHEMA + NẠP — chỉ chứa MÃ
 │   01_schema.sql · 02_catalog.sql · load_*.py · build_*.py · connect.py · rules.py

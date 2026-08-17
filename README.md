@@ -40,13 +40,16 @@ theo.
 kèm email) và `data/` đều tải được qua HTTP. **`--bind 127.0.0.1`** chặn *ai* vào được:
 mặc định của `http.server` là mọi giao diện mạng, tức cả LAN công ty.
 
-Không có backend thì mở `web/index.html` bằng cách bấm đúp vẫn xem được — dashboard
-quay về dữ liệu dự phòng đã vá sẵn trong `app.js`, nhưng số sẽ cũ.
+**Không có backend thì dashboard KHÔNG hiện số** — nó báo lỗi kèm địa chỉ đã thử và
+cách khắc phục. Trước 17/08/2026 bấm đúp `index.html` vẫn xem được nhờ dữ liệu dự phòng
+vá sẵn trong `app.js`; đã bỏ, vì chính cơ chế đó che mất mọi lỗi backend: dữ liệu dự
+phòng không tự biết mình cũ, nên số cũ hiện lên trông y hệt số mới. Đã đo lúc bỏ — khối
+dự phòng lệch 15,6% so với database, chỉ 25/224 ngày khớp.
 
 ## Cập nhật dữ liệu
 
 ```bash
-python scripts/update_dashboard.py        # 10 bước, ~15 phút, có 1 bước tay
+python scripts/update_dashboard.py        # 9 bước, ~15 phút, có 1 bước tay
 ```
 
 Chi tiết từng chặng: [`docs/reference/toan-trinh-du-lieu.md`](docs/reference/toan-trinh-du-lieu.md)
@@ -60,7 +63,7 @@ Chi tiết từng chặng: [`docs/reference/toan-trinh-du-lieu.md`](docs/referen
 | `scripts/` | Đường ống: kéo → gộp → điều phối |
 | `db/` | Schema `.sql` và các module nạp |
 | `data/` | Dữ liệu thô — mất là mất vĩnh viễn |
-| `var/` | Database đang chạy — dựng lại được bằng `rebuild_db.py` |
+| `var/` | Trống — database nằm trong volume Docker `pgdata`; chỗ duy nhất được chứa `.sqlite` đối chiếu |
 | `tests/` | Phải luôn xanh |
 | `tools/` | Chẩn đoán một lần — được phép mục |
 | `docs/` | `reference/` đang là gì · `decisions/` · `archive/` |
@@ -70,7 +73,7 @@ Quy tắc đầy đủ, kèm bảng "thêm file mới thì để đâu":
 
 ## Tài liệu
 
-- [Toàn trình dữ liệu](docs/reference/toan-trinh-du-lieu.md) — 10 bước từ nguồn tới màn hình
+- [Toàn trình dữ liệu](docs/reference/toan-trinh-du-lieu.md) — 9 bước từ nguồn tới màn hình
 - [Mô tả database](docs/reference/mo-ta-database.md) — 18 bảng, 30 phép kiểm
 - [Cây thư mục](docs/reference/cay-thu-muc.md)
 - [API TLA Hợp Đồng](docs/reference/api-map-tla-hd.md)
