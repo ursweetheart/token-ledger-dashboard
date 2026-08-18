@@ -18,8 +18,10 @@ function loadApi(protocol, search) {
   return window.TokenLedgerAPI;
 }
 
-test("hosted HTTPS uses the same-origin API", () => {
-  assert.equal(loadApi("https:", "").base(), "");
+test("hosted HTTP and HTTPS use the same-origin API", () => {
+  for (const protocol of ["http:", "https:"]) {
+    assert.equal(loadApi(protocol, "").base(), "");
+  }
 });
 
 test("file mode preserves the local API fallback", () => {
