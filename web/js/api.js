@@ -35,7 +35,11 @@
 (function (global) {
   "use strict";
 
-  var DEFAULT_BASE = "http://127.0.0.1:8000";
+  // HTTP/HTTPS hosting uses the same-origin API; file:// uses the local fallback.
+  // The ?api=<base-url> query parameter overrides either default.
+  var DEFAULT_BASE = global.location.protocol === "file:"
+    ? "http://127.0.0.1:8000"
+    : "";
 
   function base() {
     try {
