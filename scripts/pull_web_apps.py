@@ -217,7 +217,7 @@ def get_token(name: str, config: dict, env: dict) -> tuple[str, str]:
             f"  HOAC dien {config['bien_user']} va {config['bien_pass']} vao {ENV_FILE}.\n"
             f"  Xem .env.example."
         )
-    return login(config, username, password), f"dang nhap {config['login']}"
+    return login(config, username, password), f"dang nhap {config['dang_nhap']}"
 
 
 def http_get(base: str, path: str, token: str, attempts: int = 3) -> bytes:

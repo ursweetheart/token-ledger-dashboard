@@ -146,14 +146,14 @@ def main() -> None:
         tk = merge_project(name, projects[name], dest / f"{name}.csv")
         for k in total:
             total[k] += tk[k]
-        print(f"  {name:<28} {tk['vao']:>8,} vao -> {tk['out_path']:>8,} ra"
+        print(f"  {name:<28} {tk['vao']:>8,} vao -> {tk['ra']:>8,} ra"
               f" | trung {tk['trung']:>7,} | lech gia tri {tk['lech']:,}")
         for example in tk["lech_vi_du"]:
             print(f"        LECH {example[0]} @ {example[1]}:")
             print(f"             {example[2]} = {example[3]}   (dot duoc GIU)")
             print(f"             {example[4]} = {example[5]}   (dot bi BO)")
 
-    print(f"\n  TONG {total['vao']:,} vao -> {total['out_path']:,} ra"
+    print(f"\n  TONG {total['vao']:,} vao -> {total['ra']:,} ra"
           f" | trung {total['trung']:,} | lech gia tri {total['lech']:,}")
     if total["lech"]:
         print("\n  CANH BAO: co khoa trung nhung gia tri khac nhau giua hai dot keo.")
