@@ -6,7 +6,7 @@ x-api-image: &api-image
     context: .
     dockerfile: docker/api.Dockerfile
 
-x-dsn: &dsn postgresql://${PGUSER:-token}:${PGPASSWORD:?Set PGPASSWORD in .env}@postgres:5432/${PGDATABASE:-token_ledger}
+x-api-dsn: &api-dsn postgresql://${API_PGUSER:-token_reader}:${API_PGPASSWORD:?Set API_PGPASSWORD in .env}@postgres:5432/${PGDATABASE:-token_ledger}
 
 services:
   postgres:
@@ -32,7 +32,7 @@ services:
     <<: *api-image
     restart: unless-stopped
     environment:
-      TOKEN_LEDGER_DSN: *dsn
+      TOKEN_LEDGER_DSN: *api-dsn
     networks:
       - edge
       - data
@@ -98,17 +98,66 @@ services:
     security_opt:
       - no-new-privileges:true
 
+  db-grant:
+    image: postgres:17-alpine
+    profiles: ["tools"]
+    restart: "no"
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: ${PGDATABASE:-token_ledger}
+      PGUSER: ${PGUSER:-token}
+      PGPASSWORD: ${PGPASSWORD:?Set PGPASSWORD in .env}
+      API_PGUSER: ${API_PGUSER:-token_reader}
+      API_PGPASSWORD: ${API_PGPASSWORD:?Set API_PGPASSWORD in .env}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+          if [ "$$PGUSER" = "$$API_PGUSER" ]; then
+            echo >&2 'PGUSER and API_PGUSER must be different.'
+            exit 1
+          fi
+          if [ "$$PGPASSWORD" = "$$API_PGPASSWORD" ]; then
+            echo >&2 'PGPASSWORD and API_PGPASSWORD must be different.'
+            exit 1
+          fi
+          exec psql \
+            --no-psqlrc \
+            --no-password \
+            --set=ON_ERROR_STOP=1 \
+            --set=db_name="$$PGDATABASE" \
+            --set=admin_role="$$PGUSER" \
+            --set=api_role="$$API_PGUSER" \
+            --set=api_password="$$API_PGPASSWORD" \
+            --file=/grants/read-only-api.sql
+    volumes:
+      - type: bind
+        source: ./docker/read-only-api.sql
+        target: /grants/read-only-api.sql
+        read_only: true
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
   db-audit:
     <<: *api-image
     profiles: ["tools"]
     restart: "no"
     environment:
-      TOKEN_LEDGER_DSN: *dsn
+      TOKEN_LEDGER_DSN: *api-dsn
     command:
       - python
       - scripts/audit_db.py
       - --db
-      - *dsn
+      - *api-dsn
     networks:
       - data
     depends_on:

@@ -45,6 +45,19 @@ build/
 *.sqlite3
 *.db
 
+# Runtime secrets, backups, certificates, and private keys
+secrets/
+backups/
+*.dump
+*.backup
+*.bak
+*.key
+*.pem
+*.crt
+*.cer
+*.pfx
+*.p12
+
 # Python cache
 __pycache__/
 *.pyc

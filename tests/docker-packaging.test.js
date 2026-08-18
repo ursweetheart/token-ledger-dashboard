@@ -7,6 +7,21 @@ const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
 const API_PATH = path.join(ROOT, "web", "js", "api.js");
+const SMOKE_PUBLISHER_TEST_PATH = path.join(
+  ROOT,
+  "tests",
+  "docker-smoke-publishers.test.ps1",
+);
+const powershellExecutable = ["powershell.exe", "pwsh"].find((candidate) => {
+  try {
+    childProcess.execFileSync(candidate, ["-NoProfile", "-Command", "exit 0"], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+});
 const composeAvailable = (() => {
   try {
     childProcess.execFileSync("docker", ["compose", "version"], {
@@ -36,12 +51,16 @@ function composeConfig(override) {
       encoding: "utf8",
       env: {
         ...process.env,
-        PGPASSWORD: "0123456789abcdef0123456789abcdef",
-        PGADMIN_PASSWORD: "0123456789abcdef0123456789abcdef",
+        PGDATABASE: "token_ledger_test",
+        PGUSER: "token_admin_test",
+        PGPASSWORD: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        API_PGUSER: "token_reader_test",
+        API_PGPASSWORD: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        PGADMIN_PASSWORD: "cccccccccccccccccccccccccccccccc",
         LOCAL_PORT: "8080",
         PUBLIC_PORT: "45501",
-        TLS_CERT_FILE: "C:/certs/fullchain.pem",
-        TLS_KEY_FILE: "C:/certs/private.key",
+        TLS_CERT_FILE: "C:/controlled-certs/fullchain.pem",
+        TLS_KEY_FILE: "C:/controlled-certs/private.key",
       },
     },
   ));
@@ -60,6 +79,20 @@ function networkNames(service) {
   return Array.isArray(service.networks)
     ? service.networks
     : Object.keys(service.networks ?? {});
+}
+
+function normalizedMountSource(source) {
+  return path.normalize(path.resolve(ROOT, source));
+}
+
+function readOnlyBindMounts(service) {
+  return (service.volumes ?? [])
+    .filter(({ type }) => type === "bind")
+    .map(({ source, target, read_only }) => ({
+      source: normalizedMountSource(source),
+      target,
+      read_only,
+    }));
 }
 
 function loadApi(protocol, search) {
@@ -87,6 +120,26 @@ test("api query parameter overrides hosted and file defaults", () => {
   const search = "?api=https%3A%2F%2Fapi.example.test%2F";
   assert.equal(loadApi("https:", search).base(), "https://api.example.test");
   assert.equal(loadApi("file:", search).base(), "https://api.example.test");
+});
+
+test("smoke publisher classification distinguishes exposure from host bindings", {
+  skip: !powershellExecutable,
+}, () => {
+  childProcess.execFileSync(
+    powershellExecutable,
+    [
+      "-NoProfile",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      SMOKE_PUBLISHER_TEST_PATH,
+    ],
+    {
+      cwd: ROOT,
+      encoding: "utf8",
+      stdio: "pipe",
+    },
+  );
 });
 
 test("local Compose keeps API and Postgres private and exposes only the local gateway", { skip: !composeAvailable }, () => {
@@ -117,7 +170,7 @@ test("local Compose keeps API and Postgres private and exposes only the local ga
   );
 });
 
-test("production Compose exposes TLS gateway only with read-only certificate mounts", { skip: !composeAvailable }, () => {
+test("production Compose exposes TLS gateway only with exact read-only mounts", { skip: !composeAvailable }, () => {
   const { services } = composeConfig("docker-compose.prod.yml");
 
   assert.deepEqual(services.api.ports ?? [], []);
@@ -129,25 +182,74 @@ test("production Compose exposes TLS gateway only with read-only certificate mou
     host_ip: "0.0.0.0",
     protocol: "tcp",
   }]);
-  for (const target of [
-    "/etc/nginx/tls/fullchain.pem",
-    "/etc/nginx/tls/private.key",
-  ]) {
-    assert.ok(services.gateway.volumes.some((volume) =>
-      volume.type === "bind"
-      && volume.target === target
-      && volume.read_only === true));
-  }
+  assert.deepEqual(readOnlyBindMounts(services.gateway), [
+    {
+      source: normalizedMountSource("C:/controlled-certs/fullchain.pem"),
+      target: "/etc/nginx/tls/fullchain.pem",
+      read_only: true,
+    },
+    {
+      source: normalizedMountSource("C:/controlled-certs/private.key"),
+      target: "/etc/nginx/tls/private.key",
+      read_only: true,
+    },
+    {
+      source: normalizedMountSource(path.join(ROOT, "docker", "nginx.prod.conf")),
+      target: "/etc/nginx/conf.d/default.conf",
+      read_only: true,
+    },
+  ]);
 });
 
 test("rendered Compose services place database tools in the tools profile and healthcheck the runtime", { skip: !composeAvailable }, () => {
   for (const override of ["docker-compose.local.yml", "docker-compose.prod.yml"]) {
-    const { services } = composeConfig(override);
-    for (const service of ["db-import", "db-audit", "pgadmin"]) {
+    const config = composeConfig(override);
+    const { services } = config;
+    const readerDsn = "postgresql://token_reader_test:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb@postgres:5432/token_ledger_test";
+
+    for (const service of ["db-import", "db-grant", "db-audit", "pgadmin"]) {
       assert.deepEqual(services[service].profiles, ["tools"]);
     }
     for (const service of ["postgres", "api", "gateway"]) {
       assert.ok(services[service].healthcheck);
     }
+
+    assert.equal(services.api.environment.TOKEN_LEDGER_DSN, readerDsn);
+    assert.equal(services["db-audit"].environment.TOKEN_LEDGER_DSN, readerDsn);
+    assert.equal(services["db-audit"].command.at(-1), readerDsn);
+    assert.ok(!JSON.stringify(services.api).includes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+    assert.ok(!JSON.stringify(services["db-audit"]).includes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+    assert.equal(services.postgres.environment.POSTGRES_USER, "token_admin_test");
+    assert.equal(
+      services.postgres.environment.POSTGRES_PASSWORD,
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
+    assert.equal(services["db-import"].environment.PGUSER, "token_admin_test");
+    assert.equal(
+      services["db-import"].environment.PGPASSWORD,
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    );
+
+    const grantService = services["db-grant"];
+    assert.deepEqual(networkNames(grantService), ["data"]);
+    assert.deepEqual(grantService.ports ?? [], []);
+    assert.equal(grantService.depends_on.postgres.condition, "service_healthy");
+    assert.equal(grantService.read_only, true);
+    assert.deepEqual(readOnlyBindMounts(grantService), [{
+      source: normalizedMountSource(path.join(ROOT, "docker", "read-only-api.sql")),
+      target: "/grants/read-only-api.sql",
+      read_only: true,
+    }]);
+    const grantCommand = grantService.command.join("\n");
+    for (const variable of [
+      "PGUSER",
+      "PGPASSWORD",
+      "PGDATABASE",
+      "API_PGUSER",
+      "API_PGPASSWORD",
+    ]) {
+      assert.ok(grantCommand.includes(`$${variable}`));
+    }
+    assert.equal(config.networks.data.internal, true);
   }
 });

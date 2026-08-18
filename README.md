@@ -76,18 +76,38 @@ Docker server phải báo `OS=linux`; trên VM x64 này thông thường sẽ l�
 
 ### Chuẩn bị môi trường và nạp dữ liệu lần đầu
 
-Tại thư mục checkout của dự án, tạo `.env` từ mẫu, sinh rồi điền cả hai mật khẩu còn trống, kiểm tra `SQLITE_SOURCE`, và tuyệt đối không commit `.env`. Giá trị mặc định Git-ignored `./var/token_ledger.sqlite` được phép dùng, nhưng phải luôn nằm ngoài Git và Docker image; nếu chính sách công ty yêu cầu, có thể đặt `SQLITE_SOURCE` thành một đường dẫn tuyệt đối bên ngoài checkout đã được phê duyệt:
+Tại thư mục checkout của dự án, tạo `.env` từ mẫu, sinh riêng rồi điền cả ba mật khẩu còn trống, kiểm tra `SQLITE_SOURCE`, và tuyệt đối không commit `.env`. Giá trị mặc định Git-ignored `./var/token_ledger.sqlite` được phép dùng, nhưng phải luôn nằm ngoài Git và Docker image; nếu chính sách công ty yêu cầu, có thể đặt `SQLITE_SOURCE` thành một đường dẫn tuyệt đối bên ngoài checkout đã được phê duyệt:
 
 ```powershell
 Copy-Item .env.example .env
 notepad .env
-docker compose -f docker-compose.yml -f docker-compose.local.yml config
+docker compose -f docker-compose.yml -f docker-compose.local.yml config --quiet
 docker compose up -d postgres
 docker compose --profile tools run --rm db-import
+docker compose --profile tools run --rm db-grant
 docker compose --profile tools run --rm db-audit
 ```
 
-`db-import` đọc SQLite qua bind mount chỉ-đọc, nhưng nó **xóa và tạo lại PostgreSQL schema `public`**. Đây là thao tác bảo trì chủ động, không phải bước khởi động thường lệ. Với lần import sau: sao lưu trước, dừng API/gateway, import, audit, rồi khởi động lại.
+`PGUSER`/`PGPASSWORD` là tài khoản quản trị dành riêng cho khởi tạo, import, cấp quyền, backup và restore. API cùng `db-audit` chỉ nhận DSN của `API_PGUSER`/`API_PGPASSWORD`; không được đặt tên hoặc mật khẩu reader trùng với tài khoản quản trị. `db-grant` chạy một lần, có tính idempotent: nó tạo hoặc cập nhật reader, thu hồi quyền rộng, đặt mặc định transaction chỉ-đọc, rồi chỉ cấp `CONNECT`, `USAGE` và `SELECT` cần thiết.
+
+`db-import` đọc SQLite qua bind mount chỉ-đọc, nhưng nó **xóa và tạo lại PostgreSQL schema `public`**. Đây là thao tác bảo trì chủ động, không phải bước khởi động thường lệ. Với lần import sau: sao lưu trước, dừng API/gateway, import, chạy lại `db-grant`, audit, rồi khởi động lại.
+
+### Chuyển named volume hiện có sang tài khoản reader
+
+Volume đã tạo trước khi có `API_PGUSER` không tự sinh role reader. Sau khi có backup đã thử phục hồi, điền reader và mật khẩu riêng trong `.env`, rồi chạy đúng thứ tự sau; thay file local bằng `docker-compose.prod.yml` trên production. `up -d` cuối cùng sẽ tạo lại API với DSN reader mà vẫn giữ đúng override của gateway:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.local.yml stop gateway api
+if ($LASTEXITCODE -ne 0) { throw 'Reader migration failed: could not stop gateway and api.' }
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres
+if ($LASTEXITCODE -ne 0) { throw 'Reader migration failed: postgres did not start.' }
+docker compose -f docker-compose.yml -f docker-compose.local.yml --profile tools run --rm db-grant
+if ($LASTEXITCODE -ne 0) { throw 'Reader migration failed: read-only grants were not applied.' }
+docker compose -f docker-compose.yml -f docker-compose.local.yml --profile tools run --rm db-audit
+if ($LASTEXITCODE -ne 0) { throw 'Reader migration failed: database audit did not pass.' }
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d api gateway
+if ($LASTEXITCODE -ne 0) { throw 'Reader migration failed: could not recreate api and gateway.' }
+```
 
 ### Chạy cục bộ, smoke test và log
 
@@ -98,7 +118,7 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml ps
 docker compose -f docker-compose.yml -f docker-compose.local.yml logs --tail 200 gateway api postgres
 ```
 
-Mở dashboard cục bộ tại `http://127.0.0.1:8080`. Smoke test kiểm tra trang gốc, `/api/health`, trạng thái/health của `gateway`, `api`, `postgres`, và xác nhận API/Postgres không có cổng host công khai. `pgAdmin` không là điều kiện smoke vì thuộc profile `tools` tùy chọn và khi bật chỉ bind loopback.
+Mở dashboard cục bộ tại `http://127.0.0.1:8080`. Smoke test kiểm tra trang gốc, `/api/health`, trạng thái/health của `gateway`, `api`, `postgres`, và xác nhận API/Postgres không có bất kỳ host binding nào. `pgAdmin` không là điều kiện smoke vì thuộc profile `tools` tùy chọn và khi bật chỉ bind loopback.
 
 ### Sao lưu và phục hồi ngoài repository
 
@@ -129,6 +149,8 @@ docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTG
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: pg_restore in postgres container.' }
 docker compose exec -T postgres rm -f /tmp/restore.dump
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not remove temporary restore dump from postgres container.' }
+docker compose --profile tools run --rm db-grant
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: read-only grants were not applied.' }
 docker compose --profile tools run --rm db-audit
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: database audit did not pass.' }
 docker compose start api gateway
@@ -144,7 +166,7 @@ URL production là `https://dashboard.rangdong.com.vn:45501`. Quản trị viên
 Nginx cần PEM full chain và **PEM private key không mã hóa** tại các đường dẫn khai báo trong `.env`. Nếu công ty chỉ cung cấp `.pfx`/`.p12`, hãy phối hợp chuyển đổi bảo mật ở ngoài repository; bảo vệ mật khẩu của file nguồn/export và private key đã trích xuất bằng NTFS access control phù hợp. Certificate/private key không bao giờ được đưa vào Git hoặc Docker image: `.env` chỉ chứa đường dẫn và secret values, còn các byte certificate/private key nằm ngoài Git/image.
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.prod.yml config
+docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 curl.exe -k https://dashboard.rangdong.com.vn:45501/api/health
@@ -156,7 +178,7 @@ curl.exe -k https://dashboard.rangdong.com.vn:45501/api/health
 
 - `docker compose down` xóa containers nhưng giữ named volumes.
 - Không bao giờ chạy `docker compose down -v` trừ khi chủ đích xóa vĩnh viễn database và đã có bản phục hồi được thử nghiệm.
-- Đổi mật khẩu trong `.env` không đổi mật khẩu của Postgres volume đã khởi tạo. Dùng quy trình xoay vòng mật khẩu có chủ đích; không xóa volume để làm đường tắt.
+- Đổi `PGPASSWORD` trong `.env` không đổi mật khẩu quản trị của Postgres volume đã khởi tạo. Đổi `API_PGPASSWORD` phải được áp dụng bằng `db-grant` trước khi tạo lại API/audit. Dùng quy trình xoay vòng có chủ đích; không xóa volume để làm đường tắt.
 - Dùng `docker compose logs --tail 200 gateway api postgres` để chẩn đoán.
 - Certificate paths và secret values ở `.env`; byte certificate/private key phải ở ngoài Git/image.
 

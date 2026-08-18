@@ -6,6 +6,34 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Test-ActualHostPublisher {
+    param(
+        [AllowNull()]
+        [object]$Publisher
+    )
+
+    if ($null -eq $Publisher) {
+        return $false
+    }
+
+    $url = ''
+    $urlProperty = $Publisher.PSObject.Properties['URL']
+    if ($null -ne $urlProperty) {
+        $url = [string]$urlProperty.Value
+    }
+
+    $publishedPort = 0
+    $publishedPortProperty = $Publisher.PSObject.Properties['PublishedPort']
+    if ($null -ne $publishedPortProperty) {
+        $parsedPort = 0
+        if ([int]::TryParse([string]$publishedPortProperty.Value, [ref]$parsedPort)) {
+            $publishedPort = $parsedPort
+        }
+    }
+
+    return -not [string]::IsNullOrWhiteSpace($url) -or $publishedPort -gt 0
+}
+
 function Get-ComposeServices {
     $composeOutput = & docker compose -f docker-compose.yml -f $ComposeOverride ps --format json
     if ($LASTEXITCODE -ne 0) {
@@ -28,20 +56,6 @@ function Get-ComposeServices {
             }
         }
         return $services
-    }
-}
-
-function Assert-UnpublishedPort {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Service,
-        [Parameter(Mandatory = $true)]
-        [int]$ContainerPort
-    )
-
-    $portOutput = & docker compose -f docker-compose.yml -f $ComposeOverride port $Service $ContainerPort
-    if (@($portOutput).Count -gt 0 -and -not [string]::IsNullOrWhiteSpace(($portOutput -join "`n"))) {
-        throw "Service '$Service' unexpectedly publishes container port ${ContainerPort}: $($portOutput -join '; ')"
     }
 }
 
@@ -69,9 +83,16 @@ foreach ($serviceName in @('gateway', 'api', 'postgres')) {
     if ($service.Health -ne 'healthy') {
         throw "Compose service '$serviceName' is '$($service.Health)'; expected healthy."
     }
-}
 
-Assert-UnpublishedPort -Service 'api' -ContainerPort 8000
-Assert-UnpublishedPort -Service 'postgres' -ContainerPort 5432
+    if ($serviceName -in @('api', 'postgres')) {
+        $hostPublishers = @($service.Publishers | Where-Object {
+            Test-ActualHostPublisher -Publisher $_
+        })
+        if ($hostPublishers.Count -gt 0) {
+            $publisherDetails = $hostPublishers | ConvertTo-Json -Compress
+            throw "Compose service '$serviceName' unexpectedly has host publisher bindings: $publisherDetails"
+        }
+    }
+}
 
 Write-Host ("Smoke OK: {0} ({1})" -f $BaseUrl, ((@('gateway', 'api', 'postgres')) -join ', '))
