@@ -49,7 +49,27 @@ sys.path.insert(0, str(ROOT))
 import connect  # noqa: E402
 from backend import store  # noqa: E402
 
-START, END = "2026-01-01", "2026-08-13"
+def _data_range() -> tuple[str, str]:
+    """Khoảng ngày lấy TỪ DATABASE, không ghim trong file này.
+
+    Trước 17/08/2026 chỗ này là `START, END = "2026-01-01", "2026-08-13"`. Ngày
+    ghim đó lỗi thời ngay lần nạp dữ liệu kế tiếp: sau khi đường ống kéo thêm
+    14→17/08, phép kiểm hỏi API đến 13/08 rồi so với tổng của TOÀN BỘ database —
+    lệch 11,9 triệu token và $4,41, trong khi cả hai vế đều đúng.
+
+    Nó hỏng thành tiếng nên không âm thầm, nhưng vẫn trái với chính lời hàm
+    against_database() tự nói: "So với chính database, không với số ghim trong
+    file này."
+    """
+    with store.open_db() as (cn, _):
+        lo, hi = connect.query_one(
+            cn, "SELECT MIN(day), MAX(day) FROM usage_resolved")
+    if lo is None:
+        raise SystemExit("Database chua co du lieu su dung - chay rebuild_db.py truoc.")
+    return str(lo)[:10], str(hi)[:10]
+
+
+START, END = _data_range()
 PATHS = [
     "/api/health",
     "/api/catalog",
