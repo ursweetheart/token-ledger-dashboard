@@ -3505,48 +3505,27 @@ function renderDataProvenance(kq){
                       : "Dữ liệu cũ " + daysStale + " ngày (mới nhất " + fmtDateUS(lastDay) + ")";
   }
 
-  /* Ba điều cần nói, gom vào một dải. Chỉ hiện dải khi có điều đáng nói. */
-  var notes=[];
+  /* KHÔNG viết vấn đề của dữ liệu lên đầu dashboard.
 
-  // 1. Bao nhiêu phần trăm TIỀN là ước tính từ bảng giá, không phải từ hoá đơn.
-  //    Hoá đơn về sau ~1 ngày, nên kỳ càng gần hôm nay thì tỷ lệ này càng cao —
-  //    tức con số của kỳ gần nhất là con số KÉM TIN NHẤT, mà nó lại trông giống
-  //    nhất với một con số đã chốt.
-  //    Dùng ĐÚNG hàm cost() mà phần hiển thị dùng, không viết lại phép nhân ở
-  //    đây: hai bản cài đặt của cùng một công thức là một bản sẽ lệch, và lúc
-  //    đó tỷ lệ báo ra sẽ không khớp con số tiền ngay bên cạnh nó.
-  //
-  //    Và PHẢI đếm trên scopedRows() — đúng tập dòng mà các thẻ KPI đang hiện —
-  //    chứ không phải trên toàn bộ state.dayOrder. Đã dính lỗi này một lần: báo
-  //    "28% (219/1161 dòng)" cho toàn bộ 224 ngày trong khi thẻ tiền chỉ hiện kỳ
-  //    01/08→13/08, nơi tỷ lệ thật là 32%. Tỷ lệ nói về một tập, con số nằm cạnh
-  //    nó nói về tập khác — đúng loại nhập nhằng thay đổi này đang đi dọn.
-  var invoicedUsd=0, estimatedUsd=0, estimatedRows=0, totalRows=0;
-  scopedRows().forEach(function(r){
-    totalRows++;
-    if(r.cost==null){ estimatedRows++; estimatedUsd += cost(r); }
-    else invoicedUsd += num(r.cost);
-  });
-  var totalUsd = invoicedUsd + estimatedUsd;
-  if(estimatedRows>0 && totalUsd>0){
-    notes.push("<b>"+Math.round(100*estimatedUsd/totalUsd)+"% số tiền là ước tính</b> từ bảng giá "
-         + "("+estimatedRows+"/"+totalRows+" dòng chưa có hoá đơn), phần còn lại lấy từ hoá đơn.");
-  }
+     Bản trước bơm cả 5 chú thích lên dải này: tỷ lệ tiền ước tính, độ phủ 12,6%,
+     dòng chưa có hoá đơn, model embedding, tài khoản bị hai app xếp khác nhau.
+     Đã bỏ hết (17/08/2026) — quyết định của người dùng dự án, và nó đúng:
 
-  // 2. Độ phủ chiều người dùng — cảnh báo do backend sinh, chuyển tiếp nguyên văn.
-  ((kq.accountWarnings)||[]).forEach(function(w){
-    if(w && w.message) notes.push(w.message);
-  });
+       · bốn cái sau là thuộc tính THƯỜNG TRỰC của dữ liệu, không đổi theo ngày.
+         Một dải vàng luôn hiện thì người xem học cách phớt nó, và lúc có vấn đề
+         thật thì nó không còn tác dụng nào.
+       · chúng viết cho lập trình viên, có cả tên cột database.
+       · dashboard là chỗ ĐỌC SỐ. Bàn về giới hạn của dữ liệu là việc của tài
+         liệu và của người, không phải của một dải chữ trên đầu mọi trang.
 
-  // 3. Các cảnh báo khác của /api/health.
-  ((kq.health && kq.health.warnings)||[]).forEach(function(w){
-    if(w && w.code==="user_coverage") return;   // đã nói ở mục 2
-    if(w && w.message) notes.push(w.message);
-  });
+     #load-note giờ CHỈ dùng cho renderError() — tức khi không nạp được dữ liệu,
+     lúc đó nó là thứ duy nhất trên màn hình và người xem buộc phải đọc.
 
-  if(notes.length) loadNote("warn", "⚠", notes.join("<br>"));
-  else hideLoadNote();
+     Các con số về độ tin cậy vẫn có trong `/api/health`; xem
+     docs/reference/mo-ta-database.md và `python scripts/audit_db.py`. */
+  hideLoadNote();
 }
+
 
 
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", init);
