@@ -38,6 +38,8 @@ function composeConfig(override) {
         ...process.env,
         PGPASSWORD: "0123456789abcdef0123456789abcdef",
         PGADMIN_PASSWORD: "0123456789abcdef0123456789abcdef",
+        LOCAL_PORT: "8080",
+        PUBLIC_PORT: "45501",
         TLS_CERT_FILE: "C:/certs/fullchain.pem",
         TLS_KEY_FILE: "C:/certs/private.key",
       },
@@ -52,6 +54,12 @@ function publishedPorts(service) {
     host_ip,
     protocol,
   }));
+}
+
+function networkNames(service) {
+  return Array.isArray(service.networks)
+    ? service.networks
+    : Object.keys(service.networks ?? {});
 }
 
 function loadApi(protocol, search) {
@@ -87,6 +95,7 @@ test("local Compose keeps API and Postgres private and exposes only the local ga
 
   assert.deepEqual(services.api.ports ?? [], []);
   assert.deepEqual(services.postgres.ports ?? [], []);
+  assert.deepEqual(networkNames(services.gateway), ["edge"]);
   assert.equal(config.networks.data.internal, true);
   assert.ok(services.postgres.volumes.some((volume) =>
     volume.type === "volume"
@@ -98,11 +107,22 @@ test("local Compose keeps API and Postgres private and exposes only the local ga
     host_ip: "127.0.0.1",
     protocol: "tcp",
   }]);
+  assert.deepEqual(
+    publishedPorts(services.pgadmin).map(({ target, host_ip, protocol }) => ({
+      target,
+      host_ip,
+      protocol,
+    })),
+    [{ target: 80, host_ip: "127.0.0.1", protocol: "tcp" }],
+  );
 });
 
 test("production Compose exposes TLS gateway only with read-only certificate mounts", { skip: !composeAvailable }, () => {
   const { services } = composeConfig("docker-compose.prod.yml");
 
+  assert.deepEqual(services.api.ports ?? [], []);
+  assert.deepEqual(services.postgres.ports ?? [], []);
+  assert.deepEqual(networkNames(services.gateway), ["edge"]);
   assert.deepEqual(publishedPorts(services.gateway), [{
     target: 443,
     published: "45501",
