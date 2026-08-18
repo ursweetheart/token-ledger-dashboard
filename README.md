@@ -56,6 +56,101 @@ Quy tắc đầy đủ, kèm bảng "thêm file mới thì để đâu":
 
 ---
 
+## Triển khai bằng Docker
+
+Phần này dành cho máy ảo Windows chạy dashboard trong mạng nội bộ. Dashboard hiện chưa có đăng nhập hoặc SSO, vì vậy không được công khai trực tiếp ra Internet.
+
+### Điều kiện máy và cài Docker Desktop
+
+Máy cần Windows 10 Pro 22H2 x64, đã bật ảo hóa phần cứng và SLAT, có WSL2 để chạy Linux containers, Docker Desktop kèm Docker Compose v2, và có phê duyệt/licensing của công ty. Cài đặt theo tài khoản người dùng là đủ, trừ khi quản trị viên yêu cầu quản lý cho mọi người dùng. Trong trình cài đặt Docker Desktop, bật `Use the WSL 2 based engine`; không chọn hoặc chuyển sang Windows Containers.
+
+Sau khi cài, mở Windows PowerShell và kiểm tra:
+
+```powershell
+wsl --update
+docker version
+docker info --format 'Server={{.ServerVersion}}; OS={{.OSType}}; Arch={{.Architecture}}'
+```
+
+Docker server phải báo `OS=linux`; trên VM x64 này thông thường sẽ là `Arch=x86_64`.
+
+### Chuẩn bị môi trường và nạp dữ liệu lần đầu
+
+Tại thư mục checkout của dự án, tạo `.env` từ mẫu, sinh rồi điền cả hai mật khẩu còn trống, kiểm tra `SQLITE_SOURCE`, và tuyệt đối không commit `.env`:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+docker compose -f docker-compose.yml -f docker-compose.local.yml config
+docker compose up -d postgres
+docker compose --profile tools run --rm db-import
+docker compose --profile tools run --rm db-audit
+```
+
+`db-import` đọc SQLite qua bind mount chỉ-đọc, nhưng nó **xóa và tạo lại PostgreSQL schema `public`**. Đây là thao tác bảo trì chủ động, không phải bước khởi động thường lệ. Với lần import sau: sao lưu trước, dừng API/gateway, import, audit, rồi khởi động lại.
+
+### Chạy cục bộ, smoke test và log
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+powershell -ExecutionPolicy Bypass -File tests/docker-smoke.ps1
+docker compose -f docker-compose.yml -f docker-compose.local.yml ps
+docker compose -f docker-compose.yml -f docker-compose.local.yml logs --tail 200 gateway api postgres
+```
+
+Mở dashboard cục bộ tại `http://127.0.0.1:8080`. Smoke test kiểm tra trang gốc, `/api/health`, trạng thái/health của `gateway`, `api`, `postgres`, và xác nhận API/Postgres không có cổng host công khai. `pgAdmin` không là điều kiện smoke vì thuộc profile `tools` tùy chọn và khi bật chỉ bind loopback.
+
+### Sao lưu và phục hồi ngoài repository
+
+Named volume giúp dữ liệu tồn tại qua việc thay container, nhưng **không phải bản sao lưu**. Lưu backup tại một đường dẫn được phê duyệt ở ngoài checkout, ví dụ:
+
+```powershell
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$backupDir = 'C:\token-ledger-backups'
+New-Item -ItemType Directory -Force $backupDir | Out-Null
+docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/token-ledger.dump'
+$backupFile = Join-Path $backupDir "token-ledger-$stamp.dump"
+docker compose cp postgres:/tmp/token-ledger.dump $backupFile
+docker compose exec -T postgres rm -f /tmp/token-ledger.dump
+```
+
+Phục hồi cũng là bảo trì chủ động:
+
+```powershell
+$backupFile = 'C:\token-ledger-backups\token-ledger-YYYYMMDD-HHMMSS.dump'
+docker compose stop gateway api
+docker compose cp $backupFile postgres:/tmp/restore.dump
+docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists /tmp/restore.dump'
+docker compose exec -T postgres rm -f /tmp/restore.dump
+docker compose --profile tools run --rm db-audit
+docker compose start api gateway
+```
+
+Luôn thử phục hồi định kỳ để xác nhận backup sử dụng được.
+
+### Production: TLS, domain và mạng
+
+URL production là `https://dashboard.rangdong.com.vn:45501`. Quản trị viên phải ánh xạ DNS nội bộ tới VM `192.168.20.111` và chỉ cho phép TCP `45501` từ mạng công ty/VPN/allowlist đã duyệt. Domain và TLS không thay thế xác thực; vì ứng dụng chưa có login/SSO, không được phơi trực tiếp ra Internet công cộng.
+
+Nginx cần PEM full chain và **PEM private key không mã hóa** tại các đường dẫn khai báo trong `.env`. Nếu công ty chỉ cung cấp `.pfx`/`.p12`, hãy phối hợp chuyển đổi bảo mật ở ngoài repository; bảo vệ mật khẩu của file nguồn/export và private key đã trích xuất bằng NTFS access control phù hợp. Certificate/private key không bao giờ được đưa vào Git hoặc Docker image: `.env` chỉ chứa đường dẫn và secret values, còn các byte certificate/private key nằm ngoài Git/image.
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.prod.yml config
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+curl.exe -k https://dashboard.rangdong.com.vn:45501/api/health
+```
+
+`-k` chỉ là chẩn đoán kết nối tạm thời trước khi corporate trust chain được cài. Trình duyệt/API sử dụng bình thường phải kiểm tra TLS thành công, không được bỏ qua certificate validation.
+
+### An toàn và xử lý sự cố
+
+- `docker compose down` xóa containers nhưng giữ named volumes.
+- Không bao giờ chạy `docker compose down -v` trừ khi chủ đích xóa vĩnh viễn database và đã có bản phục hồi được thử nghiệm.
+- Đổi mật khẩu trong `.env` không đổi mật khẩu của Postgres volume đã khởi tạo. Dùng quy trình xoay vòng mật khẩu có chủ đích; không xóa volume để làm đường tắt.
+- Dùng `docker compose logs --tail 200 gateway api postgres` để chẩn đoán.
+- Certificate paths và secret values ở `.env`; byte certificate/private key phải ở ngoài Git/image.
+
 ## ⚠️ Phần dưới đây đã lỗi thời
 
 Nội dung dưới mô tả cách làm việc **trước khi có database và backend**, khi dữ liệu
