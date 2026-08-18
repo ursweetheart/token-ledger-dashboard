@@ -76,7 +76,7 @@ Docker server phải báo `OS=linux`; trên VM x64 này thông thường sẽ l�
 
 ### Chuẩn bị môi trường và nạp dữ liệu lần đầu
 
-Tại thư mục checkout của dự án, tạo `.env` từ mẫu, sinh rồi điền cả hai mật khẩu còn trống, kiểm tra `SQLITE_SOURCE`, và tuyệt đối không commit `.env`:
+Tại thư mục checkout của dự án, tạo `.env` từ mẫu, sinh rồi điền cả hai mật khẩu còn trống, kiểm tra `SQLITE_SOURCE`, và tuyệt đối không commit `.env`. Giá trị mặc định Git-ignored `./var/token_ledger.sqlite` được phép dùng, nhưng phải luôn nằm ngoài Git và Docker image; nếu chính sách công ty yêu cầu, có thể đặt `SQLITE_SOURCE` thành một đường dẫn tuyệt đối bên ngoài checkout đã được phê duyệt:
 
 ```powershell
 Copy-Item .env.example .env
@@ -109,9 +109,12 @@ $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backupDir = 'C:\token-ledger-backups'
 New-Item -ItemType Directory -Force $backupDir | Out-Null
 docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/token-ledger.dump'
+if ($LASTEXITCODE -ne 0) { throw 'Backup failed: pg_dump in postgres container.' }
 $backupFile = Join-Path $backupDir "token-ledger-$stamp.dump"
 docker compose cp postgres:/tmp/token-ledger.dump $backupFile
+if ($LASTEXITCODE -ne 0) { throw 'Backup failed: could not copy dump from postgres container.' }
 docker compose exec -T postgres rm -f /tmp/token-ledger.dump
+if ($LASTEXITCODE -ne 0) { throw 'Backup failed: could not remove temporary dump from postgres container.' }
 ```
 
 Phục hồi cũng là bảo trì chủ động:
@@ -119,11 +122,17 @@ Phục hồi cũng là bảo trì chủ động:
 ```powershell
 $backupFile = 'C:\token-ledger-backups\token-ledger-YYYYMMDD-HHMMSS.dump'
 docker compose stop gateway api
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not stop gateway and api.' }
 docker compose cp $backupFile postgres:/tmp/restore.dump
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not copy backup into postgres container.' }
 docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists /tmp/restore.dump'
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: pg_restore in postgres container.' }
 docker compose exec -T postgres rm -f /tmp/restore.dump
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not remove temporary restore dump from postgres container.' }
 docker compose --profile tools run --rm db-audit
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: database audit did not pass.' }
 docker compose start api gateway
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not restart gateway and api.' }
 ```
 
 Luôn thử phục hồi định kỳ để xác nhận backup sử dụng được.
