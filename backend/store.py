@@ -414,24 +414,29 @@ def health(cn) -> dict:
             "code": "user_coverage",
             "level": "high",
             "value": round(pct, 1),
-            "message": f"Chi {pct:.1f}% token quy duoc ve tai khoan that. Google chi"
-                       f" bao duoc muc project, khong ghi ai goi - moi bao cao theo"
-                       f" NGUOI hay PHONG BAN deu chi phu phan nay."})
+            # `message` HIỆN RA TRƯỚC MẶT NGƯỜI DÙNG, nên viết tiếng Việt CÓ DẤU.
+            # Trước 17/08/2026 bốn chuỗi này viết không dấu vì chỉ dùng để đọc trong
+            # terminal; frontend chuyển tiếp nguyên văn nên chúng đi thẳng lên màn
+            # hình. Chữ người dùng đọc thì phải có dấu - xem quy ước ở
+            # docs/reference/cay-thu-muc.md.
+            "message": f"Chỉ {pct:.1f}% token quy được về tài khoản thật. Google chỉ"
+                       f" báo được ở mức project, không ghi ai gọi — nên mọi báo cáo"
+                       f" theo NGƯỜI hay PHÒNG BAN đều chỉ phủ phần này."})
     if estimated:
         warnings.append({
             "code": "estimated_tokens", "level": "medium", "value": estimated,
-            "message": f"{estimated} dong co token chua duoc hoa don xac nhan (lay tu"
-                       f" Cloud Monitoring hoac tu app). Xem cot token_source."})
+            "message": f"{estimated} dòng có token chưa được hoá đơn xác nhận, lấy từ"
+                       f" Cloud Monitoring hoặc từ chính ứng dụng."})
     if missing_tokens:
         warnings.append({
             "code": "missing_tokens", "level": "low", "value": missing_tokens,
-            "message": f"{missing_tokens} dong co so luot ma khong co token (model"
-                       f" embedding: Monitoring khong co phep do token cho chung)."})
+            "message": f"{missing_tokens} dòng có số lượt nhưng không có token —"
+                       f" model embedding, Cloud Monitoring không đo token cho chúng."})
     if conflicts:
         warnings.append({
             "code": "unit_conflict", "level": "low", "value": conflicts,
-            "message": f"{conflicts} tai khoan duoc hai app xep vao hai phong ban khac"
-                       f" nhau; database da chon mot theo quy tac tat dinh."})
+            "message": f"{conflicts} tài khoản được hai ứng dụng xếp vào hai phòng ban"
+                       f" khác nhau; database đã chọn một theo quy tắc tất định."})
 
     return {"ranges": ranges,
             "total_tokens": int(total),
