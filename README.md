@@ -128,7 +128,7 @@ Named volume giúp dữ liệu tồn tại qua việc thay container, nhưng **k
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $backupDir = 'C:\token-ledger-backups'
 New-Item -ItemType Directory -Force $backupDir | Out-Null
-docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/token-ledger.dump'
+docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc --no-acl -f /tmp/token-ledger.dump'
 if ($LASTEXITCODE -ne 0) { throw 'Backup failed: pg_dump in postgres container.' }
 $backupFile = Join-Path $backupDir "token-ledger-$stamp.dump"
 docker compose cp postgres:/tmp/token-ledger.dump $backupFile
@@ -143,9 +143,11 @@ Phục hồi cũng là bảo trì chủ động:
 $backupFile = 'C:\token-ledger-backups\token-ledger-YYYYMMDD-HHMMSS.dump'
 docker compose stop gateway api
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not stop gateway and api.' }
+docker compose up -d --wait postgres
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: postgres did not become healthy.' }
 docker compose cp $backupFile postgres:/tmp/restore.dump
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not copy backup into postgres container.' }
-docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists /tmp/restore.dump'
+docker compose exec -T postgres sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-acl /tmp/restore.dump'
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: pg_restore in postgres container.' }
 docker compose exec -T postgres rm -f /tmp/restore.dump
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not remove temporary restore dump from postgres container.' }
@@ -153,11 +155,11 @@ docker compose --profile tools run --rm db-grant
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: read-only grants were not applied.' }
 docker compose --profile tools run --rm db-audit
 if ($LASTEXITCODE -ne 0) { throw 'Restore failed: database audit did not pass.' }
-docker compose start api gateway
-if ($LASTEXITCODE -ne 0) { throw 'Restore failed: could not restart gateway and api.' }
+docker compose up -d --wait api gateway
+if ($LASTEXITCODE -ne 0) { throw 'Restore failed: api and gateway did not become healthy.' }
 ```
 
-Luôn thử phục hồi định kỳ để xác nhận backup sử dụng được.
+Backup và restore chủ động bỏ qua ACL cũ; `db-grant` ngay sau restore sẽ tạo/cập nhật role reader và áp dụng lại đúng bộ quyền chỉ-đọc. Vì vậy quy trình này cũng dùng được khi phục hồi vào named volume PostgreSQL hoàn toàn mới. Luôn thử phục hồi định kỳ để xác nhận backup sử dụng được.
 
 ### Production: TLS, domain và mạng
 
