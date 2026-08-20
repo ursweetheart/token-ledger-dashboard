@@ -235,12 +235,17 @@ def main() -> None:
                                        " WHERE source='app'")[0]
     by_source = dict(connect.query(cn, "SELECT source, COUNT(*) FROM fact_usage_daily"
                                        " GROUP BY source"))
+    # In TEN agent, khong in agent_id. Doc "[5, 8]" thi phai di tra bang moi biet
+    # la ai; doc "Tro Ly Ao Hop Dong, Tro ly ao Ralli" thi hieu ngay. `agent_id`
+    # van la khoa dung trong SQL - chi rieng CHU IN RA CHO NGUOI DOC moi dung ten.
     app_agents = [r[0] for r in connect.query(
-        cn, "SELECT DISTINCT agent_id FROM fact_usage_daily WHERE source='app'")]
+        cn, "SELECT DISTINCT g.name FROM fact_usage_daily f"
+            " JOIN dim_agent g ON g.agent_id = f.agent_id"
+            " WHERE f.source='app' ORDER BY g.name")]
 
     print(f"  theo nguon: {by_source}")
     print(f"  tien billing ${float(cost):.6f} | token app {app_tokens:,}")
-    print(f"  agent co nguon 'app': {app_agents}")
+    print(f"  agent co nguon 'app': {', '.join(app_agents)}")
 
     # Đối chiếu với các bảng gốc, không với số ghim.
     src_cost = connect.query_one(cn, "SELECT SUM(cost_usd) FROM fact_billing_daily")[0]

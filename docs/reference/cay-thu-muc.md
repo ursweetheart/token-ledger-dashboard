@@ -113,6 +113,41 @@ tệ nhất trong ba lựa chọn: nó không đọc được như tiếng nào,
 | | **Tên file** — chúng nằm trong tài liệu và spec đã archive |
 | | `tools/` — chẩn đoán một lần, được phép mục |
 
+### Gọi agent bằng TÊN, không bằng `agent_id` (thêm 20/08/2026)
+
+`agent_id` là khoá đúng **trong SQL và trong biến**. Nhưng ở mọi chỗ **con người đọc** —
+chữ in ra terminal, ghi chú, nhãn giao diện, báo cáo — phải viết **tên agent**.
+
+```python
+# SAI — người đọc phải đi tra bảng mới biết [5, 8] là ai
+print(f"  agent co nguon 'app': {app_agents}")        #  [5, 8]
+
+# ĐÚNG — JOIN dim_agent lấy `name`
+print(f"  agent co nguon 'app': {', '.join(app_agents)}")
+#  Tro Ly Ao Hop Dong, Tro ly ao Ralli
+```
+
+Áp cho cả **ghi chú**: viết *"Trợ lý ảo Ralli luôn rơi về 'app'"* chứ không phải
+*"Ralli (agent_id=8) luôn rơi về 'app'"*. Cần chính xác kỹ thuật thì viết tên trước, mã
+trong ngoặc: `Trợ Lý Ảo Hợp Đồng (tla-hd)`.
+
+Bảng tra, để không phải mở database mỗi lần:
+
+| `agent_id` | `code` | Tên |
+|---|---|---|
+| 1 | `contact-center` | Chatbot Contact Center |
+| 2 | `sale-agent` | Sale Agent |
+| 3 | `invoice` | Multi modal AI Invoice |
+| 4 | `tools-quizzer` | Tools Quizzer |
+| 5 | `tla-hd` | Trợ Lý Ảo Hợp Đồng |
+| 6 | `dms-feedback` | Phân Loại Phản Hồi Tiếp Thị |
+| 7 | `crm-feedback` | Phân Loại Dữ Liệu CRM |
+| 8 | `ralli` | Trợ lý ảo Ralli |
+
+**Vì sao thành quy ước:** một con số ID chỉ máy đọc được. Người đọc bản in *"agent co
+nguon 'app': [5, 8]"* không có cách nào biết đó là hai agent nào mà không tra bảng — và
+trong lúc soát số liệu thì mỗi lần phải tra là một lần dễ tra nhầm.
+
 ### Hai cái bẫy khi đổi tên hàng loạt
 
 **① Tìm-thay thông thường sẽ phá code.** Định danh tiếng Việt không dấu **cũng là từ

@@ -70,7 +70,46 @@ CREATE TABLE dim_unit (
     path       TEXT,
     -- TRUE với 6 dòng 'Đơn vị sử dụng <agent>' và dòng 'Chưa quy được'.
     -- Thiếu cột này thì COUNT(*) đếm cả dòng kỹ thuật thành phòng ban thật.
-    is_technical BOOLEAN NOT NULL
+    is_technical BOOLEAN NOT NULL,
+    -- CÙNG MỘT PHÒNG BAN NGOÀI ĐỜI, HAI DÒNG Ở HAI CÂY (thêm 20/08/2026)
+    --
+    -- Bảng này chứa HAI cây tổ chức, không phải một: Trợ lý ảo Ralli 102 đơn vị
+    -- một gốc 'Toàn công ty'; Trợ Lý Ảo Hợp Đồng 20 đơn vị BỐN gốc. Hai app mô
+    -- hình hoá cùng một công ty theo hai kiểu, và không có khoá chung nào.
+    --
+    -- NULL = dòng này LÀ bản chuẩn. Có giá trị = dòng này là bản trùng, trỏ về
+    -- bản chuẩn. Đã đo 20/08: chỉ ĐÚNG 4 cặp cần gộp, không phải 130 —
+    --     TT C4LED  (Hợp Đồng)  ->  C4LED (Ralli)
+    --     Phòng BH1 (Hợp Đồng)  ->  PBH1  (Ralli)
+    --     Phòng BH2 (Hợp Đồng)  ->  PBH2  (Ralli)
+    --     Phòng BH3 (Hợp Đồng)  ->  PBH3  (Ralli)
+    -- Cây Ralli làm chuẩn vì nó mô hình hoá CẢ công ty (một gốc, 102 đơn vị,
+    -- 892/937 tài khoản); cây Hợp Đồng chỉ là một phần với bốn gốc rời.
+    --
+    -- VÌ SAO PHẢI GỘP, chứ không để hai hàng: mỗi cặp đều có một bên nhiều tài
+    -- khoản còn bên kia nhiều token. Không gộp thì PBH1 hiện hai hàng '7 tài
+    -- khoản / 0 token' và '30 tài khoản / 105.187 token', và tỷ lệ áp dụng bị
+    -- chẻ mẫu số: 0/7 với X/30 thay vì X/37.
+    --
+    -- Trước 20/08 phép gộp này nằm trong `UNIT_ALIASES` gõ tay ở web/js/app.js -
+    -- tức một sự thật về tổ chức công ty sống trong mã giao diện, và database
+    -- không biết gì về nó.
+    canonical_unit_id TEXT REFERENCES dim_unit,
+    -- CẤP GOM THUẦN TUÝ, báo cáo bắt đầu từ BÊN DƯỚI nó (thêm 20/08/2026)
+    --
+    -- TRUE ở đúng hai dòng: 'Toàn công ty' và 'Tổng công ty Rạng Đông'. Chúng có
+    -- thật trong cây tổ chức, nhưng mọi phòng ban đều nằm dưới chúng nên để làm
+    -- cấp 1 của bảng thì tốn hai lần bung mà không phân biệt được gì.
+    --
+    -- ĐÂY LÀ QUY ƯỚC TRÌNH BÀY, KHÔNG PHẢI THUỘC TÍNH CỦA TỔ CHỨC. Ghi vào
+    -- database vì nó là quyết định của NGƯỜI về cách đọc báo cáo, và một quyết
+    -- định như thế cần một nguồn - trước 20/08 nó nằm trong web/js/app.js dưới
+    -- dạng hai mã gõ cứng `unitChildren("company")` và `unitChildren("rd-corp")`,
+    -- tức không tra được từ database và không ai ngoài người viết giao diện biết.
+    --
+    -- Cách đọc: gốc báo cáo = đơn vị KHÔNG phải cấp gom, mà cha của nó hoặc
+    -- không có, hoặc là cấp gom.
+    is_report_aggregate BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- MỘT DÒNG = MỘT TÀI KHOẢN, không phải một con người ngoài đời.
@@ -87,12 +126,27 @@ CREATE TABLE dim_unit (
 -- Ralli đôi khi ghi username vào chỗ ObjectId). `username` ở đây đã LOWER+TRIM,
 -- giữ lại để tra cứu, nhưng khoá là số.
 --
--- BA LOẠI:
---   'real'         tài khoản người thật, từ danh bạ hoặc nhật ký của app
---   'whole_agent'  Google chỉ báo được mức project -> không quy được về ai.
---                  Một dòng cho mỗi agent. KHÔNG phải dữ liệu thiếu: Google
---                  vốn không biết.
---   'unattributed' có lượt gọi nhưng bản ghi không kèm người dùng
+-- BỐN LOẠI:
+--   'real'            tài khoản người thật, từ danh bạ hoặc nhật ký của app
+--   'service_account' agent chạy bằng MỘT tài khoản dịch vụ (6 agent, quyết
+--                     định A1). Ta BIẾT chính xác ai dùng - chỉ là "ai" đó
+--                     không phải một con người. QUY ĐƯỢC về danh tính.
+--   'whole_agent'     Google chỉ báo được mức project -> không quy được về ai.
+--                     Chỉ còn đúng 2 dòng: Trợ Lý Ảo Hợp Đồng và Trợ lý ảo
+--                     Ralli - hai agent có nhiều người dùng thật. KHÔNG phải
+--                     dữ liệu thiếu: Google vốn không biết.
+--   'unattributed'    có lượt gọi nhưng bản ghi không kèm người dùng
+--
+-- VÌ SAO TÁCH 'service_account' KHỎI 'whole_agent' (20/08/2026)
+--   Trước đó cả 8 agent đều nhận 'whole_agent', nên một giá trị mang hai
+--   nghĩa trái ngược: "biết chính xác là ai" và "không biết ai". Mọi nơi lọc
+--   `kind = 'real'` vì thế vứt luôn 749 triệu token của 6 agent
+--   một-người-dùng, và /api/health báo độ phủ 12,4% trong khi phần thật sự
+--   không quy được chỉ là 1,2%.
+--
+--   HỎI "quy được về danh tính không?"  -> kind IN ('real','service_account')
+--   HỎI "có phải một CON NGƯỜI không?"  -> kind = 'real'
+--   Hai câu hỏi khác nhau. Trước 20/08 chúng dùng chung một điều kiện.
 -- Thiếu hai loại sau thì khoá của fact_usage_daily phải nhận NULL, mà SQLite
 -- coi NULL != NULL nên sẽ âm thầm nhận hai dòng giống hệt nhau.
 --
@@ -119,7 +173,7 @@ CREATE TABLE account (
     username       TEXT UNIQUE NOT NULL,   -- đã LOWER(TRIM())
     full_name      TEXT,
     email          TEXT,
-    kind           TEXT NOT NULL,          -- 'real' | 'whole_agent' | 'unattributed'
+    kind           TEXT NOT NULL,  -- 'real'|'service_account'|'whole_agent'|'unattributed'
     unit_id        TEXT NOT NULL REFERENCES dim_unit,
     -- Tài khoản DÙNG CHUNG, không đại diện cho một người: 'admin', các tài
     -- khoản thử. Vẫn tính đủ vào token và tiền - lưu lượng của chúng là lưu
@@ -501,7 +555,7 @@ WHERE service = 'generativelanguage.googleapis.com'
 -- hôm nay đến từ monitoring (ước tính, hoá đơn chưa về) trông y hệt con số của
 -- tuần trước đến từ hoá đơn. Không có cột này thì không phân biệt được.
 --
--- Ralli (agent_id=8) luôn rơi về 'app': project tla-ralli chưa nối billing trên
+-- Trợ lý ảo Ralli luôn rơi về 'app': project tla-ralli chưa nối billing trên
 -- GCP nên không có dòng billing lẫn monitoring nào. COALESCE tự lo việc đó,
 -- không cần trường hợp riêng.
 -- =====================================================================

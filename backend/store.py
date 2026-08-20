@@ -162,13 +162,22 @@ def fx_rate(cn) -> dict | None:
 
 def units(cn) -> list[dict]:
     # ORDER BY phải là MỘT THỨ TỰ TOÀN PHẦN, không được để hai dòng hoà nhau.
-    # `ORDER BY level, name` đã từng đủ: hai dòng 'Chưa quy được' (agent 5 và 8)
+    # `ORDER BY level, name` đã từng đủ: hai dòng 'Chưa quy được' (của Trợ Lý Ảo
+    # Hợp Đồng và Trợ lý ảo Ralli)
     # level bằng nhau tên bằng nhau, và SQLite với PostgreSQL trả về ngược thứ tự
     # nhau. Kết quả: cùng một API cho hai kết quả khác nhau tuỳ database, mà
     # không ai báo gì. Thêm khoá chính vào cuối là hết.
-    return _rows(cn, """
-        SELECT unit_id, agent_id, name, parent_id, level, path, is_technical
+    # `canonical_unit_id` NULL = dòng này LÀ bản chuẩn; có giá trị = bản trùng ở
+    # cây tổ chức của app kia. Frontend cần cột này để gộp hai cây thành một cái
+    # nhìn công ty - trước 20/08/2026 phép gộp đó nằm trong UNIT_ALIASES gõ tay
+    # ở web/js/app.js, tức database không biết gì về nó.
+    r = _rows(cn, """
+        SELECT unit_id, agent_id, name, parent_id, level, path, is_technical,
+               canonical_unit_id, is_report_aggregate
         FROM dim_unit ORDER BY level, name, unit_id""")
+    for x in r:
+        x["is_report_aggregate"] = bool(x["is_report_aggregate"])
+    return r
 
 
 def accounts(cn) -> list[dict]:
@@ -400,28 +409,91 @@ def health(cn) -> dict:
                          "to": _day(hi) if hi else None, "rows": n}
 
     total = one("SELECT SUM(total_tokens) FROM usage_resolved") or 0
-    real = one("""SELECT SUM(f.total_tokens) FROM fact_usage_daily f
-                  JOIN account a ON a.account_id = f.account_id
-                  WHERE a.kind = 'real'""") or 0
+
+    # ĐỘ PHỦ CHIỀU NGƯỜI - đếm trên `usage_resolved`, KHÔNG trên fact_usage_daily.
+    #
+    # HAI CÁI BẪY đã vấp, ghi lại cả hai (20/08/2026):
+    #
+    # (1) Cộng từ fact_usage_daily là ĐẾM NHIỀU LẦN. Bảng đó để ba nguồn cạnh
+    #     nhau, và tài khoản dịch vụ có token ở CẢ billing lẫn monitoring:
+    #     Chatbot Contact Center 329.110.605 + 176.980.622 = 506.091.227, trong
+    #     khi view chỉ nhận 333.221.182. Đo thử cách cộng đó: 1.248.600.872 /
+    #     867.657.110 = 143,9%, và "phần còn lại" ra -43,9%.
+    #     Bản trước 20/08 chỉ lọc kind='real' nên an toàn một cách TÌNH CỜ -
+    #     token của người thật chỉ tồn tại ở source='app', tức một nguồn duy nhất.
+    #
+    # (2) Cộng token source='app' từ fact_usage_daily cũng vẫn LỆCH, vì nó gồm
+    #     những ngày mà usage_resolved đã CHỌN billing thay cho app. Đo được:
+    #     107.926.810 thay vì 104.990.903 - thừa 2,9 triệu view không dùng.
+    #
+    # Câu hỏi đúng là: "con số dashboard ĐANG HIỆN có chia được theo người
+    # không?" - và nó được trả lời ở mức TỪNG KHOÁ (ngày, agent, model):
+    #     agent một-người-dùng   -> chia được, về đúng một tài khoản dịch vụ
+    #     token_source = 'app'   -> chia được, về người thật
+    #     billing / monitoring   -> KHÔNG, Google chỉ báo mức project
+    #
+    # PHỤ THUỘC: câu này cần kind='service_account' đã có trong database. Với
+    # database dựng trước 20/08 nó không sập, chỉ trả về con số cũ - nên
+    # scripts/audit_db.py có phép kiểm đếm số dòng service_account, để việc chạy
+    # backend mới trên database cũ hỏng ỒN ÀO chứ không âm thầm.
+    cov = _rows(cn, """
+        SELECT
+          SUM(CASE WHEN s.agent_id IS NOT NULL
+                   THEN v.total_tokens ELSE 0 END) AS service_tokens,
+          SUM(CASE WHEN s.agent_id IS NULL AND v.token_source = 'app'
+                   THEN v.total_tokens ELSE 0 END) AS people_tokens,
+          SUM(CASE WHEN s.agent_id IS NULL
+                    AND COALESCE(v.token_source, '') <> 'app'
+                   THEN v.total_tokens ELSE 0 END) AS opaque_tokens
+        FROM usage_resolved v
+        LEFT JOIN (SELECT DISTINCT unit_agent_id AS agent_id FROM account
+                    WHERE kind = 'service_account') s
+               ON s.agent_id = v.agent_id""")[0]
+    real = int(cov["people_tokens"] or 0)        # quy về một CON NGƯỜI
+    service = int(cov["service_tokens"] or 0)    # quy về một tài khoản dịch vụ
+    opaque = int(cov["opaque_tokens"] or 0)      # không quy được về ai
+    attributed = real + service
     missing_tokens = one("SELECT COUNT(*) FROM usage_resolved WHERE total_tokens IS NULL")
     estimated = one("SELECT COUNT(*) FROM usage_resolved WHERE token_estimated = 1")
     conflicts = one("SELECT COUNT(*) FROM account WHERE unit_conflict = 1")
 
     warnings = []
     if total:
-        pct = 100.0 * float(real) / float(total)
+        pct = 100.0 * attributed / float(total)
+        pct_people = 100.0 * real / float(total)
+        # Lấy `opaque` ĐO ĐƯỢC chứ không lấy `100 - pct`. Ba nhóm cộng đúng bằng
+        # tổng, nên nếu chúng KHÔNG cộng đủ thì đó là dấu hiệu truy vấn trên hụt
+        # một trường hợp - và `100 - pct` sẽ che mất đúng dấu hiệu đó.
+        pct_opaque = 100.0 * opaque / float(total)
+        pct_service = 100.0 * service / float(total)
         warnings.append({
             "code": "user_coverage",
-            "level": "high",
+            "level": "medium",
             "value": round(pct, 1),
+            "value_people": round(pct_people, 1),
+            "value_service": round(pct_service, 1),
+            "value_opaque": round(pct_opaque, 1),
             # `message` HIỆN RA TRƯỚC MẶT NGƯỜI DÙNG, nên viết tiếng Việt CÓ DẤU.
             # Trước 17/08/2026 bốn chuỗi này viết không dấu vì chỉ dùng để đọc trong
             # terminal; frontend chuyển tiếp nguyên văn nên chúng đi thẳng lên màn
             # hình. Chữ người dùng đọc thì phải có dấu - xem quy ước ở
             # docs/reference/cay-thu-muc.md.
-            "message": f"Chỉ {pct:.1f}% token quy được về tài khoản thật. Google chỉ"
-                       f" báo được ở mức project, không ghi ai gọi — nên mọi báo cáo"
-                       f" theo NGƯỜI hay PHÒNG BAN đều chỉ phủ phần này."})
+            #
+            # NÓI ĐỦ BA CON SỐ, không gộp (sửa 20/08/2026). Bản trước chỉ nói
+            # `real` và gọi phần còn lại là "không quy được" - gộp 6 agent
+            # một-người-dùng vào cùng rổ với phần Google thật sự không biết, làm
+            # lỗ hổng trông lớn gấp ~70 lần thực tế.
+            # Nêu ĐỦ BA tỷ lệ thay vì "phần còn lại". Khi service = 0 - đúng cái
+            # xảy ra nếu chạy trên database dựng trước 20/08/2026 - câu "phần còn
+            # lại là tài khoản dịch vụ" nói về một thứ không tồn tại. Nêu cả ba
+            # thì câu đúng ở MỌI trạng thái, và người đọc cộng kiểm được.
+            "message": f"{pct:.1f}% token quy được về một danh tính"
+                       f" ({pct_people:.1f}% người thật"
+                       f" + {pct_service:.1f}% tài khoản dịch vụ của các agent"
+                       f" một-người-dùng)."
+                       f" {pct_opaque:.1f}% không quy được: phần này chỉ có hoá đơn"
+                       f" Google, nơi ghi được mức project chứ không ghi ai gọi —"
+                       f" riêng nó không chia được theo NGƯỜI hay PHÒNG BAN."})
     if estimated:
         warnings.append({
             "code": "estimated_tokens", "level": "medium", "value": estimated,
@@ -438,7 +510,12 @@ def health(cn) -> dict:
             "message": f"{conflicts} tài khoản được hai ứng dụng xếp vào hai phòng ban"
                        f" khác nhau; database đã chọn một theo quy tắc tất định."})
 
+    # Ba con số dưới đây PHẢI cộng đúng bằng total_tokens. Trả cả ba ra ngoài để
+    # người đọc kiểm được phép cộng, thay vì phải tin một tỷ lệ phần trăm.
     return {"ranges": ranges,
             "total_tokens": int(total),
-            "tokens_attributed_to_people": int(real),
+            "tokens_attributed_to_people": real,
+            "tokens_attributed_to_service": service,
+            "tokens_not_attributable": opaque,
+            "tokens_attributed": attributed,
             "warnings": warnings}

@@ -248,7 +248,7 @@ def group_e_adoption(a: Audit) -> None:
                            WHERE d.agent_id = g.agent_id AND d.found_in = 'directory')
           AND NOT EXISTS (SELECT 1 FROM account c
                            WHERE c.unit_agent_id = g.agent_id
-                             AND c.kind = 'whole_agent')
+                             AND c.kind IN ('service_account', 'whole_agent'))
         ORDER BY g.name""")]
     a.check(not no_denominator, "Moi agent co mau so cho ty le ap dung",
             f"khong xac dinh duoc mau so: {no_denominator}")
@@ -360,16 +360,63 @@ def group_d_silent_gaps(a: Audit) -> None:
            f"{int(days_latency)} ngay co do tre / {int(days_calls)} ngay co so luot"
            if days_latency < days_calls else "")
 
-    # Độ phủ chiều NGƯỜI. Google không ghi ai gọi nên phần lớn token không quy
-    # được về tài khoản thật. Con số này chỉ được TỐT LÊN, không được xấu đi.
-    real_tokens = a.num("""SELECT SUM(f.total_tokens) FROM fact_usage_daily f
-                           JOIN account x ON x.account_id = f.account_id
-                           WHERE x.kind = 'real'""")
+    # Độ phủ chiều NGƯỜI, tách làm BA chứ không hai (sửa 20/08/2026).
+    #
+    # Bản trước chỉ đo `kind='real'` rồi gọi toàn bộ phần còn lại là "không quy
+    # được". Nó gộp 6 agent một-người-dùng - nơi ta BIẾT chính xác ai dùng - vào
+    # cùng rổ với phần Google thật sự không biết, làm lỗ hổng trông lớn gấp ~70
+    # lần. Xem ghi chú `kind` ở db/01_schema.sql.
+    #
+    # Con số phải theo dõi là (c), và nó chỉ được TỐT LÊN, không được xấu đi.
+    #
+    # ĐẾM TRÊN usage_resolved, KHÔNG trên fact_usage_daily. Bảng đối chứng để ba
+    # nguồn cạnh nhau, và tài khoản dịch vụ có token ở CẢ billing lẫn monitoring
+    # nên cộng thẳng là đếm hai lần: đo 20/08/2026 ra 1.248.600.872/867.657.110
+    # = 143,9%. Cộng riêng source='app' cũng vẫn lệch, vì gồm cả những ngày mà
+    # view đã chọn billing thay cho app.
+    cov = connect.query_one(a.cn, """
+        SELECT
+          SUM(CASE WHEN s.agent_id IS NULL AND v.token_source = 'app'
+                   THEN v.total_tokens ELSE 0 END),
+          SUM(CASE WHEN s.agent_id IS NOT NULL
+                   THEN v.total_tokens ELSE 0 END),
+          SUM(CASE WHEN s.agent_id IS NULL
+                    AND COALESCE(v.token_source, '') <> 'app'
+                   THEN v.total_tokens ELSE 0 END)
+        FROM usage_resolved v
+        LEFT JOIN (SELECT DISTINCT unit_agent_id AS agent_id FROM account
+                    WHERE kind = 'service_account') s
+               ON s.agent_id = v.agent_id""")
+    real_tokens, svc_tokens, gap = (float(x or 0) for x in cov)
     view_tokens = a.num("SELECT SUM(total_tokens) FROM usage_resolved")
-    pct = 100.0 * real_tokens / view_tokens if view_tokens else 0.0
+    pct = lambda v: 100.0 * v / view_tokens if view_tokens else 0.0
+
+    # Ba nhóm PHẢI cộng đúng bằng tổng của view. Lệch nghĩa là câu trên hụt một
+    # trường hợp - và nếu chỉ in ba tỷ lệ thì cái hụt đó không lộ ra.
+    a.check(abs(real_tokens + svc_tokens + gap - view_tokens) < 1,
+            "Ba nhom do phu cong dung bang tong",
+            f"{real_tokens + svc_tokens + gap:,.0f} != {view_tokens:,.0f}")
     a.note(WARN, "Do phu chieu 'ai dung'",
-           f"{real_tokens:,.0f}/{view_tokens:,.0f} token = {pct:.1f}%"
-           f" quy duoc ve tai khoan that (Google khong ghi nguoi goi)")
+           f"(a) nguoi that {real_tokens:,.0f} = {pct(real_tokens):.1f}%"
+           f" | (b) tai khoan dich vu {svc_tokens:,.0f} = {pct(svc_tokens):.1f}%"
+           f" | (c) KHONG quy duoc {gap:,.0f} = {pct(gap):.1f}%"
+           f" (hoa don Google chi bao muc project)")
+
+    # Số tài khoản dịch vụ phải bằng số agent KHÔNG có danh bạ người dùng. Suy ra
+    # từ dữ liệu, KHÔNG ghim con số 6: thêm agent thứ 9 chỉ là thêm một dòng.
+    #
+    # Phép kiểm này còn một việc thứ hai: nó là thứ hỏng ỒN ÀO khi ai đó chạy
+    # backend sau 20/08/2026 trên database dựng trước đó. Không có nó thì
+    # health() lặng lẽ trả về con số độ phủ cũ, và con số cũ trông y như thật.
+    n_svc = a.num("SELECT COUNT(*) FROM account WHERE kind = 'service_account'")
+    n_no_dir = a.num("""SELECT COUNT(*) FROM dim_agent g
+                        WHERE NOT EXISTS (SELECT 1 FROM dim_user d
+                                          WHERE d.agent_id = g.agent_id
+                                            AND d.found_in = 'directory')""")
+    a.check(n_svc == n_no_dir, "Moi agent khong co danh ba co mot tai khoan dich vu",
+            f"{int(n_svc)} tai khoan service_account / {int(n_no_dir)} agent"
+            f" khong co danh ba - database co the dung tu truoc 20/08/2026,"
+            f" chay lai scripts/rebuild_db.py")
 
     # Model có lưu lượng mà không có giá thì mọi báo cáo chi phí đều thiếu nó.
     no_price = connect.query(a.cn, """
