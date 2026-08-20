@@ -179,13 +179,22 @@ Bảng gốc để tra lại lập luận:
 
 **Đề xuất của tôi:** 1A, 2-Có, 3-LiteLLM. Lý do câu 1: dashboard đọc hai database là chi phí vĩnh viễn trả cho một lần tiện; `data_era` là một cột.
 
-#### 🔴 A2. Chốt cách viết Project ID — 2/8 đang lệch
+#### ✅ A2. Project ID — ĐÃ CHỐT 20/08/2026: database đúng, tài liệu sai cả hai chỗ
 
-| Tài liệu triển khai §1.2 | Database đang chạy | |
+| Tài liệu §1.2 | Database | Kết luận |
 |---|---|---|
-| `tla-rally` | `tla-ralli` | ❌ |
-| `tools-quiz` | `tools-quizz` | ❌ |
-| 6 dòng còn lại | | ✅ |
+| `tla-rally` | **`tla-ralli`** | Database ĐÚNG — người dùng xác nhận 20/08 |
+| `tools-quiz` | **`tools-quizz`** | Database ĐÚNG — **chứng minh bằng chính dữ liệu Google** |
+| 6 dòng còn lại | | khớp |
+
+**Chứng cứ cho `tools-quizz`** mạnh hơn cả ảnh chụp console: cả CSV hoá đơn lẫn Cloud
+Monitoring API do Google tự xuất ra đều ghi `tools-quizz`. Nếu database ghi sai thì 2.441
+dòng hoá đơn đã không nối được.
+
+**`tla-ralli` thì dữ liệu không phán được** — project này chưa nối Google Billing nên
+không xuất hiện ở cả hai nguồn. Chốt bằng mắt người, 20/08/2026.
+
+→ **Việc còn lại: sửa `Tài_liệu_triển_khai_API_Gateway.docx` §1.2**, không sửa database.
 
 Nếu `config.yaml` của LiteLLM lấy theo cách viết trong tài liệu, hai agent đó **không nối được với dữ liệu cũ, và không có lỗi nào báo ra**. Sửa mất 5 phút hôm nay; sau khi có traffic thì là một cuộc điều tra.
 
