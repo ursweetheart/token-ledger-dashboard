@@ -18,7 +18,7 @@ Cả bốn đều đã có bảng trong database (`ref_price`, `ref_budget`, `di
 
 | | Gõ cứng trong `web/js/app.js` | Trong database |
 |---|---|---|
-| Đơn vị | **108** (`ORG_UNITS`, dòng 67–176) | **130** (`dim_unit`) |
+| Đơn vị | **108** (`ORG_UNITS`, dòng 67–177) | **130** (`dim_unit`) |
 | Phân loại kỹ thuật / thật | *(không có)* | `is_technical`: 8 / 122 |
 | Bảng đổi tên viết tắt | **33** mục `UNIT_ALIASES` gõ tay | *(không cần)* |
 

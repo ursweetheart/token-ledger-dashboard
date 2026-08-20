@@ -126,8 +126,8 @@ lại chính hoá đơn từ cùng bảng giá mà Google dùng để phát hàn
 ```
 
 Nên phép tính **phải làm ở mức dòng rồi mới cộng vào tài khoản**. Không suy được từ
-`u.ti`/`u.to` đã gộp, vì một tài khoản dùng nhiều model với đơn giá chênh nhau tới 12 lần
-(`flash-lite` $0,1 vs `pro` $1,25 cho mỗi triệu token vào).
+`u.ti`/`u.to` đã gộp, vì một tài khoản dùng nhiều model với đơn giá chênh nhau 12,5 lần
+(`flash-lite` $0,10 vs `pro` $1,25 cho mỗi triệu token vào).
 
 Chi tiết còn lại: `state.pricing` khoá theo **tên model**, API trả `model_id` — cần một
 bước tra qua `/api/catalog`.
@@ -136,21 +136,37 @@ bước tra qua `/api/catalog`.
 
 **① Ô phải nói rõ số này suy từ bảng giá, không lấy từ hoá đơn.** Dễ — thêm nhãn.
 
-**② Phải nói được rằng phần lớn tiền KHÔNG thuộc phòng ban nào.**
+**② Phải nói được rằng phần lớn tiền KHÔNG thuộc phòng ban nào — và nói cho đúng.**
+
+Bản đầu của mục này viết *"$16,43 / $62,64 = 26,2%"*. **Sai**, và sai đúng kiểu mà change
+này đang đi sửa: tử số chứa một khoản không nằm trong mẫu số.
 
 ```
-   Tien hoa don ca ky                    $62,64    100%
-   ├── quy duoc ve mot phong ban         $16,43     26,2%   <- cot nay hien
-   └── KHONG quy duoc ve phong ban nao   $46,21     73,8%   <- di qua hoa don Google,
-                                                               noi khong ghi ai goi
+   HOA DON cua ky                             $62,6442   100%
+   ├── quy duoc ve mot phong ban              $15,1333    24,2%  <- toan bo la
+   │                                                              Tro Ly Ao Hop Dong
+   └── KHONG quy duoc                         $47,5109    75,8%  <- di qua hoa don Google,
+                                                                    noi khong ghi ai goi
+
+   NGOAI hoa don, chi thay duoc bang phep suy:
+       Tro ly ao Ralli                        $ 1,2988   <- project tla-ralli CHUA NOI
+                                                            Google Billing: hoa don $0,00
+
+   Cong moi phong ban tren man hinh  =  $15,1333 + $1,2988  =  $16,4321
 ```
 
-Đây không phải thiếu sót của phép suy — phần 73,8% đó **không có chiều người dùng để mà
-chia**. Cùng đúng giới hạn đã tạo ra ba nhóm độ phủ (a)/(b)/(c) trong `health()`.
+Hai điều rút ra, và điều thứ hai dễ bị bỏ qua:
 
-Hệ quả với người đọc: cộng mọi phòng ban lại **sẽ không ra tổng chi phí**, và chênh lệch
-không phải lỗi. Nếu màn hình không nói trước điều đó, người xem sẽ tự đi tìm một lỗi không
-tồn tại — hoặc tệ hơn, tin rằng công ty chỉ tiêu $16,43.
+1. **Phần không quy được là 75,8%**, không phải 73,8%. Nó không có chiều người dùng để mà
+   chia — cùng đúng giới hạn đã tạo ra ba nhóm độ phủ (a)/(b)/(c) trong `health()`.
+2. **$1,2988 của Trợ lý ảo Ralli nằm NGOÀI hoá đơn.** Lưu lượng thật, chi phí thật, nhưng
+   `tla-ralli` chưa nối Google Billing nên tổng hoá đơn không thấy nó. Phép suy từ bảng
+   giá là **cách duy nhất** nhìn thấy khoản này — tức cột tiền theo phòng ban không chỉ
+   chia nhỏ cái đã biết, nó còn phơi ra một khoản chi mà hoá đơn không có.
+
+Hệ quả với người đọc: cộng mọi phòng ban lại **sẽ không ra tổng hoá đơn**, theo cả hai
+chiều — thiếu phần không quy được, và thừa phần Ralli. Nếu màn hình không nói trước, người
+xem sẽ đi tìm một lỗi không tồn tại, hoặc tin rằng công ty chỉ tiêu $16,43.
 
 Vì vậy cột này trả lời một câu **hẹp hơn tên cột gợi ra**:
 

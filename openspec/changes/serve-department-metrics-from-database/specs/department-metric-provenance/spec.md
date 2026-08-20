@@ -20,8 +20,18 @@ bịa ra chứ không phải đo được.
 - **WHEN** một đơn vị có request hoặc token lớn hơn 0
 - **AND** không tài khoản nào của nó cho ra được giá trị tiền
 - **THEN** ô tiền SHALL hiện `—`
-- **AND** ô đó SHALL mang lời giải thích nói rõ tiền chỉ có ở mức project nên không chia
-  được theo người dùng
+- **AND** ô đó SHALL mang lời giải thích nói rõ **vì sao lần này không tính được**
+
+Lời giải thích SHALL bám theo lý do thật tại thời điểm đó, không được ghi cứng một câu:
+
+| Giai đoạn | Lý do `—` xuất hiện |
+|---|---|
+| Sau nhóm 1 (`0e11c5a`) | Chưa nối được model với đơn giá — tiền chỉ có ở mức project |
+| Sau nhóm 8 | Chỉ còn khi một `model_id` không tra được trong `ref_price` |
+
+Sau nhóm 8, câu *"tiền chỉ có ở mức project nên không chia được theo người dùng"* **thành
+sai** — lúc đó tiền chia được. Đây là chỗ hai nhóm task của cùng change này mâu thuẫn
+nhau nếu quên sửa lời giải thích.
 
 #### Scenario: Phòng ban không có lưu lượng nào
 
@@ -104,19 +114,40 @@ tổng suy $291,6462 so với hoá đơn $291,9856 — lệch **−0,1%**, lệc
 Màn hình có cột tiền theo phòng ban SHALL nêu được tỷ lệ tiền **không quy được về phòng
 ban nào**, và SHALL không để người đọc tưởng tổng các phòng ban bằng tổng chi phí.
 
-Lý do: đo ngày 20/08/2026 trên kỳ 19/07–17/08, tiền quy được về một phòng ban là $16,43
-trên tổng hoá đơn $62,64 — tức **26,2%**. Phần 73,8% còn lại đi qua hoá đơn Google, nơi
-tính theo project và không ghi ai gọi, nên **không có chiều người dùng để mà chia**. Đây
-là giới hạn của nguồn, không phải thiếu sót của phép tính.
+Màn hình SHALL đồng thời nêu được phần tiền **suy ra mà không có dòng hoá đơn nào**.
 
-Không nói ra thì người xem cộng mọi phòng ban lại, thấy không khớp tổng, rồi đi tìm một
-lỗi không tồn tại — hoặc tin rằng công ty chỉ tiêu $16,43.
+Lý do, đo ngày 20/08/2026 trên kỳ 19/07–17/08:
+
+| | USD | |
+|---|---:|---|
+| Hoá đơn, **quy được** về một phòng ban | $15,1333 | **24,2%** |
+| Hoá đơn, **không quy được** | $47,5109 | **75,8%** |
+| | **$62,6442** | tổng hoá đơn |
+| Suy ra cho Trợ lý ảo Ralli | +$1,2988 | **ngoài hoá đơn** — `tla-ralli` chưa nối Google Billing |
+
+Phần không quy được đi qua hoá đơn Google, nơi tính theo project và không ghi ai gọi, nên
+**không có chiều người dùng để mà chia** — giới hạn của nguồn, không phải thiếu sót của
+phép tính.
+
+Phần của Trợ lý ảo Ralli là chuyện ngược lại: lưu lượng thật, chi phí thật, nhưng **không
+hoá đơn nào ghi nó**. Phép suy từ bảng giá là cách duy nhất nhìn thấy khoản này.
+
+Vì vậy tổng các phòng ban lệch khỏi tổng hoá đơn theo **cả hai chiều** — thiếu phần không
+quy được, thừa phần Ralli. Không nói ra thì người xem đi tìm một lỗi không tồn tại, hoặc
+tin rằng công ty chỉ tiêu $16,43.
 
 #### Scenario: Người đọc cộng các phòng ban lại
 
 - **WHEN** cộng tiền của mọi phòng ban trong kỳ
-- **THEN** kết quả nhỏ hơn tổng chi phí của kỳ
-- **AND** màn hình SHALL nêu được phần chênh lệch đó là gì và vì sao nó tồn tại
+- **THEN** kết quả SHALL không được trình bày như thể bằng tổng chi phí của kỳ
+- **AND** màn hình SHALL nêu được **hai** phần chênh: phần hoá đơn không quy được về phòng
+  ban nào, và phần suy ra cho agent không có hoá đơn
+
+#### Scenario: Agent không có hoá đơn vẫn phải nhìn thấy được
+
+- **WHEN** một agent có lưu lượng nhưng không có dòng hoá đơn nào
+- **THEN** tiền suy ra của nó SHALL vẫn hiện trên bảng phòng ban
+- **AND** SHALL không bị trình bày như một phần của tổng hoá đơn
 
 #### Scenario: Nhãn cột không hứa nhiều hơn số liệu trả lời được
 

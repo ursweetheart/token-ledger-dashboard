@@ -25,7 +25,7 @@ Nên `/api/usage-by-account` không có cột `cost_usd`, và đó là đúng ch
 sót — cùng một giới hạn đã tạo ra con số 1,5% không quy được về người.
 
 Phòng ban thật không có dòng usage nào (mỗi dòng `/api/usage` nhận phòng ban là **đơn vị
-kỹ thuật của agent**, `api.js:163`), nên `deptUnitMetrics` rơi vào nhánh cộng từ tài
+kỹ thuật của agent**, `api.js:164`), nên `deptUnitMetrics` rơi vào nhánh cộng từ tài
 khoản. Ở đó `cost(u)` cần `u.cost` (không có) hoặc `state.pricing[u.m]` (`u.m` là chuỗi
 rỗng) — không đường nào ra số, và hàm **trả về `0`**.
 
@@ -55,7 +55,7 @@ Nó không biết vì **cây tổ chức vẫn gõ cứng trong `app.js`**:
 
 | | Gõ cứng trong `web/js/app.js` | Trong database |
 |---|---|---|
-| Đơn vị | **108** (`ORG_UNITS`, dòng 67–176, 7.207 ký tự) | **130** (`dim_unit`) |
+| Đơn vị | **108** (`ORG_UNITS`, dòng 67–177, 7.207 ký tự) | **130** (`dim_unit`) |
 | Phân loại kỹ thuật / thật | *(không có)* | `is_technical`: 8 / 122 |
 | Bảng đổi tên viết tắt | **33** mục `UNIT_ALIASES` gõ tay | *(không cần)* |
 
@@ -107,16 +107,38 @@ Nghẽn không nằm ở dữ liệu mà ở lắp ráp: `api.js` dựng đối 
 **cộng gộp token của mọi model lại một cục**, nên tới lúc tính tiền thì model đã bị đánh
 rơi trên đường. Phải tính ở **mức dòng** rồi mới cộng.
 
-Nếu nối lại, những ô đang hiện `—` sẽ có số: `TTDL&ĐHS` 67.661 ₫ · `TT C4LED` 74.907 ₫ ·
-`TT&TMĐT` 23.270 ₫ · tổng 414.090 ₫ ($16,43).
+Nếu nối lại, những ô đang hiện `—` sẽ có số. Đo thử trên kỳ 19/07–17/08:
+
+| Nhóm cấp 1 | Token | Tiền suy ra |
+|---|---:|---:|
+| Chưa quy được | 4.731.585 | 164.398 ₫ |
+| Toàn công ty | 3.253.324 | 83.853 ₫ |
+| TT C4LED | 1.222.467 | 74.907 ₫ |
+| TTDL&ĐHS | 1.021.501 | 67.661 ₫ |
+| TT&TMĐT | 259.772 | 23.270 ₫ |
+| **Tổng** | | **414.090 ₫** = $16,4321 |
 
 **Hai điều kiện bắt buộc đi kèm**
 
 1. Ô phải nói rõ số này **suy từ bảng giá**, không phải lấy từ hoá đơn.
-2. Phải có chỗ nói **73,8% tiền của kỳ không thuộc phòng ban nào**. $16,43 chỉ bằng 26,2%
-   của $62,64 cả kỳ — không phải vì phép suy thiếu, mà vì phần còn lại đi qua hoá đơn
-   Google, nơi không ghi ai gọi. Không nói ra thì người xem cộng các phòng ban lại rồi
-   thắc mắc sao không ra tổng.
+2. Phải nói được phần tiền **không thuộc phòng ban nào** — và nói cho đúng. Ba nhóm, đo
+   trên kỳ 19/07–17/08:
+
+| | USD | |
+|---|---:|---|
+| Hoá đơn của kỳ, **quy được** về một phòng ban | **$15,1333** | **24,2%** — toàn bộ là Trợ Lý Ảo Hợp Đồng |
+| Hoá đơn của kỳ, **không quy được** | $47,5109 | 75,8% — đi qua hoá đơn Google, nơi không ghi ai gọi |
+| | **$62,6442** | tổng hoá đơn |
+| Suy ra cho Trợ lý ảo Ralli | +$1,2988 | **nằm NGOÀI hoá đơn** — `tla-ralli` chưa nối Google Billing nên không có dòng hoá đơn nào |
+
+Cộng mọi phòng ban trên màn hình được **$16,4321**, và con số đó **không so thẳng được**
+với $62,6442: $1,2988 trong đó thuộc Trợ lý ảo Ralli, agent không phát sinh hoá đơn.
+Đây là lưu lượng thật, chi phí thật, nhưng vô hình với tổng hoá đơn — và phép suy từ bảng
+giá là **cách duy nhất** nhìn thấy nó.
+
+*(Bản đầu của proposal ghi "26,2% / 73,8%" bằng cách chia $16,43 cho $62,64. Sai: tử số
+chứa một khoản không nằm trong mẫu số — đúng loại lỗi mà change này đang sửa ở tỷ lệ áp
+dụng.)*
 
 Cột này vì vậy trả lời câu **hẹp hơn** người ta tưởng: *"phần lưu lượng có ghi được người
 dùng của phòng ban này đáng giá bao nhiêu"* — không phải *"phòng ban này tiêu bao nhiêu

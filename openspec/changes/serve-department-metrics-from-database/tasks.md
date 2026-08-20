@@ -7,7 +7,8 @@
 - [x] 1.2 `deptUnitMetrics()` trả thêm `costKnown`, đếm số tài khoản thật sự cho ra giá trị
 - [x] 1.3 Ranh giới: đơn vị **không có lưu lượng** vẫn hiện `0 ₫`; có lưu lượng mà không
       tính được thì hiện `—`
-- [x] 1.4 Ô `—` mang tooltip nói rõ tiền chỉ có ở mức project nên không chia được theo người
+- [x] 1.4 Ô `—` mang tooltip nói rõ lý do. LƯU Ý: câu hiện tại ("tiền chỉ có ở mức
+      project") sẽ THÀNH SAI sau nhóm 8 — task 8.5 phải sửa lại nó
 - [x] 1.5 Kiểm trên Chrome, backend nối PostgreSQL: `Nghiên cứu thị trường` (49 req),
       `TTDL&ĐHS` (46 req), `TT&TMĐT` (19 req) đổi `0 ₫` → `—`; `Kế hoạch`,
       `Trung tâm R&D` (0 req) giữ `0 ₫`
@@ -57,11 +58,15 @@
 
 ## 6. Xoá phần gõ cứng — bước cuối, chỉ khi 3–5 đã sạch
 
-- [ ] 6.1 Xoá `ORG_UNITS` (108 đơn vị, `app.js:67-176`)
+- [ ] 6.1 Xoá `ORG_UNITS` (108 đơn vị, `app.js:67-177`)
 - [ ] 6.2 Xoá `UNIT_ALIASES` (33 mục) và nhánh ghép theo tên
-- [ ] 6.3 Xoá `rebuildRalliProvisioned()` nếu `DEPT_PROVISIONED` đã dựng được từ
-      `/api/accounts` và `/api/adoption`
+- [ ] 6.3 `rebuildRalliProvisioned()` (`app.js:631`) ghép bằng `unit_id` thay vì
+      `a.unit_name`. **KHÔNG xoá hàm này** — soát lại 20/08 thấy nó đã dựng từ
+      `REAL_ACCOUNTS` (tức `/api/accounts`) chứ không phải từ dữ liệu gõ cứng; chỗ hỏng
+      duy nhất là nó tra đơn vị qua `unitOf(a.unit_name)`, tức khớp bằng chuỗi
 - [ ] 6.4 Quét lại `web/js/` xác nhận không còn định danh nào mang dữ liệu gán cứng
+- [ ] 6.5 Đổi tên `rebuildRalliProvisioned` — nó đếm **mọi** tài khoản chứ không riêng
+      Trợ lý ảo Ralli, tên hiện tại nói sai phạm vi
 
 ## 7. Nghiệm thu
 
@@ -84,11 +89,14 @@
 - [ ] 8.2 Dựng bảng tra `model_id` → tên model từ `/api/catalog`, vì `state.pricing` khoá
       theo tên còn API trả id
 - [ ] 8.3 Tính tiền ở **mức dòng** rồi mới cộng lên tài khoản. MUST NOT nhân token đã cộng
-      gộp của tài khoản với một đơn giá — `flash-lite` $0,1 so với `pro` $1,25 chênh 12 lần
+      gộp của tài khoản với một đơn giá — `flash-lite` $0,10 so với `pro` $1,25 chênh 12,5 lần
 - [ ] 8.4 Dòng có `model_id` không tra được giá thì đơn vị chứa nó rơi về `—`, không tính 0
-- [ ] 8.5 Ô tiền mang dấu hiệu nói rõ **suy từ bảng giá**, không phải hoá đơn
-- [ ] 8.6 Thêm chỗ nói phần tiền **không quy được về phòng ban nào** (đo 20/08: $16,43 trên
-      $62,64 = 26,2% quy được, 73,8% không)
+- [ ] 8.5 Ô tiền mang dấu hiệu nói rõ **suy từ bảng giá**, không phải hoá đơn.
+      ĐỒNG THỜI sửa tooltip của ô `—` đặt ở task 1.4 — câu *"tiền chỉ có ở mức
+      project"* thành SAI khi tiền đã tính được; `—` lúc đó chỉ còn nghĩa
+      *"model này không tra được đơn giá"*
+- [ ] 8.6 Thêm chỗ nói HAI phần chênh: hoá đơn không quy được ($47,5109 = 75,8%) và phần
+      suy ra NGOÀI hoá đơn của Trợ lý ảo Ralli ($1,2988 — agent chưa nối Google Billing)
 - [ ] 8.7 Đối chiếu: tổng tiền suy ra của các phòng ban phải khớp con số đã đo tay
       (414.090 ₫ = $16,43 cho kỳ 19/07–17/08), lệch thì tìm ra dòng nào trước khi đi tiếp
 - [ ] 8.8 Đối chiếu lại phép suy trên nguồn billing: 965 dòng có cả hai vế phải cho lệch
