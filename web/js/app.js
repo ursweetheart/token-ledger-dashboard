@@ -408,8 +408,57 @@ function setToken(id, tokenValue){
   e.innerHTML=fmtTok(tokenValue);
   e.title=fmtTokFull(tokenValue);
 }
-function moneyCell(usdValue, cls){
-  return "<td class='"+(cls||"num cost")+"' title='"+esc(usdReference(usdValue))+"'>"+money(usdValue)+"</td>";
+/* Dưới ngưỡng này thì KHÔNG gắn dấu `≈` ở mức nhìn thấy ngay - tooltip vẫn nói đủ.
+   224/1.189 dòng là suy ra nhưng chúng dồn cục, nên gắn dấu lên mọi ô có dính một
+   dòng sẽ làm gần cả bảng có dấu, và một dấu hiệu xuất hiện khắp nơi thì hết là
+   dấu hiệu. 2% chọn để Chatbot Contact Center (2,8%) vẫn được đánh dấu còn nhiễu
+   lẻ thì không - đây là ngưỡng thẩm mỹ, sửa được, không phải hằng số thiêng. */
+/* Agent CHƯA NỐI Google Billing, do api.js lấy từ `dim_agent.has_google_source`.
+   Rỗng cho tới khi nạp xong - khi đó mọi phần suy ra được coi là "hoá đơn về
+   trễ", tức phía an toàn: nói nhẹ hơn sự thật chứ không nặng hơn. */
+var NO_BILLING_AGENTS = {};
+var DERIVED_COST_VISIBLE_PCT = 2;
+
+/* Lời giải thích cho một ô tiền. `est` là phần suy từ bảng giá trong `total`.
+
+   NÓI TỶ LỆ, không chỉ nói "có phần suy ra": với Trợ lý ảo Ralli là 100% còn với
+   Chatbot Contact Center là 2,8% - hai chuyện rất khác nhau mà cùng một câu sẽ
+   làm chúng trông giống hệt.
+
+   VÀ PHÂN BIỆT HAI LÝ DO. Hoá đơn về trễ thì vài ngày tự hết; agent chưa nối
+   Google Billing thì suy ra mãi. `tla-ralli` thuộc loại thứ hai - $7,6643 chi phí
+   thật không dòng hoá đơn nào ghi. Gộp hai thứ vào một nhãn "ước tính" là chôn
+   mất một việc cần người xử lý. */
+function costProvenanceTitle(total, agg){
+  var base = usdReference(total);
+  if(!agg) return base;
+  var est = num(agg.costEst);
+  if(!(est > 0)) return base;
+  var pct = total > 0 ? 100 * est / total : 100,
+      chua = num(agg.costEstNoBilling), tre = num(agg.costEstLate),
+      dau = "Trong số này có " + moneyCompact(est) + " (" + pct.toFixed(0)
+          + "%) suy từ bảng giá. ";
+  if(chua > 0 && tre <= 0)
+    dau = (pct >= 99.5 ? "TOÀN BỘ số này suy từ bảng giá. " : dau)
+        + "Agent CHƯA NỐI Google Billing nên không có hoá đơn nào — việc này sẽ"
+        + " không tự hết. ";
+  else if(chua > 0)
+    dau += "Trong đó " + moneyCompact(chua) + " của agent chưa nối Google Billing"
+         + " (không tự hết), phần còn lại do hoá đơn Google về trễ ~1 ngày. ";
+  else
+    dau += "Hoá đơn Google về trễ khoảng một ngày; vài ngày nữa những dòng này sẽ"
+         + " có hoá đơn. ";
+  return dau + base;
+}
+function costIsMarked(total, est){
+  return est > 0 && (total <= 0 || 100 * est / total >= DERIVED_COST_VISIBLE_PCT);
+}
+/* Ô tiền chung. Truyền `agg` (kết quả aggregate) thì tự lấy phần suy ra. */
+function moneyCell(usdValue, cls, agg){
+  var est = agg ? num(agg.costEst) : 0,
+      dau = costIsMarked(usdValue, est) ? "≈ " : "";
+  return "<td class='" + (cls || "num cost") + "' title='"
+    + esc(costProvenanceTitle(usdValue, agg)) + "'>" + dau + money(usdValue) + "</td>";
 }
 function shortModel(m){ return String(m||"").replace("Gemini ",""); }
 function emptyRow(cols){ return "<tr><td colspan='"+cols+"' class='subtle' style='text-align:center;padding:14px'>Không có dữ liệu khớp bộ lọc.</td></tr>"; }
@@ -880,13 +929,43 @@ function renderSingleDelta(id, cur, prev, fmtFn){
 }
 
 /* ─── Tổng hợp ─── */
+/* `costEst` / `costInv` — TIỀN NÀY TỪ ĐÂU RA (thêm 20/08/2026)
+
+   28,2% số tiền hiển thị trên dashboard không đến từ hoá đơn nào: $114,4465 trên
+   $406,4321 của kỳ 01/01-17/08. Nó được nhân ra từ `ref_price` khi
+   `usage_resolved.cost_usd` là NULL, và trước hôm nay không ô nào nói điều đó.
+
+   Không rải đều, nên trung bình cả kỳ không thay được con số của từng chỗ:
+       Trợ lý ảo Ralli           100,0% suy ra   (chưa nối Google Billing)
+       Trợ Lý Ảo Hợp Đồng         77,7%
+       Chatbot Contact Center      2,8%
+   Và 22/228 ngày có hơn một nửa tiền là suy ra — ngày mới nhất luôn 100%, vì
+   Google phát hành hoá đơn trễ khoảng một ngày.
+
+   Đây là ĐIỂM NGHẼN DUY NHẤT: 7 chỗ gọi aggregate() nuôi mọi con số tiền trên cả
+   6 tab, nên đếm ở đây là phủ hết. */
 function aggregate(rows){
   var a = {u:0,c:0,ti:0,to:0,r:0,cached:0,think:0,cost:0,erW:0,latW:0,latR:0,
-           e4:0,e5:0,e429:0,eKnown:0,lat99W:0,lat99R:0};
+           e4:0,e5:0,e429:0,eKnown:0,lat99W:0,lat99R:0,
+           costEst:0, costInv:0, costRowsInv:0, costRowsEst:0, costRowsUnknown:0,
+           costEstNoBilling:0, costEstLate:0};
   rows.forEach(function(row){
     a.u+=num(row.u); a.c+=num(row.c); a.ti+=num(row.ti); a.to+=num(row.to);
     a.r+=num(row.r); a.cached+=num(row.cached); a.think+=num(row.think);
-    a.cost+=cost(row); a.erW+=num(row.er)*num(row.r);
+    var _c=cost(row);
+    a.cost+=_c; a.erW+=num(row.er)*num(row.r);
+    if(row.cost!=null){ a.costInv+=_c; a.costRowsInv++; }
+    else if(costOrNull(row)!=null){
+      a.costEst+=_c; a.costRowsEst++;
+      /* HAI LÝ DO, KHÔNG MỘT. Trước đó phân biệt bằng `costRowsInv===0`, và điều
+         kiện đó gộp nhầm "agent này không bao giờ có hoá đơn" với "kỳ này chưa có
+         hoá đơn nào". Chọn riêng ngày 17/08 là mọi agent đều 0 dòng hoá đơn, nên
+         màn hình báo "chưa nối billing" cho cả 7 agent đã nối. */
+      if(NO_BILLING_AGENTS[row.a]) a.costEstNoBilling+=_c; else a.costEstLate+=_c;
+    }
+    // Dòng không có hoá đơn VÀ không tra được giá: không cộng vào đâu cả, nhưng
+    // phải đếm - nếu không thì `cost` hụt đúng phần đó mà không gì nói ra.
+    else a.costRowsUnknown++;
     if(num(row.lat)>0&&num(row.r)>0){a.latW+=num(row.lat)*num(row.r);a.latR+=num(row.r);}
     // Mã lỗi đếm theo SỐ LƯỢT, không theo tỷ lệ: cộng số lượt thì đúng ở mọi
     // mức gộp, còn cộng tỷ lệ thì phải nhớ trọng số và rất dễ sai.
@@ -1249,7 +1328,15 @@ function renderOverview(rows){
   set("m-ov-users",fmtCompactNum(activeUsers));
   setWithTitle("m-ov-requests",fmtCompactNum(A.r),fmt(A.r)+" request");
   setWithTitle("m-ov-tokens",fmtCompactNum(A.tokens),fmtTokFull(A.tokens));
-  setWithTitle("m-ov-cost",usageCompact(A.cost),money(A.cost)+" · "+usdReference(A.cost));
+  /* Thẻ tiền nói độ tin CỦA KỲ ĐANG CHỌN, không của toàn bộ dữ liệu. Tỷ lệ suy ra
+     lệch rất mạnh theo ngày - 22/228 ngày có hơn một nửa là suy ra, ngày mới nhất
+     luôn 100% - nên một con số trung bình cả kỳ sẽ nói dối về chính kỳ đang xem.
+     Đúng cái bẫy đã mắc 17/08: tính tỷ lệ trên 224 ngày trong khi thẻ chỉ hiện kỳ
+     được chọn, báo 28% cạnh một con số mà tỷ lệ thật là 32%. `A` ở đây là
+     aggregate() của CHÍNH tập dòng đang hiện, nên không lệch được. */
+  setWithTitle("m-ov-cost",
+    (costIsMarked(A.cost, A.costEst) ? "≈ " : "") + usageCompact(A.cost),
+    money(A.cost) + " · " + costProvenanceTitle(A.cost, A));
   setWithTitle("m-ov-costuser",usageCompact(costPerUser),money(costPerUser)+" / user hoạt động");
   set("m-ov-error",A.er.toFixed(1).replace(".",","));
 
@@ -1269,6 +1356,12 @@ function renderOverview(rows){
   set("i-ov-tokens",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.tokens,A.tokens).toFixed(0)+"% token.":"Chưa có token trong kỳ.");
   set("i-ov-cost",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.cost,A.cost).toFixed(0)+"% tổng mức sử dụng.":"Chưa phát sinh mức sử dụng.");
   set("i-ov-costuser","Bình quân trên "+fmt(activeUsers)+" user hoạt động.");
+  /* Nói thẳng phần suy ra ra màn hình, không chỉ giấu trong tooltip: đây là thẻ
+     tiền chính, và người đọc báo cáo hiếm khi trỏ chuột. */
+  if(A.costEst>0)
+    set("i-ov-cost", "Trong đó " + moneyCompact(A.costEst) + " ("
+      + (A.cost>0 ? (100*A.costEst/A.cost).toFixed(0) : "100")
+      + "%) suy từ bảng giá vì chưa có hoá đơn.");
   set("i-ov-error",topError&&topError.er>0?esc(topError.key)+" cao nhất: "+topError.er.toFixed(1)+"%.":"Không ghi nhận lỗi.");
 
   set("ov-cost-total",moneyCompact(A.cost));
@@ -1290,13 +1383,18 @@ function deptDisplayName(dept){
 }
 function renderOverviewDetail(rows,active){
   var agents=active.slice().sort(function(a,b){return b.cost-a.cost;});
-  var html="", totals={u:0,r:0,tokens:0,cost:0,erW:0};
+  var html="", totals={u:0,r:0,tokens:0,cost:0,erW:0,costEst:0,costRowsInv:0,costEstNoBilling:0,costEstLate:0};
   agents.forEach(function(g){
     var agentRows=rows.filter(function(r){return r.a===g.key;});
     var byDept=groupAgg(agentRows,function(r){return deptDisplayName(r.d);})
       .sort(function(a,b){return (b.cost-a.cost)||(b.r-a.r)||a.key.localeCompare(b.key,"vi");});
     if(!byDept.length) return;
     totals.u+=g.u; totals.r+=g.r; totals.tokens+=g.tokens; totals.cost+=g.cost; totals.erW+=g.er*g.r;
+    // Cộng cả phần suy ra: quên hai dòng này thì hàng Tổng cộng KHÔNG BAO GIỜ
+    // mang dấu `≈`, và đó là kiểu hỏng không ném lỗi - chỉ im lặng nói thiếu.
+    totals.costEst+=num(g.costEst); totals.costRowsInv+=num(g.costRowsInv);
+    totals.costEstNoBilling+=num(g.costEstNoBilling);
+    totals.costEstLate+=num(g.costEstLate);
     var usingDepts=byDept.filter(function(d){return d.r>0;}).length;
     var agentCell="<td class='detail-agent-cell' rowspan='"+byDept.length+"'>"+
       "<span class='detail-agent-name'>"+esc(g.key)+"</span>"+
@@ -1314,7 +1412,7 @@ function renderOverviewDetail(rows,active){
         "<td class='num'>"+fmt(d.u)+"</td>"+
         "<td class='num' title='"+esc(fmt(d.r)+" request")+"'>"+fmtCompactNum(d.r)+"</td>"+
         "<td class='num' title='"+esc(fmtTokFull(d.tokens))+"'>"+fmtCompactNum(d.tokens)+"</td>"+
-        "<td class='num cost' title='"+esc(usdReference(d.cost))+"'>"+moneyCompact(d.cost)+"</td>"+
+        "<td class='num cost' title='"+esc(costProvenanceTitle(d.cost,d))+"'>"+(costIsMarked(d.cost,d.costEst)?"≈ ":"")+moneyCompact(d.cost)+"</td>"+
         "<td class='num"+(d.er>=2?" text-red":"")+"'>"+d.er.toFixed(1)+"%</td>"+
         // Không có request thì không có cơ sở đo độ ổn định — để trống thay vì 100%.
         "<td>"+(d.r>0
@@ -1328,7 +1426,7 @@ function renderOverviewDetail(rows,active){
     html+="<tr class='detail-total-row'><td>Tổng cộng</td><td>"+fmt(agents.length)+" AI Agent</td>"+
       "<td class='num'>"+fmt(totals.u)+"</td><td class='num'>"+fmtCompactNum(totals.r)+"</td>"+
       "<td class='num' title='"+esc(fmtTokFull(totals.tokens))+"'>"+fmtCompactNum(totals.tokens)+"</td>"+
-      "<td class='num cost'>"+moneyCompact(totals.cost)+"</td><td class='num'>"+totalEr.toFixed(1)+"%</td>"+
+      "<td class='num cost' title='"+esc(costProvenanceTitle(totals.cost,totals))+"'>"+(costIsMarked(totals.cost,totals.costEst)?"≈ ":"")+moneyCompact(totals.cost)+"</td>"+"<td class='num'>"+totalEr.toFixed(1)+"%</td>"+
       "<td><div class='overview-success-cell'><span><i style='width:"+totalStable.toFixed(1)+"%'></i></span><b>"+totalStable.toFixed(1)+"%</b></div></td></tr>";
   }
   set("ov-detail-tbody",html||emptyRow(8));
@@ -2904,7 +3002,7 @@ function renderCostTable(rows){
      nên đối chiếu được thẳng với giá niêm yết. Chia theo lượt gọi thì mỗi agent có độ dài
      prompt khác nhau, con số không so ngang được giữa các agent. */
   set("co-tbody", groups.map(function(g){
-    return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.tokens?moneyCell(g.cost/(g.tokens/1e6),"num"):"<td class='num'>—</td>")+moneyCell(g.cost)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
+    return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.tokens?moneyCell(g.cost/(g.tokens/1e6),"num",{costEst:num(g.costEst)/(g.tokens/1e6),costRowsInv:g.costRowsInv}):"<td class='num'>—</td>")+moneyCell(g.cost,null,g)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
   }).join("") || emptyRow(6));
 }
 /* ─── Chi phí theo thời gian, tách theo phòng ban ───
@@ -3262,9 +3360,18 @@ function csv(v){ v=v==null?"":String(v); return /[",\n]/.test(v)?'"'+v.replace(/
 function exportCSV(){
   var rows=scopedRows();
   var period = state.range.start+" → "+state.range.end;
-  var lines=["Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình"];
+  /* Cột `Nguồn tiền` là bắt buộc, không phải trang trí: 28,2% số tiền trên
+     dashboard suy từ bảng giá chứ không từ hoá đơn. Số mang ra khỏi màn hình mà
+     mất dấu vết thì người nhận file không có cách nào biết - và file CSV thường
+     đi xa hơn màn hình, vào bảng tính rồi vào báo cáo. */
+  var lines=["Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,"
+            +"Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình,Nguồn tiền"];
   rows.forEach(function(r){
-    lines.push([period,r.a,r.d,r.m,modelProvider(r.m),r.u,r.c,r.ti,r.to,r.r,num(r.er).toFixed(2),cost(r).toFixed(2),toVnd(cost(r)),VND_RATE].map(csv).join(","));
+    var nguon = r.cost!=null ? "hoá đơn"
+              : (costOrNull(r)!=null ? "suy từ bảng giá" : "không tính được");
+    lines.push([period,r.a,r.d,r.m,modelProvider(r.m),r.u,r.c,r.ti,r.to,r.r,
+                num(r.er).toFixed(2),cost(r).toFixed(2),toVnd(cost(r)),VND_RATE,
+                nguon].map(csv).join(","));
   });
   var blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8;"});
   var url=URL.createObjectURL(blob); var a=document.createElement("a");
@@ -3530,6 +3637,7 @@ function loadFromBackend(){
     /* THỨ TỰ QUAN TRỌNG: nhận cây từ database TRƯỚC, rồi mới dựng danh mục tài
        khoản. buildAccountCatalogue() tra đơn vị của từng tài khoản, nên chạy nó
        trên cây cũ sẽ gán 937 tài khoản vào các đơn vị sắp bị thay. */
+    NO_BILLING_AGENTS = kq.noBillingAgents || {};
     if(!adoptOrgUnits(kq.units)) rebuildProvisionedFromDirectory();
     USER_ACCOUNTS=buildAccountCatalogue();
     renderAll();

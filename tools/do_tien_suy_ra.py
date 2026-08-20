@@ -12,12 +12,21 @@ rows = get("/api/usage?start=%s&end=%s" % (lo, hi))["rows"]
 
 
 def uoc(r):
+    """Uoc tinh tien mot dong, DUNG NHU web/js/api.js lam.
+
+    CHI cong cached khi nguon la billing. `cached` co BA nghia tuy nguon:
+        billing     SKU RIENG, nam NGOAI input  -> phai cong
+        app         TAP CON cua prompt_tokens   -> cong vao la dem hai lan
+        monitoring  khong co phep do nao        -> luon NULL
+    Ban dau ham nay cong cached o moi dong, va cho ra 28,2% thay vi con so dung.
+    """
     p = pr.get(r["model"])
     if not p or p["price_input"] is None:
         return None
+    ca = (r["cached_tokens"] or 0) if r["token_source"] == "billing" else 0
     return ((r["input_tokens"] or 0) / 1e6 * p["price_input"]
             + (r["output_tokens"] or 0) / 1e6 * (p["price_output"] or 0)
-            + (r["cached_tokens"] or 0) / 1e6 * (p["price_cached"] or 0))
+            + ca / 1e6 * (p["price_cached"] or 0))
 
 
 hd = est = 0.0

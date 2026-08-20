@@ -308,9 +308,19 @@
        Phơi sẵn ở đây để bước đó chỉ còn là đổi nguồn, không phải viết lại phép
        gộp: đã đối chiếu 20/08/2026, cây này cho ra ĐÚNG 15 gốc báo cáo mà bản
        gõ cứng đang cho. */
+    /* Agent CHƯA NỐI Google Billing. Khác hẳn "hoá đơn chưa về": bên kia vài
+       ngày là hết, bên này suy ra mãi cho tới khi ai đó nối billing cho project.
+       `dim_agent.has_google_source` đã tách riêng chuyện này khỏi
+       `gcp_project_id` từ 14/08/2026 - `tla-ralli` CÓ project nhưng chưa nối. */
+    var noBilling = {};
+    (catalog.agents || []).forEach(function (a) {
+      if (!a.has_google_source) noBilling[a.name] = true;
+    });
+
     return { days: days, dayOrder: dayOrder, pricing: pricing,
              pricingById: pricingById,
              units: tree.units, canonicalUnitOf: tree.canonicalOf,
+             noBillingAgents: noBilling,
              budgets: budgets, fxRate: catalog.fx_rate || null };
   }
 

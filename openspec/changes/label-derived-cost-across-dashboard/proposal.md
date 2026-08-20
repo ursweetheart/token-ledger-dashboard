@@ -10,14 +10,14 @@ bảng giá, và không một ô nào nói điều đó.
 | | USD | |
 |---|---:|---:|
 | Từ **hoá đơn** Google | $291,9856 | 71,8% · 965 dòng |
-| **Suy** từ bảng giá | **$114,4465** | **28,2%** · 224 dòng |
-| | **$406,4321** | |
+| **Suy** từ bảng giá | **$114,4076** | **28,2%** · 224 dòng |
+| | **$406,3932** | |
 
 Và nó **không rải đều**. Có agent gần như toàn bộ là suy ra:
 
 | Agent | Hoá đơn | Suy ra | % suy ra |
 |---|---:|---:|---:|
-| **Trợ lý ảo Ralli** | $0,0000 | $7,6643 | **100,0%** |
+| **Trợ lý ảo Ralli** | $0,0000 | $7,6254 | **100,0%** |
 | **Trợ Lý Ảo Hợp Đồng** | $18,6497 | $64,9857 | **77,7%** |
 | Phân Loại Phản Hồi Tiếp Thị | $8,8990 | $3,9255 | 30,6% |
 | Sale Agent | $131,6163 | $31,5010 | 19,3% |
@@ -46,7 +46,7 @@ Hai nguyên nhân khác hẳn nhau, và người xem cần phân biệt được
 | **Hoá đơn chưa về** | Google phát hành hoá đơn trễ ~1 ngày. Ngày mới nhất luôn 100% suy ra | Có — sau vài ngày dòng đó sẽ có hoá đơn |
 | **Agent chưa nối Google Billing** | `tla-ralli` có project trên GCP nhưng **chưa nối billing** | **Không.** Sẽ suy ra mãi cho tới khi ai đó nối |
 
-Trợ lý ảo Ralli thuộc loại thứ hai: $7,6643 chi phí thật, **không hoá đơn nào ghi**. Đó là
+Trợ lý ảo Ralli thuộc loại thứ hai: $7,6254 chi phí thật, **không hoá đơn nào ghi**. Đó là
 chi tiêu vô hình với tổng hoá đơn, và phép suy từ bảng giá là cách duy nhất nhìn thấy nó.
 
 ### Việc này đã làm xong cho MỘT bảng

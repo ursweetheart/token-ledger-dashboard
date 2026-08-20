@@ -7,8 +7,8 @@
 Mọi ô, thẻ, biểu đồ và dòng xuất CSV có chứa tiền SHALL cho biết phần nào đến từ **hoá
 đơn** và phần nào **suy từ bảng giá**. MUST NOT trình bày hai loại giống hệt nhau.
 
-Lý do: đo 20/08/2026 trên toàn kỳ 01/01–17/08, **28,2% số tiền hiển thị** ($114,4465 trên
-$406,4321) không đến từ hoá đơn nào — nó được nhân ra từ `ref_price`. Và nó không rải đều:
+Lý do: đo 20/08/2026 trên toàn kỳ 01/01–17/08, **28,2% số tiền hiển thị** ($114,4076 trên
+$406,3932) không đến từ hoá đơn nào — nó được nhân ra từ `ref_price`. Và nó không rải đều:
 Trợ lý ảo Ralli **100%** suy ra, Trợ Lý Ảo Hợp Đồng **77,7%**, trong khi Chatbot Contact
 Center chỉ 2,8%.
 
@@ -38,7 +38,7 @@ tình huống này trông giống nhau trên màn hình nhưng đòi hai hành �
 | Hoá đơn Google trễ ~1 ngày | **Có** — vài ngày nữa dòng đó sẽ có hoá đơn | Không phải làm gì |
 | Agent chưa nối Google Billing | **Không** — suy ra mãi mãi | Nối billing cho project đó |
 
-Lý do: `tla-ralli` có project trên GCP nhưng chưa nối billing, nên **$7,6643 chi phí thật
+Lý do: `tla-ralli` có project trên GCP nhưng chưa nối billing, nên **$7,6254 chi phí thật
 của Trợ lý ảo Ralli không có dòng hoá đơn nào**. Gộp nó chung với "hoá đơn hôm nay chưa
 về" là che mất một việc cần người xử lý.
 
