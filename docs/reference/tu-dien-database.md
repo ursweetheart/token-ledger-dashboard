@@ -1113,8 +1113,8 @@ bàn, **giả định được ghi rõ dưới đây** — không phải đã ch
 | # | Câu hỏi | Giả định tạm dùng ở trên | Nếu chọn khác thì đổi gì |
 |---|---|---|---|
 | 1 | ~~**Lịch sử cũ đi đâu?**~~ | ✅ **ĐÃ CHỐT 20/08/2026** — xem mục 8a ngay dưới bảng | |
-| 2 | **Có ghi `fact_attempt` không?** Nó sẽ là bảng lớn nhất, và chỉ đáng nếu thật sự cần trả lời *"bao nhiêu tiền cháy vì retry"* và *"deployment nào hay dính 429"* | Có ghi | Không ghi thì gộp vào `fact_request` và **mất hẳn** khả năng trả lời hai câu đó |
-| 3 | **Ngân sách do ai chặn?** | LiteLLM chặn, `ref_budget` chỉ là bản sao | Nếu ta tự chặn thì `ref_budget` thành bảng thực thi, cần thêm lịch sử thay đổi và nhật ký chặn |
+| 2 | ~~**Có ghi `fact_attempt` không?**~~ | ✅ **ĐÃ CHỐT 20/08/2026 — CÓ GHI.** Xem mục 8c | |
+| 3 | ~~**Ngân sách do ai chặn?**~~ | ✅ **ĐÃ CHỐT 20/08/2026.** Xem mục 8d | |
 
 ### 8a. ✅ Câu 1 đã chốt — 20/08/2026
 
@@ -1156,6 +1156,82 @@ Nên dòng cũ để **NULL** ở các cột mới. Truy vấn nào dùng cột 
 cũ** — biểu đồ vẫn vẽ ra, chỉ là mất 8 tháng lịch sử mà không báo gì. Mỗi truy vấn phải
 quyết tường minh: lọc theo kỳ nguyên, hay chấp nhận NULL. Đây là chỗ tốn công nhất của
 phương án "giữ chung", không phải cột `data_era`.
+
+### 8c. ✅ Câu 2 đã chốt — CÓ ghi `fact_attempt`
+
+Ghi mức từng lần gọi provider, dù đó sẽ là bảng lớn nhất hệ thống.
+
+*Lý do:* đây là loại dữ liệu **không dựng lại được về sau**. Quyết định "thôi không ghi"
+hôm nay là quyết định vĩnh viễn không trả lời được hai câu *"bao nhiêu tiền cháy vì
+retry"* và *"deployment nào hay dính 429"*.
+
+Số hiện tại **không** dùng để bác việc này được: `fact_perf_daily` đang có **0 lượt mã
+429** và tổng lỗi 113/44.912 = 0,25%. Nhưng đó là số của kiến trúc **hiện tại**, nơi mỗi
+agent gọi thẳng project riêng. Gateway **tạo ra** 429 bằng chính cơ chế của nó — cân bằng
+tải dồn nhiều agent qua chung một tuyến, rồi retry và fallback.
+
+### 8d. ✅ Câu 3 đã chốt — LiteLLM chặn, $70 mỗi agent, cảnh báo 3 mức
+
+**Nơi thực thi: LiteLLM.** `max_budget` + `budget_duration` theo từng Virtual Key, vượt là
+chặn request. Báo cáo LiteLLM mục 2.3 xác nhận tính năng này **miễn phí**; chỉ "ngân sách
+khác nhau cho từng model trên cùng một key" mới là Enterprise, mà ta không cần.
+
+**Hạn mức: $70 cho MỖI agent** — không phải trần chung. Trần riêng khoanh vùng thiệt hại:
+một agent lỗi vòng lặp chỉ tự chặn mình, không kéo theo 7 agent kia. Đó đúng là lý do
+LiteLLM đặt budget theo key.
+
+**Ba mức, khớp đúng ngưỡng dashboard đang dùng sẵn (`web/js/app.js`):**
+
+| Mức | USD | Hành động |
+|---|---|---|
+| 50% | $35 | cảnh báo |
+| 90% | $63 | cảnh báo |
+| 100% trở lên | $70 | **chặn request** |
+
+Đối chiếu với chi tiêu thật — chỉ **Sale Agent** từng vượt mức cảnh báo đầu:
+
+| Agent | Đỉnh tháng | % của $70 |
+|---|---:|---:|
+| Sale Agent | $46,56 (06/26) | **66,5%** |
+| Chatbot Contact Center | $20,72 | 29,6% |
+| Trợ Lý Ảo Hợp Đồng | $12,23 | 17,5% |
+| Phân Loại Dữ Liệu CRM | $11,87 | 17,0% |
+| Multi modal AI Invoice | $11,56 | 16,5% |
+| Phân Loại Phản Hồi Tiếp Thị | $6,16 | 8,8% |
+| Tools Quizzer | $0,04 | 0,1% |
+
+Chưa agent nào từng chạm 90%.
+
+**`ref_budget` là BẢN SAO CHỈ-ĐỌC**, bắt buộc có `synced_at`. Nơi thực thi là LiteLLM;
+database chỉ để hiển thị và đối chiếu. Không có `synced_at` thì không ai biết bản sao đã
+cũ bao lâu — đúng bệnh `db/gen_catalog.py` đã ghi: *"hai nguồn cho một con số thì sớm muộn
+lệch nhau mà không gì báo."*
+
+### 8e. ⚠️ Ba việc câu 3 kéo theo
+
+**① Cảnh báo Google Cloud PHẢI giữ, và không phải để dự phòng.**
+Project GCP gắn tài khoản khách hàng nên **cảnh báo được nhưng không chặn được**. Sau khi
+Gateway chạy, hai cơ chế trả lời hai câu khác nhau:
+
+| | LiteLLM `max_budget` | Cảnh báo Google |
+|---|---|---|
+| Trả lời | *"Agent này tiêu quá mức, DỪNG"* | *"Có ai đó đang tiêu mà KHÔNG qua Gateway"* |
+| Phạm vi | chỉ lưu lượng qua Gateway | **toàn bộ project**, kể cả đường vòng |
+
+Agent gọi thẳng Google (cấu hình sót, quay lui, hoặc còn API key cũ) thì LiteLLM **không
+thấy gì**, hạn mức không bao giờ chạm, mà hoá đơn vẫn tăng. Cảnh báo Google là thứ **duy
+nhất** bắt được rò rỉ đó — và trong giai đoạn 6–8 (chạy song song, chuyển từng agent) thì
+phần lớn lưu lượng vẫn đi đường cũ.
+
+**② Trợ lý ảo Ralli đặt hạn mức theo TOKEN, LiteLLM chặn theo USD.**
+50.000.000 token/tháng không quy được sang `max_budget`: quy ra USD thì trần **trôi** mỗi
+lần bảng giá đổi, còn `tpm_limit` là tốc độ mỗi phút chứ không phải trần tháng.
+→ Giữ hạn mức token ở tầng app Ralli (đã có sẵn); LiteLLM chặn $70 như trần thứ hai. Hai
+chỗ chặn nhưng **khác đơn vị nên không mâu thuẫn**.
+
+**③ Không còn trần chung.** 8 agent × $70 = **$560** trên lý thuyết, trong khi đỉnh thật
+của cả 8 cộng lại mới **$69,35** (06/26). Chưa cần trần chung, nhưng nếu sau này muốn thì
+đó là quyết định riêng.
 
 ---
 

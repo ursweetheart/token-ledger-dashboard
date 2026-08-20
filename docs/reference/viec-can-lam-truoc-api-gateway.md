@@ -153,9 +153,23 @@ WHERE f.source = 'app' AND a.kind = 'real';
 
 Đây là nhóm đáng làm nhất hôm nay: rẻ về thời gian, đắt nếu quyết muộn.
 
-#### 🟡 A1. Câu 1/3 ĐÃ CHỐT — còn hai câu treo (`tu-dien-database.md` §8)
+#### ✅ A1. CẢ BA CÂU ĐÃ CHỐT — 20/08/2026 (`tu-dien-database.md` §8a–8e)
 
-Ba câu này **đổi hình dạng schema**, nên không viết được migration nào trước khi chốt:
+Ba câu này đổi hình dạng schema nên chặn mọi migration. **Cả ba đã có câu trả lời.**
+
+| # | Câu hỏi | Quyết định |
+|---|---|---|
+| 1 | Lịch sử cũ đi đâu? | **MỘT database** + cột `data_era`. Và **giữ `fact_monitoring`** (đóng băng, không xoá) — 583.917 dòng đó không dựng lại được |
+| 2 | Có ghi `fact_attempt`? | **CÓ.** Dữ liệu retry không dựng lại được về sau |
+| 3 | Ngân sách do ai chặn? | **LiteLLM**, `$70` mỗi agent, cảnh báo 50% / 90%, chạm 100% thì chặn. `ref_budget` là bản sao chỉ-đọc + `synced_at` |
+
+Ba việc kéo theo, ghi ở `§8b` và `§8e` — đọc trước khi viết `config.yaml`:
+
+- Dòng `scrape` để **NULL** ở cột mới → truy vấn dùng cột mới sẽ **âm thầm bỏ 8 tháng lịch sử**
+- **Cảnh báo Google Cloud phải giữ** — nó là thứ duy nhất bắt được lưu lượng đi vòng qua Gateway
+- **Ralli đặt hạn mức theo token**, LiteLLM chặn theo USD → giữ trần token ở tầng app
+
+Bảng gốc để tra lại lập luận:
 
 | # | Câu hỏi | Nếu chọn A | Nếu chọn B |
 |---|---|---|---|
