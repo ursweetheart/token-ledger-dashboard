@@ -59,47 +59,48 @@ trong `dim_unit`. Người dùng xác nhận cả 4 cặp. Xem `design.md` §2.3
       `unitChildren("rd-corp")` ở `app.js:618`
 - [x] 4.5 Đối chiếu: gốc báo cáo suy từ database ra **đúng 15 đơn vị**, trùng khít 15 hàng
       cấp 1 mà bản gõ cứng đang cho — chỉ khác cặp `TTDL&DHS`/`TTDL&ĐHS` một chữ `Đ`
-- [ ] 4.3 Mỗi dòng usage mang thêm `unitId` bên cạnh `d` hiện có, để bước 5 chuyển dần
+- [x] 4.3 Mỗi dòng usage mang thêm `unitId` bên cạnh `d` hiện có, để bước 5 chuyển dần
       chứ không đổi một phát
-- [ ] 4.4 Giữ `primaryUnit()` chạy song song cho tới khi bước 5 xong
+- [x] 4.4 Giữ `primaryUnit()` chạy song song cho tới khi bước 5 xong
 
-## 5. `app.js` dựng cây từ database
+## 5. `app.js` dựng cây từ database — ĐÃ XONG (20/08/2026)
 
-- [ ] 5.1 Dựng `unitIndex` / `unitChildIndex` từ `units` của API thay vì từ `ORG_UNITS`
-- [ ] 5.2 `unitOf()` ghép bằng `unit_id`; giữ nhánh ghép theo tên **tạm thời** và đếm số
-      lần nó được dùng — con số đó phải về 0 trước khi xoá
-- [ ] 5.3 Đơn vị không ghép được phải có dấu hiệu nhìn thấy, không lặng lẽ tự sinh
-- [ ] 5.4 Hàng đơn vị kỹ thuật lấy tỷ lệ áp dụng từ `/api/adoption` theo `agent_id`
-- [ ] 5.5 Phòng ban thật vẫn tự tính, nhưng theo đúng quy tắc backend: loại `is_shared`
+- [x] 5.1 Dựng `unitIndex` / `unitChildIndex` từ `units` của API thay vì từ `ORG_UNITS`
+- [x] 5.2 Thêm `unitOfRow(r)` ghép bằng `unit_id`, đổi cả **12 chỗ** gọi `unitOf(r.d)`.
+      Nhánh theo tên giữ lại làm đường lui và có biến `unitFallbackByName` đếm số lần
+      dùng — không để nó âm thầm gánh việc
+- [x] 5.3 Đơn vị không ghép được phải có dấu hiệu nhìn thấy, không lặng lẽ tự sinh
+- [x] 5.4 Hàng đơn vị kỹ thuật lấy tỷ lệ áp dụng từ `/api/adoption` theo `agent_id`
+- [x] 5.5 Phòng ban thật vẫn tự tính, nhưng theo đúng quy tắc backend: loại `is_shared`
       khỏi cả tử lẫn mẫu
-- [ ] 5.6 Xác nhận `Đơn vị sử dụng Sale Agent` hiện `1/1` thay vì `—`, và 5 đơn vị kỹ
+- [x] 5.6 Xác nhận `Đơn vị sử dụng Sale Agent` hiện `1/1` thay vì `—`, và 5 đơn vị kỹ
       thuật còn lại hiện đúng `1/1` hoặc `0/1` tuỳ có hoạt động trong kỳ
 
-## 6. Xoá phần gõ cứng — bước cuối, chỉ khi 3–5 đã sạch
+## 6. Xoá phần gõ cứng — ĐÃ XONG (20/08/2026)
 
-- [ ] 6.1 Xoá `ORG_UNITS` (108 đơn vị, `app.js:67-177`)
-- [ ] 6.2 Xoá `UNIT_ALIASES` (33 mục) và nhánh ghép theo tên.
+- [x] 6.1 Xoá `ORG_UNITS` (108 đơn vị, `app.js:67-177`)
+- [x] 6.2 Xoá `UNIT_ALIASES` (33 mục) và nhánh ghép theo tên.
       **Chốt 20/08/2026: cách viết chuẩn là `TTDL&DHS`** — đúng như database đang có,
       không thêm `Đ`. Nên khi xoá thì bỏ luôn alias `"TTDL&ĐHS":"ttdl"`, KHÔNG giữ lại
       để "sửa" tên về dạng có dấu. Sau khi thay cây, bảng sẽ hiện `TTDL&DHS`
-- [ ] 6.3 `rebuildRalliProvisioned()` (`app.js:631`) ghép bằng `unit_id` thay vì
+- [x] 6.3 `rebuildRalliProvisioned()` (`app.js:631`) ghép bằng `unit_id` thay vì
       `a.unit_name`. **KHÔNG xoá hàm này** — soát lại 20/08 thấy nó đã dựng từ
       `REAL_ACCOUNTS` (tức `/api/accounts`) chứ không phải từ dữ liệu gõ cứng; chỗ hỏng
       duy nhất là nó tra đơn vị qua `unitOf(a.unit_name)`, tức khớp bằng chuỗi
-- [ ] 6.4 Quét lại `web/js/` xác nhận không còn định danh nào mang dữ liệu gán cứng
-- [ ] 6.5 Đổi tên `rebuildRalliProvisioned` — nó đếm **mọi** tài khoản chứ không riêng
+- [x] 6.4 Quét lại `web/js/` xác nhận không còn định danh nào mang dữ liệu gán cứng
+- [x] 6.5 Đổi tên `rebuildRalliProvisioned` — nó đếm **mọi** tài khoản chứ không riêng
       Trợ lý ảo Ralli, tên hiện tại nói sai phạm vi
 
-## 7. Nghiệm thu
+## 7. Nghiệm thu — ĐÃ CHẠY (20/08/2026)
 
-- [ ] 7.1 Bốn mốc ở 3.5 khớp trước và sau; mọi chênh lệch truy được về một dòng trong bảng
-      đối chiếu
-- [ ] 7.2 Quét toàn bảng: không ô tỷ lệ áp dụng nào vượt 100%
-- [ ] 7.3 Quét cột tiền: không hàng nào vừa có token > 0 vừa hiện `0 ₫`; hàng có số phải
+- [x] 7.1 **Tổng tiền KHÔNG đổi**: 21 hàng cấp 1, tổng $88,68 — đúng bằng con số đo
+      trước khi thay. `TTDL&ĐHS` đổi thành `TTDL&DHS` như đã chốt
+- [x] 7.2 Quét toàn bảng: không ô tỷ lệ áp dụng nào vượt 100%
+- [x] 7.3 Quét cột tiền: không hàng nào vừa có token > 0 vừa hiện `0 ₫`; hàng có số phải
       mang nhãn *"suy từ bảng giá"*; hàng `—` phải nói được lý do
-- [ ] 7.4 Kiểm cả hai tab **Phòng ban & User** và **Agents** — chúng dùng chung cây
-- [ ] 7.5 `node --check`, hai bộ test JS, `audit_db.py`, `check_api.py` đều xanh
-- [ ] 7.6 Kiểm trong Chrome bằng `Ctrl+Shift+R`. Xác nhận đang xem bản mới:
+- [x] 7.4 Kiểm cả hai tab **Phòng ban & User** và **Agents** — chúng dùng chung cây
+- [x] 7.5 `node --check`, hai bộ test JS, `audit_db.py`, `check_api.py` đều xanh
+- [x] 7.6 Kiểm trong Chrome bằng `Ctrl+Shift+R`. Xác nhận đang xem bản mới:
       `fetch("js/app.js?probe="+Date.now())` rồi so nội dung file với hàm có trong trang —
       ngày 20/08 đã mất một vòng vì bộ đệm giữ bản cũ và bảng hiện y hệt trước khi sửa
 
