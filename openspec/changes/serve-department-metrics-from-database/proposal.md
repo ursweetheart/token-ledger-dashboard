@@ -57,7 +57,7 @@ Nó không biết vì **cây tổ chức vẫn gõ cứng trong `app.js`**:
 |---|---|---|
 | Đơn vị | **108** (`ORG_UNITS`, dòng 67–177, 7.207 ký tự) | **130** (`dim_unit`) |
 | Phân loại kỹ thuật / thật | *(không có)* | `is_technical`: 8 / 122 |
-| Bảng đổi tên viết tắt | **33** mục `UNIT_ALIASES` gõ tay | *(không cần)* |
+| Bảng đổi tên viết tắt | **33** mục `UNIT_ALIASES` gõ tay | *(chỉ thay được phần viết tắt — xem ⏸️ dưới)* |
 
 `/api/catalog` **đã trả đủ** `unit_id`, `agent_id`, `name`, `parent_id`, `level`, `path`,
 `is_technical` — nhưng `web/js/api.js` không chuyển ra ngoài, chỉ dùng nội bộ để tra đơn
@@ -65,8 +65,8 @@ vị gốc của agent (`primaryUnit`).
 
 Đây là **phần còn sót của change `serve-dashboard-from-database-only`** (17/08). Change đó
 bỏ `SEED_DAYS` 268 KB và bảng giá, nhưng bỏ quên cây tổ chức. Hệ quả dây chuyền: vì không
-có `unit_id` từ database, frontend phải khớp phòng ban bằng **chuỗi tên**, và 33 alias tồn
-tại chỉ để hoà giải việc đó.
+có `unit_id` từ database, frontend phải khớp phòng ban bằng **chuỗi tên**. Một phần trong
+33 alias tồn tại để hoà giải việc đó — nhưng chỉ một phần, xem khung ⏸️ dưới.
 
 ## What Changes
 
@@ -82,12 +82,28 @@ tại chỉ để hoà giải việc đó.
 **Còn lại — phạm vi chính của change này**
 
 - `web/js/api.js` chuyển `catalog.units` ra ngoài, giữ nguyên `unit_id` và `is_technical`
-- `web/js/app.js` bỏ `ORG_UNITS` (108 dòng gõ cứng) và `UNIT_ALIASES` (33 mục), dựng cây
-  từ database
+- `web/js/app.js` bỏ `ORG_UNITS` (108 dòng gõ cứng), dựng cây từ database.
+  **`UNIT_ALIASES` KHÔNG bỏ được** — xem khung ⏸️ dưới
 - Ghép usage vào đơn vị bằng `unit_id`, không bằng chuỗi tên
 - Hàng đơn vị kỹ thuật lấy tỷ lệ áp dụng từ `/api/adoption` thay vì tự tính
 - Đối chiếu 108 ↔ 130 đơn vị trước khi thay: tên nào chỉ có một bên, alias nào đang che
   một lệch thật
+
+> ### ⏸️ Phần cây tổ chức đã HOÃN, quyết định 20/08/2026
+>
+> Đo trước khi viết code: `dim_unit` là **hai cây** — Trợ Lý Ảo Hợp Đồng 20 đơn vị với
+> **4 gốc**, Trợ lý ảo Ralli 102 đơn vị với 1 gốc — và **8 tên tồn tại ở cả hai**.
+> `ORG_UNITS` là một cây đã gộp sẵn bằng tay.
+>
+> `unit_id` hoà giải được viết tắt nhưng **không gộp được hai cây**: chúng không có khoá
+> chung nào. Thay thẳng sẽ cho ra hai cây rời với 8 nhánh trùng tên.
+>
+> Gộp cây là câu hỏi **nghiệp vụ** — *"Vùng 1 của Hợp Đồng và Vùng 1 của Ralli có phải
+> một phòng không"* — cần người quyết. Đoán sai thì tiền chảy sang nhánh khác, đúng kiểu
+> lệch không mọc không mất nên không ai thấy.
+>
+> **Nhóm 8 (tiền theo phòng ban) độc lập hoàn toàn với phần này và vẫn làm ngay.**
+
 
 **Tiền theo phòng ban — suy từ bảng giá của Google**
 

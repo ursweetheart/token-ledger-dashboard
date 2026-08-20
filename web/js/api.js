@@ -220,14 +220,23 @@
     });
     dayOrder.sort();
 
-    /* Bảng giá lấy từ database (Cloud Billing Catalog), không gõ tay. */
-    var pricing = {};
+    /* Bảng giá lấy từ database (Cloud Billing Catalog), không gõ tay.
+
+       HAI BẢN CHỈ MỤC CỦA CÙNG MỘT BẢNG GIÁ, vì hai nơi hỏi bằng hai khoá khác
+       nhau và không nơi nào đổi được:
+           pricing      khoá theo TÊN model - dòng /api/usage trả `model`
+           pricingById  khoá theo model_id  - dòng /api/usage-by-account trả
+                        `model_id` chứ không trả tên (xem backend/store.py)
+       Dựng cả hai ở đây, trong lớp dịch, thay vì bắt app.js tự tra chéo. */
+    var pricing = {}, pricingById = {};
     (catalog.models || []).forEach(function (m) {
       if (m.price_input != null || m.price_output != null) {
         // `c` chỉ dùng cho những ngày hoá đơn chưa về. Model nào chưa có giá
         // cache thì để 0 - thà thiếu một khoản nhỏ còn hơn bịa một đơn giá.
-        pricing[m.name] = { i: m.price_input || 0, o: m.price_output || 0,
-                            c: m.price_cached || 0 };
+        var p = { i: m.price_input || 0, o: m.price_output || 0,
+                  c: m.price_cached || 0 };
+        pricing[m.name] = p;
+        pricingById[m.model_id] = p;
       }
     });
 
@@ -242,6 +251,7 @@
     });
 
     return { days: days, dayOrder: dayOrder, pricing: pricing,
+             pricingById: pricingById,
              budgets: budgets, fxRate: catalog.fx_rate || null };
   }
 

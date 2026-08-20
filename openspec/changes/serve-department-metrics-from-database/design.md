@@ -40,19 +40,63 @@ Ranh giới: `costKnown = known > 0 || (requests === 0 && tokens === 0)`.
 Kiểm chứng trên trang thật: `Kế hoạch` và `Trung tâm R&D` (0 request) giữ `0 ₫`;
 `Nghiên cứu thị trường`, `TTDL&ĐHS`, `TT&TMĐT` (có request) đổi sang `—`.
 
-### 2.3. Cây tổ chức: đọc từ database, ghép bằng `unit_id`
+### 2.3. Cây tổ chức — HOÃN, vì lập luận ban đầu đã bị bác bỏ
 
-**Ba phương án đã cân:**
+> **Bản đầu viết:** *"33 mục `UNIT_ALIASES` tồn tại **chỉ vì** frontend khớp bằng chuỗi
+> tên. Có `unit_id` thì chúng không còn việc gì để làm."*
+>
+> **Sai.** Đo ngày 20/08/2026, trước khi viết một dòng code nào.
 
-| | Cách | Được | Mất |
+`dim_unit` **không phải một cây**. Nó là hai, cộng thêm trùng lặp bên trong một cây:
+
+```
+   agent 5  Tro Ly Ao Hop Dong     20 don vi that,  BON goc
+            Cong ty CPBD PN Rang Dong · TT C4LED · TT&TMDT · TTDL&DHS
+
+   agent 8  Tro ly ao Ralli       102 don vi that,  mot goc
+            Toan cong ty
+
+   TAM ten ton tai o CA HAI cay:
+       CN Can Tho · CN Nha Trang · CN Tien Giang · CN Da Nang
+       TT3 · Vung 1 · Vung 2 · Vung 3
+   Va TT1, TT2 trung NGAY BEN TRONG cay cua Ralli.
+```
+
+Còn `ORG_UNITS` (108 đơn vị) là **một cây đã gộp sẵn bằng tay**.
+
+`db/01_schema.sql` nói thẳng điều này ngay tại bảng `dim_unit`: *"Cùng một phòng ban ngoài
+đời có thể có 2 dòng ở 2 cây khác nhau."* Database **cố ý** giữ chúng riêng.
+
+**Vậy `UNIT_ALIASES` làm hai việc, không phải một:**
+
+| Việc | `unit_id` có thay được không |
+|---|---|
+| Hoà giải viết tắt: `PBH1` ↔ `Phòng Bán hàng 1` ↔ `Phòng BH1` | ✅ Có |
+| **Gộp hai cây tổ chức thành một cái nhìn công ty** | ❌ Không — hai cây không có khoá chung nào |
+
+Thay `ORG_UNITS` bằng `dim_unit` sẽ cho ra **hai cây rời với 8 nhánh trùng tên**, không
+phải một cây sạch hơn.
+
+**Một chi tiết làm nhẹ vấn đề:** 892/937 tài khoản nằm ở cây của Trợ lý ảo Ralli, 45 ở cây
+Trợ Lý Ảo Hợp Đồng — và trong 8 tên trùng, bản của agent 5 đều có **0 tài khoản**. Nên
+phần trùng chủ yếu là trùng *hình dạng cây*, không phải trùng dữ liệu; `account.unit_id`
+đã chọn sẵn một bên theo quy tắc tất định từ 14/08.
+
+**Quyết định 20/08/2026: HOÃN việc thay cây.** Câu *"Vùng 1 của Hợp Đồng và Vùng 1 của
+Ralli có phải một phòng không"* là câu hỏi **nghiệp vụ**, không phải kỹ thuật. Đoán sai thì
+tiền chảy sang nhánh khác — đúng kiểu lệch thứ ba đã cảnh báo ở §3, kiểu không mọc không
+mất nên không ai thấy.
+
+Khi làm, hai hướng còn lại:
+
+| | Hướng | Được | Mất |
 |---|---|---|---|
-| A | Giữ `ORG_UNITS`, thêm cờ `is_technical` gõ tay cho 8 dòng | Sửa nhỏ nhất | Thêm **nguồn thứ hai** cho một sự thật database đã có. Đúng bệnh đang chữa |
-| B | Đặc biệt hoá theo tiền tố tên `"Đơn vị sử dụng "` | Không đụng cấu trúc | Khớp bằng chuỗi hiển thị. Đổi nhãn tiếng Việt là gãy, và gãy im lặng |
-| **C ★** | `api.js` chuyển `catalog.units` ra ngoài, `app.js` dựng cây từ đó | Một nguồn duy nhất; bỏ được cả 33 alias | Phải đối chiếu 108 ↔ 130 trước khi thay |
+| **A** | Đưa bảng ánh xạ **vào database** (cột `canonical_unit_id` hoặc bảng `unit_alias`) | Một nguồn thật; frontend hết gõ cứng | Đụng `db/`; phải có người quyết cặp nào gộp cặp nào |
+| **B** | Hiện **hai cây**, ghi rõ cây của app nào | Trung thực với dữ liệu; không cần ánh xạ | Tab Phòng ban đổi nghĩa từ *"công ty"* sang *"theo từng app"* |
 
-**Chọn C.** Lý do quyết định: 33 mục `UNIT_ALIASES` tồn tại **chỉ vì** frontend khớp bằng
-chuỗi tên. Có `unit_id` thì chúng không còn việc gì để làm — đây không phải một chỗ vá,
-mà là bỏ đi cả một tầng đang phải nuôi.
+**Bài học, giống hệt §5.1:** lập luận nghe hợp lý vẫn phải đo trước khi dùng nó để quyết
+phạm vi. Lần này cái sai lộ ra ở bước đầu tiên của việc apply — nếu không dừng lại đo thì
+đã viết xong `api.js` và `app.js` rồi mới phát hiện cây không gộp được.
 
 ## 3. Chỗ nguy hiểm nhất: 108 ↔ 130 không phải quan hệ con của nhau
 

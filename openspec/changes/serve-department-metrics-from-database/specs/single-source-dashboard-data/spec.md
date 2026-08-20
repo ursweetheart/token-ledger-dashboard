@@ -27,9 +27,23 @@ Cả bốn đều đã có bảng trong database (`ref_price`, `ref_budget`, `di
 chuyển ra ngoài.
 
 Hệ quả dây chuyền: không có `unit_id` thì frontend phải ghép usage vào đơn vị bằng **chuỗi
-tên hiển thị**, và 33 alias tồn tại chỉ để hoà giải việc đó. Ghép bằng chuỗi hiển thị sẽ
-gãy khi ai đó sửa một nhãn tiếng Việt — và gãy im lặng, vì usage không tìm được đơn vị sẽ
-rơi vào một đơn vị tự sinh chứ không báo lỗi.
+tên hiển thị**. Ghép bằng chuỗi hiển thị sẽ gãy khi ai đó sửa một nhãn tiếng Việt — và gãy
+im lặng, vì usage không tìm được đơn vị sẽ rơi vào một đơn vị tự sinh (`app.js:591`) chứ
+không báo lỗi.
+
+> ### ⏸️ Các yêu cầu về cây tổ chức đang HOÃN — chưa được thực hiện
+>
+> Đo ngày 20/08/2026 cho thấy `dim_unit` là **hai cây riêng** — 20 đơn vị với **4 gốc**
+> của Trợ Lý Ảo Hợp Đồng, 102 đơn vị với 1 gốc của Trợ lý ảo Ralli — và **8 tên tồn tại
+> ở cả hai**. `ORG_UNITS` là một cây đã gộp sẵn bằng tay.
+>
+> Nên `UNIT_ALIASES` làm **hai** việc: hoà giải viết tắt (`unit_id` thay được) **và gộp
+> hai cây thành một cái nhìn công ty** (`unit_id` KHÔNG thay được — hai cây không có khoá
+> chung). Thay thẳng sẽ cho ra hai cây rời với 8 nhánh trùng tên.
+>
+> Việc gộp cây là câu hỏi **nghiệp vụ**, cần người quyết. Xem `design.md` §2.3.
+
+Các scenario dưới đây mô tả trạng thái đích, **chưa phải trạng thái hiện tại**.
 
 #### Scenario: Không còn khối dữ liệu nào trong mã frontend
 
@@ -51,7 +65,10 @@ rơi vào một đơn vị tự sinh chứ không báo lỗi.
 - **WHEN** một dòng usage cần được quy về một đơn vị
 - **THEN** phép ghép SHALL dùng `unit_id`
 - **AND** MUST NOT dùng chuỗi tên hiển thị của phòng ban
-- **AND** không cần bảng alias nào để hoà giải cách viết tắt
+- **AND** không cần bảng alias nào để hoà giải **cách viết tắt**
+
+Lưu ý: việc này KHÔNG bỏ được nhu cầu **gộp hai cây tổ chức**. Đó là một ánh xạ riêng,
+phải có nguồn riêng — xem khung ⏸️ ở trên.
 
 #### Scenario: Đơn vị trong database mà không ghép được thì phải kêu
 

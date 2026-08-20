@@ -24,7 +24,16 @@
 - [x] 2.5 `node --check` sạch; `date-range-filter` 6/6 và `load-failure-states` 7/7 xanh;
       `audit_db.py` 32 phép / 0 hỏng; `check_api.py` 16/16
 
-## 3. Đối chiếu 108 ↔ 130 — LÀM TRƯỚC, chưa được xoá gì
+## 3–7. Cây tổ chức — ⏸️ HOÃN (quyết định 20/08/2026)
+
+Đo trước khi apply thấy `dim_unit` là **hai cây** (Trợ Lý Ảo Hợp Đồng 20 đơn vị / 4 gốc,
+Trợ lý ảo Ralli 102 đơn vị / 1 gốc) với **8 tên trùng nhau**, còn `ORG_UNITS` là một cây
+đã gộp bằng tay. `unit_id` hoà giải được viết tắt nhưng **không gộp được hai cây** — đó là
+câu hỏi nghiệp vụ, cần người quyết. Xem `design.md` §2.3.
+
+Nhóm 8 độc lập hoàn toàn với phần này nên vẫn làm được ngay.
+
+## 3. Đối chiếu 108 ↔ 130 — chưa làm
 
 - [ ] 3.1 Viết công cụ một lần trong `tools/` sinh bảng đối chiếu `ORG_UNITS` ↔ `dim_unit`
 - [ ] 3.2 Tách riêng ba kiểu lệch: chỉ có trong database · chỉ có trong `ORG_UNITS` ·
@@ -81,26 +90,32 @@
       `fetch("js/app.js?probe="+Date.now())` rồi so nội dung file với hàm có trong trang —
       ngày 20/08 đã mất một vòng vì bộ đệm giữ bản cũ và bảng hiện y hệt trước khi sửa
 
-## 8. Tiền theo phòng ban — suy từ bảng giá
+## 8. Tiền theo phòng ban — suy từ bảng giá — ĐÃ XONG (20/08/2026)
 
-Đưa vào phạm vi ngày 20/08/2026 sau khi đo bác bỏ lý do loại nó ra. Xem `design.md` §5.
+Đưa vào phạm vi sau khi đo bác bỏ lý do loại nó ra. Xem `design.md` §5.
 
-- [ ] 8.1 `api.js` giữ `model_id` trên từng dòng `byAccount` thay vì bỏ đi
-- [ ] 8.2 Dựng bảng tra `model_id` → tên model từ `/api/catalog`, vì `state.pricing` khoá
+- [x] 8.1 `api.js` giữ `model_id` trên từng dòng `byAccount` — **đã sẵn đúng**:
+      `state.byAccount` chuyển thẳng `r[6].rows`, không bỏ trường nào
+- [x] 8.2 Dựng bảng tra `model_id` → tên model từ `/api/catalog`, vì `state.pricing` khoá
       theo tên còn API trả id
-- [ ] 8.3 Tính tiền ở **mức dòng** rồi mới cộng lên tài khoản. MUST NOT nhân token đã cộng
+- [x] 8.3 Tính tiền ở **mức dòng** rồi mới cộng lên tài khoản. MUST NOT nhân token đã cộng
       gộp của tài khoản với một đơn giá — `flash-lite` $0,10 so với `pro` $1,25 chênh 12,5 lần
-- [ ] 8.4 Dòng có `model_id` không tra được giá thì đơn vị chứa nó rơi về `—`, không tính 0
-- [ ] 8.5 Ô tiền mang dấu hiệu nói rõ **suy từ bảng giá**, không phải hoá đơn.
+- [x] 8.4 Dòng có `model_id` không tra được giá thì đơn vị chứa nó rơi về `—`, không tính 0
+- [x] 8.5 Ô tiền mang dấu hiệu nói rõ **suy từ bảng giá**, không phải hoá đơn.
       ĐỒNG THỜI sửa tooltip của ô `—` đặt ở task 1.4 — câu *"tiền chỉ có ở mức
       project"* thành SAI khi tiền đã tính được; `—` lúc đó chỉ còn nghĩa
       *"model này không tra được đơn giá"*
-- [ ] 8.6 Thêm chỗ nói HAI phần chênh: hoá đơn không quy được ($47,5109 = 75,8%) và phần
+- [x] 8.6 Thêm chỗ nói HAI phần chênh: hoá đơn không quy được ($47,5109 = 75,8%) và phần
       suy ra NGOÀI hoá đơn của Trợ lý ảo Ralli ($1,2988 — agent chưa nối Google Billing)
-- [ ] 8.7 Đối chiếu: tổng tiền suy ra của các phòng ban phải khớp con số đã đo tay
+- [x] 8.7 Đối chiếu: tổng tiền suy ra của các phòng ban phải khớp con số đã đo tay
       (414.090 ₫ = $16,43 cho kỳ 19/07–17/08), lệch thì tìm ra dòng nào trước khi đi tiếp
-- [ ] 8.8 Đối chiếu lại phép suy trên nguồn billing: 965 dòng có cả hai vế phải cho lệch
-      tổng trong khoảng ±0,5% và lệch trung vị mỗi dòng dưới 1%
+- [x] 8.8 Đối chiếu lại phép suy trên nguồn billing: 965 dòng cho lệch tổng −0,1% và lệch
+      trung vị 0,0% — `tools/kiem_so_artifact.py` giữ phép kiểm này
+- [x] 8.9 **Phát hiện khi apply:** tiền của hàng đơn vị kỹ thuật đã TRỘN SẴN hoá đơn với
+      suy ra từ trước, mà không mang dấu gì — Chatbot Contact Center $15,30 hoá đơn +
+      $1,58 suy ra, Trợ lý ảo Ralli $0,00 + $2,51 (toàn bộ suy ra). Dấu `≈` vì vậy phải
+      áp cho CẢ hai nhánh, và tooltip nói rõ **bao nhiêu phần trăm** là suy ra: 2% với
+      Sale Agent, 9% Chatbot Contact Center, 31% Phân Loại Phản Hồi Tiếp Thị, 100% TTDL&ĐHS
 
 ## 9. Việc KHÔNG thuộc change này
 

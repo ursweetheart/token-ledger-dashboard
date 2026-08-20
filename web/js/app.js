@@ -336,6 +336,7 @@ function applyRealAccountUsage(){
   var byKey={};
   USER_ACCOUNTS.forEach(function(u){
     u.req=0; u.ti=0; u.to=0; u.active=false; u.last=""; u.quotaPct=0; u.byAgent={};
+    u.costDerived=0; u.costRows=0; u.costRowsPriced=0;
     if(u.login) byKey[String(u.login).trim().toLowerCase()]=u;
     if(u.email) byKey[String(u.email).trim().toLowerCase()]=u;
   });
@@ -346,6 +347,18 @@ function applyRealAccountUsage(){
         ||byKey[String(x.full_name||"").trim().toLowerCase()];
     if(!u){ bo++; boLuot+=x.calls||0; return; }
     var req=x.calls||0, ti=x.input_tokens||0, to=x.output_tokens||0;
+    /* TIỀN TÍNH Ở ĐÂY, MỨC TỪNG DÒNG - không cộng gộp token rồi mới nhân giá.
+       Một tài khoản dùng nhiều model, và đơn giá chênh 12,5 lần (flash-lite
+       $0,10 so với pro $1,25 cho mỗi triệu token vào), nên nhân tổng đã gộp với
+       bất kỳ đơn giá nào cũng ra một con số không model nào tính như thế.
+       Đó đúng là chỗ hỏng cũ: api.js dựng tài khoản với `m: ""`, model bị đánh
+       rơi, `cost()` tra không ra và trả 0 - làm mọi phòng ban thật hiện `0 ₫`
+       ngay cạnh 525,9 nghìn token.
+       Đếm cả `costRowsPriced` để biết có dòng nào KHÔNG tra được giá không -
+       khi đó phải hiện `—` chứ không phải một con số thiếu. */
+    var pr = state.pricingById && state.pricingById[x.model_id];
+    u.costRows++;
+    if(pr){ u.costRowsPriced++; u.costDerived += ti/1e6*num(pr.i) + to/1e6*num(pr.o); }
     u.req+=req; u.ti+=ti; u.to+=to;
     var ag=x.agent||u.a, b=u.byAgent[ag]||(u.byAgent[ag]={req:0,ti:0,to:0});
     b.req+=req; b.ti+=ti; b.to+=to;
@@ -701,7 +714,7 @@ function defaultState(){
     range:null,
     filters:{dept:"",user:"",provider:"",model:"",agent:""},
     deptExpanded:defaultDeptExpanded(), deptExpandedInit:1, deptSearch:"",
-    matrixExpanded:{}, matrixSearch:"", pmCollapsed:{}, pricing:{} };
+    matrixExpanded:{}, matrixSearch:"", pmCollapsed:{}, pricing:{}, pricingById:{} };
 }
 /* Cấp 1 của cây giờ đã là phòng ban thật (xem buildDeptRows dùng reportingRoots),
    nên mở dashboard là thấy ngay danh sách phòng ban mà không cần bung sẵn cấp nào —
@@ -1585,9 +1598,18 @@ function buildDeptUsageIndex(rows){
     if(!u||isExcludedUnit(u)) return;
     var rq=num(r.r), c=cost(r), ti=num(r.ti), to=num(r.to), ca=num(r.cached),
         erW=num(r.er)*rq;
+    /* Tách phần tiền SUY RA khỏi phần lấy từ hoá đơn. `cost(r)` ước tính từ bảng
+       giá bất cứ khi nào `r.cost` là NULL - tức những ngày hoá đơn chưa về - và
+       trước 20/08/2026 ô hiện ra không phân biệt hai loại.
+       Đo trên kỳ 19/07-17/08: Chatbot Contact Center $15,30 hoá đơn + $1,58 suy
+       ra; Phân Loại Phản Hồi Tiếp Thị $6,02 + $2,68; Trợ lý ảo Ralli $0,00 hoá
+       đơn + $2,51 suy ra - agent này chưa nối Google Billing nên TOÀN BỘ số tiền
+       của nó là suy ra, mà màn hình không nói gì. */
+    var est = (r.cost == null) ? c : 0;
     unitPath(u.id).forEach(function(n){
-      var m=map[n.id]||(map[n.id]={r:0,ti:0,to:0,cached:0,tokens:0,cost:0,erW:0,rowCount:0,agentSet:{}});
-      m.r+=rq; m.ti+=ti; m.to+=to; m.cached+=ca; m.cost+=c; m.erW+=erW; m.rowCount++;
+      var m=map[n.id]||(map[n.id]={r:0,ti:0,to:0,cached:0,tokens:0,cost:0,costEst:0,erW:0,rowCount:0,agentSet:{}});
+      m.r+=rq; m.ti+=ti; m.to+=to; m.cached+=ca; m.cost+=c; m.costEst+=est;
+      m.erW+=erW; m.rowCount++;
       if(r.a) m.agentSet[r.a]=1;
     });
   });
@@ -1603,20 +1625,60 @@ function buildDeptUsageIndex(rows){
    (vùng/đội) thì lấy phần đã phân bổ xuống tài khoản, để tổng cấp con khớp cấp cha. */
 function deptUnitMetrics(unit, usageIndex, accounts){
   var hit=usageIndex&&usageIndex[unit.id];
-  // Nhánh này có dòng usage thật, tức có `cost` từ hoá đơn: tiền đo được.
-  if(hit&&hit.rowCount>0) return {agg:hit, agents:hit.agents, costKnown:true};
-  var a={r:0,ti:0,to:0,tokens:0,cost:0,er:0}, agentMap={}, known=0;
+  // Nhánh này có dòng usage thật. Tiền tính được, NHƯNG có thể trộn hoá đơn với
+  // phần suy ra của những ngày hoá đơn chưa về - `costEst` nói phần đó bao nhiêu.
+  if(hit&&hit.rowCount>0)
+    return {agg:hit, agents:hit.agents, costKnown:true,
+            costDerived: num(hit.costEst)>0, costEst: num(hit.costEst)};
+  var a={r:0,ti:0,to:0,tokens:0,cost:0,er:0}, agentMap={}, rows=0, priced=0;
   (accounts||[]).forEach(function(u){
     a.r+=num(u.req); a.ti+=num(u.ti); a.to+=num(u.to);
-    var c=costOrNull(u); if(c!=null){ a.cost+=c; known++; }
+    // Tiền SUY RA, đã tính sẵn ở mức dòng trong applyRealAccountUsage().
+    a.cost+=num(u.costDerived);
+    rows+=num(u.costRows); priced+=num(u.costRowsPriced);
     if(u.a&&u.a!=="—") agentMap[u.a]=1;
   });
   a.tokens=a.ti+a.to;
-  /* Đơn vị KHÔNG có lưu lượng nào thì 0 ₫ là con số ĐÚNG, không phải chỗ trống.
-     Có lưu lượng mà không tài khoản nào tính được tiền thì phải hiện '—': nói
-     `0 ₫` cạnh `525,9 nghìn token` là một khẳng định sai. */
+  /* Ba trạng thái, không phải hai:
+       không lưu lượng nào          -> `0 ₫` ĐÚNG, đó là số thật
+       mọi dòng đều tra được giá    -> con số suy ra
+       có dòng KHÔNG tra được giá   -> `—`, vì con số sẽ thiếu đúng phần đó
+     Nói `0 ₫` cạnh `525,9 nghìn token` là một khẳng định sai; mà nói một con số
+     thiếu vài dòng cũng vậy, chỉ khó thấy hơn. */
+  // Nhánh này KHÔNG có dòng hoá đơn nào - toàn bộ số tiền là suy từ bảng giá.
   return {agg:a, agents:Object.keys(agentMap).length,
-          costKnown: known>0 || (a.r===0 && a.tokens===0)};
+          costDerived: rows>0, costEst: a.cost,
+          costKnown: (rows>0 && priced===rows) || (a.r===0 && a.tokens===0)};
+}
+/* Ô tiền của một hàng đơn vị. Ba trạng thái, mỗi trạng thái một câu khác nhau.
+
+   VÌ SAO TIỀN SUY RA PHẢI TỰ KHAI LÀ SUY RA
+   Tiền của hàng đơn vị KHÔNG lấy từ hoá đơn được: hoá đơn Google tính theo
+   project và không ghi ai gọi, nên /api/usage-by-account không có cột cost_usd.
+   Con số ở đây nhân token với ref_price - mà ref_price lấy từ chính Cloud
+   Billing Catalog của Google (`price_source='google'`), nên nó dựng lại rất sát:
+   đối chiếu 965 dòng có cả hai vế cho lệch tổng −0,1% và lệch trung vị 0,0%.
+   Sát đến vậy vẫn KHÔNG phải hoá đơn, và người đọc có quyền biết mình đang xem
+   con số nào. Dấu `≈` và tooltip làm đúng việc đó.
+
+   Trước 20/08/2026 ô này in `0 ₫` cho mọi phòng ban thật - xem deptUnitMetrics. */
+function deptCostCell(m, g){
+  if(!m.costKnown)
+    return "<td class='num cost' title='"+esc("Chưa tính được: có dòng sử dụng mang model"
+      +" không tra được đơn giá trong bảng giá")+"'><span class='metric-na'>—</span></td>";
+  if(!m.costDerived)   // toàn bộ từ hoá đơn Google
+    return "<td class='num cost' title='"+esc(usdReference(g.cost))+"'>"
+      +moneyCompact(g.cost)+"</td>";
+  /* Có phần suy ra. NÓI ĐỦ BAO NHIÊU, không chỉ nói "có" — với Trợ lý ảo Ralli
+     thì toàn bộ là suy ra, với Chatbot Contact Center chỉ 9%. Hai chuyện rất
+     khác nhau mà cùng một dấu `≈` sẽ làm chúng trông giống hệt. */
+  var est=num(m.costEst), pct=g.cost>0 ? 100*est/g.cost : 100;
+  return "<td class='num cost' title='"+esc(
+      (pct>=99.5 ? "Toàn bộ số này SUY TỪ BẢNG GIÁ, không có dòng hoá đơn nào."
+                 : "Trong số này có "+moneyCompact(est)+" ("+pct.toFixed(0)
+                   +"%) suy từ bảng giá, phần còn lại lấy từ hoá đơn.")
+      +" Hoá đơn Google tính theo project nên không chia được theo phòng ban. "
+      +usdReference(g.cost))+"'>≈ "+moneyCompact(g.cost)+"</td>";
 }
 function deptQuotaCell(u){
   var c=accountCost(u), q=Math.max(0,Math.min(100,num(u.quotaPct)));
@@ -1687,11 +1749,7 @@ function deptRowHtml(row, usageIndex, light){
     adoptionCell(activeCount,prov,outsideCount)+
     "<td class='num'>"+fmt(g.r)+"</td>"+
     "<td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtCompactNum(g.tokens)+"</td>"+
-    (m.costKnown
-      ? "<td class='num cost' title='"+esc(usdReference(g.cost))+"'>"+moneyCompact(g.cost)+"</td>"
-      : "<td class='num cost' title='"+esc("Không tính được: tiền chỉ có ở hoá đơn"
-          +" Google, mà hoá đơn ở mức project nên không chia được theo người dùng")
-        +"'><span class='metric-na'>—</span></td>")+
+    deptCostCell(m, g)+
     "<td class='num"+(g.er>2?" text-red":"")+"'>"+num(g.er).toFixed(1)+"%</td>"+
     naCell()+"</tr>";
   return html;
@@ -3497,6 +3555,11 @@ function loadFromBackend(){
     state.days=kq.days;
     state.dayOrder=kq.dayOrder;
     if(Object.keys(kq.pricing||{}).length) state.pricing=kq.pricing;
+    /* Bản chỉ mục thứ hai của cùng bảng giá, khoá theo model_id. CHÉP RIÊNG,
+       không suy ra từ state.pricing: bảng kia khoá theo TÊN model, mà
+       /api/usage-by-account chỉ trả `model_id`. Quên dòng này thì tiền theo
+       phòng ban im lặng rơi hết về '—' - đã dính đúng vậy lúc apply 20/08. */
+    if(Object.keys(kq.pricingById||{}).length) state.pricingById=kq.pricingById;
     if(kq.fxRate && kq.fxRate.vnd_per_usd) VND_RATE=kq.fxRate.vnd_per_usd;
     state.activeDay=kq.dayOrder[kq.dayOrder.length-1];
     // Kỳ đang chọn có thể nằm ngoài khoảng dữ liệu vừa nạp — kéo về cuối kỳ.
