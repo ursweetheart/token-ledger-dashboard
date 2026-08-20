@@ -167,8 +167,13 @@ def units(cn) -> list[dict]:
     # level bằng nhau tên bằng nhau, và SQLite với PostgreSQL trả về ngược thứ tự
     # nhau. Kết quả: cùng một API cho hai kết quả khác nhau tuỳ database, mà
     # không ai báo gì. Thêm khoá chính vào cuối là hết.
+    # `canonical_unit_id` NULL = dòng này LÀ bản chuẩn; có giá trị = bản trùng ở
+    # cây tổ chức của app kia. Frontend cần cột này để gộp hai cây thành một cái
+    # nhìn công ty - trước 20/08/2026 phép gộp đó nằm trong UNIT_ALIASES gõ tay
+    # ở web/js/app.js, tức database không biết gì về nó.
     return _rows(cn, """
-        SELECT unit_id, agent_id, name, parent_id, level, path, is_technical
+        SELECT unit_id, agent_id, name, parent_id, level, path, is_technical,
+               canonical_unit_id
         FROM dim_unit ORDER BY level, name, unit_id""")
 
 

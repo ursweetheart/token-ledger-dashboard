@@ -70,7 +70,31 @@ CREATE TABLE dim_unit (
     path       TEXT,
     -- TRUE với 6 dòng 'Đơn vị sử dụng <agent>' và dòng 'Chưa quy được'.
     -- Thiếu cột này thì COUNT(*) đếm cả dòng kỹ thuật thành phòng ban thật.
-    is_technical BOOLEAN NOT NULL
+    is_technical BOOLEAN NOT NULL,
+    -- CÙNG MỘT PHÒNG BAN NGOÀI ĐỜI, HAI DÒNG Ở HAI CÂY (thêm 20/08/2026)
+    --
+    -- Bảng này chứa HAI cây tổ chức, không phải một: Trợ lý ảo Ralli 102 đơn vị
+    -- một gốc 'Toàn công ty'; Trợ Lý Ảo Hợp Đồng 20 đơn vị BỐN gốc. Hai app mô
+    -- hình hoá cùng một công ty theo hai kiểu, và không có khoá chung nào.
+    --
+    -- NULL = dòng này LÀ bản chuẩn. Có giá trị = dòng này là bản trùng, trỏ về
+    -- bản chuẩn. Đã đo 20/08: chỉ ĐÚNG 4 cặp cần gộp, không phải 130 —
+    --     TT C4LED  (Hợp Đồng)  ->  C4LED (Ralli)
+    --     Phòng BH1 (Hợp Đồng)  ->  PBH1  (Ralli)
+    --     Phòng BH2 (Hợp Đồng)  ->  PBH2  (Ralli)
+    --     Phòng BH3 (Hợp Đồng)  ->  PBH3  (Ralli)
+    -- Cây Ralli làm chuẩn vì nó mô hình hoá CẢ công ty (một gốc, 102 đơn vị,
+    -- 892/937 tài khoản); cây Hợp Đồng chỉ là một phần với bốn gốc rời.
+    --
+    -- VÌ SAO PHẢI GỘP, chứ không để hai hàng: mỗi cặp đều có một bên nhiều tài
+    -- khoản còn bên kia nhiều token. Không gộp thì PBH1 hiện hai hàng '7 tài
+    -- khoản / 0 token' và '30 tài khoản / 105.187 token', và tỷ lệ áp dụng bị
+    -- chẻ mẫu số: 0/7 với X/30 thay vì X/37.
+    --
+    -- Trước 20/08 phép gộp này nằm trong `UNIT_ALIASES` gõ tay ở web/js/app.js -
+    -- tức một sự thật về tổ chức công ty sống trong mã giao diện, và database
+    -- không biết gì về nó.
+    canonical_unit_id TEXT REFERENCES dim_unit
 );
 
 -- MỘT DÒNG = MỘT TÀI KHOẢN, không phải một con người ngoài đời.

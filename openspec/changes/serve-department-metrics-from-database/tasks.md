@@ -24,25 +24,29 @@
 - [x] 2.5 `node --check` sạch; `date-range-filter` 6/6 và `load-failure-states` 7/7 xanh;
       `audit_db.py` 32 phép / 0 hỏng; `check_api.py` 16/16
 
-## 3–7. Cây tổ chức — ⏸️ HOÃN (quyết định 20/08/2026)
+## 3–7. Cây tổ chức — hướng **A**, người dùng chốt 20/08/2026
 
-Đo trước khi apply thấy `dim_unit` là **hai cây** (Trợ Lý Ảo Hợp Đồng 20 đơn vị / 4 gốc,
-Trợ lý ảo Ralli 102 đơn vị / 1 gốc) với **8 tên trùng nhau**, còn `ORG_UNITS` là một cây
-đã gộp bằng tay. `unit_id` hoà giải được viết tắt nhưng **không gộp được hai cây** — đó là
-câu hỏi nghiệp vụ, cần người quyết. Xem `design.md` §2.3.
+`dim_unit` là **hai cây**: Trợ Lý Ảo Hợp Đồng 20 đơn vị / 4 gốc, Trợ lý ảo Ralli 102 đơn
+vị / 1 gốc. Đo ra **chỉ 4 cặp** thật sự cần gộp, không phải 33 như tưởng — 13 nhóm alias
+còn lại chỉ là viết tắt trong một cây (`unit_id` giải quyết), 3 nhóm trỏ tới tên không có
+trong `dim_unit`. Người dùng xác nhận cả 4 cặp. Xem `design.md` §2.3.
 
-Nhóm 8 độc lập hoàn toàn với phần này nên vẫn làm được ngay.
+## 3. Đối chiếu 108 ↔ 130 — ĐÃ XONG (20/08/2026)
 
-## 3. Đối chiếu 108 ↔ 130 — chưa làm
-
-- [ ] 3.1 Viết công cụ một lần trong `tools/` sinh bảng đối chiếu `ORG_UNITS` ↔ `dim_unit`
-- [ ] 3.2 Tách riêng ba kiểu lệch: chỉ có trong database · chỉ có trong `ORG_UNITS` ·
+- [x] 3.1 Viết công cụ một lần trong `tools/` sinh bảng đối chiếu `ORG_UNITS` ↔ `dim_unit`
+- [x] 3.2 Tách riêng ba kiểu lệch: chỉ có trong database · chỉ có trong `ORG_UNITS` ·
       có ở cả hai nhưng **khác cha hoặc khác cấp**
-- [ ] 3.3 Với mỗi mục thuộc kiểu thứ ba, ghi rõ số token đang bị cộng vào nhánh nào
-- [ ] 3.4 Soát 33 mục `UNIT_ALIASES`: alias nào là viết tắt thật, alias nào đang **che một
+- [x] 3.3 Với mỗi mục thuộc kiểu thứ ba, ghi rõ số token đang bị cộng vào nhánh nào
+- [x] 3.4 Soát 33 mục `UNIT_ALIASES`: alias nào là viết tắt thật, alias nào đang **che một
       lệch** giữa hai cây
-- [ ] 3.5 Ghi lại bốn mốc nghiệm thu TRƯỚC khi thay: tổng token · tổng tiền · tổng từng
+- [x] 3.5 Ghi lại bốn mốc nghiệm thu TRƯỚC khi thay: tổng token · tổng tiền · tổng từng
       phòng ban cấp 1 · số hàng đơn vị và số hàng tài khoản
+- [x] 3.6 `dim_unit.canonical_unit_id` — 4 cặp gộp đưa vào database, thay cho phép gộp
+      gõ tay trong `UNIT_ALIASES`. Đặt bằng UPDATE sau khi chèn, vì nó là khoá ngoại tự
+      trỏ mà vòng chèn sắp theo `level` và bản chuẩn không nhất thiết nông hơn bản trùng
+- [x] 3.7 `tools/doi_chieu_cay_don_vi.py` — kết quả: **nhóm [3] = 0**, không đơn vị nào
+      lệch cha; 5 đơn vị mọc thêm đều **0 tài khoản / 0 token**; 3 đơn vị mất đi là tên
+      cũ thời Excel không có dòng trong `dim_unit`; 1 cặp khác nhau đúng một chữ `Đ`
 
 ## 4. `api.js` chuyển cây tổ chức ra ngoài
 
