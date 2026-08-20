@@ -57,142 +57,32 @@ var EXCLUDED_DEPARTMENTS = {"Đang trong quá trình thử nghiệm":true};
    Nguồn dữ liệu usage đặt tên phòng ban tự do: mỗi agent trong file Excel là một khối
    riêng và mỗi khối dùng một quy ước viết tắt khác nhau, nên cùng một đơn vị xuất hiện
    dưới nhiều tên (PBH1 / Phòng Bán hàng 1, TMĐT / Thương mại điện tử, C4LED / TT C4LED).
-   ORG_UNITS + UNIT_ALIASES là nguồn sự thật duy nhất để mỗi đơn vị chỉ xuất hiện MỘT lần.
+   Cây đơn vị giờ lấy từ database qua /api/catalog, nên mỗi đơn vị chỉ xuất hiện MỘT lần.
 
    Cây Ralli và số user phân quyền lấy trực tiếp từ data/phong_ban_phan_quyen.xlsx,
    theo mức thụt lề trong sheet "Cơ cấu Tổ chức". Alias tiếp tục chuẩn hóa tên viết tắt
    giữa file usage và file phân quyền: PBH1 / Phòng Bán hàng 1, TMĐT / Thương mại điện tử,
    C4LED / TT C4LED.
    ═══════════════════════════════════════════ */
-var ORG_UNITS = [
-  {id:"company",name:"Toàn công ty",parent:null,level:1},
-  {id:"rd-corp",name:"Tổng công ty Rạng Đông",parent:"company",level:2},
-  {id:"pbh1",name:"PBH1",parent:"rd-corp",level:3},
-  {id:"perm-004",name:"Vùng 1",parent:"pbh1",level:4},
-  {id:"perm-005",name:"Đội chuyên trách - Vùng 1",parent:"perm-004",level:5},
-  {id:"perm-006",name:"Đội 1 - Nam Định",parent:"perm-004",level:5},
-  {id:"perm-007",name:"Đội 2 - Thái Bình",parent:"perm-004",level:5},
-  {id:"perm-008",name:"Đội 3 - Hà Nam - Ninh Bình",parent:"perm-004",level:5},
-  {id:"perm-009",name:"Đội 4 - Thanh Hoá",parent:"perm-004",level:5},
-  {id:"perm-010",name:"Đội 5 - Nghệ An - Hà Tĩnh",parent:"perm-004",level:5},
-  {id:"perm-011",name:"Vùng 2",parent:"pbh1",level:4},
-  {id:"perm-012",name:"Đội chuyên trách - Vùng 2",parent:"perm-011",level:5},
-  {id:"perm-013",name:"Đội 1 - Hà Nội",parent:"perm-011",level:5},
-  {id:"perm-014",name:"Đội 2 - Hà Nội",parent:"perm-011",level:5},
-  {id:"perm-015",name:"Đội 3 - Hà Nội",parent:"perm-011",level:5},
-  {id:"perm-016",name:"Đội 4 - Bắc Ninh",parent:"perm-011",level:5},
-  {id:"perm-017",name:"Đội 5 - Bắc Giang - Lạng Sơn",parent:"perm-011",level:5},
-  {id:"perm-018",name:"Đội 6 - Hưng Yên",parent:"perm-011",level:5},
-  {id:"perm-019",name:"Đội 7 - Hải Dương - Hải Phòng",parent:"perm-011",level:5},
-  {id:"perm-020",name:"Đội 8 - Quảng Ninh",parent:"perm-011",level:5},
-  {id:"perm-021",name:"Vùng 3",parent:"pbh1",level:4},
-  {id:"perm-022",name:"Đội chuyên trách - Vùng 3",parent:"perm-021",level:5},
-  {id:"perm-023",name:"Đội 1 - HN2 - Sơn La - Điện Biên",parent:"perm-021",level:5},
-  {id:"perm-024",name:"Đội 2 - HN2 - Hoà Bình",parent:"perm-021",level:5},
-  {id:"perm-025",name:"Đội 3 - Vĩnh Phúc",parent:"perm-021",level:5},
-  {id:"perm-026",name:"Đội 4 - Thái Nguyên - Cao Bằng",parent:"perm-021",level:5},
-  {id:"perm-027",name:"Đội 5 - Phú Thọ",parent:"perm-021",level:5},
-  {id:"perm-028",name:"Đội 6 - Yên Bái - Tuyên Quang - Hà Giang - Lào Cai - Lai Châu",parent:"perm-021",level:5},
-  {id:"perm-029",name:"TT1",parent:"pbh1",level:4},
-  {id:"perm-030",name:"TT1",parent:"perm-029",level:5},
-  {id:"perm-031",name:"Đội chuyên trách 1 - trung tâm 1",parent:"perm-029",level:5},
-  {id:"perm-032",name:"Đội Chuyên Trách 2",parent:"perm-029",level:5},
-  {id:"pbh2",name:"PBH2",parent:"rd-corp",level:3},
-  {id:"perm-034",name:"CN Đà Nẵng",parent:"pbh2",level:4},
-  {id:"perm-035",name:"Đội Bình Định",parent:"perm-034",level:5},
-  {id:"perm-036",name:"Đội Đà Nẵng",parent:"perm-034",level:5},
-  {id:"perm-037",name:"Đội Huế",parent:"perm-034",level:5},
-  {id:"perm-038",name:"Đội Quảng Bình",parent:"perm-034",level:5},
-  {id:"perm-039",name:"Đội Quảng Nam",parent:"perm-034",level:5},
-  {id:"perm-040",name:"Đội Quảng Trị",parent:"perm-034",level:5},
-  {id:"perm-041",name:"Đội chuyên trách - CN Đà Nẵng",parent:"perm-034",level:5},
-  {id:"perm-042",name:"CN Nha Trang",parent:"pbh2",level:4},
-  {id:"perm-043",name:"Đội Khánh Hòa",parent:"perm-042",level:5},
-  {id:"perm-044",name:"Đội Lâm Đồng",parent:"perm-042",level:5},
-  {id:"perm-045",name:"Đội Ninh Thuận",parent:"perm-042",level:5},
-  {id:"perm-046",name:"Đội Phú Yên",parent:"perm-042",level:5},
-  {id:"perm-047",name:"Đội chuyên trách - CN Nha Trang",parent:"perm-042",level:5},
-  {id:"perm-048",name:"Tây Nguyên",parent:"pbh2",level:4},
-  {id:"perm-049",name:"Đội Đắk Lắk",parent:"perm-048",level:5},
-  {id:"perm-050",name:"Đội Đắk Nông",parent:"perm-048",level:5},
-  {id:"perm-051",name:"Đội Gia Lai",parent:"perm-048",level:5},
-  {id:"perm-052",name:"Đội Kon Tum",parent:"perm-048",level:5},
-  {id:"perm-053",name:"Đội chuyên trách - Tây Nguyên",parent:"perm-048",level:5},
-  {id:"perm-054",name:"TT2",parent:"pbh2",level:4},
-  {id:"perm-055",name:"TT2",parent:"perm-054",level:5},
-  {id:"perm-056",name:"Đội 1 - TT2",parent:"perm-054",level:5},
-  {id:"perm-057",name:"Đội 2 - TT2",parent:"perm-054",level:5},
-  {id:"perm-058",name:"Đội 3 - TT2",parent:"perm-054",level:5},
-  {id:"perm-059",name:"Đội 4 - TT2",parent:"perm-054",level:5},
-  {id:"perm-060",name:"Đội 5 - TT2",parent:"perm-054",level:5},
-  {id:"perm-061",name:"Đội 6 - TT2",parent:"perm-054",level:5},
-  {id:"pbh3",name:"PBH3",parent:"rd-corp",level:3},
-  {id:"perm-063",name:"CN Hồ Chí Minh",parent:"pbh3",level:4},
-  {id:"perm-064",name:"Đội 1",parent:"perm-063",level:5},
-  {id:"perm-065",name:"Đội 2",parent:"perm-063",level:5},
-  {id:"perm-066",name:"Đội 3",parent:"perm-063",level:5},
-  {id:"perm-067",name:"Đội 4",parent:"perm-063",level:5},
-  {id:"perm-068",name:"Đội 5",parent:"perm-063",level:5},
-  {id:"perm-069",name:"Đội Siêu Thị",parent:"perm-063",level:5},
-  {id:"perm-070",name:"Đội chuyên trách - CN Hồ Chí Minh",parent:"perm-063",level:5},
-  {id:"perm-071",name:"CN Biên Hòa",parent:"pbh3",level:4},
-  {id:"perm-072",name:"Đội Bình Dương",parent:"perm-071",level:5},
-  {id:"perm-073",name:"Đội Bình Phước",parent:"perm-071",level:5},
-  {id:"perm-074",name:"Đội Bình Thuận",parent:"perm-071",level:5},
-  {id:"perm-075",name:"Đội Đồng Nai",parent:"perm-071",level:5},
-  {id:"perm-076",name:"Đội Vũng Tàu",parent:"perm-071",level:5},
-  {id:"perm-077",name:"Đội chuyên trách - CN Biên Hòa",parent:"perm-071",level:5},
-  {id:"perm-078",name:"CN Cần Thơ",parent:"pbh3",level:4},
-  {id:"perm-079",name:"Đội An Giang",parent:"perm-078",level:5},
-  {id:"perm-080",name:"Đội Kiên Giang",parent:"perm-078",level:5},
-  {id:"perm-081",name:"Đội Cần Thơ",parent:"perm-078",level:5},
-  {id:"perm-082",name:"Đội Sóc Trăng",parent:"perm-078",level:5},
-  {id:"perm-083",name:"Đội Cà Mau",parent:"perm-078",level:5},
-  {id:"perm-084",name:"Đội Bạc Liêu",parent:"perm-078",level:5},
-  {id:"perm-085",name:"Đội Campuchia",parent:"perm-078",level:5},
-  {id:"perm-086",name:"Đội chuyên trách - CN Cần Thơ",parent:"perm-078",level:5},
-  {id:"perm-087",name:"CN Tiền Giang",parent:"pbh3",level:4},
-  {id:"perm-088",name:"Đội Vĩnh Long",parent:"perm-087",level:5},
-  {id:"perm-089",name:"Đội Đồng Tháp",parent:"perm-087",level:5},
-  {id:"perm-090",name:"Đội Long An",parent:"perm-087",level:5},
-  {id:"perm-091",name:"Đội chuyên trách - CN Tiền Giang",parent:"perm-087",level:5},
-  {id:"perm-092",name:"TT3",parent:"pbh3",level:4},
-  {id:"perm-093",name:"TT4",parent:"pbh3",level:4},
-  {id:"pxk",name:"Xuất khẩu",parent:"rd-corp",level:3},
-  {id:"truyenthong",name:"Truyền thông",parent:"rd-corp",level:3},
-  {id:"ketoan",name:"Kế toán",parent:"rd-corp",level:3},
-  {id:"ecom",name:"TMĐT",parent:"rd-corp",level:3},
-  {id:"c4led",name:"C4LED",parent:"company",level:2},
-  {id:"nctt2",name:"Nghiên cứu thị trường",parent:"company",level:2},
-  {id:"kehoach",name:"Kế hoạch",parent:"company",level:2},
-  {id:"rnd",name:"Trung tâm R&D",parent:"company",level:2},
-  {id:"qths",name:"Quản trị hệ thống",parent:"company",level:2},
-  /* Đơn vị của các agent khác không nằm trong workbook phân quyền Ralli. */
-  {id:"aemkt",name:"Anh Em tiếp thị",parent:null,level:1},
-  {id:"cskh",name:"Chăm sóc khách hàng",parent:null,level:1},
-  {id:"nctt",name:"P.NCTT",parent:null,level:1},
-  {id:"cpbd",name:"Công ty CPBĐ PN Rạng Đông",parent:null,level:1},
-  {id:"ttdl",name:"TTDL&ĐHS",parent:null,level:1},
-  {id:"tttmdt",name:"TT&TMĐT",parent:null,level:1}
-];
-var UNIT_ALIASES = {
-  "Toàn công ty":"company", "Tổng công ty Rạng Đông":"rd-corp",
-  // "Phòng BH1" là cách cây tổ chức của app TLA Hợp Đồng gọi, "PBH1" là cách
-  // Ralli gọi. Cùng một phòng. Thiếu ba dòng này thì người của Hợp Đồng rơi vào
-  // đơn vị tự sinh và không gộp chung với người của Ralli cùng phòng.
-  "PBH1":"pbh1", "Phòng Bán hàng 1":"pbh1", "Phòng BH1":"pbh1",
-  "PBH2":"pbh2", "Phòng Bán hàng 2":"pbh2", "Phòng BH2":"pbh2",
-  "PBH3":"pbh3", "Phòng Bán hàng 3":"pbh3", "Phòng BH3":"pbh3",
-  "TMĐT":"ecom", "Thương mại điện tử":"ecom",            // danh mục chuẩn: TMDT
-  "TT C4LED":"c4led", "C4LED":"c4led",
-  "Cty CPBĐ PN Rạng Đông":"cpbd", "Công ty CPBĐ PN Rạng Đông":"cpbd",
-  "P.NCTT":"nctt",
-  "P.NCTT , TTDL&ĐHS":"nctt", "P.NCTT, TTDL&ĐHS":"nctt", // fallback cho dữ liệu cũ trước khi tách
-  "Anh Em tiếp thị":"aemkt", "Chăm sóc khách hàng":"cskh",
-  "TTDL&DHS":"ttdl", "TTDL&ĐHS":"ttdl", "TT&TMĐT":"tttmdt", "Xuất khẩu":"pxk",
-  "Truyền thông":"truyenthong", "Kế toán":"ketoan", "Kế hoạch":"kehoach",
-  "Nghiên cứu thị trường":"nctt2", "Trung tâm R&D":"rnd", "Quản trị hệ thống":"qths"
-};
+/* Cây đơn vị. RỖNG cho tới khi adoptOrgUnits() nhận dữ liệu từ /api/catalog.
+
+   Trước 20/08/2026 chỗ này là 108 đơn vị GÕ CỨNG (7.207 ký tự) trong khi
+   database có 130. Đó là phần bị bỏ sót của change serve-dashboard-from-
+   database-only: đợt đó bỏ được SEED_DAYS, bảng giá và danh bạ, nhưng quên cây
+   tổ chức - nên một sự thật về cơ cấu công ty vẫn sống trong mã giao diện.
+
+   Đối chiếu trước khi bỏ (tools/doi_chieu_cay_don_vi.py): KHÔNG đơn vị nào lệch
+   cha - đó là kiểu lệch nguy hiểm nhất vì nó không làm mọc thêm hay mất đi hàng
+   nào, chỉ chuyển số sang nhánh khác. 5 đơn vị mọc thêm đều 0 tài khoản/0 token,
+   3 đơn vị mất đi là tên cũ thời Excel không có dòng trong database. */
+var ORG_UNITS = [];
+/* UNIT_ALIASES đã bỏ 20/08/2026. Nó làm HAI việc:
+     1. hoà giải viết tắt  PBH1 / Phòng Bán hàng 1 / Phòng BH1
+     2. gộp hai cây tổ chức thành một cái nhìn công ty
+   Việc (1) hết cần khi ghép bằng `unit_id`. Việc (2) chuyển vào database thành
+   cột `dim_unit.canonical_unit_id` - 4 cặp, người dùng xác nhận 20/08/2026.
+   Cách viết chuẩn của TTDL&DHS lấy đúng như database, không thêm dấu. */
+
 /* Số tài khoản được cấp sẽ được dựng lại từ danh sách user Ralli đã làm sạch.
    Không dùng số demo hoặc số của agent khác cho các KPI/bảng người dùng. */
 var DEPT_PROVISIONED = {};
@@ -261,7 +151,7 @@ function unitAgentProfiles(){
     if(!src) return;
     Object.keys(src).forEach(function(day){
       (src[day]||[]).forEach(function(r){
-        var unit=unitOf(r.d);
+        var unit=unitOfRow(r);
         if(!unit||isExcludedUnit(unit)||!r.a) return;
         var list=byUnit[unit.id]=byUnit[unit.id]||[];
         if(!list.some(function(p){return p.a===r.a&&p.m===r.m;})) list.push({a:r.a,m:r.m,ug:r.ug});
@@ -283,9 +173,14 @@ function unitAgentProfiles(){
    không hụt, nhưng mang cờ `shared` để chỉ tiêu tỷ lệ áp dụng loại ra. */
 function buildAccountCatalogueFromDb(){
   return REAL_ACCOUNTS.map(function(a){
-    var unit=unitOf(a.unit_name)||null;
+    // Ưu tiên MÃ đơn vị (api.js đã quy về bản chuẩn); tên chỉ là đường lui.
+    var unit=unitById(a.unit_id)||unitOf(a.unit_name)||null;
     return {
-      user:a.email||a.username, login:a.username, email:a.email||"",
+      /* `id` là khoá GHÉP; `user` chỉ để hiển thị và làm khoá hàng trong bảng.
+         Trước 20/08/2026 `user` là `a.email||a.username` và email cũng được dùng
+         làm khoá ghép - xem applyRealAccountUsage(). Ghép bằng chuỗi thì phụ
+         thuộc hoa/thường và khoảng trắng, mà `account_id` thì không. */
+      id:a.account_id, user:a.username, login:a.username,
       n:a.full_name||a.username,
       unitId:unit?unit.id:"", d:a.unit_name||"—",
       a:a.agent||"", m:"", ug:"",
@@ -332,19 +227,30 @@ function buildAccountCatalogue(){
    Excel) trong khi database có 937 tài khoản thật. Người của TLA Hợp Đồng
    phần lớn không có dòng trong danh bạ đó nên số của họ không hiện lên được ở
    tab này — con số bị bỏ lại được đếm và ghi vào console. */
+var accountFallbackByName = 0;
 function applyRealAccountUsage(){
-  var byKey={};
+  var byKey={}, byId={};
   USER_ACCOUNTS.forEach(function(u){
     u.req=0; u.ti=0; u.to=0; u.active=false; u.last=""; u.quotaPct=0; u.byAgent={};
     u.costDerived=0; u.costRows=0; u.costRowsPriced=0;
+    if(u.id!=null) byId[u.id]=u;
     if(u.login) byKey[String(u.login).trim().toLowerCase()]=u;
-    if(u.email) byKey[String(u.email).trim().toLowerCase()]=u;
   });
   var r=state&&state.range, bo=0, boLuot=0;
   REAL_BY_ACCOUNT.forEach(function(x){
     if(r&&(x.day<r.start||x.day>r.end)) return;
-    var u=byKey[String(x.username||"").trim().toLowerCase()]
+    /* GHÉP BẰNG `account_id` TRƯỚC. Nó là khoá số, cùng khoá mà database dùng -
+       không phụ thuộc hoa/thường, khoảng trắng, hay việc app ghi tên kiểu nào.
+       Đúng nguyên tắc db/01_schema.sql: "KHÔNG dùng tên đăng nhập làm khoá ngoại
+       ... đã thấy ba dạng khác nhau cho cùng một tài khoản".
+       Nhánh ghép theo tên giữ lại làm đường lui và có biến đếm, để nó không âm
+       thầm gánh việc nếu một ngày `account_id` vắng mặt. */
+    var u=byId[x.account_id];
+    if(!u){
+      u=byKey[String(x.username||"").trim().toLowerCase()]
         ||byKey[String(x.full_name||"").trim().toLowerCase()];
+      if(u) accountFallbackByName++;
+    }
     if(!u){ bo++; boLuot+=x.calls||0; return; }
     var req=x.calls||0, ti=x.input_tokens||0, to=x.output_tokens||0;
     /* TIỀN TÍNH Ở ĐÂY, MỨC TỪNG DÒNG - không cộng gộp token rồi mới nhân giá.
@@ -384,7 +290,7 @@ function applyAccountAllocation(rows){
   if(REAL_BY_ACCOUNT.length){ applyRealAccountUsage(); return; }
   var totals={};
   (rows||[]).forEach(function(r){
-    var unit=unitOf(r.d);
+    var unit=unitOfRow(r);
     if(!unit||isExcludedUnit(unit)||!r.a) return;
     var key=unit.id+"::"+r.a;
     var t=totals[key]=totals[key]||{unitId:unit.id, agent:r.a, r:0, ti:0, to:0};
@@ -517,8 +423,57 @@ function setToken(id, tokenValue){
   e.innerHTML=fmtTok(tokenValue);
   e.title=fmtTokFull(tokenValue);
 }
-function moneyCell(usdValue, cls){
-  return "<td class='"+(cls||"num cost")+"' title='"+esc(usdReference(usdValue))+"'>"+money(usdValue)+"</td>";
+/* Dưới ngưỡng này thì KHÔNG gắn dấu `≈` ở mức nhìn thấy ngay - tooltip vẫn nói đủ.
+   224/1.189 dòng là suy ra nhưng chúng dồn cục, nên gắn dấu lên mọi ô có dính một
+   dòng sẽ làm gần cả bảng có dấu, và một dấu hiệu xuất hiện khắp nơi thì hết là
+   dấu hiệu. 2% chọn để Chatbot Contact Center (2,8%) vẫn được đánh dấu còn nhiễu
+   lẻ thì không - đây là ngưỡng thẩm mỹ, sửa được, không phải hằng số thiêng. */
+/* Agent CHƯA NỐI Google Billing, do api.js lấy từ `dim_agent.has_google_source`.
+   Rỗng cho tới khi nạp xong - khi đó mọi phần suy ra được coi là "hoá đơn về
+   trễ", tức phía an toàn: nói nhẹ hơn sự thật chứ không nặng hơn. */
+var NO_BILLING_AGENTS = {};
+var DERIVED_COST_VISIBLE_PCT = 2;
+
+/* Lời giải thích cho một ô tiền. `est` là phần suy từ bảng giá trong `total`.
+
+   NÓI TỶ LỆ, không chỉ nói "có phần suy ra": với Trợ lý ảo Ralli là 100% còn với
+   Chatbot Contact Center là 2,8% - hai chuyện rất khác nhau mà cùng một câu sẽ
+   làm chúng trông giống hệt.
+
+   VÀ PHÂN BIỆT HAI LÝ DO. Hoá đơn về trễ thì vài ngày tự hết; agent chưa nối
+   Google Billing thì suy ra mãi. `tla-ralli` thuộc loại thứ hai - $7,6643 chi phí
+   thật không dòng hoá đơn nào ghi. Gộp hai thứ vào một nhãn "ước tính" là chôn
+   mất một việc cần người xử lý. */
+function costProvenanceTitle(total, agg){
+  var base = usdReference(total);
+  if(!agg) return base;
+  var est = num(agg.costEst);
+  if(!(est > 0)) return base;
+  var pct = total > 0 ? 100 * est / total : 100,
+      chua = num(agg.costEstNoBilling), tre = num(agg.costEstLate),
+      dau = "Trong số này có " + moneyCompact(est) + " (" + pct.toFixed(0)
+          + "%) suy từ bảng giá. ";
+  if(chua > 0 && tre <= 0)
+    dau = (pct >= 99.5 ? "TOÀN BỘ số này suy từ bảng giá. " : dau)
+        + "Agent CHƯA NỐI Google Billing nên không có hoá đơn nào — việc này sẽ"
+        + " không tự hết. ";
+  else if(chua > 0)
+    dau += "Trong đó " + moneyCompact(chua) + " của agent chưa nối Google Billing"
+         + " (không tự hết), phần còn lại do hoá đơn Google về trễ ~1 ngày. ";
+  else
+    dau += "Hoá đơn Google về trễ khoảng một ngày; vài ngày nữa những dòng này sẽ"
+         + " có hoá đơn. ";
+  return dau + base;
+}
+function costIsMarked(total, est){
+  return est > 0 && (total <= 0 || 100 * est / total >= DERIVED_COST_VISIBLE_PCT);
+}
+/* Ô tiền chung. Truyền `agg` (kết quả aggregate) thì tự lấy phần suy ra. */
+function moneyCell(usdValue, cls, agg){
+  var est = agg ? num(agg.costEst) : 0,
+      dau = costIsMarked(usdValue, est) ? "≈ " : "";
+  return "<td class='" + (cls || "num cost") + "' title='"
+    + esc(costProvenanceTitle(usdValue, agg)) + "'>" + dau + money(usdValue) + "</td>";
 }
 function shortModel(m){ return String(m||"").replace("Gemini ",""); }
 function emptyRow(cols){ return "<tr><td colspan='"+cols+"' class='subtle' style='text-align:center;padding:14px'>Không có dữ liệu khớp bộ lọc.</td></tr>"; }
@@ -571,31 +526,62 @@ function isExcludedDepartment(name){ return !!EXCLUDED_DEPARTMENTS[String(name||
 
 /* ═══════════════ TRUY VẤN CÂY ĐƠN VỊ ═══════════════ */
 var unitIndex = {}, unitChildIndex = {}, autoUnitSeq = 0;
-(function buildUnitIndex(){
+/* Dựng lại chỉ mục cây. Gọi ở mức module (lúc đó ORG_UNITS còn rỗng) và gọi LẠI
+   sau khi nạp xong dữ liệu - cây đến từ /api/catalog chứ không còn gõ cứng. */
+function buildUnitIndex(){
   unitIndex = {}; unitChildIndex = {};
   ORG_UNITS.forEach(function(u){
     unitIndex[u.id] = u;
     var p = u.parent || "";
     (unitChildIndex[p] = unitChildIndex[p] || []).push(u);
   });
-})();
+}
+buildUnitIndex();
+/* Thay ORG_UNITS bằng cây từ database, rồi dựng lại mọi thứ phụ thuộc nó.
+
+   `units` do api.js giao đã GỘP sẵn hai cây tổ chức qua `canonical_unit_id`, đã
+   nối lại con của bản trùng, đã bỏ dòng kỹ thuật. app.js không cần biết database
+   có hai cây - đó là việc của lớp dịch.
+
+   Trước 20/08/2026 chỗ này là mảng 108 đơn vị gõ cứng cộng 33 dòng UNIT_ALIASES,
+   trong khi database có 130 dòng. Đối chiếu trước khi thay (tools/
+   doi_chieu_cay_don_vi.py): không đơn vị nào lệch cha, và gốc báo cáo suy từ
+   database ra đúng 15 đơn vị - trùng khít bản gõ cứng. */
+function adoptOrgUnits(units){
+  if(!units || !units.length) return false;
+  ORG_UNITS = units.map(function(u){
+    return {id:u.id, name:u.name, parent:u.parent, level:u.level,
+            agentId:u.agentId, reportAggregate:!!u.reportAggregate};
+  });
+  buildUnitIndex();
+  rebuildProvisionedFromDirectory();
+  return true;
+}
 /* Phân giải chuỗi phòng ban tự do về một đơn vị. Chuỗi lạ KHÔNG bị loại: tự sinh một
    đơn vị cấp 1 để không mất số liệu và không gom sai vào đơn vị khác. */
+/* Đơn vị của MỘT DÒNG usage. Ưu tiên mã, chỉ rơi về tên khi không có mã.
+
+   api.js gắn `unitId` (đã quy về bản chuẩn) lên từng dòng từ 20/08/2026. Ghép
+   bằng mã thì đổi nhãn tiếng Việt không làm gãy gì; ghép bằng tên thì gãy, và
+   gãy LẶNG LẼ - dòng không tra ra đơn vị sẽ rơi vào một đơn vị tự sinh
+   (`app.js:591`) chứ không báo lỗi, nên số vẫn hiện ra, chỉ là hiện sai chỗ.
+
+   Nhánh theo tên giữ lại để phòng backend cũ chưa trả `unitId`. Đếm số lần nó
+   được dùng, không để nó âm thầm gánh việc - xem `unitFallbackByName`. */
+var unitFallbackByName = 0;
+function unitOfRow(r){
+  if(r && r.unitId){
+    var hit = unitIndex[r.unitId];
+    if(hit) return hit;
+  }
+  unitFallbackByName++;
+  return unitOf(r && r.d);
+}
 function unitOf(deptString){
   var key = String(deptString==null?"":deptString).trim();
   if(!key || key==="—") return null;
-  var id = UNIT_ALIASES[key];
-  if(id && unitIndex[id]) return unitIndex[id];
   // Khớp lỏng: bỏ khoảng trắng thừa quanh dấu phẩy để chịu được lệch dấu cách.
   var loose = key.replace(/\s*,\s*/g, ",").toLowerCase();
-  for(var alias in UNIT_ALIASES){
-    if(alias.replace(/\s*,\s*/g, ",").toLowerCase() === loose){
-      var hit = unitIndex[UNIT_ALIASES[alias]];
-      if(hit) return hit;
-    }
-  }
-  // Danh sách Ralli dùng tên đầy đủ của 86 phòng/đội trong ORG_UNITS. Khớp trực tiếp
-  // trước khi tạo auto-unit để tài khoản luôn nằm đúng nhánh vùng/chi nhánh.
   for(var i=0;i<ORG_UNITS.length;i++){
     if(ORG_UNITS[i].name.trim().toLowerCase()===loose) return ORG_UNITS[i];
   }
@@ -615,11 +601,26 @@ function unitRoots(){ return unitChildren(""); }
 /* Các phòng/đơn vị hiển thị ở cấp đầu của dashboard. Hai dòng tổng hợp
    "Toàn công ty" và "Tổng công ty Rạng Đông" vẫn giữ trong cây để tính đúng 887/807,
    nhưng không chiếm hai cấp drilldown trước khi người dùng thấy phòng ban thực tế. */
+/* Cấp 1 của báo cáo: bỏ qua các CẤP GOM thuần tuý.
+
+   'Toàn công ty' và 'Tổng công ty Rạng Đông' có thật trong cây, nhưng mọi phòng
+   ban đều nằm dưới cả hai - để chúng làm cấp 1 thì người xem phải bung hai lần
+   mới thấy thứ đầu tiên phân biệt được với nhau.
+
+   Trước 20/08/2026 hai dòng đó được nhận ra bằng hai MÃ GÕ CỨNG `"company"` và
+   `"rd-corp"`, tức một quyết định về cách công ty đọc báo cáo sống trong mã giao
+   diện. Giờ database đánh dấu bằng `dim_unit.is_report_aggregate`. */
+function isReportAggregate(u){ return !!(u && u.reportAggregate); }
 function reportingRoots(){
-  var companyChildren=unitChildren("company"), corpChildren=unitChildren("rd-corp");
-  var companyDirect=companyChildren.filter(function(u){return u.id!=="rd-corp";});
-  var outsideCompany=unitRoots().filter(function(u){return u.id!=="company";});
-  return corpChildren.concat(companyDirect,outsideCompany);
+  var out=[];
+  function xet(list){
+    list.forEach(function(u){
+      if(isReportAggregate(u)) xet(unitChildren(u.id));   // đi xuyên qua cấp gom
+      else out.push(u);
+    });
+  }
+  xet(unitRoots());
+  return out;
 }
 function reportingRootOf(unitId){
   var ids={}; reportingRoots().forEach(function(u){ids[u.id]=true;});
@@ -641,23 +642,30 @@ function unitDescendants(unitId){
 function isExcludedUnit(unit){ return !unit || isExcludedDepartment(unit.name); }
 /* Đếm 622 tài khoản Ralli theo phòng trực tiếp, sau đó cộng vào toàn bộ cấp cha.
    Nhờ đó company/PBH/vùng/đội đều có mẫu số đúng nhưng mỗi tài khoản chỉ tồn tại một lần. */
-function rebuildRalliProvisioned(){
+/* Số tài khoản ĐƯỢC CẤP QUYỀN theo đơn vị, cộng dồn lên mọi cấp cha.
+
+   Đếm từ danh bạ THẬT: chỉ người có trong danh bạ của app (`in_directory`) và
+   không phải tài khoản dùng chung. Đó đúng là định nghĩa "được cấp quyền", và là
+   MẪU SỐ của tỷ lệ áp dụng - tử số phải lọc y hệt, xem deptRowHtml.
+
+   Đổi tên 20/08/2026 (cũ: `rebuildRalliProvisioned`) vì nó đếm MỌI tài khoản chứ
+   không riêng Trợ lý ảo Ralli - tên cũ nói sai phạm vi.
+
+   Ghép bằng `unit_id` chứ không bằng `unit_name`: tên phòng ban do app tự khai,
+   đổi nhãn là hụt mẫu số mà không có gì báo. */
+function rebuildProvisionedFromDirectory(){
   DEPT_PROVISIONED={};
-  // Đếm từ danh bạ THẬT: chỉ người có trong danh bạ của app (in_directory) và
-  // không phải tài khoản dùng chung. Đó đúng là định nghĩa "được cấp quyền".
-  // Nhánh dự phòng đọc window.RALLI_USERS đã bỏ cùng file fallback.
-  var phong = REAL_ACCOUNTS
+  REAL_ACCOUNTS
     .filter(function(a){ return a.in_directory && !a.is_shared; })
-    .map(function(a){ return a.unit_name; });
-  phong.forEach(function(dept){
-    var unit=unitOf(dept);
-    if(!unit||isExcludedUnit(unit)) return;
-    unitPath(unit.id).forEach(function(node){
-      DEPT_PROVISIONED[node.id]=(DEPT_PROVISIONED[node.id]||0)+1;
+    .forEach(function(a){
+      var unit=unitById(a.unit_id)||unitOf(a.unit_name);
+      if(!unit||isExcludedUnit(unit)) return;
+      unitPath(unit.id).forEach(function(node){
+        DEPT_PROVISIONED[node.id]=(DEPT_PROVISIONED[node.id]||0)+1;
+      });
     });
-  });
 }
-rebuildRalliProvisioned();
+rebuildProvisionedFromDirectory();
 /* Số tài khoản được cấp: khai báo ở cấp lá, cấp cha cộng dồn từ con.
    Trả về null khi không có dữ liệu — KHÔNG suy ra từ số user active. */
 function provisionedOf(unitId){
@@ -798,7 +806,7 @@ function applyFilters(rows){
     }
   }
   return rows.filter(function(r){
-    if(wantIds){ var u=unitOf(r.d); if(!u||!wantIds[u.id]) return false; }
+    if(wantIds){ var u=unitOfRow(r); if(!u||!wantIds[u.id]) return false; }
     if(f.user && r.ug !== f.user) return false;
     if(f.provider && modelProvider(r.m) !== f.provider) return false;
     if(f.model && r.m !== f.model) return false;
@@ -936,13 +944,43 @@ function renderSingleDelta(id, cur, prev, fmtFn){
 }
 
 /* ─── Tổng hợp ─── */
+/* `costEst` / `costInv` — TIỀN NÀY TỪ ĐÂU RA (thêm 20/08/2026)
+
+   28,2% số tiền hiển thị trên dashboard không đến từ hoá đơn nào: $114,4465 trên
+   $406,4321 của kỳ 01/01-17/08. Nó được nhân ra từ `ref_price` khi
+   `usage_resolved.cost_usd` là NULL, và trước hôm nay không ô nào nói điều đó.
+
+   Không rải đều, nên trung bình cả kỳ không thay được con số của từng chỗ:
+       Trợ lý ảo Ralli           100,0% suy ra   (chưa nối Google Billing)
+       Trợ Lý Ảo Hợp Đồng         77,7%
+       Chatbot Contact Center      2,8%
+   Và 22/228 ngày có hơn một nửa tiền là suy ra — ngày mới nhất luôn 100%, vì
+   Google phát hành hoá đơn trễ khoảng một ngày.
+
+   Đây là ĐIỂM NGHẼN DUY NHẤT: 7 chỗ gọi aggregate() nuôi mọi con số tiền trên cả
+   6 tab, nên đếm ở đây là phủ hết. */
 function aggregate(rows){
   var a = {u:0,c:0,ti:0,to:0,r:0,cached:0,think:0,cost:0,erW:0,latW:0,latR:0,
-           e4:0,e5:0,e429:0,eKnown:0,lat99W:0,lat99R:0};
+           e4:0,e5:0,e429:0,eKnown:0,lat99W:0,lat99R:0,
+           costEst:0, costInv:0, costRowsInv:0, costRowsEst:0, costRowsUnknown:0,
+           costEstNoBilling:0, costEstLate:0};
   rows.forEach(function(row){
     a.u+=num(row.u); a.c+=num(row.c); a.ti+=num(row.ti); a.to+=num(row.to);
     a.r+=num(row.r); a.cached+=num(row.cached); a.think+=num(row.think);
-    a.cost+=cost(row); a.erW+=num(row.er)*num(row.r);
+    var _c=cost(row);
+    a.cost+=_c; a.erW+=num(row.er)*num(row.r);
+    if(row.cost!=null){ a.costInv+=_c; a.costRowsInv++; }
+    else if(costOrNull(row)!=null){
+      a.costEst+=_c; a.costRowsEst++;
+      /* HAI LÝ DO, KHÔNG MỘT. Trước đó phân biệt bằng `costRowsInv===0`, và điều
+         kiện đó gộp nhầm "agent này không bao giờ có hoá đơn" với "kỳ này chưa có
+         hoá đơn nào". Chọn riêng ngày 17/08 là mọi agent đều 0 dòng hoá đơn, nên
+         màn hình báo "chưa nối billing" cho cả 7 agent đã nối. */
+      if(NO_BILLING_AGENTS[row.a]) a.costEstNoBilling+=_c; else a.costEstLate+=_c;
+    }
+    // Dòng không có hoá đơn VÀ không tra được giá: không cộng vào đâu cả, nhưng
+    // phải đếm - nếu không thì `cost` hụt đúng phần đó mà không gì nói ra.
+    else a.costRowsUnknown++;
     if(num(row.lat)>0&&num(row.r)>0){a.latW+=num(row.lat)*num(row.r);a.latR+=num(row.r);}
     // Mã lỗi đếm theo SỐ LƯỢT, không theo tỷ lệ: cộng số lượt thì đúng ở mọi
     // mức gộp, còn cộng tỷ lệ thì phải nhớ trọng số và rất dễ sai.
@@ -1305,7 +1343,15 @@ function renderOverview(rows){
   set("m-ov-users",fmtCompactNum(activeUsers));
   setWithTitle("m-ov-requests",fmtCompactNum(A.r),fmt(A.r)+" request");
   setWithTitle("m-ov-tokens",fmtCompactNum(A.tokens),fmtTokFull(A.tokens));
-  setWithTitle("m-ov-cost",usageCompact(A.cost),money(A.cost)+" · "+usdReference(A.cost));
+  /* Thẻ tiền nói độ tin CỦA KỲ ĐANG CHỌN, không của toàn bộ dữ liệu. Tỷ lệ suy ra
+     lệch rất mạnh theo ngày - 22/228 ngày có hơn một nửa là suy ra, ngày mới nhất
+     luôn 100% - nên một con số trung bình cả kỳ sẽ nói dối về chính kỳ đang xem.
+     Đúng cái bẫy đã mắc 17/08: tính tỷ lệ trên 224 ngày trong khi thẻ chỉ hiện kỳ
+     được chọn, báo 28% cạnh một con số mà tỷ lệ thật là 32%. `A` ở đây là
+     aggregate() của CHÍNH tập dòng đang hiện, nên không lệch được. */
+  setWithTitle("m-ov-cost",
+    (costIsMarked(A.cost, A.costEst) ? "≈ " : "") + usageCompact(A.cost),
+    money(A.cost) + " · " + costProvenanceTitle(A.cost, A));
   setWithTitle("m-ov-costuser",usageCompact(costPerUser),money(costPerUser)+" / user hoạt động");
   set("m-ov-error",A.er.toFixed(1).replace(".",","));
 
@@ -1325,6 +1371,12 @@ function renderOverview(rows){
   set("i-ov-tokens",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.tokens,A.tokens).toFixed(0)+"% token.":"Chưa có token trong kỳ.");
   set("i-ov-cost",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.cost,A.cost).toFixed(0)+"% tổng mức sử dụng.":"Chưa phát sinh mức sử dụng.");
   set("i-ov-costuser","Bình quân trên "+fmt(activeUsers)+" user hoạt động.");
+  /* Nói thẳng phần suy ra ra màn hình, không chỉ giấu trong tooltip: đây là thẻ
+     tiền chính, và người đọc báo cáo hiếm khi trỏ chuột. */
+  if(A.costEst>0)
+    set("i-ov-cost", "Trong đó " + moneyCompact(A.costEst) + " ("
+      + (A.cost>0 ? (100*A.costEst/A.cost).toFixed(0) : "100")
+      + "%) suy từ bảng giá vì chưa có hoá đơn.");
   set("i-ov-error",topError&&topError.er>0?esc(topError.key)+" cao nhất: "+topError.er.toFixed(1)+"%.":"Không ghi nhận lỗi.");
 
   set("ov-cost-total",moneyCompact(A.cost));
@@ -1346,13 +1398,18 @@ function deptDisplayName(dept){
 }
 function renderOverviewDetail(rows,active){
   var agents=active.slice().sort(function(a,b){return b.cost-a.cost;});
-  var html="", totals={u:0,r:0,tokens:0,cost:0,erW:0};
+  var html="", totals={u:0,r:0,tokens:0,cost:0,erW:0,costEst:0,costRowsInv:0,costEstNoBilling:0,costEstLate:0};
   agents.forEach(function(g){
     var agentRows=rows.filter(function(r){return r.a===g.key;});
     var byDept=groupAgg(agentRows,function(r){return deptDisplayName(r.d);})
       .sort(function(a,b){return (b.cost-a.cost)||(b.r-a.r)||a.key.localeCompare(b.key,"vi");});
     if(!byDept.length) return;
     totals.u+=g.u; totals.r+=g.r; totals.tokens+=g.tokens; totals.cost+=g.cost; totals.erW+=g.er*g.r;
+    // Cộng cả phần suy ra: quên hai dòng này thì hàng Tổng cộng KHÔNG BAO GIỜ
+    // mang dấu `≈`, và đó là kiểu hỏng không ném lỗi - chỉ im lặng nói thiếu.
+    totals.costEst+=num(g.costEst); totals.costRowsInv+=num(g.costRowsInv);
+    totals.costEstNoBilling+=num(g.costEstNoBilling);
+    totals.costEstLate+=num(g.costEstLate);
     var usingDepts=byDept.filter(function(d){return d.r>0;}).length;
     var agentCell="<td class='detail-agent-cell' rowspan='"+byDept.length+"'>"+
       "<span class='detail-agent-name'>"+esc(g.key)+"</span>"+
@@ -1370,7 +1427,7 @@ function renderOverviewDetail(rows,active){
         "<td class='num'>"+fmt(d.u)+"</td>"+
         "<td class='num' title='"+esc(fmt(d.r)+" request")+"'>"+fmtCompactNum(d.r)+"</td>"+
         "<td class='num' title='"+esc(fmtTokFull(d.tokens))+"'>"+fmtCompactNum(d.tokens)+"</td>"+
-        "<td class='num cost' title='"+esc(usdReference(d.cost))+"'>"+moneyCompact(d.cost)+"</td>"+
+        "<td class='num cost' title='"+esc(costProvenanceTitle(d.cost,d))+"'>"+(costIsMarked(d.cost,d.costEst)?"≈ ":"")+moneyCompact(d.cost)+"</td>"+
         "<td class='num"+(d.er>=2?" text-red":"")+"'>"+d.er.toFixed(1)+"%</td>"+
         // Không có request thì không có cơ sở đo độ ổn định — để trống thay vì 100%.
         "<td>"+(d.r>0
@@ -1384,7 +1441,7 @@ function renderOverviewDetail(rows,active){
     html+="<tr class='detail-total-row'><td>Tổng cộng</td><td>"+fmt(agents.length)+" AI Agent</td>"+
       "<td class='num'>"+fmt(totals.u)+"</td><td class='num'>"+fmtCompactNum(totals.r)+"</td>"+
       "<td class='num' title='"+esc(fmtTokFull(totals.tokens))+"'>"+fmtCompactNum(totals.tokens)+"</td>"+
-      "<td class='num cost'>"+moneyCompact(totals.cost)+"</td><td class='num'>"+totalEr.toFixed(1)+"%</td>"+
+      "<td class='num cost' title='"+esc(costProvenanceTitle(totals.cost,totals))+"'>"+(costIsMarked(totals.cost,totals.costEst)?"≈ ":"")+moneyCompact(totals.cost)+"</td>"+"<td class='num'>"+totalEr.toFixed(1)+"%</td>"+
       "<td><div class='overview-success-cell'><span><i style='width:"+totalStable.toFixed(1)+"%'></i></span><b>"+totalStable.toFixed(1)+"%</b></div></td></tr>";
   }
   set("ov-detail-tbody",html||emptyRow(8));
@@ -1498,7 +1555,7 @@ function trendSeries(){
 function groupRowsByUnit(rows){
   var map={};
   (rows||[]).forEach(function(r){
-    var unit=unitOf(r.d);
+    var unit=unitOfRow(r);
     if(!unit||isExcludedUnit(unit)) return;
     var g=map[unit.id]=map[unit.id]||{unit:unit,rows:[],agents:{}};
     g.rows.push(r);
@@ -1537,7 +1594,7 @@ function sortAccounts(list){
 function usageUnderUnit(unitId, rows){
   var ids={};
   [unitId].concat(unitDescendants(unitId).map(function(u){return u.id;})).forEach(function(id){ids[id]=true;});
-  var scoped=(rows||[]).filter(function(r){var u=unitOf(r.d);return u&&ids[u.id];});
+  var scoped=(rows||[]).filter(function(r){var u=unitOfRow(r);return u&&ids[u.id];});
   var agents={}; scoped.forEach(function(r){if(r.a)agents[r.a]=1;});
   return {agg:aggregate(scoped),agents:Object.keys(agents),hasRows:scoped.length>0};
 }
@@ -1582,7 +1639,7 @@ function deptTreeNode(unit, byUnit, usageIds){
 function deptUsageUnitIds(rows){
   var ids={};
   (rows||[]).forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(!u||isExcludedUnit(u)) return;
     unitPath(u.id).forEach(function(n){ ids[n.id]=true; });
   });
@@ -1594,7 +1651,7 @@ function deptUsageUnitIds(rows){
 function buildDeptUsageIndex(rows){
   var map={};
   (rows||[]).forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(!u||isExcludedUnit(u)) return;
     var rq=num(r.r), c=cost(r), ti=num(r.ti), to=num(r.to), ca=num(r.cached),
         erW=num(r.er)*rq;
@@ -2232,7 +2289,7 @@ function flattenMatrixTree(node, depth, guides, isLast, group, parent, out, isOp
 function matrixUsageIndex(rows){
   var map={};
   (rows||[]).forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(!u||isExcludedUnit(u)||!r.a) return;
     unitPath(u.id).forEach(function(node){
       var m=map[node.id]=map[node.id]||{};
@@ -2438,7 +2495,7 @@ function renderMatrixNote(rows, scopeRows, idleAgents){
   rows.forEach(function(r){ if(r.depth===1) shown+=r.total; });
   var real=0;
   (scopeRows||[]).forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(u&&!isExcludedUnit(u)&&r.a) real+=num(r.r);
   });
   var accounts=0, blind=0;
@@ -2960,7 +3017,7 @@ function renderCostTable(rows){
      nên đối chiếu được thẳng với giá niêm yết. Chia theo lượt gọi thì mỗi agent có độ dài
      prompt khác nhau, con số không so ngang được giữa các agent. */
   set("co-tbody", groups.map(function(g){
-    return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.tokens?moneyCell(g.cost/(g.tokens/1e6),"num"):"<td class='num'>—</td>")+moneyCell(g.cost)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
+    return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.tokens?moneyCell(g.cost/(g.tokens/1e6),"num",{costEst:num(g.costEst)/(g.tokens/1e6),costRowsInv:g.costRowsInv}):"<td class='num'>—</td>")+moneyCell(g.cost,null,g)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
   }).join("") || emptyRow(6));
 }
 /* ─── Chi phí theo thời gian, tách theo phòng ban ───
@@ -2972,7 +3029,7 @@ function deptCostTrend(){
   var perDay=dates.map(function(d){
     var m={};
     applyFilters(state.days[d]||[]).forEach(function(r){
-      var u=unitOf(r.d);
+      var u=unitOfRow(r);
       if(!u||isExcludedUnit(u)) return;
       var c=cost(r);
       m[u.name]=(m[u.name]||0)+c;
@@ -3277,7 +3334,7 @@ function renderFilters(){
   // Dropdown hiển thị TÊN ĐƠN VỊ chuẩn hoá, mỗi phòng chỉ một lựa chọn.
   var deptNames=[], seenDept={};
   rows.forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(!u||isExcludedUnit(u)) return;
     var root=reportingRootOf(u.id)||u;
     if(!seenDept[root.name]){ seenDept[root.name]=true; deptNames.push(root.name); }
@@ -3318,9 +3375,18 @@ function csv(v){ v=v==null?"":String(v); return /[",\n]/.test(v)?'"'+v.replace(/
 function exportCSV(){
   var rows=scopedRows();
   var period = state.range.start+" → "+state.range.end;
-  var lines=["Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình"];
+  /* Cột `Nguồn tiền` là bắt buộc, không phải trang trí: 28,2% số tiền trên
+     dashboard suy từ bảng giá chứ không từ hoá đơn. Số mang ra khỏi màn hình mà
+     mất dấu vết thì người nhận file không có cách nào biết - và file CSV thường
+     đi xa hơn màn hình, vào bảng tính rồi vào báo cáo. */
+  var lines=["Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,"
+            +"Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình,Nguồn tiền"];
   rows.forEach(function(r){
-    lines.push([period,r.a,r.d,r.m,modelProvider(r.m),r.u,r.c,r.ti,r.to,r.r,num(r.er).toFixed(2),cost(r).toFixed(2),toVnd(cost(r)),VND_RATE].map(csv).join(","));
+    var nguon = r.cost!=null ? "hoá đơn"
+              : (costOrNull(r)!=null ? "suy từ bảng giá" : "không tính được");
+    lines.push([period,r.a,r.d,r.m,modelProvider(r.m),r.u,r.c,r.ti,r.to,r.r,
+                num(r.er).toFixed(2),cost(r).toFixed(2),toVnd(cost(r)),VND_RATE,
+                nguon].map(csv).join(","));
   });
   var blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8;"});
   var url=URL.createObjectURL(blob); var a=document.createElement("a");
@@ -3583,7 +3649,11 @@ function loadFromBackend(){
     ADOPTION_BY_AGENT=kq.adoption||[];
     REAL_BY_ACCOUNT=kq.byAccount||[];
     REAL_ACCOUNTS=kq.accounts||[];
-    rebuildRalliProvisioned();
+    /* THỨ TỰ QUAN TRỌNG: nhận cây từ database TRƯỚC, rồi mới dựng danh mục tài
+       khoản. buildAccountCatalogue() tra đơn vị của từng tài khoản, nên chạy nó
+       trên cây cũ sẽ gán 937 tài khoản vào các đơn vị sắp bị thay. */
+    NO_BILLING_AGENTS = kq.noBillingAgents || {};
+    if(!adoptOrgUnits(kq.units)) rebuildProvisionedFromDirectory();
     USER_ACCOUNTS=buildAccountCatalogue();
     renderAll();
     renderDataProvenance(kq);

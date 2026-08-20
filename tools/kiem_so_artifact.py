@@ -38,8 +38,11 @@ for b in range(a, len(lines)):
     depth += lines[b].count("[") - lines[b].count("]")
     if depth == 0 and b > a:
         break
-check("ORG_UNITS go cung (trong khoi)", sum(l.count("{id:") for l in lines[a:b + 1]), 108)
-check("don vi tu sinh ngoai khoi", src.count("{id:") - sum(l.count("{id:") for l in lines[a:b + 1]), 1)
+# BAT BIEN DA DAO NGUOC sau khi thay cay (20/08/2026, commit bd0e442).
+# Truoc do phep kiem nay khang dinh "co dung 108 don vi go cung" - do la mo ta
+# VAN DE. Gio cay lay tu /api/catalog nen bat bien la KHONG CON don vi nao go
+# cung, va do la mo ta KET QUA. Giu phep kiem, doi ky vong.
+check("ORG_UNITS khong con don vi go cung", sum(l.count("{id:") for l in lines[a:b + 1]), 0)
 check("usage-by-account so dong", len(rows), 76)
 check("dong thieu model_id", sum(1 for r in rows if r.get("model_id") is None), 0)
 check("model co gia nguon google", sum(1 for m in cat["models"] if m["price_source"] == "google"), 10)

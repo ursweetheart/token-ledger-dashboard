@@ -143,6 +143,11 @@
       }
       return id;
     }
+    /* Bảng tra CÔNG KHAI: mã đơn vị gốc -> mã bản chuẩn. Tài khoản và dòng usage
+       mang mã gốc, mà cây đã bỏ bản trùng, nên không có bảng này thì chúng trỏ
+       vào một đơn vị không còn tồn tại - và trỏ hụt thì lặng lẽ mất số. */
+    var canonicalOf = {};
+    all.forEach(function (u) { canonicalOf[u.unit_id] = canonical(u.unit_id); });
 
     var out = [];
     all.forEach(function (u) {
@@ -159,7 +164,7 @@
         reportAggregate: !!u.is_report_aggregate
       });
     });
-    return out;
+    return { units: out, canonicalOf: canonicalOf };
   }
 
   function primaryUnit(catalog) {
@@ -176,7 +181,8 @@
   function buildState(usage, perf, thinking, catalog) {
     var byAgent = perfByAgent(perf),
         think = thinkingByKey(thinking),
-        unit = primaryUnit(catalog);
+        unit = primaryUnit(catalog),
+        tree = orgTree(catalog);
     var agentName = {};
     (catalog.agents || []).forEach(function (a) { agentName[a.agent_id] = a.name; });
 
@@ -228,6 +234,10 @@
       days[x.day].push({
         a: x.agent || agentName[x.agent_id] || ("agent " + x.agent_id),
         d: u ? u.name : "—",
+        /* Mã đơn vị, đã quy về bản chuẩn. app.js ghép usage vào đơn vị bằng mã
+           này; `d` (TÊN) giữ lại để hiện ra và để đối chiếu khi lần lỗi.
+           Ghép bằng tên thì gãy lặng lẽ mỗi khi app đổi nhãn tiếng Việt. */
+        unitId: u ? (tree.canonicalOf[u.unit_id] || u.unit_id) : "",
         m: x.model,
         ug: "", u: 0, c: 0,
         ti: x.input_tokens || 0,
@@ -298,8 +308,19 @@
        Phơi sẵn ở đây để bước đó chỉ còn là đổi nguồn, không phải viết lại phép
        gộp: đã đối chiếu 20/08/2026, cây này cho ra ĐÚNG 15 gốc báo cáo mà bản
        gõ cứng đang cho. */
+    /* Agent CHƯA NỐI Google Billing. Khác hẳn "hoá đơn chưa về": bên kia vài
+       ngày là hết, bên này suy ra mãi cho tới khi ai đó nối billing cho project.
+       `dim_agent.has_google_source` đã tách riêng chuyện này khỏi
+       `gcp_project_id` từ 14/08/2026 - `tla-ralli` CÓ project nhưng chưa nối. */
+    var noBilling = {};
+    (catalog.agents || []).forEach(function (a) {
+      if (!a.has_google_source) noBilling[a.name] = true;
+    });
+
     return { days: days, dayOrder: dayOrder, pricing: pricing,
-             pricingById: pricingById, units: orgTree(catalog),
+             pricingById: pricingById,
+             units: tree.units, canonicalUnitOf: tree.canonicalOf,
+             noBillingAgents: noBilling,
              budgets: budgets, fxRate: catalog.fx_rate || null };
   }
 
@@ -368,7 +389,15 @@
           var state = buildState(r[0], r[1], r[2], r[3]);
           state.health = health;
           state.adoption = (r[4] && r[4].rows) || [];
-          state.accounts = (r[5] && r[5].rows) || [];
+          /* Tài khoản mang `unit_id` GỐC, mà cây đã bỏ các bản trùng. Quy về bản
+             chuẩn ngay tại đây - để app.js tự nhớ thì sớm muộn một chỗ quên, và
+             tài khoản trỏ vào đơn vị không còn tồn tại sẽ lặng lẽ rơi khỏi bảng. */
+          state.accounts = ((r[5] && r[5].rows) || []).map(function (a) {
+            var cid = state.canonicalUnitOf[a.unit_id];
+            return cid && cid !== a.unit_id
+              ? Object.assign({}, a, { unit_id: cid, unit_id_raw: a.unit_id })
+              : a;
+          });
           state.byAccount = (r[6] && r[6].rows) || [];
           /* Cảnh báo độ phủ đi KÈM bảng theo người dùng, không để app.js phải
              nhớ sang hỏi /api/health - xem ghi chú ở backend/main.py. */

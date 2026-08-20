@@ -153,31 +153,54 @@ WHERE f.source = 'app' AND a.kind = 'real';
 
 Đây là nhóm đáng làm nhất hôm nay: rẻ về thời gian, đắt nếu quyết muộn.
 
-#### 🔴 A1. Ba câu còn treo ở `tu-dien-database.md` Phần II §8
+#### ✅ A1. CẢ BA CÂU ĐÃ CHỐT — 20/08/2026 (`tu-dien-database.md` §8a–8e)
 
-Ba câu này **đổi hình dạng schema**, nên không viết được migration nào trước khi chốt:
+Ba câu này đổi hình dạng schema nên chặn mọi migration. **Cả ba đã có câu trả lời.**
+
+| # | Câu hỏi | Quyết định |
+|---|---|---|
+| 1 | Lịch sử cũ đi đâu? | **MỘT database** + cột `data_era`. Và **giữ `fact_monitoring`** (đóng băng, không xoá) — 583.917 dòng đó không dựng lại được |
+| 2 | Có ghi `fact_attempt`? | **CÓ.** Dữ liệu retry không dựng lại được về sau |
+| 3 | Ngân sách do ai chặn? | **LiteLLM**, `$70` mỗi agent, cảnh báo 50% / 90%, chạm 100% thì chặn. `ref_budget` là bản sao chỉ-đọc + `synced_at` |
+
+Ba việc kéo theo, ghi ở `§8b` và `§8e` — đọc trước khi viết `config.yaml`:
+
+- Dòng `scrape` để **NULL** ở cột mới → truy vấn dùng cột mới sẽ **âm thầm bỏ 8 tháng lịch sử**
+- **Cảnh báo Google Cloud phải giữ** — nó là thứ duy nhất bắt được lưu lượng đi vòng qua Gateway
+- **Ralli đặt hạn mức theo token**, LiteLLM chặn theo USD → giữ trần token ở tầng app
+
+Bảng gốc để tra lại lập luận:
 
 | # | Câu hỏi | Nếu chọn A | Nếu chọn B |
 |---|---|---|---|
-| 1 | Lịch sử cũ đi đâu? | Chung một database, phân biệt bằng `data_era` | Đóng băng DB hiện tại làm kho lưu trữ, dựng DB mới → dashboard phải đọc **hai** database |
+| ~~1~~ | ~~Lịch sử cũ đi đâu?~~ | ✅ **CHỐT 20/08:** một database + `data_era`, và **giữ `fact_monitoring`** (đóng băng, không xoá) | |
 | 2 | Có ghi `fact_attempt` không? | Có → trả lời được *"bao nhiêu tiền cháy vì retry"*, *"deployment nào hay dính 429"*. Bảng lớn nhất hệ thống | Không → gộp vào `fact_request`, **mất hẳn** hai câu đó |
 | 3 | Ngân sách do ai chặn? | LiteLLM chặn, `ref_budget` là bản sao chỉ-đọc + `synced_at` | Ta tự chặn → cần thêm lịch sử thay đổi + nhật ký chặn |
 
 **Đề xuất của tôi:** 1A, 2-Có, 3-LiteLLM. Lý do câu 1: dashboard đọc hai database là chi phí vĩnh viễn trả cho một lần tiện; `data_era` là một cột.
 
-#### 🔴 A2. Chốt cách viết Project ID — 2/8 đang lệch
+#### ✅ A2. Project ID — ĐÃ CHỐT 20/08/2026: database đúng, tài liệu sai cả hai chỗ
 
-| Tài liệu triển khai §1.2 | Database đang chạy | |
+| Tài liệu §1.2 | Database | Kết luận |
 |---|---|---|
-| `tla-rally` | `tla-ralli` | ❌ |
-| `tools-quiz` | `tools-quizz` | ❌ |
-| 6 dòng còn lại | | ✅ |
+| `tla-rally` | **`tla-ralli`** | Database ĐÚNG — người dùng xác nhận 20/08 |
+| `tools-quiz` | **`tools-quizz`** | Database ĐÚNG — **chứng minh bằng chính dữ liệu Google** |
+| 6 dòng còn lại | | khớp |
+
+**Chứng cứ cho `tools-quizz`** mạnh hơn cả ảnh chụp console: cả CSV hoá đơn lẫn Cloud
+Monitoring API do Google tự xuất ra đều ghi `tools-quizz`. Nếu database ghi sai thì 2.441
+dòng hoá đơn đã không nối được.
+
+**`tla-ralli` thì dữ liệu không phán được** — project này chưa nối Google Billing nên
+không xuất hiện ở cả hai nguồn. Chốt bằng mắt người, 20/08/2026.
+
+→ **Việc còn lại: sửa `Tài_liệu_triển_khai_API_Gateway.docx` §1.2**, không sửa database.
 
 Nếu `config.yaml` của LiteLLM lấy theo cách viết trong tài liệu, hai agent đó **không nối được với dữ liệu cũ, và không có lỗi nào báo ra**. Sửa mất 5 phút hôm nay; sau khi có traffic thì là một cuộc điều tra.
 
 Việc: mở `SELECT gcp_project_id FROM dim_agent` trên GCP Console đối chiếu, chốt một cách viết, sửa vào tài liệu (không sửa DB nếu DB đang đúng).
 
-#### 🔴 A3. Chốt quy ước `username` cho cả 8 agent — **trước** khi có request đầu tiên
+#### 🟡 A3. Quy ước `username` — HƯỚNG ĐÃ CHỐT 20/08, còn một việc phải đo
 
 `Data Out` #4 ghi: *"Hiện chỉ 2/8 agent đang có, 6 Agent 1 user còn lại đang được để mặc định."*
 
@@ -185,8 +208,35 @@ Bệnh cũ của dự án là ba nguồn ghi danh tính ba kiểu, phải hoà g
 
 Nếu agent A gửi `LongNT` còn agent B gửi `longnt@rangdong.com.vn`, ta có lại đúng bệnh cũ, chỉ muộn hơn và tốn hơn.
 
+> ### ✅ Chốt 20/08/2026 — danh tính lấy từ JWT, agent tự trích
+>
+> Ralli và Trợ Lý Ảo Hợp Đồng đều dùng JWT. **Agent tự giải mã token ở phía mình**, trích
+> ra người dùng rồi gửi lên Gateway trong một header (ví dụ `X-User`). Sáu agent còn lại
+> là một-người-dùng nên chỉ cần một tên cố định.
+>
+> **Ba điều việc này giải quyết:**
+>
+> | | |
+> |---|---|
+> | Danh tính từ **token** thay vì từ client tự khai | 8 chỗ có thể lệch → còn 2, và 6 chỗ **không thể** lệch vì là hằng số |
+> | Gateway **không cầm** JWT phiên | JWT phiên là chứng chỉ bearer — ai cầm được thì gọi API của app với tư cách người dùng đó. Agent trích rồi gửi giá trị đã tách thì Gateway không giữ thứ phát lại được |
+> | App đổi claim thì sửa **một chỗ** | Sửa trong agent, không đụng Gateway |
+>
+> **Và nó XOÁ luôn việc gửi phòng ban.** Có username là tra được `account.unit_id` — bảng
+> `account` vốn đã là nguồn duy nhất cho *"một tài khoản một đơn vị"* (chốt 14/08, quy tắc
+> chọn tất định). Bắt agent gửi phòng ban là tạo **nguồn thứ hai** cho một sự thật đã có.
+>
+> **Còn một việc PHẢI ĐO trước khi viết code:** claim nào trong JWT là username, và **hai
+> app có dùng cùng một claim không**. `01_schema.sql` đã ghi *"Ralli đôi khi ghi username
+> vào chỗ ObjectId"* — nếu `sub` của Ralli là ObjectId 24 ký tự còn của Hợp Đồng là
+> username thì bài toán hoà giải **không biến mất, chỉ chui vào trong token**.
+> `scripts/pull_web_apps.py:141` đã giải mã payload sẵn (để đọc `exp`), nên đo chỉ là
+> liệt kê claim của một token mỗi app.
+
 **Cần ban hành trước khi agent đầu tiên gửi request:**
-- Dạng chuẩn: `LOWER(TRIM())`, có/không đuôi tên miền — chọn một
+- Dạng chuẩn: `LOWER(TRIM())`, có/không đuôi tên miền — chọn một.
+  **Đề xuất giữ dạng hiện tại**: đo 937 tài khoản thật thấy 821 đã dùng dạng có dấu chấm
+  (`bh1.longnt`), 113 dạng một từ, 3 có đuôi tên miền
 - **Tên của 6 "người dùng đặc biệt"** — xem khung ⚠️ ở mục 1. Đây không phải chỗ
   trống chờ dữ liệu, mà là **một quyết định đặt tên**. Gợi ý ba lối:
 
@@ -198,7 +248,7 @@ Nếu agent A gửi `LongNT` còn agent B gửi `longnt@rangdong.com.vn`, ta có
 
   **Đề xuất: lối 1**, tiền tố `svc.` + `dim_agent.code`. Suy ra được từ dữ liệu đã
   có, không phải gõ tay 6 lần, và tiền tố khiến mọi truy vấn lọc ra được dễ dàng.
-- Phòng ban gửi `unit_id` hay gửi tên — nếu gửi tên thì ai giữ bảng dịch
+- ~~Phòng ban gửi `unit_id` hay gửi tên~~ → **BỎ**, tra từ `account.unit_id`
 
 #### 🟡 A4. Sửa 3 kiểu dữ liệu sai trong sheet `Data Out`
 
@@ -338,9 +388,20 @@ Ba điều làm việc này đáng ưu tiên:
 Đây đúng là loại "sửa schema cho thuận với Gateway" mà anh muốn — khác với việc bỏ
 cột nguồn ở chỗ: nó **thêm khả năng phân biệt**, không **bỏ đi** khả năng đó.
 
-#### ⚪ B4. Dọn cái thật sự chết
+#### ❌ B4. ĐÃ RÚT — `dim_function` KHÔNG chết (đo lại 20/08/2026)
 
-`dim_function` — 8 dòng, cột `is_user_facing` **chưa từng có giá trị nào khác NULL**, không endpoint nào đọc. Phần II đã xếp nó vào nhóm bỏ. Đây mới đúng là thứ "bỏ đi cho gọn" — khác hẳn cột nguồn.
+Nhận định ban đầu: *"8 dòng, `is_user_facing` chưa từng có giá trị, không endpoint nào
+đọc — thứ bỏ đi cho gọn."* **Đo lại thì sai:**
+
+| | |
+|---|---|
+| `fact_call.function_code` | **8.330/8.330 dòng có giá trị** — mọi lượt gọi Ralli đều mang mã chức năng |
+| `Data Out` trường #10 | `function` · text · **Nguồn: Gateway** — Gateway sẽ nạp lại chiều này |
+
+Bảng không chết, nó chỉ **chưa được phơi lên giao diện**. Bỏ bây giờ là xoá rồi dựng lại,
+và mất luôn 2 nhãn tiếng Việt đang có (`Phân tích hợp đồng`, `Hỏi đáp AI`).
+
+**Giữ.** Việc đúng là phơi chiều này lên dashboard, không phải xoá bảng.
 
 ---
 

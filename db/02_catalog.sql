@@ -9,7 +9,7 @@ INSERT INTO dim_agent (agent_id, code, name, gcp_project_id, has_org_tree,
                        is_running, has_google_source) VALUES
   (1, 'contact-center', 'Chatbot Contact Center', 'pro-tuner-454203-v3', FALSE, '2025-03-19', '2026-01-13', NULL, TRUE, TRUE),
   (2, 'sale-agent', 'Sale Agent', 'tranquil-post-471401-c1', FALSE, '2025-09-07', '2026-01-01', NULL, TRUE, TRUE),
-  (3, 'invoice', 'Multi modal AI Invoice', 'multimodal-invoice', FALSE, '2025-09-15', '2026-01-22', '2026-08-13', FALSE, TRUE),
+  (3, 'invoice', 'Multi modal AI Invoice', 'multimodal-invoice', FALSE, '2025-09-15', '2026-01-22', '2026-08-17', FALSE, TRUE),
   (4, 'tools-quizzer', 'Tools Quizzer', 'tools-quizz', FALSE, '2026-04-10', '2026-06-17', '2026-07-01', FALSE, TRUE),
   (5, 'tla-hd', 'Trợ Lý Ảo Hợp Đồng', 'ai-chatbot-contract', TRUE, '2026-06-20', '2026-07-02', NULL, TRUE, TRUE),
   (6, 'dms-feedback', 'Phân Loại Phản Hồi Tiếp Thị', 'feedback-dms-tiep-thi', FALSE, '2026-06-25', '2026-07-06', NULL, TRUE, TRUE),
