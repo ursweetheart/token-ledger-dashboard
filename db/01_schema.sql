@@ -94,7 +94,22 @@ CREATE TABLE dim_unit (
     -- Trước 20/08 phép gộp này nằm trong `UNIT_ALIASES` gõ tay ở web/js/app.js -
     -- tức một sự thật về tổ chức công ty sống trong mã giao diện, và database
     -- không biết gì về nó.
-    canonical_unit_id TEXT REFERENCES dim_unit
+    canonical_unit_id TEXT REFERENCES dim_unit,
+    -- CẤP GOM THUẦN TUÝ, báo cáo bắt đầu từ BÊN DƯỚI nó (thêm 20/08/2026)
+    --
+    -- TRUE ở đúng hai dòng: 'Toàn công ty' và 'Tổng công ty Rạng Đông'. Chúng có
+    -- thật trong cây tổ chức, nhưng mọi phòng ban đều nằm dưới chúng nên để làm
+    -- cấp 1 của bảng thì tốn hai lần bung mà không phân biệt được gì.
+    --
+    -- ĐÂY LÀ QUY ƯỚC TRÌNH BÀY, KHÔNG PHẢI THUỘC TÍNH CỦA TỔ CHỨC. Ghi vào
+    -- database vì nó là quyết định của NGƯỜI về cách đọc báo cáo, và một quyết
+    -- định như thế cần một nguồn - trước 20/08 nó nằm trong web/js/app.js dưới
+    -- dạng hai mã gõ cứng `unitChildren("company")` và `unitChildren("rd-corp")`,
+    -- tức không tra được từ database và không ai ngoài người viết giao diện biết.
+    --
+    -- Cách đọc: gốc báo cáo = đơn vị KHÔNG phải cấp gom, mà cha của nó hoặc
+    -- không có, hoặc là cấp gom.
+    is_report_aggregate BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- MỘT DÒNG = MỘT TÀI KHOẢN, không phải một con người ngoài đời.

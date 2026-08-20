@@ -187,6 +187,22 @@ CANONICAL_UNIT_PAIRS = [
     ("Phòng BH3", "PBH3"),
 ]
 
+# Hai cấp gom thuần tuý trong cây Trợ lý ảo Ralli. Báo cáo bắt đầu từ BÊN DƯỚI
+# chúng: mọi phòng ban đều nằm dưới cả hai, nên để chúng làm cấp 1 thì người xem
+# phải bung hai lần mới thấy được thứ đầu tiên phân biệt được với nhau.
+#
+# Đây là QUY ƯỚC TRÌNH BÀY, không phải thuộc tính của tổ chức - xem ghi chú ở
+# db/01_schema.sql. Trước 20/08/2026 nó sống trong web/js/app.js dưới dạng hai mã
+# gõ cứng `unitChildren("company")` và `unitChildren("rd-corp")`.
+#
+# `Công ty CPBĐ PN Rạng Đông` (cây Hợp Đồng) KHÔNG nằm trong danh sách này dù tên
+# nghe tương tự: nó có 2 tài khoản của riêng mình, tức là một hàng có nội dung
+# chứ không phải một cấp gom rỗng.
+REPORT_AGGREGATE_UNITS = [
+    (RALLI, "Toàn công ty"),
+    (RALLI, "Tổng công ty Rạng Đông"),
+]
+
 
 def resolve_canonical(rows: list[tuple]) -> dict[str, str]:
     """Tra bốn cặp trong CANONICAL_UNIT_PAIRS thành {unit_id trùng: unit_id chuẩn}.
@@ -210,6 +226,21 @@ def resolve_canonical(rows: list[tuple]) -> dict[str, str]:
 
     return {find(TLA_HD, hd): find(RALLI, ralli)
             for hd, ralli in CANONICAL_UNIT_PAIRS}
+
+
+def resolve_report_aggregates(rows: list[tuple]) -> list[str]:
+    """Tra REPORT_AGGREGATE_UNITS thành danh sách unit_id. Hỏng ồn ào như trên."""
+    out = []
+    for agent, unit_name in REPORT_AGGREGATE_UNITS:
+        hit = [r[0] for r in rows
+               if r[1] == agent and r[2].strip() == unit_name and not r[6]]
+        if len(hit) != 1:
+            raise SystemExit(
+                f"REPORT_AGGREGATE_UNITS: tim '{unit_name}' trong cay agent"
+                f" {agent} ra {len(hit)} ket qua, phai dung 1."
+                f" App co the da doi ten don vi.")
+        out.append(hit[0])
+    return out
 
 
 def collect_units() -> list[tuple]:
@@ -299,7 +330,12 @@ def main() -> None:
     cur.executemany(
         f"UPDATE dim_unit SET canonical_unit_id = {ph} WHERE unit_id = {ph}",
         [(v, k) for k, v in canonical.items()])
-    print(f"  gop {len(canonical)} don vi trung giua hai cay to chuc")
+    aggregates = resolve_report_aggregates(unit_rows)
+    cur.executemany(
+        f"UPDATE dim_unit SET is_report_aggregate = TRUE WHERE unit_id = {ph}",
+        [(x,) for x in aggregates])
+    print(f"  gop {len(canonical)} don vi trung giua hai cay to chuc"
+          f" | {len(aggregates)} cap gom, bao cao bat dau ben duoi")
 
     # ================================================== (3) dim_user từ danh bạ
     # Tuple: (user_id, agent_id, username, full_name, email, unit_id,

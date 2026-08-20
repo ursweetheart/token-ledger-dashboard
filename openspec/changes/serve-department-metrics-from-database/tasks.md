@@ -48,11 +48,17 @@ trong `dim_unit`. Người dùng xác nhận cả 4 cặp. Xem `design.md` §2.3
       lệch cha; 5 đơn vị mọc thêm đều **0 tài khoản / 0 token**; 3 đơn vị mất đi là tên
       cũ thời Excel không có dòng trong `dim_unit`; 1 cặp khác nhau đúng một chữ `Đ`
 
-## 4. `api.js` chuyển cây tổ chức ra ngoài
+## 4. `api.js` chuyển cây tổ chức ra ngoài — ĐÃ XONG (20/08/2026)
 
-- [ ] 4.1 Thêm `units` vào state mà `api.js` trả về, giữ nguyên `unit_id`, `agent_id`,
-      `name`, `parent_id`, `level`, `path`, `is_technical`
-- [ ] 4.2 Giữ nguyên hợp đồng "chỉ bơm dữ liệu, không đụng giao diện" — `api.js` MUST NOT vẽ gì
+- [x] 4.1 `orgTree()` trả `units` trong state: đã **gộp** hai cây qua
+      `canonical_unit_id`, đã **nối lại** con của bản trùng vào bản chuẩn (13 đơn vị),
+      đã bỏ dòng kỹ thuật, kèm cờ `reportAggregate`
+- [x] 4.2 Giữ nguyên hợp đồng "chỉ bơm dữ liệu, không đụng giao diện" — `api.js` MUST NOT vẽ gì
+- [x] 4.4b `dim_unit.is_report_aggregate` — hai cấp gom 'Toàn công ty' và 'Tổng công ty
+      Rạng Đông' đưa vào database, thay hai mã gõ cứng `unitChildren("company")` /
+      `unitChildren("rd-corp")` ở `app.js:618`
+- [x] 4.5 Đối chiếu: gốc báo cáo suy từ database ra **đúng 15 đơn vị**, trùng khít 15 hàng
+      cấp 1 mà bản gõ cứng đang cho — chỉ khác cặp `TTDL&DHS`/`TTDL&ĐHS` một chữ `Đ`
 - [ ] 4.3 Mỗi dòng usage mang thêm `unitId` bên cạnh `d` hiện có, để bước 5 chuyển dần
       chứ không đổi một phát
 - [ ] 4.4 Giữ `primaryUnit()` chạy song song cho tới khi bước 5 xong

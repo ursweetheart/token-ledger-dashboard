@@ -120,6 +120,48 @@
     return out;
   }
 
+  /* Cây đơn vị cho app.js: MỘT cây, đã gộp sẵn, đã bỏ dòng kỹ thuật.
+
+     dim_unit chứa HAI cây tổ chức - Trợ lý ảo Ralli 102 đơn vị một gốc, Trợ Lý
+     Ảo Hợp Đồng 20 đơn vị bốn gốc - vì hai app mô hình hoá cùng một công ty theo
+     hai kiểu. Cột `canonical_unit_id` (database, 20/08/2026) nói dòng nào là bản
+     trùng của dòng nào. Gộp Ở ĐÂY, trong lớp dịch, để app.js chỉ thấy một cây.
+
+     Con của bản trùng được NỐI LẠI vào bản chuẩn - 13 đơn vị có cha là một bản
+     trùng, bỏ bước này thì chúng mất cha và rơi ra khỏi cây. */
+  function orgTree(catalog) {
+    var all = catalog.units || [];
+    var byId = {};
+    all.forEach(function (u) { byId[u.unit_id] = u; });
+
+    function canonical(id) {
+      var seen = {};
+      while (id && byId[id] && byId[id].canonical_unit_id) {
+        if (seen[id]) return id;         // vòng lặp: dừng, đừng treo trình duyệt
+        seen[id] = 1;
+        id = byId[id].canonical_unit_id;
+      }
+      return id;
+    }
+
+    var out = [];
+    all.forEach(function (u) {
+      if (u.is_technical) return;                       // dòng kỹ thuật đi đường riêng
+      if (canonical(u.unit_id) !== u.unit_id) return;   // bản trùng: đã gộp
+      out.push({
+        id: u.unit_id,
+        name: u.name,
+        parent: u.parent_id ? canonical(u.parent_id) : null,
+        level: u.level,
+        agentId: u.agent_id,
+        /* Cấp gom thuần tuý - báo cáo bắt đầu BÊN DƯỚI nó. Trước 20/08/2026
+           app.js ghim cứng hai mã `company` và `rd-corp` cho việc này. */
+        reportAggregate: !!u.is_report_aggregate
+      });
+    });
+    return out;
+  }
+
   function primaryUnit(catalog) {
     /* Mỗi agent hiện ở cột "Đơn vị". Lấy đơn vị gốc của cây tổ chức agent đó;
        agent không có cây thì lấy chính dòng kỹ thuật. */
@@ -250,8 +292,14 @@
       if (a.budget_usd != null) budgets.push({ agent: a.name, usd: a.budget_usd });
     });
 
+    /* Cây đơn vị từ database, đã gộp hai cây thành một. app.js CHƯA dùng - nó
+       vẫn đang chạy trên ORG_UNITS gõ cứng (108 đơn vị, app.js:67-177). Bước
+       thay nằm ở nhóm 4-7 của change serve-department-metrics-from-database.
+       Phơi sẵn ở đây để bước đó chỉ còn là đổi nguồn, không phải viết lại phép
+       gộp: đã đối chiếu 20/08/2026, cây này cho ra ĐÚNG 15 gốc báo cáo mà bản
+       gõ cứng đang cho. */
     return { days: days, dayOrder: dayOrder, pricing: pricing,
-             pricingById: pricingById,
+             pricingById: pricingById, units: orgTree(catalog),
              budgets: budgets, fxRate: catalog.fx_rate || null };
   }
 

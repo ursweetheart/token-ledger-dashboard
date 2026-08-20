@@ -171,10 +171,13 @@ def units(cn) -> list[dict]:
     # cây tổ chức của app kia. Frontend cần cột này để gộp hai cây thành một cái
     # nhìn công ty - trước 20/08/2026 phép gộp đó nằm trong UNIT_ALIASES gõ tay
     # ở web/js/app.js, tức database không biết gì về nó.
-    return _rows(cn, """
+    r = _rows(cn, """
         SELECT unit_id, agent_id, name, parent_id, level, path, is_technical,
-               canonical_unit_id
+               canonical_unit_id, is_report_aggregate
         FROM dim_unit ORDER BY level, name, unit_id""")
+    for x in r:
+        x["is_report_aggregate"] = bool(x["is_report_aggregate"])
+    return r
 
 
 def accounts(cn) -> list[dict]:
