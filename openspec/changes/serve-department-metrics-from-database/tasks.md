@@ -78,7 +78,10 @@ trong `dim_unit`. Người dùng xác nhận cả 4 cặp. Xem `design.md` §2.3
 ## 6. Xoá phần gõ cứng — bước cuối, chỉ khi 3–5 đã sạch
 
 - [ ] 6.1 Xoá `ORG_UNITS` (108 đơn vị, `app.js:67-177`)
-- [ ] 6.2 Xoá `UNIT_ALIASES` (33 mục) và nhánh ghép theo tên
+- [ ] 6.2 Xoá `UNIT_ALIASES` (33 mục) và nhánh ghép theo tên.
+      **Chốt 20/08/2026: cách viết chuẩn là `TTDL&DHS`** — đúng như database đang có,
+      không thêm `Đ`. Nên khi xoá thì bỏ luôn alias `"TTDL&ĐHS":"ttdl"`, KHÔNG giữ lại
+      để "sửa" tên về dạng có dấu. Sau khi thay cây, bảng sẽ hiện `TTDL&DHS`
 - [ ] 6.3 `rebuildRalliProvisioned()` (`app.js:631`) ghép bằng `unit_id` thay vì
       `a.unit_name`. **KHÔNG xoá hàm này** — soát lại 20/08 thấy nó đã dựng từ
       `REAL_ACCOUNTS` (tức `/api/accounts`) chứ không phải từ dữ liệu gõ cứng; chỗ hỏng
