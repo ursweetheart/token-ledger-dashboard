@@ -360,6 +360,40 @@ def group_d_silent_gaps(a: Audit) -> None:
            f"{int(days_latency)} ngay co do tre / {int(days_calls)} ngay co so luot"
            if days_latency < days_calls else "")
 
+    # AGENT KHAI LA DA DUNG NHUNG VAN CO LUU LUONG.
+    #
+    # `dim_agent.is_running` GO TAY co chu dich - no la ket luan nghiep vu, khong
+    # suy ra bang nguong "bao nhieu ngay khong co du lieu thi coi la ngung", vi
+    # nguong nhu vay se phan loai sai moi khi mot agent nghi le dai (xem ghi chu
+    # dau db/gen_catalog.py).
+    #
+    # Nhung go tay thi TROI, va troi im lang. Do 20/08/2026: Multi modal AI
+    # Invoice duoc khai ngung tu 25/07, ma sau ngay do van co 452.096 token / 88
+    # luot trai tren 6 ngay, ngay cuoi 17/08 - tuc ngay MOI NHAT cua ca database.
+    #
+    # Phep kiem nay khong tu sua co; no chi bat co va du lieu phai NOI CHUYEN voi
+    # nhau. Ai doc con phai quyet: agent chay lai that, hay con mot tien trinh sot.
+    # KHONG so voi `data_to`: cot do SUY TU CHINH DU LIEU, nen sau moi lan sinh
+    # lai catalog no luon bang ngay cuoi, va dieu kien `v.day > data_to` thanh
+    # vinh vien rong - mot phep kiem khong bao gio keu thi te hon la khong co,
+    # vi no tao cam giac da duoc kiem.
+    #
+    # So voi NGAY CUOI CUA CA DATABASE. Mot agent ngung that thi du lieu cua no
+    # phai dung TRUOC nhung agent khac; con dung dung ngay moi nhat thi co nghia
+    # no van dang chay.
+    dung_ma_van_chay = [(r[0], str(r[1])[:10], int(r[2] or 0)) for r in connect.query(a.cn, """
+        SELECT g.name, MAX(v.day), SUM(v.calls)
+        FROM dim_agent g JOIN usage_resolved v ON v.agent_id = g.agent_id
+        WHERE g.is_running = FALSE
+        GROUP BY g.name
+        HAVING MAX(v.day) >= (SELECT MAX(day) FROM usage_resolved)
+        ORDER BY g.name""")]
+    a.check(not dung_ma_van_chay, "Agent khai da dung thi khong con luu luong",
+            "; ".join(f"{n}: van co du lieu toi {d} - dung ngay moi nhat cua ca"
+                      f" database, tong {c:,} luot"
+                      for n, d, c in dung_ma_van_chay)
+            + ". Hoac agent chay lai, hoac is_running da loi thoi", WARN)
+
     # Độ phủ chiều NGƯỜI, tách làm BA chứ không hai (sửa 20/08/2026).
     #
     # Bản trước chỉ đo `kind='real'` rồi gọi toàn bộ phần còn lại là "không quy
