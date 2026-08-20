@@ -2,8 +2,8 @@
 
 **Ai cần đọc:** bất kỳ ai lần cuối `git pull` **trước ngày 17/08/2026**.
 
-`origin/main` trước sáng 18/08 nằm ở `4d7060e` (16/08). Từ đó tới nay có **11 commit** —
-2 commit tài liệu ngày 16/08 (`ed55d06`, `4e1ef52`, không cần làm gì) và 9 commit thay đổi
+`origin/main` trước sáng 18/08 nằm ở `4d7060e` (16/08). Từ đó tới nay có **14 commit** —
+2 commit tài liệu ngày 16/08 (`ed55d06`, `4e1ef52`, không cần làm gì) và 12 commit thay đổi
 mã nguồn.
 
 Trong đó có một thay đổi **không tự chạy được** sau khi pull: database mặc định chuyển từ
@@ -46,7 +46,8 @@ python backend/check_api.py      # kỳ vọng: 16 dat, 0 hong
 
 ### 🔴 `e6cfe2e` — PostgreSQL thành database mặc định, SQLite bị xoá
 
-Đây là thay đổi duy nhất **bắt buộc** phải làm gì. Ba việc kéo theo:
+Một trong **hai** commit bắt buộc phải làm gì (cái kia là `3dc795b` ở cuối file). Ba việc
+kéo theo:
 
 | | |
 |---|---|
@@ -152,9 +153,10 @@ chat hay ổ chung: cả hai đều là mang dữ liệu cá nhân của 953 ng�
 
 ---
 
-## Đang chờ commit — chưa pull được, nhưng biết trước thì đỡ ngạc nhiên
+## 🔴 `3dc795b` — đổi giá trị cột `kind`, BẮT BUỘC rebuild
 
-Bốn file đang sửa trên máy chủ trì, sẽ commit sau khi rà soát xong:
+Đây là commit thứ hai trong đợt này **đổi nội dung database chứ không chỉ đổi code**, nên
+bước 4 ở đầu file không phải tuỳ chọn.
 
 | File | Nội dung |
 |---|---|
@@ -163,8 +165,8 @@ Bốn file đang sửa trên máy chủ trì, sẽ commit sau khi rà soát xong
 | `backend/store.py` | `health()` đếm độ phủ trên `usage_resolved` thay vì `fact_usage_daily` |
 | `scripts/audit_db.py` | 2 phép kiểm mới (30 → 32 phép) |
 
-**Khi đợt này về, sẽ PHẢI chạy lại `python scripts/rebuild_db.py`** — nó đổi giá trị cột
-`kind` trong bảng `account`, tức đổi *nội dung* database chứ không chỉ đổi code.
+Sau rebuild, bảng `account` sẽ là: `real` 937 · **`service_account` 6** ·
+**`whole_agent` 2** · `unattributed` 8. Trước đó `whole_agent` có 8 dòng.
 
 Không rebuild thì `audit_db.py` sẽ báo hỏng đúng một dòng, kèm sẵn lệnh phải chạy:
 
