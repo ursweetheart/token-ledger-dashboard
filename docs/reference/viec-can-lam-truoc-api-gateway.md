@@ -153,13 +153,13 @@ WHERE f.source = 'app' AND a.kind = 'real';
 
 Đây là nhóm đáng làm nhất hôm nay: rẻ về thời gian, đắt nếu quyết muộn.
 
-#### 🔴 A1. Ba câu còn treo ở `tu-dien-database.md` Phần II §8
+#### 🟡 A1. Câu 1/3 ĐÃ CHỐT — còn hai câu treo (`tu-dien-database.md` §8)
 
 Ba câu này **đổi hình dạng schema**, nên không viết được migration nào trước khi chốt:
 
 | # | Câu hỏi | Nếu chọn A | Nếu chọn B |
 |---|---|---|---|
-| 1 | Lịch sử cũ đi đâu? | Chung một database, phân biệt bằng `data_era` | Đóng băng DB hiện tại làm kho lưu trữ, dựng DB mới → dashboard phải đọc **hai** database |
+| ~~1~~ | ~~Lịch sử cũ đi đâu?~~ | ✅ **CHỐT 20/08:** một database + `data_era`, và **giữ `fact_monitoring`** (đóng băng, không xoá) | |
 | 2 | Có ghi `fact_attempt` không? | Có → trả lời được *"bao nhiêu tiền cháy vì retry"*, *"deployment nào hay dính 429"*. Bảng lớn nhất hệ thống | Không → gộp vào `fact_request`, **mất hẳn** hai câu đó |
 | 3 | Ngân sách do ai chặn? | LiteLLM chặn, `ref_budget` là bản sao chỉ-đọc + `synced_at` | Ta tự chặn → cần thêm lịch sử thay đổi + nhật ký chặn |
 

@@ -1089,7 +1089,7 @@ nó**, không phải hoá đơn thật. Sai lệch vẫn còn, chỉ giảm từ
 | `fact_call` | `fact_request` | 🔀 gộp |
 | `fact_app_daily` | `fact_request` | 🔀 gộp |
 | — | `fact_attempt` | ➕ mới — độ mịn thứ hai |
-| `fact_monitoring` | — | ❌ bỏ — Gateway thay thế hoàn toàn |
+| `fact_monitoring` | `fact_monitoring` | ✅ **GIỮ, đóng băng** (chốt 20/08 — xem 8a). Bản trước ghi "❌ bỏ", trái với chính mục 6.2 |
 | `fact_perf_daily` | `fact_attempt` | 🔀 `error_class` + cuộn ra `fact_usage_daily` |
 | `fact_latency_daily` | `fact_request.latency_ms` | 🔀 đo trực tiếp, không còn gộp histogram |
 | `fact_billing_daily` | `fact_invoice_daily` | ✏️ khoá đổi sang `credential_ref` |
@@ -1112,9 +1112,50 @@ bàn, **giả định được ghi rõ dưới đây** — không phải đã ch
 
 | # | Câu hỏi | Giả định tạm dùng ở trên | Nếu chọn khác thì đổi gì |
 |---|---|---|---|
-| 1 | **Lịch sử cũ đi đâu?** Giữ chung một database hai kỷ nguyên, hay đóng băng database hiện tại làm kho lưu trữ rồi dựng mới hoàn toàn? | Giữ chung, phân biệt bằng `data_era` | Nếu đóng băng thì bỏ hẳn cột `data_era`, schema gọn hơn nhưng dashboard phải đọc hai database |
+| 1 | ~~**Lịch sử cũ đi đâu?**~~ | ✅ **ĐÃ CHỐT 20/08/2026** — xem mục 8a ngay dưới bảng | |
 | 2 | **Có ghi `fact_attempt` không?** Nó sẽ là bảng lớn nhất, và chỉ đáng nếu thật sự cần trả lời *"bao nhiêu tiền cháy vì retry"* và *"deployment nào hay dính 429"* | Có ghi | Không ghi thì gộp vào `fact_request` và **mất hẳn** khả năng trả lời hai câu đó |
 | 3 | **Ngân sách do ai chặn?** | LiteLLM chặn, `ref_budget` chỉ là bản sao | Nếu ta tự chặn thì `ref_budget` thành bảng thực thi, cần thêm lịch sử thay đổi và nhật ký chặn |
+
+### 8a. ✅ Câu 1 đã chốt — 20/08/2026
+
+Câu này hoá ra là **hai câu**, và người dùng trả lời cả hai:
+
+**1a. MỘT database, phân biệt bằng `data_era`.**
+Dòng cũ mang `'scrape'`, dòng Gateway mang `'gateway'`. Không đóng băng, không dựng
+database thứ hai.
+
+*Lý do:* dashboard đọc hai database là chi phí trả **mãi mãi** cho một lần tiện lúc
+thiết kế. Một cột rẻ hơn nhiều.
+
+**1b. GIỮ `fact_monitoring` — bảng này KHÔNG bỏ.**
+Đóng băng nó: sau ngày Gateway chạy thì không nạp thêm dòng nào, nhưng cũng không xoá.
+
+*Lý do:* mục 6.2 nói *"lịch sử cũ không dựng lại được"*, mà mục 7 lại xếp
+`fact_monitoring` vào nhóm ❌ bỏ — **hai câu đó không thể cùng đúng**. Cửa sổ lưu giữ của
+Google trượt rất nhanh (đo 06/08: 196 ngày; đo 13/08: 112 ngày), nên **583.917 dòng** này
+giờ chỉ còn trên đĩa máy cục bộ. Bảng cuộn `fact_usage_daily` không thay thế được, vì nó
+không giữ ba thứ:
+
+| Mất nếu bỏ `fact_monitoring` | Hậu quả |
+|---|---|
+| `thinking_enabled` | Nguồn **duy nhất** của cột "think" trên dashboard |
+| `output_modality` | Không còn phân loại text / image / audio |
+| Chi tiết từng phút, histogram độ trễ | Không dựng lại được phân vị |
+
+### 8b. ⚠️ Việc kéo theo mà câu 1 vừa tạo ra
+
+Hai kỷ nguyên **khác hình dạng**, không chỉ khác nhãn:
+
+```
+   'scrape'    (ngay, agent, model, account, nguon)
+               KHONG co: provider, retry, do tre tung request, virtual_key
+   'gateway'   tung request, co du
+```
+
+Nên dòng cũ để **NULL** ở các cột mới. Truy vấn nào dùng cột mới sẽ **âm thầm bỏ hết dòng
+cũ** — biểu đồ vẫn vẽ ra, chỉ là mất 8 tháng lịch sử mà không báo gì. Mỗi truy vấn phải
+quyết tường minh: lọc theo kỳ nguyên, hay chấp nhận NULL. Đây là chỗ tốn công nhất của
+phương án "giữ chung", không phải cột `data_era`.
 
 ---
 
