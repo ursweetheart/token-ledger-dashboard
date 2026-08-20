@@ -25,6 +25,7 @@ còn hơn, vì khi đó người xem sẽ tin vào con số nhiều hơn mức n
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import date, timedelta
 
@@ -40,11 +41,24 @@ app = FastAPI(
                 " Chi doc, khong ghi.",
 )
 
-# Dashboard mở bằng file:// (origin 'null') hoặc từ một cổng khác. Mở CORS ở đây
-# chấp nhận được vì máy chủ chỉ lắng nghe trên 127.0.0.1 và không có endpoint
-# ghi nào - không có gì để CSRF.
+# Dashboard mở bằng file:// (origin 'null') hoặc từ một cổng khác.
+#
+# TRƯỚC 20/08/2026 chỗ này là `allow_origins=["*"]`, và ghi chú tự biện minh:
+# "chấp nhận được vì máy chủ chỉ lắng nghe trên 127.0.0.1". Lý do đó hết hiệu lực
+# đúng vào ngày Gateway lên - kiến trúc đó có load balancer và nhiều instance,
+# tức máy chủ này sẽ ra khỏi 127.0.0.1. Một biện minh gắn với một dòng cấu hình
+# thì mất hiệu lực cùng lúc dòng cấu hình đó đổi, mà không ai được báo.
+#
+# Mặc định vẫn cho `null` (file://) và localhost để không phá cách chạy hiện tại.
+# Đặt DASHBOARD_ORIGINS để siết lại, hoặc "*" để quay về hành vi cũ - nhưng khi đó
+# là một lựa chọn tường minh, không phải một mặc định bị quên.
+DEFAULT_ORIGINS = "null,http://127.0.0.1:8080,http://localhost:8080"
+ALLOWED_ORIGINS = [o.strip() for o in
+                   os.environ.get("DASHBOARD_ORIGINS", DEFAULT_ORIGINS).split(",")
+                   if o.strip()]
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"],
+    CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET"],
+    allow_headers=["*"],
 )
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

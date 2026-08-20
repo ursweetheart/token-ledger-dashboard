@@ -182,9 +182,18 @@ def units(cn) -> list[dict]:
 
 def accounts(cn) -> list[dict]:
     """Danh bạ. `unit_conflict`=1 nghĩa là hai app xếp người này vào hai phòng ban
-    khác nhau và database đã chọn một - màn hình nên cho thấy dấu vết đó."""
+    khác nhau và database đã chọn một - màn hình nên cho thấy dấu vết đó.
+
+    KHÔNG TRẢ `email` (bỏ 20/08/2026). Frontend từng dùng email làm khoá ghép,
+    nhưng `/api/usage-by-account` đã trả `account_id` - ghép bằng khoá số thì
+    chính xác hơn và không phụ thuộc hoa/thường. Bỏ đi thì endpoint này thôi phơi
+    927 địa chỉ thư của nhân viên ra mọi nơi gọi được nó.
+
+    Đây là phòng thủ theo chiều sâu, KHÔNG thay cho xác thực: máy chủ này vẫn
+    chưa có xác thực nào (xem docs/reference/viec-can-lam-truoc-api-gateway.md
+    mục C1). Xác thực chặn người ngoài; bớt dữ liệu chặn cả sự cố lẫn sơ ý."""
     r = _rows(cn, """
-        SELECT a.account_id, a.username, a.full_name, a.email, a.kind,
+        SELECT a.account_id, a.username, a.full_name, a.kind,
                a.unit_id, u.name AS unit_name, u.path AS unit_path,
                a.unit_conflict, a.is_shared, a.role, a.is_enabled, a.created_at,
                g.name AS agent,

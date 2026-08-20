@@ -44,7 +44,20 @@ CREATE TABLE dim_agent (
     agent_id           INT PRIMARY KEY,
     code               TEXT UNIQUE NOT NULL,
     name               TEXT NOT NULL,
-    gcp_project_id     TEXT,              -- NULL nếu agent không đi qua GCP
+    -- NULL nếu agent không đi qua GCP.
+    --
+    -- ⚠️ PHÉP SUY `agent_id ← project` CÓ HẠN SỬ DỤNG (ghi 20/08/2026)
+    -- fact_billing_daily và fact_monitoring đang nối về agent QUA cột này. Phép
+    -- suy đó đúng khi mỗi agent gọi project của riêng nó - tức kiến trúc hôm nay.
+    --
+    -- Sau API Gateway thì SAI. Tài liệu triển khai §5.2: khi deployment của Agent
+    -- A gần chạm hạn mức, Router chuyển request sang deployment của Agent B. Lúc
+    -- đó hoá đơn Google ghi nợ project B cho lưu lượng của Agent A:
+    --     ai HỎI  ≠  ai TRẢ TIỀN
+    -- Giữ nguyên cách nối này thì dashboard báo B tiêu tiền của A, và KHÔNG LỖI
+    -- NÀO BÁO RA. Khi đó `gcp_project_id` phải rời khỏi đây, sang một bảng
+    -- deployment riêng - xem tu-dien-database.md Phần II mục 3.1.
+    gcp_project_id     TEXT,
     has_org_tree       BOOLEAN NOT NULL,  -- chỉ TLA HĐ và Ralli (quyết định A1)
     project_created_at DATE,
     data_from          DATE NOT NULL,

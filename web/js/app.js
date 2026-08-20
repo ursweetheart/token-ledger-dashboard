@@ -176,7 +176,11 @@ function buildAccountCatalogueFromDb(){
     // Ưu tiên MÃ đơn vị (api.js đã quy về bản chuẩn); tên chỉ là đường lui.
     var unit=unitById(a.unit_id)||unitOf(a.unit_name)||null;
     return {
-      user:a.email||a.username, login:a.username, email:a.email||"",
+      /* `id` là khoá GHÉP; `user` chỉ để hiển thị và làm khoá hàng trong bảng.
+         Trước 20/08/2026 `user` là `a.email||a.username` và email cũng được dùng
+         làm khoá ghép - xem applyRealAccountUsage(). Ghép bằng chuỗi thì phụ
+         thuộc hoa/thường và khoảng trắng, mà `account_id` thì không. */
+      id:a.account_id, user:a.username, login:a.username,
       n:a.full_name||a.username,
       unitId:unit?unit.id:"", d:a.unit_name||"—",
       a:a.agent||"", m:"", ug:"",
@@ -223,19 +227,30 @@ function buildAccountCatalogue(){
    Excel) trong khi database có 937 tài khoản thật. Người của TLA Hợp Đồng
    phần lớn không có dòng trong danh bạ đó nên số của họ không hiện lên được ở
    tab này — con số bị bỏ lại được đếm và ghi vào console. */
+var accountFallbackByName = 0;
 function applyRealAccountUsage(){
-  var byKey={};
+  var byKey={}, byId={};
   USER_ACCOUNTS.forEach(function(u){
     u.req=0; u.ti=0; u.to=0; u.active=false; u.last=""; u.quotaPct=0; u.byAgent={};
     u.costDerived=0; u.costRows=0; u.costRowsPriced=0;
+    if(u.id!=null) byId[u.id]=u;
     if(u.login) byKey[String(u.login).trim().toLowerCase()]=u;
-    if(u.email) byKey[String(u.email).trim().toLowerCase()]=u;
   });
   var r=state&&state.range, bo=0, boLuot=0;
   REAL_BY_ACCOUNT.forEach(function(x){
     if(r&&(x.day<r.start||x.day>r.end)) return;
-    var u=byKey[String(x.username||"").trim().toLowerCase()]
+    /* GHÉP BẰNG `account_id` TRƯỚC. Nó là khoá số, cùng khoá mà database dùng -
+       không phụ thuộc hoa/thường, khoảng trắng, hay việc app ghi tên kiểu nào.
+       Đúng nguyên tắc db/01_schema.sql: "KHÔNG dùng tên đăng nhập làm khoá ngoại
+       ... đã thấy ba dạng khác nhau cho cùng một tài khoản".
+       Nhánh ghép theo tên giữ lại làm đường lui và có biến đếm, để nó không âm
+       thầm gánh việc nếu một ngày `account_id` vắng mặt. */
+    var u=byId[x.account_id];
+    if(!u){
+      u=byKey[String(x.username||"").trim().toLowerCase()]
         ||byKey[String(x.full_name||"").trim().toLowerCase()];
+      if(u) accountFallbackByName++;
+    }
     if(!u){ bo++; boLuot+=x.calls||0; return; }
     var req=x.calls||0, ti=x.input_tokens||0, to=x.output_tokens||0;
     /* TIỀN TÍNH Ở ĐÂY, MỨC TỪNG DÒNG - không cộng gộp token rồi mới nhân giá.
