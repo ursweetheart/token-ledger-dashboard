@@ -68,15 +68,34 @@
 - [ ] 7.1 Bốn mốc ở 3.5 khớp trước và sau; mọi chênh lệch truy được về một dòng trong bảng
       đối chiếu
 - [ ] 7.2 Quét toàn bảng: không ô tỷ lệ áp dụng nào vượt 100%
-- [ ] 7.3 Quét toàn bảng: không hàng nào vừa có request > 0 vừa hiện `0 ₫`
+- [ ] 7.3 Quét cột tiền: không hàng nào vừa có token > 0 vừa hiện `0 ₫`; hàng có số phải
+      mang nhãn *"suy từ bảng giá"*; hàng `—` phải nói được lý do
 - [ ] 7.4 Kiểm cả hai tab **Phòng ban & User** và **Agents** — chúng dùng chung cây
 - [ ] 7.5 `node --check`, hai bộ test JS, `audit_db.py`, `check_api.py` đều xanh
 - [ ] 7.6 Kiểm trong Chrome bằng `Ctrl+Shift+R`. Xác nhận đang xem bản mới:
       `fetch("js/app.js?probe="+Date.now())` rồi so nội dung file với hàm có trong trang —
       ngày 20/08 đã mất một vòng vì bộ đệm giữ bản cũ và bảng hiện y hệt trước khi sửa
 
-## 8. Việc KHÔNG thuộc change này
+## 8. Tiền theo phòng ban — suy từ bảng giá
 
-- Ước tính tiền theo phòng ban từ `ref_price` — làm được nhưng là **thêm một con số ước
-  tính mới**, phải có nhãn riêng và là quyết định riêng
-- Mọi thay đổi trong `backend/`, `db/`, `scripts/` — cả ba lỗi đều ở frontend
+Đưa vào phạm vi ngày 20/08/2026 sau khi đo bác bỏ lý do loại nó ra. Xem `design.md` §5.
+
+- [ ] 8.1 `api.js` giữ `model_id` trên từng dòng `byAccount` thay vì bỏ đi
+- [ ] 8.2 Dựng bảng tra `model_id` → tên model từ `/api/catalog`, vì `state.pricing` khoá
+      theo tên còn API trả id
+- [ ] 8.3 Tính tiền ở **mức dòng** rồi mới cộng lên tài khoản. MUST NOT nhân token đã cộng
+      gộp của tài khoản với một đơn giá — `flash-lite` $0,1 so với `pro` $1,25 chênh 12 lần
+- [ ] 8.4 Dòng có `model_id` không tra được giá thì đơn vị chứa nó rơi về `—`, không tính 0
+- [ ] 8.5 Ô tiền mang dấu hiệu nói rõ **suy từ bảng giá**, không phải hoá đơn
+- [ ] 8.6 Thêm chỗ nói phần tiền **không quy được về phòng ban nào** (đo 20/08: $16,43 trên
+      $62,64 = 26,2% quy được, 73,8% không)
+- [ ] 8.7 Đối chiếu: tổng tiền suy ra của các phòng ban phải khớp con số đã đo tay
+      (414.090 ₫ = $16,43 cho kỳ 19/07–17/08), lệch thì tìm ra dòng nào trước khi đi tiếp
+- [ ] 8.8 Đối chiếu lại phép suy trên nguồn billing: 965 dòng có cả hai vế phải cho lệch
+      tổng trong khoảng ±0,5% và lệch trung vị mỗi dòng dưới 1%
+
+## 9. Việc KHÔNG thuộc change này
+
+- Mọi thay đổi trong `backend/`, `db/`, `scripts/`. Cả ba lỗi đều ở frontend, và phép suy
+  tiền cũng làm được hoàn toàn ở frontend: `/api/usage-by-account` đã có `model_id`,
+  `/api/catalog` đã có đơn giá

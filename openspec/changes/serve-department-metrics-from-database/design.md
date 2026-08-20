@@ -91,19 +91,72 @@ Chỗ tự tính vẫn phải theo **đúng quy tắc backend đang dùng**: lo�
 lẫn mẫu, và tài khoản có request mà không có trong danh bạ thì để riêng chứ không cộng vào
 tử số.
 
-## 5. Vì sao không ước tính tiền theo phòng ban trong change này
+## 5. Tiền theo phòng ban: suy từ bảng giá — quyết định đã ĐẢO
 
-Làm được về mặt kỹ thuật: mỗi dòng `/api/usage-by-account` có `model_id`, và `ref_price`
-có đơn giá. Nhưng:
+### 5.1. Lập luận đầu tiên, và phép đo bác bỏ nó
 
-1. Phải tính ở **mức dòng** rồi mới cộng. Không ước tính được từ `u.ti`/`u.to` đã cộng gộp
-   của tài khoản, vì một tài khoản dùng nhiều model với đơn giá khác nhau.
-2. `state.pricing` khoá theo **tên model**, còn API trả `model_id` — cần thêm một bước tra.
-3. Quan trọng nhất: đó là **thêm một con số ước tính mới** vào một màn hình vừa mới bỏ
-   được thói quen bịa số. Nó phải có nhãn riêng và là quyết định riêng.
+Bản đầu của tài liệu này loại việc suy tiền ra khỏi phạm vi, với ba lý do. Hai trong ba
+lý do đó **sai**, và cái sai chỉ lộ ra khi đi đo thay vì ngồi suy:
 
-Đưa nó vào đây sẽ khiến change này vừa xoá số bịa vừa thêm số suy — và người đọc diff
-không phân biệt được hai việc.
+| Đã lập luận | Đo được 20/08/2026 |
+|---|---|
+| *"App không phơi model"* | **66/66** dòng Trợ lý ảo Ralli và **10/10** dòng Trợ Lý Ảo Hợp Đồng trong `/api/usage-by-account` đều có `model_id`. Không sót dòng nào |
+| *"Đó là thêm một con số ước tính mới"* | `ref_price` lấy từ Cloud Billing Catalog của Google — `price_source='google'` cho cả 10 model, hiệu lực 2026-08-13. Không phải giá gõ tay |
+| *"Sai số làm bẩn màn hình"* | Đối chiếu **965 dòng** có cả hai vế: tổng $291,6462 (suy) vs $291,9856 (hoá đơn) = **−0,1%**. Lệch **trung vị mỗi dòng: 0,0%**. Dòng tệ nhất: 6,4% |
+
+Lý do thứ nhất là một **giả định về dữ liệu chưa kiểm** — và nó sai. Ghi lại ở đây vì đó
+là bài học đắt hơn cả quyết định: *lập luận nghe hợp lý vẫn phải đo trước khi dùng nó để
+loại một việc ra khỏi phạm vi.*
+
+Với sai số 0,1%, chữ **"ước tính" dùng sai**. Phép nhân này không phỏng đoán gì — nó dựng
+lại chính hoá đơn từ cùng bảng giá mà Google dùng để phát hành hoá đơn đó.
+
+### 5.2. Nghẽn thật nằm ở lắp ráp, không ở dữ liệu
+
+```
+   /api/usage-by-account       76 dong, MOI dong co model_id + input + output
+              │
+              ▼
+   api.js dung doi tuong tai khoan
+       m: ""                    <-- model bi bo
+       ti/to cong gop MOI model  <-- mat luon phan tach
+              │
+              ▼
+   cost(u)  ->  state.pricing[""]  ->  undefined  ->  0
+```
+
+Nên phép tính **phải làm ở mức dòng rồi mới cộng vào tài khoản**. Không suy được từ
+`u.ti`/`u.to` đã gộp, vì một tài khoản dùng nhiều model với đơn giá chênh nhau tới 12 lần
+(`flash-lite` $0,1 vs `pro` $1,25 cho mỗi triệu token vào).
+
+Chi tiết còn lại: `state.pricing` khoá theo **tên model**, API trả `model_id` — cần một
+bước tra qua `/api/catalog`.
+
+### 5.3. Hai điều kiện, và vì sao điều kiện thứ hai mới là điều kiện khó
+
+**① Ô phải nói rõ số này suy từ bảng giá, không lấy từ hoá đơn.** Dễ — thêm nhãn.
+
+**② Phải nói được rằng phần lớn tiền KHÔNG thuộc phòng ban nào.**
+
+```
+   Tien hoa don ca ky                    $62,64    100%
+   ├── quy duoc ve mot phong ban         $16,43     26,2%   <- cot nay hien
+   └── KHONG quy duoc ve phong ban nao   $46,21     73,8%   <- di qua hoa don Google,
+                                                               noi khong ghi ai goi
+```
+
+Đây không phải thiếu sót của phép suy — phần 73,8% đó **không có chiều người dùng để mà
+chia**. Cùng đúng giới hạn đã tạo ra ba nhóm độ phủ (a)/(b)/(c) trong `health()`.
+
+Hệ quả với người đọc: cộng mọi phòng ban lại **sẽ không ra tổng chi phí**, và chênh lệch
+không phải lỗi. Nếu màn hình không nói trước điều đó, người xem sẽ tự đi tìm một lỗi không
+tồn tại — hoặc tệ hơn, tin rằng công ty chỉ tiêu $16,43.
+
+Vì vậy cột này trả lời một câu **hẹp hơn tên cột gợi ra**:
+
+> *"Phần lưu lượng **có ghi được người dùng** của phòng ban này đáng giá bao nhiêu."*
+
+Không phải *"phòng ban này tiêu bao nhiêu của công ty"*.
 
 ## 6. Nghiệm thu
 

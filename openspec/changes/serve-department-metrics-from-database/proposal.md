@@ -10,7 +10,7 @@ câu trả lời mà backend đã có**, và khi không dựng nổi thì nó tr
 
 | # | Hàng | Màn hình nói | Sự thật |
 |---|---|---|---|
-| 1 | Nghiên cứu thị trường | `0 ₫` cạnh **49 request · 525,9 nghìn token** | Không tính được, không phải bằng không |
+| 1 | Nghiên cứu thị trường | `0 ₫` cạnh **49 request · 525,9 nghìn token** | Tính được — nhưng mã nguồn đánh rơi model trên đường nên trả về 0 |
 | 2 | Chưa quy được | `3/1 · 300%` | Tỷ lệ áp dụng không thể vượt 100% |
 | 3 | Đơn vị sử dụng Sale Agent | `—` user, cạnh **14.264 request · 35,7 triệu token** | Đúng 1 tài khoản dịch vụ, đang hoạt động |
 
@@ -89,12 +89,44 @@ tại chỉ để hoà giải việc đó.
 - Đối chiếu 108 ↔ 130 đơn vị trước khi thay: tên nào chỉ có một bên, alias nào đang che
   một lệch thật
 
+**Tiền theo phòng ban — suy từ bảng giá của Google**
+
+Bản đầu của proposal này loại việc đó ra, với lý do *"thêm một con số ước tính mới vào màn
+hình vừa bỏ được thói quen bịa số"*. **Đo xong thì lý do đó sai**, ở cả hai vế:
+
+| Điều đã tưởng | Đo được (20/08/2026) |
+|---|---|
+| App không phơi model nên không tính được | `/api/usage-by-account`: **66/66** dòng Trợ lý ảo Ralli và **10/10** dòng Trợ Lý Ảo Hợp Đồng đều có `model_id` — phủ 100% |
+| Nhân token với bảng giá là phỏng đoán | `ref_price` lấy từ **Cloud Billing Catalog của Google** (`price_source='google'` cho cả 10 model), không gõ tay |
+| Sai số không chấp nhận được | Trên **965 dòng** có cả hai vế: tổng ước tính $291,6462 vs hoá đơn $291,9856 = **−0,1%**; lệch **trung vị mỗi dòng 0,0%**; dòng lệch nhiều nhất 6,4% |
+
+Với sai số đó, chữ *"ước tính"* dùng sai. Đúng hơn là **suy từ bảng giá chính thức**, và nó
+dựng lại gần đúng chính hoá đơn.
+
+Nghẽn không nằm ở dữ liệu mà ở lắp ráp: `api.js` dựng đối tượng tài khoản với `m: ""` và
+**cộng gộp token của mọi model lại một cục**, nên tới lúc tính tiền thì model đã bị đánh
+rơi trên đường. Phải tính ở **mức dòng** rồi mới cộng.
+
+Nếu nối lại, những ô đang hiện `—` sẽ có số: `TTDL&ĐHS` 67.661 ₫ · `TT C4LED` 74.907 ₫ ·
+`TT&TMĐT` 23.270 ₫ · tổng 414.090 ₫ ($16,43).
+
+**Hai điều kiện bắt buộc đi kèm**
+
+1. Ô phải nói rõ số này **suy từ bảng giá**, không phải lấy từ hoá đơn.
+2. Phải có chỗ nói **73,8% tiền của kỳ không thuộc phòng ban nào**. $16,43 chỉ bằng 26,2%
+   của $62,64 cả kỳ — không phải vì phép suy thiếu, mà vì phần còn lại đi qua hoá đơn
+   Google, nơi không ghi ai gọi. Không nói ra thì người xem cộng các phòng ban lại rồi
+   thắc mắc sao không ra tổng.
+
+Cột này vì vậy trả lời câu **hẹp hơn** người ta tưởng: *"phần lưu lượng có ghi được người
+dùng của phòng ban này đáng giá bao nhiêu"* — không phải *"phòng ban này tiêu bao nhiêu
+của công ty"*.
+
 **KHÔNG làm trong change này**
 
-- Ước tính tiền theo phòng ban từ bảng giá. Làm được (mỗi dòng `/api/usage-by-account` có
-  `model_id`), nhưng đó là **thêm một con số ước tính mới**, phải ghi nhãn, và là quyết
-  định riêng — không nên đi kèm một change đang sửa lỗi bịa số.
-- Đụng vào `backend/`. Cả ba lỗi đều nằm ở frontend; backend đã đúng ở cả ba ca.
+- Đụng vào `backend/`, `db/`, `scripts/`. Cả ba lỗi đều nằm ở frontend; backend đã đúng ở
+  cả ba ca. Phép suy tiền cũng làm được hoàn toàn ở frontend, vì `/api/usage-by-account`
+  đã có `model_id` và `/api/catalog` đã có đơn giá.
 
 ## Impact
 

@@ -62,6 +62,68 @@ trình duyệt.
 - **WHEN** quét toàn bộ bảng phòng ban ở bất kỳ khoảng ngày nào
 - **THEN** không ô tỷ lệ áp dụng nào SHALL lớn hơn 100%
 
+### Requirement: Tiền theo phòng ban suy từ bảng giá, và tự khai là suy
+
+Ô tiền của một đơn vị SHALL được tính bằng cách nhân token với `ref_price`, thực hiện ở
+**mức từng dòng** `/api/usage-by-account` rồi mới cộng lên. MUST NOT tính từ token đã cộng
+gộp của một tài khoản.
+
+Ô đó SHALL nói rõ con số **suy từ bảng giá**, không phải lấy từ hoá đơn.
+
+Lý do phải tính ở mức dòng: một tài khoản dùng nhiều model, và đơn giá chênh nhau tới 12
+lần (`gemini-2.5-flash-lite` $0,1 so với `gemini-2.5-pro` $1,25 cho mỗi triệu token vào).
+Nhân tổng token đã gộp với bất kỳ đơn giá nào cũng ra một con số không model nào có.
+
+Lý do tin được phép suy này: `ref_price` lấy từ Cloud Billing Catalog của Google
+(`price_source='google'` cho cả 10 model), không gõ tay. Đối chiếu 965 dòng có cả hai vế:
+tổng suy $291,6462 so với hoá đơn $291,9856 — lệch **−0,1%**, lệch **trung vị mỗi dòng
+0,0%**, dòng lệch nhiều nhất 6,4%.
+
+#### Scenario: Mỗi dòng usage được áp đúng đơn giá của model nó
+
+- **WHEN** tính tiền cho một đơn vị
+- **THEN** mỗi dòng `/api/usage-by-account` SHALL được nhân với đơn giá của chính
+  `model_id` của nó
+- **AND** kết quả mới được cộng lên mức tài khoản rồi mức đơn vị
+
+#### Scenario: Con số tự khai là suy chứ không phải hoá đơn
+
+- **WHEN** ô tiền của một đơn vị hiện ra một con số
+- **THEN** phải có dấu hiệu nhìn thấy được nói con số này suy từ bảng giá
+- **AND** MUST NOT trình bày như thể lấy trực tiếp từ hoá đơn
+
+#### Scenario: Model không tra được đơn giá
+
+- **WHEN** một dòng mang `model_id` không có trong `ref_price`
+- **THEN** dòng đó MUST NOT được tính là 0 đồng
+- **AND** đơn vị chứa nó SHALL rơi về trạng thái không tính được, theo requirement
+  *"Không đo được phải hiện khác bằng không"*
+
+### Requirement: Nói rõ phần tiền không thuộc phòng ban nào
+
+Màn hình có cột tiền theo phòng ban SHALL nêu được tỷ lệ tiền **không quy được về phòng
+ban nào**, và SHALL không để người đọc tưởng tổng các phòng ban bằng tổng chi phí.
+
+Lý do: đo ngày 20/08/2026 trên kỳ 19/07–17/08, tiền quy được về một phòng ban là $16,43
+trên tổng hoá đơn $62,64 — tức **26,2%**. Phần 73,8% còn lại đi qua hoá đơn Google, nơi
+tính theo project và không ghi ai gọi, nên **không có chiều người dùng để mà chia**. Đây
+là giới hạn của nguồn, không phải thiếu sót của phép tính.
+
+Không nói ra thì người xem cộng mọi phòng ban lại, thấy không khớp tổng, rồi đi tìm một
+lỗi không tồn tại — hoặc tin rằng công ty chỉ tiêu $16,43.
+
+#### Scenario: Người đọc cộng các phòng ban lại
+
+- **WHEN** cộng tiền của mọi phòng ban trong kỳ
+- **THEN** kết quả nhỏ hơn tổng chi phí của kỳ
+- **AND** màn hình SHALL nêu được phần chênh lệch đó là gì và vì sao nó tồn tại
+
+#### Scenario: Nhãn cột không hứa nhiều hơn số liệu trả lời được
+
+- **WHEN** đặt tên hoặc mô tả cột tiền theo phòng ban
+- **THEN** mô tả SHALL nói phạm vi là phần lưu lượng **có ghi được người dùng**
+- **AND** MUST NOT trình bày như thể đó là toàn bộ chi phí của phòng ban
+
 ### Requirement: Đơn vị kỹ thuật lấy tỷ lệ áp dụng từ backend
 
 Hàng của đơn vị kỹ thuật SHALL lấy số tài khoản hoạt động và số tài khoản được cấp từ
