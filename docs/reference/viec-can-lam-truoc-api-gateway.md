@@ -388,9 +388,20 @@ Ba điều làm việc này đáng ưu tiên:
 Đây đúng là loại "sửa schema cho thuận với Gateway" mà anh muốn — khác với việc bỏ
 cột nguồn ở chỗ: nó **thêm khả năng phân biệt**, không **bỏ đi** khả năng đó.
 
-#### ⚪ B4. Dọn cái thật sự chết
+#### ❌ B4. ĐÃ RÚT — `dim_function` KHÔNG chết (đo lại 20/08/2026)
 
-`dim_function` — 8 dòng, cột `is_user_facing` **chưa từng có giá trị nào khác NULL**, không endpoint nào đọc. Phần II đã xếp nó vào nhóm bỏ. Đây mới đúng là thứ "bỏ đi cho gọn" — khác hẳn cột nguồn.
+Nhận định ban đầu: *"8 dòng, `is_user_facing` chưa từng có giá trị, không endpoint nào
+đọc — thứ bỏ đi cho gọn."* **Đo lại thì sai:**
+
+| | |
+|---|---|
+| `fact_call.function_code` | **8.330/8.330 dòng có giá trị** — mọi lượt gọi Ralli đều mang mã chức năng |
+| `Data Out` trường #10 | `function` · text · **Nguồn: Gateway** — Gateway sẽ nạp lại chiều này |
+
+Bảng không chết, nó chỉ **chưa được phơi lên giao diện**. Bỏ bây giờ là xoá rồi dựng lại,
+và mất luôn 2 nhãn tiếng Việt đang có (`Phân tích hợp đồng`, `Hỏi đáp AI`).
+
+**Giữ.** Việc đúng là phơi chiều này lên dashboard, không phải xoá bảng.
 
 ---
 
