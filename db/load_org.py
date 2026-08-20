@@ -447,15 +447,35 @@ def main() -> None:
     i = len(by_username)
     technical_account: dict[tuple[str, int], int] = {}
     for aid in sorted(agent_name):
-        for kind in ("whole_agent", "unattributed"):
+        for slot in ("whole_agent", "unattributed"):
             i += 1
-            technical_account[(kind, aid)] = i
-            label = (f"Cả {agent_name[aid]}" if kind == "whole_agent"
+            technical_account[(slot, aid)] = i
+            label = (f"Cả {agent_name[aid]}" if slot == "whole_agent"
                      else "Chưa quy được")
+            # `slot` là CHỖ NGỒI trong khoá của fact_usage_daily; `kind` là điều
+            # ta NÓI VỚI người đọc về dòng đó. Hai chuyện này chỉ khác nhau ở
+            # đúng một trường hợp - agent một-người-dùng:
+            #
+            #   'whole_agent'     Google chỉ báo mức project, KHÔNG biết ai
+            #                     trong 45 / 892 người đã gọi. Không quy được.
+            #   'service_account' agent chạy bằng MỘT tài khoản dịch vụ. Biết
+            #                     chính xác là ai - chỉ là "ai" đó không phải
+            #                     một con người. QUY ĐƯỢC.
+            #
+            # Trước 20/08/2026 cả hai dùng chung 'whole_agent', nên health() đếm
+            # 749 triệu token của 6 agent này vào phần "không quy được về người"
+            # và báo độ phủ 12,4% trong khi lỗ hổng thật chỉ 1,2%.
+            #
+            # `username` GIỮ NGUYÊN `__whole_agent_<id>__`: build_usage_daily.py
+            # tra tài khoản này bằng tên đăng nhập chứ không bằng kind. Đổi tên
+            # ở đây là gãy khâu nạp, mà gãy im lặng - nó chỉ tra dict.
+            kind = ("service_account"
+                    if slot == "whole_agent" and aid in SINGLE_USER_AGENTS
+                    else slot)
             # is_shared = 1: theo đúng định nghĩa, đây không phải tài khoản của
             # một người. Nhờ vậy chỉ tiêu tỷ lệ áp dụng chỉ cần lọc `is_shared`
             # là đủ, không phải liệt kê thêm điều kiện về `kind`.
-            accounts.append((i, f"__{kind}_{aid}__", label, None, kind,
+            accounts.append((i, f"__{slot}_{aid}__", label, None, kind,
                              technical_unit[aid], 1, None, None, None, aid, 0))
 
     cur.executemany(

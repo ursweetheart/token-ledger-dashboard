@@ -87,12 +87,27 @@ CREATE TABLE dim_unit (
 -- Ralli đôi khi ghi username vào chỗ ObjectId). `username` ở đây đã LOWER+TRIM,
 -- giữ lại để tra cứu, nhưng khoá là số.
 --
--- BA LOẠI:
---   'real'         tài khoản người thật, từ danh bạ hoặc nhật ký của app
---   'whole_agent'  Google chỉ báo được mức project -> không quy được về ai.
---                  Một dòng cho mỗi agent. KHÔNG phải dữ liệu thiếu: Google
---                  vốn không biết.
---   'unattributed' có lượt gọi nhưng bản ghi không kèm người dùng
+-- BỐN LOẠI:
+--   'real'            tài khoản người thật, từ danh bạ hoặc nhật ký của app
+--   'service_account' agent chạy bằng MỘT tài khoản dịch vụ (6 agent, quyết
+--                     định A1). Ta BIẾT chính xác ai dùng - chỉ là "ai" đó
+--                     không phải một con người. QUY ĐƯỢC về danh tính.
+--   'whole_agent'     Google chỉ báo được mức project -> không quy được về ai.
+--                     Chỉ còn đúng 2 dòng: Trợ Lý Ảo Hợp Đồng và Trợ lý ảo
+--                     Ralli - hai agent có nhiều người dùng thật. KHÔNG phải
+--                     dữ liệu thiếu: Google vốn không biết.
+--   'unattributed'    có lượt gọi nhưng bản ghi không kèm người dùng
+--
+-- VÌ SAO TÁCH 'service_account' KHỎI 'whole_agent' (20/08/2026)
+--   Trước đó cả 8 agent đều nhận 'whole_agent', nên một giá trị mang hai
+--   nghĩa trái ngược: "biết chính xác là ai" và "không biết ai". Mọi nơi lọc
+--   `kind = 'real'` vì thế vứt luôn 749 triệu token của 6 agent
+--   một-người-dùng, và /api/health báo độ phủ 12,4% trong khi phần thật sự
+--   không quy được chỉ là 1,2%.
+--
+--   HỎI "quy được về danh tính không?"  -> kind IN ('real','service_account')
+--   HỎI "có phải một CON NGƯỜI không?"  -> kind = 'real'
+--   Hai câu hỏi khác nhau. Trước 20/08 chúng dùng chung một điều kiện.
 -- Thiếu hai loại sau thì khoá của fact_usage_daily phải nhận NULL, mà SQLite
 -- coi NULL != NULL nên sẽ âm thầm nhận hai dòng giống hệt nhau.
 --
@@ -119,7 +134,7 @@ CREATE TABLE account (
     username       TEXT UNIQUE NOT NULL,   -- đã LOWER(TRIM())
     full_name      TEXT,
     email          TEXT,
-    kind           TEXT NOT NULL,          -- 'real' | 'whole_agent' | 'unattributed'
+    kind           TEXT NOT NULL,  -- 'real'|'service_account'|'whole_agent'|'unattributed'
     unit_id        TEXT NOT NULL REFERENCES dim_unit,
     -- Tài khoản DÙNG CHUNG, không đại diện cho một người: 'admin', các tài
     -- khoản thử. Vẫn tính đủ vào token và tiền - lưu lượng của chúng là lưu
@@ -501,7 +516,7 @@ WHERE service = 'generativelanguage.googleapis.com'
 -- hôm nay đến từ monitoring (ước tính, hoá đơn chưa về) trông y hệt con số của
 -- tuần trước đến từ hoá đơn. Không có cột này thì không phân biệt được.
 --
--- Ralli (agent_id=8) luôn rơi về 'app': project tla-ralli chưa nối billing trên
+-- Trợ lý ảo Ralli luôn rơi về 'app': project tla-ralli chưa nối billing trên
 -- GCP nên không có dòng billing lẫn monitoring nào. COALESCE tự lo việc đó,
 -- không cần trường hợp riêng.
 -- =====================================================================
