@@ -191,7 +191,7 @@ Nếu `config.yaml` của LiteLLM lấy theo cách viết trong tài liệu, hai
 
 Việc: mở `SELECT gcp_project_id FROM dim_agent` trên GCP Console đối chiếu, chốt một cách viết, sửa vào tài liệu (không sửa DB nếu DB đang đúng).
 
-#### 🔴 A3. Chốt quy ước `username` cho cả 8 agent — **trước** khi có request đầu tiên
+#### 🟡 A3. Quy ước `username` — HƯỚNG ĐÃ CHỐT 20/08, còn một việc phải đo
 
 `Data Out` #4 ghi: *"Hiện chỉ 2/8 agent đang có, 6 Agent 1 user còn lại đang được để mặc định."*
 
@@ -199,8 +199,35 @@ Bệnh cũ của dự án là ba nguồn ghi danh tính ba kiểu, phải hoà g
 
 Nếu agent A gửi `LongNT` còn agent B gửi `longnt@rangdong.com.vn`, ta có lại đúng bệnh cũ, chỉ muộn hơn và tốn hơn.
 
+> ### ✅ Chốt 20/08/2026 — danh tính lấy từ JWT, agent tự trích
+>
+> Ralli và Trợ Lý Ảo Hợp Đồng đều dùng JWT. **Agent tự giải mã token ở phía mình**, trích
+> ra người dùng rồi gửi lên Gateway trong một header (ví dụ `X-User`). Sáu agent còn lại
+> là một-người-dùng nên chỉ cần một tên cố định.
+>
+> **Ba điều việc này giải quyết:**
+>
+> | | |
+> |---|---|
+> | Danh tính từ **token** thay vì từ client tự khai | 8 chỗ có thể lệch → còn 2, và 6 chỗ **không thể** lệch vì là hằng số |
+> | Gateway **không cầm** JWT phiên | JWT phiên là chứng chỉ bearer — ai cầm được thì gọi API của app với tư cách người dùng đó. Agent trích rồi gửi giá trị đã tách thì Gateway không giữ thứ phát lại được |
+> | App đổi claim thì sửa **một chỗ** | Sửa trong agent, không đụng Gateway |
+>
+> **Và nó XOÁ luôn việc gửi phòng ban.** Có username là tra được `account.unit_id` — bảng
+> `account` vốn đã là nguồn duy nhất cho *"một tài khoản một đơn vị"* (chốt 14/08, quy tắc
+> chọn tất định). Bắt agent gửi phòng ban là tạo **nguồn thứ hai** cho một sự thật đã có.
+>
+> **Còn một việc PHẢI ĐO trước khi viết code:** claim nào trong JWT là username, và **hai
+> app có dùng cùng một claim không**. `01_schema.sql` đã ghi *"Ralli đôi khi ghi username
+> vào chỗ ObjectId"* — nếu `sub` của Ralli là ObjectId 24 ký tự còn của Hợp Đồng là
+> username thì bài toán hoà giải **không biến mất, chỉ chui vào trong token**.
+> `scripts/pull_web_apps.py:141` đã giải mã payload sẵn (để đọc `exp`), nên đo chỉ là
+> liệt kê claim của một token mỗi app.
+
 **Cần ban hành trước khi agent đầu tiên gửi request:**
-- Dạng chuẩn: `LOWER(TRIM())`, có/không đuôi tên miền — chọn một
+- Dạng chuẩn: `LOWER(TRIM())`, có/không đuôi tên miền — chọn một.
+  **Đề xuất giữ dạng hiện tại**: đo 937 tài khoản thật thấy 821 đã dùng dạng có dấu chấm
+  (`bh1.longnt`), 113 dạng một từ, 3 có đuôi tên miền
 - **Tên của 6 "người dùng đặc biệt"** — xem khung ⚠️ ở mục 1. Đây không phải chỗ
   trống chờ dữ liệu, mà là **một quyết định đặt tên**. Gợi ý ba lối:
 
@@ -212,7 +239,7 @@ Nếu agent A gửi `LongNT` còn agent B gửi `longnt@rangdong.com.vn`, ta có
 
   **Đề xuất: lối 1**, tiền tố `svc.` + `dim_agent.code`. Suy ra được từ dữ liệu đã
   có, không phải gõ tay 6 lần, và tiền tố khiến mọi truy vấn lọc ra được dễ dàng.
-- Phòng ban gửi `unit_id` hay gửi tên — nếu gửi tên thì ai giữ bảng dịch
+- ~~Phòng ban gửi `unit_id` hay gửi tên~~ → **BỎ**, tra từ `account.unit_id`
 
 #### 🟡 A4. Sửa 3 kiểu dữ liệu sai trong sheet `Data Out`
 
