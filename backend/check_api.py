@@ -6,14 +6,22 @@
     python backend/check_api.py
     python backend/check_api.py --compare http://127.0.0.1:8001
 
-BA VIỆC NÀY KIỂM
-----------------
+BỐN VIỆC NÀY KIỂM
+-----------------
 1. API trả đúng số mà database có. Không phải "trả về 200 là xong" - một
    endpoint trả bảng rỗng cũng trả về 200.
 2. Tham số rác bị từ chối bằng 400, không âm thầm trả bảng rỗng. Bảng rỗng là
    cách nguy hiểm nhất để báo lỗi, vì nó trông y hệt "kỳ này không có dữ liệu".
-3. Máy chủ THẬT SỰ chỉ đọc. Thử ghi qua chính kết nối của backend và đợi bị từ
+3. Xác thực THẬT SỰ bật. Gọi không khoá phải nhận 401. Mọi phép kiểm khác đều
+   GỬI khoá, nên chúng vẫn xanh y nguyên nếu xác thực bị gỡ - phép kiểm này là
+   thứ duy nhất bắt được chuyện đó.
+4. Máy chủ THẬT SỰ chỉ đọc. Thử ghi qua chính kết nối của backend và đợi bị từ
    chối - không tin vào việc "không có endpoint ghi nào".
+
+CẦN KHOÁ ĐỂ CHẠY
+----------------
+Đặt DASHBOARD_KEY (biến môi trường hoặc .env) giống hệt khoá máy chủ đang dùng.
+Thiếu thì script này thoát ngay lúc import - xem ghi chú ở chỗ import.
 
 Với --compare: gọi cả hai máy chủ và so từng byte JSON. Hai hệ quản trị phải trả
 về giống hệt nhau, kể cả thứ tự dòng.
@@ -48,6 +56,17 @@ sys.path.insert(0, str(ROOT))
 
 import connect  # noqa: E402
 from backend import store  # noqa: E402
+
+# Lấy khoá TỪ CHÍNH backend, không đọc lại biến môi trường ở đây.
+#
+# Đọc lại là tạo bản sao thứ hai của cùng một phép đọc cấu hình, và bản sao sẽ
+# trôi: đúng cái bẫy đã dính ngày 21/08 khi tools/dien_tap_gateway.py tự chép
+# câu SQL của store.py rồi đo bằng logic đã bị bỏ. Import thế này thì khoá mà
+# phép kiểm gửi đi LUÔN bằng khoá mà máy chủ kiểm - không có đường nào lệch.
+#
+# Hệ quả có chủ ý: chưa cấu hình DASHBOARD_KEY thì dòng import này thoát ngay,
+# kèm đúng thông báo mà máy chủ sẽ in. Không kiểm được một API chưa cấu hình nổi.
+from backend.main import DASHBOARD_KEY, DASHBOARD_OPEN  # noqa: E402
 
 def _data_range() -> tuple[str, str]:
     """Khoảng ngày lấy TỪ DATABASE, không ghim trong file này.
@@ -96,14 +115,20 @@ class Check:
             print(f"[ HONG ] {label}\n         {detail}")
 
 
-def get(base: str, path: str):
-    with urllib.request.urlopen(base + path, timeout=120) as r:
+def _headers(auth: bool) -> dict:
+    return {"Authorization": "Bearer " + DASHBOARD_KEY} if auth and DASHBOARD_KEY else {}
+
+
+def get(base: str, path: str, auth: bool = True):
+    req = urllib.request.Request(base + path, headers=_headers(auth))
+    with urllib.request.urlopen(req, timeout=120) as r:
         return json.loads(r.read())
 
 
-def status(base: str, path: str) -> int:
+def status(base: str, path: str, auth: bool = True) -> int:
     try:
-        urllib.request.urlopen(base + path, timeout=30)
+        urllib.request.urlopen(
+            urllib.request.Request(base + path, headers=_headers(auth)), timeout=30)
         return 200
     except urllib.error.HTTPError as e:
         return e.code
@@ -170,6 +195,35 @@ def bad_params(c: Check, base: str) -> None:
              "Khoang ngay dao nguoc duoc tu sap lai", f"{d['start']} .. {d['end']}")
 
 
+def xac_thuc(c: Check, base: str) -> None:
+    """Gọi KHÔNG khoá phải bị từ chối.
+
+    Đây là phép kiểm giữ cho cả bộ này khỏi nói dối. 16 phép kiểm cũ đều gửi
+    khoá, nên chúng vẫn xanh y nguyên kể cả khi xác thực bị gỡ khỏi mọi
+    endpoint. Không có phép kiểm này thì bộ kiểm báo "đạt" cho một máy chủ đang
+    mở toang - đúng loại sai im lặng mà cả change này đi bịt.
+    """
+    code = status(base, "/api/accounts", auth=False)
+    # Liệt kê CẢ BA nguyên nhân, không đoán lấy một.
+    #
+    # Bản đầu chọn nguyên nhân theo `DASHBOARD_OPEN` của CHÍNH tiến trình này -
+    # nhưng máy chủ có thể đã được khởi động từ một cửa sổ khác với biến môi
+    # trường khác. Khi đó thông báo tự tin chỉ sai chỗ, và người đọc đi sửa
+    # đúng thứ không hỏng.
+    vi_sao = ("Ba kha nang: (1) may chu khoi dong voi DASHBOARD_OPEN=1"
+              " - xac thuc DANG TAT; (2) endpoint thieu Depends(nguoi_goi);"
+              " (3) HTTPBearer dang auto_error=True nen tra 403 chu khong 401."
+              f" [tien trinh nay doc duoc DASHBOARD_OPEN={DASHBOARD_OPEN}]")
+    c.expect(code == 401, "Goi /api/accounts khong khoa bi tu choi 401",
+             f"tra ve {code}. {vi_sao}")
+
+    # Điểm thăm dò PHẢI mở. Nếu ai đó gắn khoá vào /healthz thì giám sát sẽ báo
+    # máy chủ chết trong khi nó vẫn sống - và không ai biết vì sao.
+    code = status(base, "/healthz", auth=False)
+    c.expect(code == 200, "Diem tham do /healthz van mo khong can khoa",
+             f"tra ve {code}, dang le 200")
+
+
 def read_only(c: Check) -> None:
     """Thử GHI thật sự qua chính kết nối của backend. Phải bị từ chối."""
     try:
@@ -200,6 +254,16 @@ def main() -> None:
 
     try:
         get(args.base, "/api/health")
+    except urllib.error.HTTPError as e:
+        # 401 KHÁC HẲN "chưa bật máy chủ": máy chủ đang chạy và đang trả lời.
+        # Gộp hai cái vào một câu là chỉ sai chỗ cho người đọc.
+        if e.code == 401:
+            raise SystemExit(
+                f"May chu {args.base} tra 401 - khoa khong dung.\n"
+                f"  Khoa phep kiem dang dung lay tu DASHBOARD_KEY (moi truong"
+                f" hoac .env).\n"
+                f"  May chu phai duoc khoi dong voi DUNG khoa do.")
+        raise SystemExit(f"Khong goi duoc {args.base}: HTTP {e.code}")
     except Exception as e:
         raise SystemExit(f"Khong goi duoc {args.base}: {e}\n"
                          f"  Mo may chu truoc:"
@@ -210,6 +274,8 @@ def main() -> None:
     against_database(c, args.base)
     print("\nTham so\n" + "─" * 72)
     bad_params(c, args.base)
+    print("\nXac thuc\n" + "─" * 72)
+    xac_thuc(c, args.base)
     print("\nChi doc\n" + "─" * 72)
     read_only(c)
     if args.compare:
