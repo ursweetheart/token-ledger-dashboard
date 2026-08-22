@@ -200,7 +200,7 @@ Nếu `config.yaml` của LiteLLM lấy theo cách viết trong tài liệu, hai
 
 Việc: mở `SELECT gcp_project_id FROM dim_agent` trên GCP Console đối chiếu, chốt một cách viết, sửa vào tài liệu (không sửa DB nếu DB đang đúng).
 
-#### 🟡 A3. Quy ước `username` — HƯỚNG ĐÃ CHỐT 20/08, còn một việc phải đo
+#### ✅ A3. Quy ước `username` — ĐÃ CHỐT 20/08, ĐÃ ĐO XONG 21/08
 
 `Data Out` #4 ghi: *"Hiện chỉ 2/8 agent đang có, 6 Agent 1 user còn lại đang được để mặc định."*
 
@@ -226,12 +226,38 @@ Nếu agent A gửi `LongNT` còn agent B gửi `longnt@rangdong.com.vn`, ta có
 > `account` vốn đã là nguồn duy nhất cho *"một tài khoản một đơn vị"* (chốt 14/08, quy tắc
 > chọn tất định). Bắt agent gửi phòng ban là tạo **nguồn thứ hai** cho một sự thật đã có.
 >
-> **Còn một việc PHẢI ĐO trước khi viết code:** claim nào trong JWT là username, và **hai
-> app có dùng cùng một claim không**. `01_schema.sql` đã ghi *"Ralli đôi khi ghi username
-> vào chỗ ObjectId"* — nếu `sub` của Ralli là ObjectId 24 ký tự còn của Hợp Đồng là
-> username thì bài toán hoà giải **không biến mất, chỉ chui vào trong token**.
-> `scripts/pull_web_apps.py:141` đã giải mã payload sẵn (để đọc `exp`), nên đo chỉ là
-> liệt kê claim của một token mỗi app.
+> ### ✅ Đã đo 21/08/2026 — hai app KHÔNG dùng cùng claim
+>
+> Đăng nhập cả hai app, giải mã payload. Chi tiết đầy đủ: `tu-dien-database.md` §8f.
+>
+> | | Trợ lý ảo Ralli | Trợ Lý Ảo Hợp Đồng |
+> |---|---|---|
+> | `sub` | `"admin"` — **là username** | `"user-admin"` — **KHÔNG phải username** |
+> | `username` | *(không có claim này)* | `"admin"` — **username ở đây** |
+> | `unit_id` | — | `""` **rỗng** |
+> | Ký / sống | HS256 · ~2 giờ | HS256 · ~8 giờ |
+>
+> ```
+>    Trợ lý ảo Ralli        ->  claim  sub
+>    Trợ Lý Ảo Hợp Đồng     ->  claim  username        (KHÔNG phải sub)
+>    6 agent một-người-dùng ->  hằng số  svc.<code>
+> ```
+>
+> **Quy ước không được rút gọn thành "lấy `sub`".** Viết vậy thì agent Hợp Đồng gửi lên
+> `user-admin` — chuỗi hợp lệ, không có trong bảng `account`, JOIN ra rỗng, **không lỗi
+> nào báo**.
+>
+> **Bẫy thứ hai:** claim `unit_id` của Hợp Đồng *tồn tại* nên trông như lối tắt cho phòng
+> ban, nhưng nó **rỗng** — và Ralli không có claim đơn vị nào. Quyết định "tra
+> `account.unit_id`" vì thế tránh đúng một cái bẫy đang nằm sẵn.
+>
+> **Nỗi lo "Ralli trả ObjectId" nhắm sai chỗ** — cảnh báo ở `01_schema.sql:139` nói về bản
+> ghi sử dụng, không phải JWT. Trong 891 tài khoản Ralli: `username` là ObjectId **0/891**,
+> có dấu chấm 814/891.
+>
+> **Chưa chứng minh được:** tài khoản `.env` là ADMIN ở cả hai app, không nằm trong danh bạ
+> 891 dòng. Quyết định 21/08: **không đợi token nhân viên thường**. Thay bằng một phép kiểm
+> trong `audit_db.py` kêu khi có dòng `gateway` mang username không tra ra `account_id`.
 
 **Cần ban hành trước khi agent đầu tiên gửi request:**
 - Dạng chuẩn: `LOWER(TRIM())`, có/không đuôi tên miền — chọn một.
@@ -286,16 +312,29 @@ Nhưng kiến trúc đích **bỏ hẳn `fact_monitoring`** (Phần II §7: "❌
 
 Đây là phần trả lời trực tiếp mong muốn ban đầu của anh, nhưng theo chiều ngược lại: không phải bỏ cột nguồn, mà là **làm cho việc thêm nguồn không còn đau**.
 
-#### 🔴 B1. `'app'` đang là chuỗi CHỊU LỰC ở 8 chỗ — và nó có nghĩa ngầm
+#### ✅ B1 + B2. XONG 21/08/2026 — `'app'` không còn là chuỗi chịu lực
 
 Trong code hôm nay, `source = 'app'` không có nghĩa là *"nguồn tên app"*. Nó có nghĩa là **"nguồn duy nhất biết ai là người dùng"**. Hai nghĩa đó trùng nhau — cho tới ngày Gateway xuất hiện.
 
+**Đếm lại 21/08: 24 chỗ / 8 file.** Nhưng con số đó chưa dùng được, vì nó gộp hai loại
+việc trái ngược — và chỉ một loại là việc phải làm:
+
+```
+   ĐẦU GHI (14 chỗ) — GIỮ NGUYÊN        ĐẦU ĐỌC (10 chỗ) — ĐÂY LÀ B1
+   load_hd · load_ralli                 backend/store.py   :257 :263 :452
+   build_usage_daily · rebuild_db       db/01_schema.sql   :600 :648
+   gen_catalog                          scripts/audit_db.py :163 :263 :290 :312 :413
+        │                                    │
+   "dòng này TỪ app" — đúng             "chỉ lấy dòng của app" — lọc mất Gateway
+```
+
 | File | Dòng | Câu |
 |---|---|---|
-| `db/01_schema.sql` | 581 | `WHERE f.source = 'app'` — view `usage_by_account` |
-| `backend/store.py` | 239, 245 | `AND f.source = 'app'` — chỉ tiêu **tỷ lệ áp dụng** |
-| `scripts/audit_db.py` | 163, 263, 290, 312 | 4 phép kiểm |
-| `db/build_usage_daily.py` | 193, 212, 235, 239 | khâu nạp |
+| `backend/store.py` | 257, 263 | `AND f.source = 'app'` — chỉ tiêu **tỷ lệ áp dụng** |
+| `backend/store.py` | 452 | `v.token_source = 'app'` — chia token về người thật |
+| `db/01_schema.sql` | 600 | `WHERE source = 'app'` — view `usage_by_account` |
+| `db/01_schema.sql` | 648 | `WHERE f.source = 'app' AND a.kind = 'real'` |
+| `scripts/audit_db.py` | 163, 263, 290, 312, 413 | 5 phép kiểm |
 
 **Chuyện sẽ xảy ra nếu không sửa:** Gateway ghi dữ liệu vào `source='gateway'`, mang theo đầy đủ username và phòng ban. Nhưng:
 - `usage_by_account` trả về **y nguyên như cũ** — không thấy một dòng Gateway nào
@@ -306,7 +345,44 @@ Không có lỗi nào. Chỉ là một dashboard đã có dữ liệu tốt mà 
 
 → Việc: đổi từ liệt kê giá trị sang **một khái niệm có tên**, ví dụ một bảng nhỏ `ref_source(source, knows_user BOOLEAN, has_cost BOOLEAN)` hoặc tối thiểu một hằng số dùng chung. Thêm nguồn thứ tư khi đó là thêm **một dòng dữ liệu**, không phải sửa 8 câu SQL nằm rải ở 4 file.
 
-#### 🟡 B2. `usage_resolved` phải nhận được nguồn thứ tư
+> ### ✅ Làm xong 21/08/2026 — change `admit-gateway-as-a-fourth-source`
+>
+> **Nghiệm thu bằng một phép đo, không bằng lời:** `tools/dien_tap_gateway.py` chèn dòng
+> `source='gateway'` mang username THẬT, chạy toàn bộ phép kiểm, so số trước/sau, rồi
+> `ROLLBACK`.
+>
+> | | trước khi sửa | sau khi sửa |
+> |---|---|---|
+> | `usage_by_account` | +0 dòng | **+3 dòng / +3.000.000 token** |
+> | tỷ lệ áp dụng | +0 | **+3** |
+> | quy về người thật | +0 | **+3.000.000** |
+> | gateway ưu tiên trước billing | không | **có** |
+> | kỳ vọng đạt | **0/8** | **7/7** |
+>
+> Chạy trước khi sửa, dashboard **đứng im** trước 4 triệu token: `usage_resolved` có thêm
+> khoá nhưng `COALESCE(b,m,a)` không biết `gateway` nên trả `NULL`. Dữ liệu nằm trong
+> database và **vô hình** — đúng dự đoán, và rõ hơn dự đoán.
+>
+> **Đã sửa:** bảng `ref_source(source, knows_user, has_invoice_cost, era, note)` ·
+> `usage_resolved` thêm CTE `g` đứng đầu `COALESCE` · 8 chỗ đầu đọc hỏi `knows_user` thay
+> vì so tên nguồn · 6 tài khoản dịch vụ đổi sang `svc.<code>` · 3 phép kiểm mới.
+>
+> **Bất biến giữ nguyên tuyệt đối:** 1.189 dòng · 867.657.110 token · $291,985601 · độ phủ
+> 104.990.903 / 749.483.267 / 13.182.940. Không lệch một token.
+>
+> **Nghiệm thu:** rebuild 7/7 · `audit_db.py` 36 phép / 0 hỏng · `check_api.py` 16/16 ·
+> test JS 6 + 7 · diễn tập 7/7.
+>
+> **Bốn chỗ đo lại thì khác với lúc soạn proposal** — ghi lại vì cùng loại bẫy sẽ quay lại:
+>
+> | Tưởng | Đo ra |
+> |---|---|
+> | 10 chỗ đầu đọc | **8.** Hai chỗ là *định nghĩa nguồn app*; Gateway lọt vào đó mới sai |
+> | `has_cost` cho gateway = TRUE | **FALSE.** LiteLLM có số tiền nhưng tự nhân từ bảng giá — đổ vào `cost_usd` là biến tiền suy ra thành tiền đã xác nhận |
+> | Phép kiểm "nguồn lạ" | **Không kêu được** — khoá ngoại đã chặn ngay lúc ghi. Bỏ, thay bằng một dòng trong `FOREIGN_KEYS` |
+> | Phép kiểm "mọi dòng biết người đều quy được" | Kêu ngay **21 dòng**, và nó đúng: `app` *biết được* người dùng nhưng không phải lúc nào cũng biết. Chỉ ký nguyên gateway mới đòi được vế đó |
+
+#### ✅ B2. `usage_resolved` đã nhận nguồn thứ tư — chi tiết ở khung trên
 
 View hiện có 3 CTE `b`/`m`/`a` và `COALESCE(b, m, a)`. Thêm Gateway = thêm CTE thứ tư **đứng đầu** thứ tự ưu tiên:
 
@@ -409,17 +485,71 @@ và mất luôn 2 nhãn tiếng Việt đang có (`Phân tích hợp đồng`, `
 
 Hôm nay cả hệ thống sống trên máy anh. Gateway có load balancer, 2+ server, Redis — tức là nó **ra mạng**. Ba thứ dưới đây hôm nay vô hại, ngày mai thì không.
 
-#### 🔴 C1. Backend **không có xác thực nào**
+#### ✅ C1 + C2. XONG 21/08/2026 — change `require-a-key-to-read-the-api`
 
-`backend/main.py`: 8 endpoint, không một dòng nào kiểm danh tính. `/api/accounts` trả về **953 tài khoản kèm họ tên, email, phòng ban**.
+`backend/main.py`: 8 endpoint, không một dòng nào kiểm danh tính. `/api/accounts` trả về **937 tài khoản kèm họ tên, phòng ban**.
 
-Master Plan giai đoạn 3 yêu cầu: *"JWT đăng nhập Dashboard do Backend phát hành và kiểm tra, áp dụng cho Admin / User xem báo cáo."* Chưa có gì.
+Master Plan giai đoạn 3 yêu cầu: *"JWT đăng nhập Dashboard do Backend phát hành và kiểm tra, áp dụng cho Admin / User xem báo cáo."*
 
 Hiện tại an toàn **chỉ vì** uvicorn gắn `127.0.0.1`. Đó là một dòng cấu hình, không phải một cơ chế.
 
-#### 🟡 C2. `CORS allow_origins=["*"]`
-
-`main.py:47`. Ghi chú trong file tự biện minh: *"chấp nhận được vì máy chủ chỉ lắng nghe trên 127.0.0.1"*. Lý do đó hết hiệu lực đúng vào ngày Gateway lên. Nên gắn kèm C1 thành một việc.
+> ### ✅ Đã bịt — nhưng bịt bằng **khoá dùng chung**, không phải JWT theo người
+>
+> ```
+>    Authorization: Bearer <DASHBOARD_KEY>   ->  8/8 endpoint
+>    thieu DASHBOARD_KEY                     ->  MAY CHU KHONG KHOI DONG
+>    /healthz                                ->  diem tham do duy nhat, khong khoa
+> ```
+>
+> **Vì sao lệch khỏi Master Plan giai đoạn 3** — ghi ra đây để ba tháng nữa mở kế
+> hoạch ra không tưởng là chưa làm:
+>
+> | | |
+> |---|---:|
+> | Số endpoint | 8 |
+> | Trong đó là `GET` | **8** |
+> | Hành động đặc quyền (sửa / xoá / đổi hạn mức) | **0** |
+> | Kho người dùng của dashboard | **không có** — `account` không có cột mật khẩu |
+>
+> Không có gì để phân vai thì phân vai bây giờ là viết code không dùng tới. Hàm
+> `nguoi_goi()` trả về một **`Principal`** chứ không trả `True`, nên ngày lên JWT
+> chỉ phải sửa **một hàm** — 8 endpoint không đụng một chữ.
+>
+> **Nói thẳng phần CHƯA có**, để không ai tưởng C1 đã đóng trọn:
+>
+> | | |
+> |---|---|
+> | Chặn người lạ đọc 937 họ tên kèm phòng ban | ✅ đây là rủi ro thật của C1 |
+> | Biết **ai** đã xem gì | ❌ không có nhật ký theo người |
+> | Thu hồi quyền của **một người** | ❌ đổi khoá là đá văng tất cả |
+> | Phân biệt Admin / User | ❌ |
+>
+> **C2 (CORS) đã xong từ 20/08** (`c3d7169`, đọc `DASHBOARD_ORIGINS`) — nhưng nó
+> **không** đóng được C1 và đây là chỗ dễ tưởng nhầm nhất:
+>
+> ```
+>    CORS la luat cua TRINH DUYET, khong phai cua may chu.
+>    trang web la  -> trinh duyet vut cau tra loi di   ✅ CORS chan duoc
+>    curl / script -> KHONG doc CORS bao gio           ❌ CORS khong thay gi
+> ```
+>
+> Máy chủ vẫn **trả đủ dữ liệu** trong cả hai trường hợp. Một dòng `curl` lấy trọn
+> 937 người, hôm qua cũng như hôm nay — cho tới change này.
+>
+> **Nghiệm thu:** `check_api.py` 18 phép (thêm *"gọi không khoá phải nhận 401"* và
+> *"`/healthz` vẫn mở"*) · test JS **6 + 11** · một lát mỏng riêng dựng uvicorn thật
+> **không cần Docker** (`soat_khoa.py`, **24/24**) — đo được rằng `main.py` import xong
+> mà không chạm database, nên mọi đường 401 kiểm được ngay.
+>
+> **Ba chỗ đo lại thì khác lúc soạn proposal** — ghi vì cùng loại bẫy sẽ quay lại:
+>
+> | Tưởng | Đo ra |
+> |---|---|
+> | Khoá sai chỉ dẫn tới 401 | **`Bearer á` làm mọi endpoint hỏng.** `secrets.compare_digest` với hai `str` ném `TypeError` khi có ký tự ngoài ASCII — một đường sập gọi được **mà không cần biết khoá**. Phải so trên `bytes` |
+> | `?api=` chỉ đổi chỗ đọc dữ liệu | Từ lúc trình duyệt giữ một bí mật, nó đổi luôn **chỗ gửi bí mật**: link `?api=http://host-la` lấy được khoá của người bấm. Đã cất khoá **theo từng địa chỉ** |
+> | `HTTPBearer` mặc định là đủ | Nó trả **403** khi thiếu header, không phải 401. Phải `auto_error=False` rồi tự ném 401 |
+> | Đặt khoá vào `.env` là chạy | **Không file Python nào của backend đọc `.env`** — chỉ docker-compose và `pull_web_apps.py` đọc. Đồng nghiệp làm đúng theo `.env.example` sẽ vẫn không khởi động được |
+> | Test JS không liên quan | Cả **4 kịch bản** hỏng cũ dừng ở ô nhập khoá và không chạm tới nhánh chúng đang kiểm. Phải gieo khoá vào `localStorage` giả |
 
 #### ⚪ C3. Base URL của frontend
 
@@ -453,12 +583,12 @@ Thiếu LiteLLM, Redis, Nginx. Chưa cần hôm nay, nhưng khi thêm thì `dock
 |---|---|---|---|
 | 1 | **A1** chốt 3 câu treo | 1h họp | Mọi thứ khác phụ thuộc |
 | 2 | **A2** chốt project ID | 15 phút | Rẻ nhất, hỏng im lặng nhất |
-| 3 | **A3** ban hành quy ước username | 1h | Phải xong **trước** request đầu tiên, không sửa lại được |
+| 3 | ~~**A3** ban hành quy ước username~~ | ✅ chốt 20/08, đo claim xong 21/08 | Ralli dùng `sub`, Hợp Đồng dùng `username` — xem §8f |
 | 4 | **A4 + A5** sửa sheet `Data Out` | 30 phút | Nó là hợp đồng; sai hợp đồng thì code sai theo |
 | 5 | ~~**B5** tách `account.kind`~~ | ✅ xong 20/08 | Nửa `health()` đã chữa con số sai; nửa `accounts()` gộp vào B1 |
-| 6 | **B1** gỡ `'app'` khỏi 8 chỗ | 2–3h | Việc code lớn nhất, và là việc trả lời đúng ý ban đầu của anh |
-| 7 | **B2** thêm nguồn thứ tư vào `usage_resolved` + chạy thử bằng dữ liệu giả | 1–2h | Đây là **phép đo** cho câu "đã sẵn sàng chưa" |
-| 8 | **C1 + C2** JWT cho backend | 2–3h | Có thể lùi nếu 1–7 chưa xong |
+| 6 | ~~**B1** gỡ `'app'` khỏi 8 chỗ đầu đọc~~ | ✅ xong 21/08 | Diễn tập 0/8 → 7/7 |
+| 7 | ~~**B2** nguồn thứ tư vào `usage_resolved`~~ | ✅ xong 21/08 | Gộp cùng B1, đúng như khuyến nghị |
+| 8 | ~~**C1 + C2** xác thực cho backend~~ | ✅ xong 21/08 | Khoá dùng chung, không phải JWT theo người — lý do ở mục C1 |
 
 B5 đứng trước B1 vì cả hai đều đụng cùng những câu SQL ở `store.py` và
 `audit_db.py`. Làm B5 trước rồi B1 thì sửa mỗi câu một lần; làm ngược lại thì sửa

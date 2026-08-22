@@ -29,6 +29,7 @@ docker compose up -d
 python scripts/rebuild_db.py
 
 # 5. Mở backend, rồi mở dashboard
+#    TỪ 21/08: phải có DASHBOARD_KEY trong .env, xem mục bổ sung (2) ở cuối file.
 python -m uvicorn backend.main:app --port 8000
 #    và mở web/index.html, bấm Ctrl+Shift+R (tải lại bỏ qua bộ đệm)
 ```
@@ -37,7 +38,7 @@ Kiểm xem đã đúng chưa:
 
 ```bash
 python scripts/audit_db.py       # kỳ vọng: 0 hong
-python backend/check_api.py      # kỳ vọng: 16 dat, 0 hong
+python backend/check_api.py      # kỳ vọng: 18 dat, 0 hong (cần DASHBOARD_KEY)
 ```
 
 ---
@@ -208,11 +209,121 @@ Chưa làm. Nếu thấy cần thì nói, nó là một đề xuất riêng.
 | Lệnh | Kết quả mong đợi |
 |---|---|
 | `docker compose ps` | `token-ledger-postgres` trạng thái `healthy` |
-| `python scripts/audit_db.py` | `32 phep kiem \| ... \| 0 hong` (4 dòng "lưu ý" là lỗ hổng dữ liệu đã biết, không phải lỗi) |
-| `python backend/check_api.py` | `16 phep kiem \| 16 dat \| 0 hong` |
+| `python scripts/audit_db.py` | `36 phep kiem \| 31 dat \| 5 luu y \| 0 hong` (các dòng "lưu ý" là lỗ hổng dữ liệu đã biết, không phải lỗi) |
+| `python backend/check_api.py` | `18 phep kiem \| 18 dat \| 0 hong` (cần `DASHBOARD_KEY`) |
 | `node tests/date-range-filter.test.js` | `pass 6, fail 0` |
-| `node tests/load-failure-states.test.js` | `pass 7, fail 0` |
-| Mở `web/index.html` | có số liệu, **không** có dải cảnh báo ở đầu trang |
+| `node tests/load-failure-states.test.js` | `pass 11, fail 0` |
+| Mở `web/index.html` | hỏi khoá một lần, rồi có số liệu và **không** có dải cảnh báo |
 
 Còn hỏng chỗ nào thì gửi nguyên văn dòng `[ HONG ]` — mỗi phép kiểm đều tự nói nó kiểm
 gì và lệch bao nhiêu.
+
+
+---
+
+## Bổ sung 21/08/2026 — lại phải rebuild
+
+Change `admit-gateway-as-a-fourth-source` **đổi schema**, nên bước rebuild ở trên là bắt
+buộc lần nữa. Pull code mới mà không rebuild thì backend sẽ ném lỗi ở `ref_source` —
+**hỏng ồn ào, không hỏng im lặng**, nên không sợ chạy nhầm trên database cũ.
+
+```bash
+git pull
+docker compose up -d
+python scripts/rebuild_db.py        # ~60 giây, 7/7 bước
+python scripts/audit_db.py          # 36 phép, 0 hỏng
+```
+
+**Ba thứ mới trong database:**
+
+| | |
+|---|---|
+| Bảng `ref_source` | 4 dòng, nói mỗi nguồn có biết người dùng / có tiền hoá đơn không |
+| `usage_resolved` | thêm nhánh `gateway`, đứng **đầu** thứ tự ưu tiên |
+| 6 tài khoản dịch vụ | đổi tên `__whole_agent_<id>__` → **`svc.<code>`** |
+
+**Con số phải giữ nguyên sau rebuild** — lệch là có chuyện:
+
+```
+   usage_resolved     1.189 dòng · 867.657.110 token · $291,985601
+   usage_by_account     320 dòng · 107.926.810 token
+   độ phủ             104.990.903 / 749.483.267 / 13.182.940
+```
+
+**Một công cụ mới đáng biết:** `python tools/dien_tap_gateway.py` chèn dữ liệu Gateway giả
+mang username thật, đo xem dashboard có nhúc nhích không, rồi `ROLLBACK`. Nó **không để lại
+gì** trong database. Chạy được bất cứ lúc nào, và phải ra `DAT 7/7`.
+
+---
+
+## 🔴 Bổ sung 21/08/2026 (2) — API giờ ĐÒI MỘT KHOÁ, không có khoá thì máy chủ không chạy
+
+Change `require-a-key-to-read-the-api`. **Đây là thay đổi dễ làm bạn tắc nhất trong cả
+tuần**, vì triệu chứng của nó không giống một lỗi:
+
+```
+   Chua dat DASHBOARD_KEY  ->  uvicorn KHONG khoi dong duoc
+   Da dat, chua nhap tren  ->  dashboard hien O NHAP KHOA, khong hien so
+   trinh duyet
+```
+
+Máy chủ **cố tình** không chạy khi thiếu khoá. Chế độ hỏng phải là *"không chạy"*, tuyệt
+đối không phải *"chạy mở"* — chạy mở là có đúng lỗ hổng cũ cộng thêm niềm tin sai rằng đã
+khoá.
+
+### Làm gì — một lần, rồi thôi
+
+```bash
+git pull
+
+# 1. Sinh một khoá (chuoi ngau nhien, khong phai mat khau tu nghi)
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+
+# 2. Dan vao .env o goc repo  (backend doc file nay, khong can `set`)
+#       DASHBOARD_KEY=<khoa vua sinh>
+#    File .env nam trong .gitignore nen khoa khong len git.
+#    Xem mau day du o .env.example.
+
+# 3. Chay nhu cu
+python -m uvicorn backend.main:app --port 8000
+```
+
+Rồi mở dashboard: nó hỏi khoá **một lần**, dán đúng chuỗi ở bước 1 vào. Trình duyệt nhớ cho
+các lần sau (`localStorage`, theo từng máy và từng trình duyệt).
+
+> **Khoá của bạn không cần giống khoá của người khác.** Mỗi máy chạy backend riêng, nên
+> mỗi người tự sinh một khoá cho máy mình. Chỉ khi nào dùng chung một máy chủ thì mới phải
+> thống nhất.
+
+### Bốn triệu chứng và cách đọc chúng
+
+| Thấy gì | Nghĩa là | Làm gì |
+|---|---|---|
+| `THIEU BIEN MOI TRUONG: DASHBOARD_KEY`, uvicorn thoát ngay | Chưa có khoá | Làm bước 1–2 ở trên |
+| Dashboard hiện **ô nhập khoá** màu xanh | Máy chủ chạy đúng, trình duyệt chưa có khoá | Dán khoá vào |
+| Ô nhập khoá màu **đỏ**, "Khoá không đúng" | Khoá trên trình duyệt khác khoá của máy chủ | Dán lại khoá trong `.env` |
+| `check_api.py` thoát với *"tra 401 - khoa khong dung"* | Máy chủ đang chạy bằng một khoá khác `.env` hiện tại | Khởi động lại uvicorn |
+
+### Chỉ khi phát triển, và phải khai ra
+
+```bash
+DASHBOARD_OPEN=1   # bo qua xac thuc; may chu IN CANH BAO moi lan khoi dong
+```
+
+Đặt biến này trên máy có thể ra mạng là mở lại đúng lỗ hổng vừa bịt. `check_api.py` sẽ
+**báo hỏng** khi máy chủ chạy ở chế độ này — đó là chủ ý, để chế độ mở không bao giờ im lặng.
+
+### Một công cụ mới, chạy được trên máy trắng
+
+```bash
+python tools/soat_khoa_api.py     # ky vong: 24 dat, 0 hong
+```
+
+Nó **tự dựng máy chủ** ở nhiều cấu hình (có khoá · thiếu khoá · thiếu khoá kèm
+`--reload` · khoá toàn khoảng trắng · `DASHBOARD_OPEN=1`) rồi tự tắt. **Không cần
+Docker, không cần database, không đụng `.env` của bạn** — nên đây là thứ duy nhất trong
+repo chạy được ngay sau khi `git clone`.
+
+Vì sao nó không trùng với `check_api.py`: bộ kia gọi một máy chủ **đang** chạy, nên nó
+vẫn xanh nếu ai đó lỡ tay gỡ mất phần chặn — lúc ấy máy chủ vẫn trả lời bình thường.
+Bộ này tự dựng máy chủ nên bắt được cả trường hợp *đáng lẽ không được chạy mà vẫn chạy*.
