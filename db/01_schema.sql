@@ -295,6 +295,60 @@ CREATE TABLE dim_metric_alias (
 );
 
 
+-- NGUỒN DỮ LIỆU TỰ KHAI NĂNG LỰC CỦA MÌNH (thêm 21/08/2026)
+--
+-- VÌ SAO BẢNG NÀY TỒN TẠI
+--   Trước 21/08, `source = 'app'` rải ở 24 chỗ trong 8 file. Nhưng ở 10 chỗ
+--   ĐẦU ĐỌC nó không có nghĩa "nguồn tên app" - nó có nghĩa "nguồn DUY NHẤT
+--   biết ai là người dùng". Hai nghĩa đó trùng nhau, cho tới ngày Gateway xuất
+--   hiện: Gateway cũng biết người dùng.
+--
+--   Không tách ra thì Gateway ghi đủ username vào database mà `usage_by_account`
+--   vẫn trả y nguyên số dòng cũ, tỷ lệ áp dụng đứng im, và audit_db báo đạt hết.
+--   Đã ĐO điều đó ngày 21/08 bằng tools/dien_tap_gateway.py: chèn 4.000.000
+--   token mang username thật -> dashboard nhúc nhích 0, và usage_resolved sinh
+--   thêm 3 dòng KHÔNG CÓ TOKEN. Dữ liệu nằm trong database và vô hình.
+--
+-- ĐỌC BẢNG NÀY THAY VÌ LIỆT KÊ TÊN NGUỒN. Thêm nguồn thứ tư khi đó là thêm MỘT
+-- DÒNG DỮ LIỆU, không phải sửa 10 câu SQL nằm rải ở 3 file.
+--
+-- ĐẶT Ở ĐÂY, KHÔNG Ở MỤC 3 CÙNG ref_price/ref_fx/ref_budget: fact_usage_daily
+-- có khoá ngoại trỏ vào bảng này, nên nó phải được khai TRƯỚC mục 2.
+--
+-- `era` PHÂN BIỆT KỶ NGUYÊN, KHÔNG PHẢI NGUỒN. Ba nguồn cũ là 'scrape' - ta đi
+-- cào số của người khác. Gateway là 'gateway' - ta tự đếm. Lịch sử 01-08/2026
+-- vĩnh viễn ở kỷ nguyên cũ vì cửa sổ lưu giữ của Google đã trượt (06/08 thấy
+-- 196 ngày, 13/08 còn 112), Gateway không dựng lại được.
+CREATE TABLE ref_source (
+    source      TEXT PRIMARY KEY,
+    -- Nguồn này có nói AI đã gọi không. Đây là câu mà 10 chỗ đầu đọc đang hỏi
+    -- bằng cách so tên nguồn.
+    knows_user  BOOLEAN NOT NULL,
+    -- TÊN CỘT LÀ `has_INVOICE_cost`, KHÔNG PHẢI `has_cost`. Khác biệt này quan
+    -- trọng và suýt bị đặt sai lúc viết bảng:
+    --   "tính ra được tiền"   -> nguồn nào cũng làm được, nhân với ref_price
+    --   "có tiền HOÁ ĐƠN"     -> chỉ billing. Đây mới là thứ ta hỏi.
+    -- LiteLLM CÓ trả về một con số tiền, nhưng nó tự nhân từ bảng giá chứ không
+    -- phải hoá đơn ai gửi. Gọi nó là `has_cost = TRUE` rồi đổ vào cột cost_usd
+    -- là biến tiền SUY RA thành tiền ĐÃ XÁC NHẬN trên màn hình - đúng thứ cả
+    -- ngày 20/08 đi bịt.
+    has_invoice_cost BOOLEAN NOT NULL,
+    era         TEXT NOT NULL,       -- 'scrape' | 'gateway'
+    note        TEXT
+);
+
+INSERT INTO ref_source (source, knows_user, has_invoice_cost, era, note) VALUES
+  ('app',        TRUE,  FALSE, 'scrape',
+   'Nhật ký của chính hai app. Nguồn DUY NHẤT biết người dùng trước Gateway.'),
+  ('billing',    FALSE, TRUE,  'scrape',
+   'Hoá đơn Google. Tính theo project nên không biết ai gọi. Về trễ ~1 ngày.'),
+  ('monitoring', FALSE, FALSE, 'scrape',
+   'Cloud Monitoring. Không tiền, không người. Cửa sổ lưu giữ trượt rất nhanh.'),
+  ('gateway',    TRUE,  FALSE, 'gateway',
+   'LiteLLM. Biết người dùng, có ngay trong ngày. Tiền của nó là SUY TỪ BẢNG GIÁ '
+   'nên vẫn phải đợi hoá đơn xác nhận - xem ghi chú cost_usd ở usage_resolved.');
+
+
 -- =====================================================================
 -- 2. BẢNG SỰ KIỆN
 -- Nguyên tắc số một: mỗi nguồn một bảng riêng, không trộn.
@@ -456,7 +510,10 @@ CREATE TABLE fact_usage_daily (
     output_tokens BIGINT,
     cached_tokens BIGINT,
     cost_usd      NUMERIC(14,6),
-    source        TEXT NOT NULL,      -- 'app' | 'billing' | 'monitoring'
+    -- Khoá ngoại, KHÔNG phải chú thích liệt kê. Nguồn lạ bị chặn ngay lúc GHI,
+    -- không đợi phép kiểm chạy sau. Và năng lực của nguồn (biết người? có tiền?)
+    -- đọc từ ref_source chứ không suy từ tên - xem ghi chú ở bảng đó.
+    source        TEXT NOT NULL REFERENCES ref_source,
     PRIMARY KEY (day, agent_id, model_id, account_id, source)
 );
 
@@ -553,13 +610,24 @@ WHERE service = 'generativelanguage.googleapis.com'
 -- 'resolved' là để nói đúng điều đó: nguồn đã được giải quyết.
 --
 -- CHỌN THEO TỪNG CHỈ TIÊU, không phải theo từng dòng. Mỗi nguồn mạnh một thứ:
---     tiền        chỉ billing có
---     token       billing trước, thiếu thì monitoring, thiếu nữa thì app
---                 (đo 13/08: hai nguồn khớp 100,4% khi cắt cùng khoảng ngày,
---                  nên thay thế là hợp lệ. Trước đó tưởng lệch 4,2 lần - đó là
---                  do so 111 ngày monitoring với 223 ngày hoá đơn.)
---     lượt gọi    monitoring trước, thiếu thì app; billing không có
---     người dùng  chỉ app có
+--     tiền        chỉ billing có tiền HOÁ ĐƠN. Gateway có một con số tiền nhưng
+--                 nó tự nhân từ bảng giá - xem ghi chú ở cột cost_usd bên dưới
+--     token       gateway trước, rồi billing, thiếu thì monitoring, thiếu nữa
+--                 thì app
+--                 (đo 13/08: billing và monitoring khớp 100,4% khi cắt cùng
+--                  khoảng ngày, nên thay thế là hợp lệ. Trước đó tưởng lệch 4,2
+--                  lần - đó là do so 111 ngày monitoring với 223 ngày hoá đơn.)
+--     lượt gọi    gateway trước, rồi monitoring, thiếu thì app; billing không có
+--     người dùng  app và gateway. KHÔNG hỏi bằng tên nguồn - hỏi ref_source
+--                 .knows_user, xem ghi chú ở bảng đó
+--
+-- VÌ SAO GATEWAY ĐỨNG TRƯỚC BILLING (21/08/2026)
+--   Gateway là bộ đếm của CHÍNH TA, và nó có mặt ngay trong ngày trong khi hoá
+--   đơn Google về trễ ~1 ngày. Trong kỳ chạy song song (Master Plan giai đoạn
+--   7, tối thiểu 2 tuần) cả bốn nguồn cùng có dữ liệu cho cùng một ngày; không
+--   chốt thứ tự thì con số đổi tuỳ theo nguồn nào nạp sau.
+--   Đứng trước billing về TOKEN không có nghĩa đứng trước về TIỀN: cột cost_usd
+--   vẫn chỉ lấy của hoá đơn.
 --
 -- VÌ SAO KHÔNG CỘNG BA NGUỒN LẠI: chúng đo CÙNG một lưu lượng bằng ba cái công
 -- tơ khác nhau. Cộng lại là đếm ba lần.
@@ -575,6 +643,14 @@ WHERE service = 'generativelanguage.googleapis.com'
 CREATE VIEW usage_resolved AS
 WITH keys AS (
     SELECT DISTINCT day, agent_id, model_id FROM fact_usage_daily
+),
+g AS (
+    SELECT day, agent_id, model_id,
+           SUM(total_tokens) AS tokens, SUM(calls) AS calls,
+           SUM(input_tokens) AS tok_in, SUM(output_tokens) AS tok_out,
+           SUM(cached_tokens) AS tok_cached
+    FROM fact_usage_daily WHERE source = 'gateway'
+    GROUP BY day, agent_id, model_id
 ),
 b AS (
     SELECT day, agent_id, model_id,
@@ -603,36 +679,55 @@ a AS (
 SELECT k.day,
        k.agent_id,
        k.model_id,
-       COALESCE(b.tokens, m.tokens, a.tokens)  AS total_tokens,
+       COALESCE(g.tokens, b.tokens, m.tokens, a.tokens)  AS total_tokens,
        -- Ba cột này lấy từ CÙNG nguồn với total_tokens, không COALESCE riêng
        -- từng cột: trộn input_tokens của hoá đơn với output_tokens của
        -- monitoring sẽ ra một cặp số không kỳ nguồn nào từng báo cáo.
-       CASE WHEN b.tokens IS NOT NULL THEN b.tok_in
+       CASE WHEN g.tokens IS NOT NULL THEN g.tok_in
+            WHEN b.tokens IS NOT NULL THEN b.tok_in
             WHEN m.tokens IS NOT NULL THEN m.tok_in
             ELSE a.tok_in     END               AS input_tokens,
-       CASE WHEN b.tokens IS NOT NULL THEN b.tok_out
+       CASE WHEN g.tokens IS NOT NULL THEN g.tok_out
+            WHEN b.tokens IS NOT NULL THEN b.tok_out
             WHEN m.tokens IS NOT NULL THEN m.tok_out
             ELSE a.tok_out    END               AS output_tokens,
-       CASE WHEN b.tokens IS NOT NULL THEN b.tok_cached
+       CASE WHEN g.tokens IS NOT NULL THEN g.tok_cached
+            WHEN b.tokens IS NOT NULL THEN b.tok_cached
             WHEN m.tokens IS NOT NULL THEN m.tok_cached
             ELSE a.tok_cached END               AS cached_tokens,
+       -- CHỈ LẤY TIỀN CỦA HOÁ ĐƠN, KỂ CẢ KHI GATEWAY CÓ SỐ TIỀN CỦA NÓ.
+       -- LiteLLM trả về một con số tiền, nhưng nó tự nhân từ bảng giá. Đổ vào
+       -- đây là biến tiền suy ra thành tiền đã xác nhận: giao diện coi
+       -- `cost_usd IS NULL` là "chưa có hoá đơn" và gắn dấu ≈ dựa vào đó. Để
+       -- NULL thì dòng Gateway tự động được tính lại từ ref_price VÀ được ghi
+       -- nhãn suy ra - đúng bản chất của nó cho tới ngày hoá đơn về.
        b.cost                                   AS cost_usd,
-       COALESCE(m.calls, a.calls)               AS calls,
-       CASE WHEN b.tokens IS NOT NULL THEN 'billing'
+       COALESCE(g.calls, m.calls, a.calls)      AS calls,
+       CASE WHEN g.tokens IS NOT NULL THEN 'gateway'
+            WHEN b.tokens IS NOT NULL THEN 'billing'
             WHEN m.tokens IS NOT NULL THEN 'monitoring'
             WHEN a.tokens IS NOT NULL THEN 'app'   END AS token_source,
-       CASE WHEN m.calls  IS NOT NULL THEN 'monitoring'
+       CASE WHEN g.calls  IS NOT NULL THEN 'gateway'
+            WHEN m.calls  IS NOT NULL THEN 'monitoring'
             WHEN a.calls  IS NOT NULL THEN 'app'   END AS call_source,
-       -- 1 = con số này chưa được hoá đơn xác nhận
+       -- 1 = con số này chưa được hoá đơn xác nhận. Gateway KHÔNG làm cờ này
+       -- về 0: nó là bộ đếm của ta, không phải hoá đơn của Google.
        CASE WHEN b.tokens IS NULL THEN 1 ELSE 0 END   AS token_estimated
 FROM keys k
+LEFT JOIN g ON g.day = k.day AND g.agent_id = k.agent_id AND g.model_id = k.model_id
 LEFT JOIN b ON b.day = k.day AND b.agent_id = k.agent_id AND b.model_id = k.model_id
 LEFT JOIN m ON m.day = k.day AND m.agent_id = k.agent_id AND m.model_id = k.model_id
 LEFT JOIN a ON a.day = k.day AND a.agent_id = k.agent_id AND a.model_id = k.model_id;
 
 
--- Cùng số liệu, nhìn theo người dùng. CHỈ phủ phần có nguồn 'app' - hiện là
--- 5,7% tổng token, vì Google không ghi ai gọi.
+-- Cùng số liệu, nhìn theo người dùng. CHỈ phủ phần đến từ nguồn BIẾT NGƯỜI
+-- DÙNG, vì Google không ghi ai gọi.
+--
+-- HỎI ref_source.knows_user, KHÔNG liệt kê tên nguồn (đổi 21/08/2026). Trước đó
+-- câu này là `WHERE f.source = 'app'`, và chuỗi 'app' mang nghĩa ngầm "nguồn
+-- duy nhất biết người dùng". Ngày Gateway ghi dữ liệu có đủ username vào
+-- database, view này vẫn trả y nguyên 320 dòng cũ - đã đo bằng
+-- tools/dien_tap_gateway.py, chèn 4 triệu token thì view nhúc nhích 0.
 --
 -- `unit_id` và `path` lấy từ account, KHÔNG từ fact - xem ghi chú ở hai bảng
 -- đó. Một tài khoản một đơn vị, không còn chuyện cùng một người ra hai phòng
@@ -645,4 +740,10 @@ SELECT f.day, f.agent_id, f.model_id,
 FROM fact_usage_daily f
 JOIN account a ON a.account_id = f.account_id
 JOIN dim_unit u ON u.unit_id = a.unit_id
-WHERE f.source = 'app' AND a.kind = 'real';
+-- Hai điều kiện này hỏi HAI CÂU KHÁC NHAU, đừng gộp:
+--   knows_user   nguồn có nói ai gọi không
+--   kind='real'  cái "ai" đó có phải một CON NGƯỜI không
+-- Tài khoản dịch vụ thoả câu đầu mà không thoả câu sau - và đó là đúng, view
+-- này là bảng người dùng.
+WHERE f.source IN (SELECT source FROM ref_source WHERE knows_user)
+  AND a.kind = 'real';

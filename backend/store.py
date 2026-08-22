@@ -254,13 +254,15 @@ def adoption(cn) -> list[dict]:
               AND c.is_shared = 0) AS provisioned,
           (SELECT COUNT(DISTINCT f.account_id)
              FROM fact_usage_daily f JOIN account c ON c.account_id = f.account_id
-            WHERE f.agent_id = g.agent_id AND f.source = 'app' AND c.is_shared = 0
+            WHERE f.agent_id = g.agent_id AND c.is_shared = 0
+              AND f.source IN (SELECT source FROM ref_source WHERE knows_user)
               AND f.account_id IN (SELECT d.account_id FROM dim_user d
                                     WHERE d.agent_id = g.agent_id
                                       AND d.found_in = 'directory')) AS active,
           (SELECT COUNT(DISTINCT f.account_id)
              FROM fact_usage_daily f JOIN account c ON c.account_id = f.account_id
-            WHERE f.agent_id = g.agent_id AND f.source = 'app' AND c.is_shared = 0
+            WHERE f.agent_id = g.agent_id AND c.is_shared = 0
+              AND f.source IN (SELECT source FROM ref_source WHERE knows_user)
               AND c.kind = 'real'
               AND f.account_id NOT IN (SELECT d.account_id FROM dim_user d
                                         WHERE d.agent_id = g.agent_id
@@ -326,7 +328,8 @@ def usage(cn, ph, start: str, end: str) -> list[dict]:
 
 
 def usage_by_account(cn, ph, start: str, end: str) -> list[dict]:
-    """Sử dụng quy về từng người. CHỈ phủ phần có nguồn 'app' - xem `health`."""
+    """Sử dụng quy về từng người. CHỈ phủ phần đến từ nguồn BIẾT NGƯỜI DÙNG
+    (ref_source.knows_user) - xem `health`."""
     r = _rows(cn, f"""
         SELECT v.day, v.agent_id, g.name AS agent, v.model_id, v.account_id,
                v.username, v.full_name, v.unit_id, v.unit_path, v.unit_conflict,
@@ -438,8 +441,12 @@ def health(cn) -> dict:
     # Câu hỏi đúng là: "con số dashboard ĐANG HIỆN có chia được theo người
     # không?" - và nó được trả lời ở mức TỪNG KHOÁ (ngày, agent, model):
     #     agent một-người-dùng   -> chia được, về đúng một tài khoản dịch vụ
-    #     token_source = 'app'   -> chia được, về người thật
+    #     nguồn knows_user       -> chia được, về người thật (app, gateway)
     #     billing / monitoring   -> KHÔNG, Google chỉ báo mức project
+    #
+    # HỎI ref_source.knows_user, KHÔNG so với chuỗi 'app' (đổi 21/08/2026).
+    # Chuỗi 'app' mang nghĩa ngầm "nguồn duy nhất biết người dùng"; Gateway
+    # cũng biết người dùng, nên hai nghĩa đó tách nhau ra.
     #
     # PHỤ THUỘC: câu này cần kind='service_account' đã có trong database. Với
     # database dựng trước 20/08 nó không sập, chỉ trả về con số cũ - nên
@@ -449,10 +456,12 @@ def health(cn) -> dict:
         SELECT
           SUM(CASE WHEN s.agent_id IS NOT NULL
                    THEN v.total_tokens ELSE 0 END) AS service_tokens,
-          SUM(CASE WHEN s.agent_id IS NULL AND v.token_source = 'app'
+          SUM(CASE WHEN s.agent_id IS NULL AND v.token_source IN
+                    (SELECT source FROM ref_source WHERE knows_user)
                    THEN v.total_tokens ELSE 0 END) AS people_tokens,
           SUM(CASE WHEN s.agent_id IS NULL
-                    AND COALESCE(v.token_source, '') <> 'app'
+                    AND COALESCE(v.token_source, '') NOT IN
+                        (SELECT source FROM ref_source WHERE knows_user)
                    THEN v.total_tokens ELSE 0 END) AS opaque_tokens
         FROM usage_resolved v
         LEFT JOIN (SELECT DISTINCT unit_agent_id AS agent_id FROM account
