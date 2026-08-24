@@ -198,13 +198,15 @@ so lại **23/23 khớp**, không đụng một token.
 
 ## 4. Đổi nguồn schema trong `connect.rebuild()` — giữ nguyên bước xoá sạch
 
-- [ ] 4.1 ⚠️ **`DROP SCHEMA` KHÔNG biến mất — nó ở lại đúng chỗ của nó.**
+- [x] 4.1 ⚠️ **`DROP SCHEMA` KHÔNG biến mất — nó ở lại đúng chỗ của nó.**
 
       Bẫy dễ mắc: change này tên là *"đổi schema không phải xoá database"*, nên phản xạ đầu
       tiên là gỡ bỏ `DROP SCHEMA`. **Làm thế sẽ vỡ `rebuild_db.py`**: bước 1 gọi
       `load_billing.py --rebuild`, và `--rebuild` có nghĩa *"xoá sạch, dựng schema + danh
       mục, nạp hoá đơn"*. Không xoá sạch thì nạp lại danh mục vào bảng đã có dòng → đụng
       khoá chính ngay.
+
+      Evidence: guard-ordering test proves a missing catalog exits before `open_db`; full-flow test preserves the wipe step.
 
       Việc đúng là **tách hai thao tác đang bị gộp làm một**:
 
@@ -239,12 +241,18 @@ so lại **23/23 khớp**, không đụng một token.
 
       Database rác đã xoá; `token_ledger` không bị đụng (kiểm lại: 1.189 dòng ·
       867.657.110 token).
-- [ ] 4.3 Nửa danh mục là **dữ liệu gieo**, sinh bởi `gen_catalog.py`, Alembic không thay.
+- [x] 4.3 Nửa danh mục là **dữ liệu gieo**, sinh bởi `gen_catalog.py`, Alembic không thay.
       Giữ cả nhánh `raise SystemExit` khi thiếu file — nó đang chỉ đúng cách sửa
-- [ ] 4.4 Giữ nguyên chữ ký hàm và giá trị trả về `(cn, placeholder)` — `load_billing.py`
+
+      Evidence: full-flow test observes `migrate` before separate `seed:02_catalog.sql`.
+- [x] 4.4 Giữ nguyên chữ ký hàm và giá trị trả về `(cn, placeholder)` — `load_billing.py`
       gọi nó và không được biết bên trong đã đổi
-- [ ] 4.5 Đọc lại toàn bộ hàm sau khi sửa. Bước này bắt buộc: `rebuild()` là chỗ duy nhất
+
+      Evidence: full-flow test asserts the seed connection object and `%s` return contract.
+- [x] 4.5 Đọc lại toàn bộ hàm sau khi sửa. Bước này bắt buộc: `rebuild()` là chỗ duy nhất
       biết cách dựng database, sửa sai là mọi thứ sau đó sai theo
+
+      Evidence: rebuild full-flow and `ACTIVE_DSN` failure-reset tests pass.
 
 ## 5. Dựng `token_ledger_v2` song song — database cũ KHÔNG bị đụng
 

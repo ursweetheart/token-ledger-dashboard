@@ -227,6 +227,10 @@ def rebuild(dsn: str):
         rebuild()              xoá sạch  ->  migration  ->  danh mục
         alembic upgrade head   (không xoá gì, database giữ nguyên dữ liệu)
     """
+    catalog = DB_DIR / "02_catalog.sql"
+    if not catalog.exists():
+        raise SystemExit("Chưa có db/02_catalog.sql. Chạy: python db/gen_catalog.py")
+
     cn, _ = open_db(dsn)
     with cn.cursor() as cur:
         cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
@@ -239,9 +243,6 @@ def rebuild(dsn: str):
     apply_migrations(dsn)
 
     cn, placeholder = open_db(dsn)
-    catalog = DB_DIR / "02_catalog.sql"
-    if not catalog.exists():
-        raise SystemExit("Chưa có db/02_catalog.sql. Chạy: python db/gen_catalog.py")
     run_sql_file(cn, placeholder, catalog)
     cn.commit()
     return cn, placeholder
