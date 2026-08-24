@@ -30,7 +30,22 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const ROOT = "D:/RangDonk/token-ledger-dashboard";
+const ROOT = path.resolve(__dirname, "..");
+const REQUIRED_FILES = ["web/index.html", "web/js/api.js", "web/js/app.js"];
+
+if (process.argv.includes("--check-files")) {
+  let missing = false;
+  for (const file of REQUIRED_FILES) {
+    const resolved = path.join(ROOT, file);
+    if (fs.existsSync(resolved)) console.log(`  ok: ${resolved}`);
+    else {
+      missing = true;
+      console.error(`  THIEU: ${resolved}`);
+    }
+  }
+  process.exit(missing ? 1 : 0);
+}
+
 const html = fs.readFileSync(path.join(ROOT, "web/index.html"), "utf8");
 
 // --- moi id co that trong index.html --------------------------------------

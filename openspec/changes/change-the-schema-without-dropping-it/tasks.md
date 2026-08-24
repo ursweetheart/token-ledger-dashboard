@@ -356,7 +356,7 @@ Chỉ làm nhóm này khi nhóm 5 khớp **hết**.
 - [ ] 8.2 `audit_db.py` không có phép hỏng mới so với mốc 1.3
 - [ ] 8.3 `check_api.py` không có phép hỏng mới so với mốc 1.3
 - [ ] 8.4 `node --test tests/*.test.js` vẫn xanh
-- [ ] 8.5 `python tools/chay_dashboard_trong_node.js` exit 0
+- [ ] 8.5 `node tools/chay_dashboard_trong_node.js` exit 0
 - [ ] 8.6 Chứng minh năng lực mới thật sự có — **diễn tập trên database THẬT đang có dữ
       liệu**, vì đó mới là điều hôm nay không làm được:
 
