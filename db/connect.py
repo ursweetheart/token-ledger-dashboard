@@ -1,37 +1,170 @@
 """Mở kết nối và dựng lại database - dùng chung cho mọi script nạp.
 
-HAI HỆ QUẢN TRỊ, MỘT BẢN SCHEMA
--------------------------------
-01_schema.sql chạy được cả PostgreSQL lẫn SQLite vì không dùng SERIAL: mọi khoá
-đều gán tường minh. Nhờ vậy khi Docker chưa chạy vẫn kiểm được toàn bộ khâu nạp
-bằng một file SQLite, rồi đổi sang Postgres mà không sửa dòng SQL nào.
+CHỈ POSTGRESQL. SQLITE ĐÃ BỊ GỠ 24/08/2026.
+-------------------------------------------
+File này TỪNG hứa "hai hệ quản trị, một bản schema". Đừng khôi phục lời hứa đó -
+nó đã sai từ 21/08 và không ai biết. Ba điều kiện của một đường quay về, đo ngày
+24/08, không điều nào còn đúng:
 
-Cách chọn: đuôi .sqlite / .db -> SQLite. Còn lại -> chuỗi kết nối PostgreSQL.
+    có dữ liệu để quay về   var/token_ledger.sqlite bị xoá 17/08, var/ rỗng
+    dựng lại được           01_schema.sql HỎNG CÚ PHÁP trên SQLite từ 21/08
+    có phép kiểm canh       chưa từng có phép nào chạy trên SQLite
+
+Chỗ hỏng nằm ở `INSERT INTO ref_source`: hai chuỗi viết LIỀN KỀ nhau. PostgreSQL
+nối lại theo chuẩn SQL, SQLite báo lỗi cú pháp. Bảng `ref_source` ra đời 21/08,
+tức SAU ngày database SQLite biến mất - nên lỗi nằm im ba ngày, không ai chạm tới.
+
+Một đường quay về không dựng được, không có dữ liệu, và không ai kiểm thì không
+phải đường quay về. Nó tệ hơn không có gì: nó làm người đọc file này tin rằng có.
+
+VÌ SAO KHÔNG PHẢI SQLITE, GHI LẠI ĐỂ KHÔNG AI QUAY LẠI
+------------------------------------------------------
+SQLite là MỘT FILE: không đi qua mạng nên tiến trình trong container khác không
+đọc được, và không có schema riêng lẫn GRANT theo user nên không chia quyền theo
+service được. Cả hai là chặn đường cứng cho việc chạy nhiều bản sau một load
+balancer - tức chặn đúng kiến trúc mà Master Plan giai đoạn 5 đang nhắm tới.
+
+MỘT NGUỒN SỰ THẬT
+-----------------
+DEFAULT_DSN dưới đây là chỗ DUY NHẤT quyết định database mặc định. Không file nào
+khác được dựng chuỗi kết nối mặc định của riêng nó.
+
+Đã có sự cố đúng hình dạng đó: scripts/rebuild_db.py từng khai
+`default=str(ROOT / "var" / "token_ledger.sqlite")` độc lập với hằng số này, và
+scripts/update_dashboard.py gọi nó KHÔNG truyền --db. Hệ quả: đổi file này xong
+mà đường ống vẫn dựng lại database cũ, không lỗi nào báo ra.
+
+Thứ tự ưu tiên:
+    1. TOKEN_LEDGER_DSN        - đổi được TOÀN BỘ hệ thống bằng một biến
+    2. PG* dựng thành chuỗi    - khớp tên biến của docker-compose.yml
+    3. --db trên dòng lệnh     - ghi đè cho một lần chạy
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_DIR = ROOT / "db"                # ma: schema .sql + cac module nap
-VAR_DIR = ROOT / "var"              # du lieu chay: dung lai duoc bang rebuild_db.py
-DEFAULT_DSN = str(VAR_DIR / "token_ledger.sqlite")
+DB_DIR = ROOT / "db"                # ma: migration + danh muc .sql
+# VAR_DIR bo 24/08/2026 cung voi SQLite - no chi ton tai de tro toi file .sqlite,
+# va sau khi go thi khong file .py nao con dung toi. Thu muc var/ van con, nay
+# chua ban chup bo so bat bien cua tools/baseline_db.py.
+
+# Tên biến VÀ giá trị mặc định KHỚP docker-compose.yml, nên `docker compose up -d`
+# rồi chạy script là nối được ngay, không phải đặt gì. Đặt tên khác sẽ thành hai
+# bộ cấu hình phải giữ khớp bằng tay - đúng loại lỗi im lặng mà file này đang dọn.
+PG_HOST = os.environ.get("PGHOST", "127.0.0.1")
+PG_PORT = os.environ.get("PGPORT", "5432")
+PG_USER = os.environ.get("PGUSER", "token")
+PG_PASSWORD = os.environ.get("PGPASSWORD", "token_local")
+# TẠM TRỎ SANG token_ledger_v2 — 24/08/2026, kỳ chạy thử của change
+# `change-the-schema-without-dropping-it`.
+#
+# v2 là bản dựng HOÀN TOÀN từ chuỗi migration rồi nạp lại từ data/, và đã khớp
+# 23/23 khoá với bản cũ (867.657.110 token · $291,985601 · audit 36/31/5/0 ·
+# check_api 19/19). Kỳ chạy thử để bắt những gì một phép so không bắt được.
+#
+# `token_ledger` cũ VẪN CÒN NGUYÊN, chưa bị đụng một chữ. Quay lui = sửa đúng
+# dòng này về "token_ledger".
+#
+# HAI VIỆC CÒN LẠI, không được quên:
+#   1. DROP DATABASE token_ledger        (task 6.4 — KHÔNG hoàn tác được)
+#   2. ALTER DATABASE token_ledger_v2 RENAME TO token_ledger, rồi trả dòng này
+#      về "token_ledger"                 (task 6.5, 6.6)
+PG_DATABASE = os.environ.get("PGDATABASE", "token_ledger_v2")
+
+# Dùng `or` chứ không `os.environ.get(k, mac_dinh)`: biến đặt thành chuỗi rỗng
+# cũng phải rơi về mặc định, không được thành DSN rỗng.
+DEFAULT_DSN = os.environ.get("TOKEN_LEDGER_DSN") or (
+    f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}")
+
+# DSN của lần chạy hiện tại, khi nó KHÁC mặc định.
+#
+# Vì sao cần thêm biến này (24/08/2026): `DEFAULT_DSN` là hằng số tính MỘT LẦN lúc
+# import, nên `rebuild(dsn_khac)` không đổi được nó, và `db/migrations/env.py` -
+# chạy trong một ngăn xếp gọi khác - sẽ vẫn thấy database mặc định. Tức là
+# `rebuild()` xoá database A rồi bảo Alembic dựng schema lên database B.
+#
+# `rebuild()` đặt biến này trước khi gọi Alembic và trả về `None` sau đó. env.py
+# đọc nó. Thứ tự ưu tiên trong env.py:  -x db=...  >  ACTIVE_DSN  >  DEFAULT_DSN
+#
+# Vẫn giữ đúng nguyên tắc "một nguồn sự thật": chuỗi kết nối vẫn chỉ được quyết
+# định trong file này, không nơi nào khác dựng chuỗi mặc định của riêng nó.
+ACTIVE_DSN: str | None = None
 
 
-def is_sqlite(dsn: str) -> bool:
-    return dsn.endswith(".sqlite") or dsn.endswith(".db")
+def _chan_sqlite(dsn: str) -> None:
+    """Dừng ngay nếu DSN trỏ vào một file SQLite.
+
+    HỎNG TO TIẾNG, KHÔNG HỎNG IM LẶNG. Không có hàm này thì `--db du_lieu.sqlite`
+    đi thẳng vào psycopg2, và thông báo lỗi sẽ nói về chuỗi kết nối chứ không nói
+    về điều người dùng thật sự làm sai. Tệ hơn: nếu mai kia có ai thêm lại một
+    nhánh sqlite3 thì nó sẽ lặng lẽ TẠO một file rỗng rồi chạy nửa vời.
+
+    Đây là thứ duy nhất còn sót lại của `is_sqlite()` cũ, và nó tồn tại để nói
+    KHÔNG cho rõ ràng.
+    """
+    if dsn.endswith((".sqlite", ".db")):
+        raise SystemExit(
+            f"DSN trỏ vào một file SQLite: {dsn}\n"
+            "SQLite đã bị gỡ khỏi dự án ngày 24/08/2026 - xem ghi chú đầu file này.\n"
+            "Dùng một chuỗi kết nối PostgreSQL, ví dụ:\n"
+            f"    {mask_dsn(DEFAULT_DSN)}"
+        )
+
+
+def mask_dsn(dsn: str) -> str:
+    """Giấu mật khẩu khi in DSN ra màn hình hoặc log.
+
+    Nơi nào biết DSN thì nơi đó phải biết cách in DSN an toàn - nên hàm này nằm
+    cạnh DEFAULT_DSN chứ không nằm trong script gọi. Hai bản cài đặt của cùng một
+    quy tắc bảo mật là một bản sẽ sai.
+
+    Trước 17/08 mặc định là đường dẫn file nên in thẳng vô hại, và
+    db/load_billing.py in `args.db` không che. Khi mặc định thành chuỗi Postgres
+    có mật khẩu thì chính dòng đó thành chỗ rò.
+
+    DSN là đường dẫn file thì trả về y nguyên, không cắt gì.
+
+    CẮT Ở '@' CUỐI, KHÔNG PHẢI '@' ĐẦU
+    ----------------------------------
+    Mật khẩu được phép chứa '@'. Với `postgresql://u:p@ss@may/db`, cắt ở '@' đầu
+    cho credentials='u:p' và host='ss@may/db' - tức đoạn 'ss' của mật khẩu CHẢY
+    SANG vế host rồi được in ra nguyên văn. Phần host của URL thì không bao giờ
+    chứa '@', nên cắt ở '@' cuối mới đúng.
+    """
+    if "://" not in dsn or "@" not in dsn:
+        return dsn
+    scheme, rest = dsn.split("://", 1)
+    credentials, host = rest.rsplit("@", 1)
+    # Không có ':' nghĩa là DSN vốn không mang mật khẩu - đừng thêm '***' vào,
+    # người đọc log sẽ tưởng có một mật khẩu mà thực ra không có.
+    if ":" not in credentials:
+        return f"{scheme}://{credentials}@{host}"
+    user = credentials.split(":", 1)[0]
+    return f"{scheme}://{user}:***@{host}"
 
 
 def open_db(dsn: str):
-    """Trả về (connection, placeholder) với placeholder là '?' hoặc '%s'."""
-    if is_sqlite(dsn):
-        import sqlite3
-        cn = sqlite3.connect(dsn)
-        # SQLite MẶC ĐỊNH KHÔNG kiểm khoá ngoại. Không bật thì một model_id sai
-        # vẫn nạp được, và chỉ lộ ra khi đổi sang Postgres.
-        cn.execute("PRAGMA foreign_keys = ON")
-        return cn, "?"
+    """Trả về (connection, placeholder).
+
+    VÌ SAO VẪN TRẢ VỀ `placeholder` KHI CHỈ CÒN MỘT HỆ
+    ---------------------------------------------------
+    Nó nay là hằng `"%s"`, nên nhìn qua thì thừa. Giữ lại là CÓ CHỦ Ý: gỡ nó đi
+    là sửa 34 chỗ - 15 điểm gọi hàm này, cộng 19 chuỗi truy vấn nội suy biến
+    placeholder, nằm rải khắp db/, scripts/, backend/. Một diff lớn như vậy mang
+    rủi ro thật mà không mua thêm năng lực nào.
+
+    (Cố ý KHÔNG viết literal của biến đó ra đây: phép kiểm 6.2 của change đếm số
+    lần nó xuất hiện để chứng minh change không lan vào tầng truy vấn, và một
+    dòng ghi chú cũng bị đếm. Bẫy này đã cắn một lần ngày 24/08.)
+
+    Change `drop-the-sqlite-escape-hatch` (24/08/2026) vì thế chỉ gỡ NHÁNH RẼ,
+    không chạm tầng truy vấn - và nghiệm thu bằng cách đếm lại đúng hai con số
+    15 và 19. Muốn dọn nốt thì làm một change riêng.
+    """
+    _chan_sqlite(dsn)
     try:
         import psycopg2 as pg
     except ImportError:
@@ -40,37 +173,72 @@ def open_db(dsn: str):
         except ImportError:
             raise SystemExit(
                 "Cần psycopg2 để nối PostgreSQL:  pip install psycopg2-binary\n"
-                f"Hoặc dùng SQLite:  --db {DEFAULT_DSN}"
+                "  hoặc:  pip install -r backend/requirements.txt\n"
+                "PostgreSQL là hệ quản trị DUY NHẤT từ 24/08/2026, nên gói này\n"
+                "bắt buộc - không còn đường quay về SQLite để đỡ."
             )
     return pg.connect(dsn), "%s"
 
 
 def run_sql_file(cn, placeholder: str, path: Path) -> None:
-    sql = path.read_text(encoding="utf-8")
-    if placeholder == "?":
-        cn.executescript(sql)
-    else:
-        with cn.cursor() as cur:
-            cur.execute(sql)
+    # `placeholder` giữ trong chữ ký để 15 chỗ gọi không phải đổi - xem open_db().
+    with cn.cursor() as cur:
+        cur.execute(path.read_text(encoding="utf-8"))
+
+
+def apply_migrations(dsn: str) -> None:
+    """Dựng schema bằng chuỗi migration trong db/migrations/.
+
+    Thay cho `run_sql_file(01_schema.sql)` từ 24/08/2026. Từ đó schema chỉ được
+    mô tả ở MỘT chỗ - chuỗi migration - và `db/01_schema.sql` đã bị xoá.
+
+    Gọi Alembic qua API trong tiến trình, không qua `subprocess`: trên máy này
+    `python` trên PATH là một shim trỏ đi chỗ khác, nên gọi tiến trình con là mời
+    đúng loại lỗi "chạy nhầm trình thông dịch" vào một hàm vốn không có lỗi nào.
+    """
+    global ACTIVE_DSN
+    from alembic import command
+    from alembic.config import Config
+
+    ACTIVE_DSN = dsn
+    try:
+        command.upgrade(Config(str(ROOT / "alembic.ini")), "head")
+    finally:
+        ACTIVE_DSN = None
 
 
 def rebuild(dsn: str):
-    """Xoá sạch rồi dựng lại từ 01_schema.sql + 02_catalog.sql.
+    """Xoá sạch rồi dựng lại: migration + 02_catalog.sql.
 
     CHỈ dùng cho database do script này tạo ra. Không dùng lên database thật.
-    """
-    if is_sqlite(dsn):
-        p = Path(dsn)
-        if p.exists():
-            p.unlink()
-        cn, placeholder = open_db(dsn)
-    else:
-        cn, placeholder = open_db(dsn)
-        with cn.cursor() as cur:
-            cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        cn.commit()
 
-    run_sql_file(cn, placeholder, DB_DIR / "01_schema.sql")
+    BƯỚC XOÁ SẠCH VẪN Ở ĐÂY, VÀ PHẢI Ở ĐÂY.
+    ----------------------------------------
+    Change `change-the-schema-without-dropping-it` mang cái tên dễ khiến người
+    đọc tưởng `DROP SCHEMA` phải biến mất. Không phải. Nó chỉ làm cho việc đổi
+    schema KHÔNG CÒN BẮT BUỘC phải xoá - `alembic upgrade head` gọi độc lập sẽ
+    sửa tại chỗ, không đi qua hàm này.
+
+    Còn hàm này là đường "dựng lại toàn bộ từ data/", và nó thật sự cần một schema
+    trắng: bước ngay sau là nạp `02_catalog.sql`, mà nạp danh mục vào bảng đã có
+    dòng là đụng khoá chính ngay.
+
+    Hai đường dùng chung một chuỗi migration:
+        rebuild()              xoá sạch  ->  migration  ->  danh mục
+        alembic upgrade head   (không xoá gì, database giữ nguyên dữ liệu)
+    """
+    cn, _ = open_db(dsn)
+    with cn.cursor() as cur:
+        cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+    cn.commit()
+    # ĐÓNG kết nối này trước khi Alembic mở kết nối của nó. Giữ mở thì lát nữa
+    # phải tin rằng một kết nối cũ nhìn thấy bảng do kết nối khác vừa tạo -
+    # đúng, nhưng là thứ phải nhớ mỗi lần đọc lại. Mở lại sau rẻ hơn.
+    cn.close()
+
+    apply_migrations(dsn)
+
+    cn, placeholder = open_db(dsn)
     catalog = DB_DIR / "02_catalog.sql"
     if not catalog.exists():
         raise SystemExit("Chưa có db/02_catalog.sql. Chạy: python db/gen_catalog.py")
@@ -80,21 +248,25 @@ def rebuild(dsn: str):
 
 
 def query(cn, sql: str, params=()) -> list:
-    """Chạy một câu SELECT, trả về toàn bộ kết quả. Dùng được cả hai hệ.
+    """Chạy một câu SELECT, trả về toàn bộ kết quả.
 
-    SQLite cho `cur.execute(...)` trả về CHÍNH cursor, nên viết
-    `cur.execute(...).fetchall()` hoặc lặp thẳng `for r in cur.execute(...)`
-    đều chạy. psycopg2 thì `execute()` trả về None.
+    psycopg2 cho `execute()` trả về None, nên `cur.execute(...).fetchall()` hay
+    `for r in cur.execute(...)` đều ném AttributeError. Hàm này bịt hẳn lối viết
+    tiện tay đó lại.
 
-    Hai lối viết tiện tay đó là cái bẫy kinh điển: chạy trên SQLite thì ngon,
-    đổi sang Postgres mới ném AttributeError - tức lộ ra ở đúng lúc chuyển hệ,
-    là lúc ít muốn gặp bất ngờ nhất. Hàm này bịt hẳn nó lại.
+    (Trước 24/08/2026 ghi chú ở đây nói đó là "bẫy khi đổi hệ": SQLite cho
+    execute() trả về chính cursor nên hai lối viết trên chạy được, và chỉ vỡ khi
+    sang Postgres. SQLite đã bị gỡ, nhưng cái bẫy vẫn còn - chỉ là nay nó vỡ
+    ngay lần chạy đầu thay vì vỡ muộn.)
     """
     cur = cn.cursor()
     # KHÔNG truyền tuple rỗng xuống. psycopg2 chỉ diễn giải '%' khi đối số tham
     # số KHÁC None - đưa () xuống thì câu `LIKE '%token_count'` bị hiểu là dấu
-    # định dạng và ném IndexError. SQLite không có vấn đề này, nên lỗi chỉ lộ ra
-    # trên Postgres.
+    # định dạng và ném IndexError.
+    #
+    # BẪY NÀY VẪN CÒN SỐNG, và nó vừa cắn lần nữa ngày 24/08: migration 001 gọi
+    # `exec_driver_sql(sql, ())` và 11 dấu '%' trong ghi chú tiếng Việt của
+    # 01_schema.sql vỡ hết. Xem db/migrations/versions/001_baseline_baseline.py.
     if params:
         cur.execute(sql, params)
     else:
@@ -109,14 +281,15 @@ def query_one(cn, sql: str, params=()):
 
 
 def insert_many(cn, placeholder: str, table: str, columns: list[str], rows: list) -> int:
-    """Chèn nhiều dòng, dùng đường nhanh của từng hệ.
+    """Chèn nhiều dòng, ưu tiên đường nhanh của psycopg2.
 
     executemany của psycopg2 gửi MỘT vòng mạng cho MỖI dòng. Với 562.307 dòng
     của fact_monitoring thì đó là hàng chục phút - và nó không hỏng, chỉ chậm,
     nên rất dễ tưởng là bình thường. execute_values gom nhiều dòng vào một câu
     INSERT, nhanh hơn vài chục lần.
 
-    SQLite thì executemany vốn đã nhanh vì không qua mạng.
+    Nhánh `executemany` cuối hàm KHÔNG phải nhánh cho hệ quản trị khác - nó là
+    đường lui khi `psycopg2.extras.execute_values` không import được.
     """
     if not rows:
         return 0

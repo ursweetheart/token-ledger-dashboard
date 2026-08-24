@@ -55,11 +55,30 @@ def anchor_accounts(cn) -> dict[int, int]:
     KHÔNG trả về unit_id: fact_usage_daily đã bỏ cột đó. Đơn vị là thuộc tính
     của tài khoản, JOIN account là ra - giữ thêm một bản sao trong bảng sự kiện
     chỉ tạo thêm một chỗ để lệch.
+
+    TRA BẰNG (kind, unit_agent_id), KHÔNG BẰNG TÊN ĐĂNG NHẬP. Trước 21/08/2026
+    hàm này tra `__whole_agent_<id>__`, tức một chuỗi ký tự do khâu nạp khác đặt
+    ra - hai file phải giữ khớp bằng tay, và load_org.py phải mang một ghi chú
+    "đừng đổi tên ở đây". Ngày quy ước A3 bắt tài khoản dịch vụ đổi sang
+    `svc.<code>`, đúng chỗ đó gãy.
+
+    `kind IN ('service_account','whole_agent')` là CHỖ NGỒI "cả agent" - hai giá
+    trị vì 20/08 đã tách "biết chính xác là ai" khỏi "không biết ai trong 892
+    người". Cả hai đều là dòng gộp mức agent, nên cùng vào đây.
     """
-    by_username = {u: a for u, a in connect.query(
-        cn, "SELECT username, account_id FROM account WHERE kind <> 'real'")}
-    return {aid: by_username[f"__whole_agent_{aid}__"]
-            for (aid,) in connect.query(cn, "SELECT agent_id FROM dim_agent")}
+    rows = connect.query(cn, """
+        SELECT unit_agent_id, account_id FROM account
+         WHERE kind IN ('service_account', 'whole_agent')""")
+    out = {int(a): int(acc) for a, acc in rows}
+    thieu = [aid for (aid,) in connect.query(cn, "SELECT agent_id FROM dim_agent")
+             if aid not in out]
+    if thieu:
+        raise SystemExit(f"agent khong co dong gop muc agent: {thieu}."
+                         f" Chay lai db/load_org.py.")
+    if len(out) != len(rows):
+        raise SystemExit(f"co agent >1 dong gop muc agent: {len(rows)} dong,"
+                         f" {len(out)} agent. Chay lai db/load_org.py.")
+    return out
 
 
 COLUMNS = ["day", "agent_id", "model_id", "account_id", "calls", "total_tokens",
@@ -235,12 +254,17 @@ def main() -> None:
                                        " WHERE source='app'")[0]
     by_source = dict(connect.query(cn, "SELECT source, COUNT(*) FROM fact_usage_daily"
                                        " GROUP BY source"))
+    # In TEN agent, khong in agent_id. Doc "[5, 8]" thi phai di tra bang moi biet
+    # la ai; doc "Tro Ly Ao Hop Dong, Tro ly ao Ralli" thi hieu ngay. `agent_id`
+    # van la khoa dung trong SQL - chi rieng CHU IN RA CHO NGUOI DOC moi dung ten.
     app_agents = [r[0] for r in connect.query(
-        cn, "SELECT DISTINCT agent_id FROM fact_usage_daily WHERE source='app'")]
+        cn, "SELECT DISTINCT g.name FROM fact_usage_daily f"
+            " JOIN dim_agent g ON g.agent_id = f.agent_id"
+            " WHERE f.source='app' ORDER BY g.name")]
 
     print(f"  theo nguon: {by_source}")
     print(f"  tien billing ${float(cost):.6f} | token app {app_tokens:,}")
-    print(f"  agent co nguon 'app': {app_agents}")
+    print(f"  agent co nguon 'app': {', '.join(app_agents)}")
 
     # Đối chiếu với các bảng gốc, không với số ghim.
     src_cost = connect.query_one(cn, "SELECT SUM(cost_usd) FROM fact_billing_daily")[0]
@@ -278,14 +302,14 @@ def main() -> None:
     # gộp y hệt cách load_app() gộp, rồi đòi bảng dẫn xuất lệch ĐÚNG BẰNG THẾ.
     # Dung sai 0. Phép kiểm vẫn bắt đúng cái nó sinh ra để bắt - token rơi rớt
     # trong khâu gộp - mà không lỗi thời khi có dữ liệu mới.
-    lech_nguon = int(connect.query_one(cn, """
+    source_conflict = int(connect.query_one(cn, """
         SELECT SUM(t) - SUM(COALESCE(p, 0)) - SUM(COALESCE(c, 0)) FROM (
             SELECT SUM(total_tokens) AS t, SUM(prompt_tokens) AS p,
                    SUM(completion_tokens) AS c
             FROM fact_call WHERE model_id IS NOT NULL
             GROUP BY substr(CAST(ts_local AS TEXT), 1, 10), agent_id, model_id,
                      account_id) x""")[0] or 0)
-    lech_nguon += int(connect.query_one(cn, """
+    source_conflict += int(connect.query_one(cn, """
         SELECT SUM(t) - SUM(COALESCE(p, 0)) - SUM(COALESCE(c, 0)) FROM (
             SELECT SUM(total_tokens) AS t, SUM(prompt_tokens) AS p,
                    SUM(completion_tokens) AS c
@@ -299,12 +323,12 @@ def main() -> None:
             FROM fact_usage_daily WHERE source = {ph}""", (source,))
         total = int(r[0] or 0)
         parts = int(r[1] or 0) + int(r[2] or 0) + (int(r[3] or 0) if add_cached else 0)
-        cho_phep = lech_nguon if source == "app" else 0
-        if (total - parts) != cho_phep:
+        allowed = source_conflict if source == "app" else 0
+        if (total - parts) != allowed:
             errors.append(f"nguon {source}: tach {parts:,} != tong {total:,}"
-                          f" (lech {total - parts:,}, bang nguon lech {cho_phep:,})")
-    if lech_nguon:
-        print(f"  app lech {lech_nguon:,} token giua total va prompt+completion"
+                          f" (lech {total - parts:,}, bang nguon lech {allowed:,})")
+    if source_conflict:
+        print(f"  app lech {source_conflict:,} token giua total va prompt+completion"
               f" - do chinh app ghi vay, da doi chieu tu bang nguon")
 
     if errors:

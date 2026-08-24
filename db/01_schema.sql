@@ -44,7 +44,20 @@ CREATE TABLE dim_agent (
     agent_id           INT PRIMARY KEY,
     code               TEXT UNIQUE NOT NULL,
     name               TEXT NOT NULL,
-    gcp_project_id     TEXT,              -- NULL nếu agent không đi qua GCP
+    -- NULL nếu agent không đi qua GCP.
+    --
+    -- ⚠️ PHÉP SUY `agent_id ← project` CÓ HẠN SỬ DỤNG (ghi 20/08/2026)
+    -- fact_billing_daily và fact_monitoring đang nối về agent QUA cột này. Phép
+    -- suy đó đúng khi mỗi agent gọi project của riêng nó - tức kiến trúc hôm nay.
+    --
+    -- Sau API Gateway thì SAI. Tài liệu triển khai §5.2: khi deployment của Agent
+    -- A gần chạm hạn mức, Router chuyển request sang deployment của Agent B. Lúc
+    -- đó hoá đơn Google ghi nợ project B cho lưu lượng của Agent A:
+    --     ai HỎI  ≠  ai TRẢ TIỀN
+    -- Giữ nguyên cách nối này thì dashboard báo B tiêu tiền của A, và KHÔNG LỖI
+    -- NÀO BÁO RA. Khi đó `gcp_project_id` phải rời khỏi đây, sang một bảng
+    -- deployment riêng - xem tu-dien-database.md Phần II mục 3.1.
+    gcp_project_id     TEXT,
     has_org_tree       BOOLEAN NOT NULL,  -- chỉ TLA HĐ và Ralli (quyết định A1)
     project_created_at DATE,
     data_from          DATE NOT NULL,
@@ -70,7 +83,46 @@ CREATE TABLE dim_unit (
     path       TEXT,
     -- TRUE với 6 dòng 'Đơn vị sử dụng <agent>' và dòng 'Chưa quy được'.
     -- Thiếu cột này thì COUNT(*) đếm cả dòng kỹ thuật thành phòng ban thật.
-    is_technical BOOLEAN NOT NULL
+    is_technical BOOLEAN NOT NULL,
+    -- CÙNG MỘT PHÒNG BAN NGOÀI ĐỜI, HAI DÒNG Ở HAI CÂY (thêm 20/08/2026)
+    --
+    -- Bảng này chứa HAI cây tổ chức, không phải một: Trợ lý ảo Ralli 102 đơn vị
+    -- một gốc 'Toàn công ty'; Trợ Lý Ảo Hợp Đồng 20 đơn vị BỐN gốc. Hai app mô
+    -- hình hoá cùng một công ty theo hai kiểu, và không có khoá chung nào.
+    --
+    -- NULL = dòng này LÀ bản chuẩn. Có giá trị = dòng này là bản trùng, trỏ về
+    -- bản chuẩn. Đã đo 20/08: chỉ ĐÚNG 4 cặp cần gộp, không phải 130 —
+    --     TT C4LED  (Hợp Đồng)  ->  C4LED (Ralli)
+    --     Phòng BH1 (Hợp Đồng)  ->  PBH1  (Ralli)
+    --     Phòng BH2 (Hợp Đồng)  ->  PBH2  (Ralli)
+    --     Phòng BH3 (Hợp Đồng)  ->  PBH3  (Ralli)
+    -- Cây Ralli làm chuẩn vì nó mô hình hoá CẢ công ty (một gốc, 102 đơn vị,
+    -- 892/937 tài khoản); cây Hợp Đồng chỉ là một phần với bốn gốc rời.
+    --
+    -- VÌ SAO PHẢI GỘP, chứ không để hai hàng: mỗi cặp đều có một bên nhiều tài
+    -- khoản còn bên kia nhiều token. Không gộp thì PBH1 hiện hai hàng '7 tài
+    -- khoản / 0 token' và '30 tài khoản / 105.187 token', và tỷ lệ áp dụng bị
+    -- chẻ mẫu số: 0/7 với X/30 thay vì X/37.
+    --
+    -- Trước 20/08 phép gộp này nằm trong `UNIT_ALIASES` gõ tay ở web/js/app.js -
+    -- tức một sự thật về tổ chức công ty sống trong mã giao diện, và database
+    -- không biết gì về nó.
+    canonical_unit_id TEXT REFERENCES dim_unit,
+    -- CẤP GOM THUẦN TUÝ, báo cáo bắt đầu từ BÊN DƯỚI nó (thêm 20/08/2026)
+    --
+    -- TRUE ở đúng hai dòng: 'Toàn công ty' và 'Tổng công ty Rạng Đông'. Chúng có
+    -- thật trong cây tổ chức, nhưng mọi phòng ban đều nằm dưới chúng nên để làm
+    -- cấp 1 của bảng thì tốn hai lần bung mà không phân biệt được gì.
+    --
+    -- ĐÂY LÀ QUY ƯỚC TRÌNH BÀY, KHÔNG PHẢI THUỘC TÍNH CỦA TỔ CHỨC. Ghi vào
+    -- database vì nó là quyết định của NGƯỜI về cách đọc báo cáo, và một quyết
+    -- định như thế cần một nguồn - trước 20/08 nó nằm trong web/js/app.js dưới
+    -- dạng hai mã gõ cứng `unitChildren("company")` và `unitChildren("rd-corp")`,
+    -- tức không tra được từ database và không ai ngoài người viết giao diện biết.
+    --
+    -- Cách đọc: gốc báo cáo = đơn vị KHÔNG phải cấp gom, mà cha của nó hoặc
+    -- không có, hoặc là cấp gom.
+    is_report_aggregate BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- MỘT DÒNG = MỘT TÀI KHOẢN, không phải một con người ngoài đời.
@@ -87,12 +139,27 @@ CREATE TABLE dim_unit (
 -- Ralli đôi khi ghi username vào chỗ ObjectId). `username` ở đây đã LOWER+TRIM,
 -- giữ lại để tra cứu, nhưng khoá là số.
 --
--- BA LOẠI:
---   'real'         tài khoản người thật, từ danh bạ hoặc nhật ký của app
---   'whole_agent'  Google chỉ báo được mức project -> không quy được về ai.
---                  Một dòng cho mỗi agent. KHÔNG phải dữ liệu thiếu: Google
---                  vốn không biết.
---   'unattributed' có lượt gọi nhưng bản ghi không kèm người dùng
+-- BỐN LOẠI:
+--   'real'            tài khoản người thật, từ danh bạ hoặc nhật ký của app
+--   'service_account' agent chạy bằng MỘT tài khoản dịch vụ (6 agent, quyết
+--                     định A1). Ta BIẾT chính xác ai dùng - chỉ là "ai" đó
+--                     không phải một con người. QUY ĐƯỢC về danh tính.
+--   'whole_agent'     Google chỉ báo được mức project -> không quy được về ai.
+--                     Chỉ còn đúng 2 dòng: Trợ Lý Ảo Hợp Đồng và Trợ lý ảo
+--                     Ralli - hai agent có nhiều người dùng thật. KHÔNG phải
+--                     dữ liệu thiếu: Google vốn không biết.
+--   'unattributed'    có lượt gọi nhưng bản ghi không kèm người dùng
+--
+-- VÌ SAO TÁCH 'service_account' KHỎI 'whole_agent' (20/08/2026)
+--   Trước đó cả 8 agent đều nhận 'whole_agent', nên một giá trị mang hai
+--   nghĩa trái ngược: "biết chính xác là ai" và "không biết ai". Mọi nơi lọc
+--   `kind = 'real'` vì thế vứt luôn 749 triệu token của 6 agent
+--   một-người-dùng, và /api/health báo độ phủ 12,4% trong khi phần thật sự
+--   không quy được chỉ là 1,2%.
+--
+--   HỎI "quy được về danh tính không?"  -> kind IN ('real','service_account')
+--   HỎI "có phải một CON NGƯỜI không?"  -> kind = 'real'
+--   Hai câu hỏi khác nhau. Trước 20/08 chúng dùng chung một điều kiện.
 -- Thiếu hai loại sau thì khoá của fact_usage_daily phải nhận NULL, mà SQLite
 -- coi NULL != NULL nên sẽ âm thầm nhận hai dòng giống hệt nhau.
 --
@@ -119,7 +186,7 @@ CREATE TABLE account (
     username       TEXT UNIQUE NOT NULL,   -- đã LOWER(TRIM())
     full_name      TEXT,
     email          TEXT,
-    kind           TEXT NOT NULL,          -- 'real' | 'whole_agent' | 'unattributed'
+    kind           TEXT NOT NULL,  -- 'real'|'service_account'|'whole_agent'|'unattributed'
     unit_id        TEXT NOT NULL REFERENCES dim_unit,
     -- Tài khoản DÙNG CHUNG, không đại diện cho một người: 'admin', các tài
     -- khoản thử. Vẫn tính đủ vào token và tiền - lưu lượng của chúng là lưu
@@ -226,6 +293,60 @@ CREATE TABLE dim_metric_alias (
     value_type   TEXT,            -- INT64 | DISTRIBUTION   (chỉ nguồn monitoring)
     PRIMARY KEY (source, raw_name)
 );
+
+
+-- NGUỒN DỮ LIỆU TỰ KHAI NĂNG LỰC CỦA MÌNH (thêm 21/08/2026)
+--
+-- VÌ SAO BẢNG NÀY TỒN TẠI
+--   Trước 21/08, `source = 'app'` rải ở 24 chỗ trong 8 file. Nhưng ở 10 chỗ
+--   ĐẦU ĐỌC nó không có nghĩa "nguồn tên app" - nó có nghĩa "nguồn DUY NHẤT
+--   biết ai là người dùng". Hai nghĩa đó trùng nhau, cho tới ngày Gateway xuất
+--   hiện: Gateway cũng biết người dùng.
+--
+--   Không tách ra thì Gateway ghi đủ username vào database mà `usage_by_account`
+--   vẫn trả y nguyên số dòng cũ, tỷ lệ áp dụng đứng im, và audit_db báo đạt hết.
+--   Đã ĐO điều đó ngày 21/08 bằng tools/dien_tap_gateway.py: chèn 4.000.000
+--   token mang username thật -> dashboard nhúc nhích 0, và usage_resolved sinh
+--   thêm 3 dòng KHÔNG CÓ TOKEN. Dữ liệu nằm trong database và vô hình.
+--
+-- ĐỌC BẢNG NÀY THAY VÌ LIỆT KÊ TÊN NGUỒN. Thêm nguồn thứ tư khi đó là thêm MỘT
+-- DÒNG DỮ LIỆU, không phải sửa 10 câu SQL nằm rải ở 3 file.
+--
+-- ĐẶT Ở ĐÂY, KHÔNG Ở MỤC 3 CÙNG ref_price/ref_fx/ref_budget: fact_usage_daily
+-- có khoá ngoại trỏ vào bảng này, nên nó phải được khai TRƯỚC mục 2.
+--
+-- `era` PHÂN BIỆT KỶ NGUYÊN, KHÔNG PHẢI NGUỒN. Ba nguồn cũ là 'scrape' - ta đi
+-- cào số của người khác. Gateway là 'gateway' - ta tự đếm. Lịch sử 01-08/2026
+-- vĩnh viễn ở kỷ nguyên cũ vì cửa sổ lưu giữ của Google đã trượt (06/08 thấy
+-- 196 ngày, 13/08 còn 112), Gateway không dựng lại được.
+CREATE TABLE ref_source (
+    source      TEXT PRIMARY KEY,
+    -- Nguồn này có nói AI đã gọi không. Đây là câu mà 10 chỗ đầu đọc đang hỏi
+    -- bằng cách so tên nguồn.
+    knows_user  BOOLEAN NOT NULL,
+    -- TÊN CỘT LÀ `has_INVOICE_cost`, KHÔNG PHẢI `has_cost`. Khác biệt này quan
+    -- trọng và suýt bị đặt sai lúc viết bảng:
+    --   "tính ra được tiền"   -> nguồn nào cũng làm được, nhân với ref_price
+    --   "có tiền HOÁ ĐƠN"     -> chỉ billing. Đây mới là thứ ta hỏi.
+    -- LiteLLM CÓ trả về một con số tiền, nhưng nó tự nhân từ bảng giá chứ không
+    -- phải hoá đơn ai gửi. Gọi nó là `has_cost = TRUE` rồi đổ vào cột cost_usd
+    -- là biến tiền SUY RA thành tiền ĐÃ XÁC NHẬN trên màn hình - đúng thứ cả
+    -- ngày 20/08 đi bịt.
+    has_invoice_cost BOOLEAN NOT NULL,
+    era         TEXT NOT NULL,       -- 'scrape' | 'gateway'
+    note        TEXT
+);
+
+INSERT INTO ref_source (source, knows_user, has_invoice_cost, era, note) VALUES
+  ('app',        TRUE,  FALSE, 'scrape',
+   'Nhật ký của chính hai app. Nguồn DUY NHẤT biết người dùng trước Gateway.'),
+  ('billing',    FALSE, TRUE,  'scrape',
+   'Hoá đơn Google. Tính theo project nên không biết ai gọi. Về trễ ~1 ngày.'),
+  ('monitoring', FALSE, FALSE, 'scrape',
+   'Cloud Monitoring. Không tiền, không người. Cửa sổ lưu giữ trượt rất nhanh.'),
+  ('gateway',    TRUE,  FALSE, 'gateway',
+   'LiteLLM. Biết người dùng, có ngay trong ngày. Tiền của nó là SUY TỪ BẢNG GIÁ '
+   'nên vẫn phải đợi hoá đơn xác nhận - xem ghi chú cost_usd ở usage_resolved.');
 
 
 -- =====================================================================
@@ -389,7 +510,10 @@ CREATE TABLE fact_usage_daily (
     output_tokens BIGINT,
     cached_tokens BIGINT,
     cost_usd      NUMERIC(14,6),
-    source        TEXT NOT NULL,      -- 'app' | 'billing' | 'monitoring'
+    -- Khoá ngoại, KHÔNG phải chú thích liệt kê. Nguồn lạ bị chặn ngay lúc GHI,
+    -- không đợi phép kiểm chạy sau. Và năng lực của nguồn (biết người? có tiền?)
+    -- đọc từ ref_source chứ không suy từ tên - xem ghi chú ở bảng đó.
+    source        TEXT NOT NULL REFERENCES ref_source,
     PRIMARY KEY (day, agent_id, model_id, account_id, source)
 );
 
@@ -486,13 +610,24 @@ WHERE service = 'generativelanguage.googleapis.com'
 -- 'resolved' là để nói đúng điều đó: nguồn đã được giải quyết.
 --
 -- CHỌN THEO TỪNG CHỈ TIÊU, không phải theo từng dòng. Mỗi nguồn mạnh một thứ:
---     tiền        chỉ billing có
---     token       billing trước, thiếu thì monitoring, thiếu nữa thì app
---                 (đo 13/08: hai nguồn khớp 100,4% khi cắt cùng khoảng ngày,
---                  nên thay thế là hợp lệ. Trước đó tưởng lệch 4,2 lần - đó là
---                  do so 111 ngày monitoring với 223 ngày hoá đơn.)
---     lượt gọi    monitoring trước, thiếu thì app; billing không có
---     người dùng  chỉ app có
+--     tiền        chỉ billing có tiền HOÁ ĐƠN. Gateway có một con số tiền nhưng
+--                 nó tự nhân từ bảng giá - xem ghi chú ở cột cost_usd bên dưới
+--     token       gateway trước, rồi billing, thiếu thì monitoring, thiếu nữa
+--                 thì app
+--                 (đo 13/08: billing và monitoring khớp 100,4% khi cắt cùng
+--                  khoảng ngày, nên thay thế là hợp lệ. Trước đó tưởng lệch 4,2
+--                  lần - đó là do so 111 ngày monitoring với 223 ngày hoá đơn.)
+--     lượt gọi    gateway trước, rồi monitoring, thiếu thì app; billing không có
+--     người dùng  app và gateway. KHÔNG hỏi bằng tên nguồn - hỏi ref_source
+--                 .knows_user, xem ghi chú ở bảng đó
+--
+-- VÌ SAO GATEWAY ĐỨNG TRƯỚC BILLING (21/08/2026)
+--   Gateway là bộ đếm của CHÍNH TA, và nó có mặt ngay trong ngày trong khi hoá
+--   đơn Google về trễ ~1 ngày. Trong kỳ chạy song song (Master Plan giai đoạn
+--   7, tối thiểu 2 tuần) cả bốn nguồn cùng có dữ liệu cho cùng một ngày; không
+--   chốt thứ tự thì con số đổi tuỳ theo nguồn nào nạp sau.
+--   Đứng trước billing về TOKEN không có nghĩa đứng trước về TIỀN: cột cost_usd
+--   vẫn chỉ lấy của hoá đơn.
 --
 -- VÌ SAO KHÔNG CỘNG BA NGUỒN LẠI: chúng đo CÙNG một lưu lượng bằng ba cái công
 -- tơ khác nhau. Cộng lại là đếm ba lần.
@@ -501,13 +636,21 @@ WHERE service = 'generativelanguage.googleapis.com'
 -- hôm nay đến từ monitoring (ước tính, hoá đơn chưa về) trông y hệt con số của
 -- tuần trước đến từ hoá đơn. Không có cột này thì không phân biệt được.
 --
--- Ralli (agent_id=8) luôn rơi về 'app': project tla-ralli chưa nối billing trên
+-- Trợ lý ảo Ralli luôn rơi về 'app': project tla-ralli chưa nối billing trên
 -- GCP nên không có dòng billing lẫn monitoring nào. COALESCE tự lo việc đó,
 -- không cần trường hợp riêng.
 -- =====================================================================
 CREATE VIEW usage_resolved AS
 WITH keys AS (
     SELECT DISTINCT day, agent_id, model_id FROM fact_usage_daily
+),
+g AS (
+    SELECT day, agent_id, model_id,
+           SUM(total_tokens) AS tokens, SUM(calls) AS calls,
+           SUM(input_tokens) AS tok_in, SUM(output_tokens) AS tok_out,
+           SUM(cached_tokens) AS tok_cached
+    FROM fact_usage_daily WHERE source = 'gateway'
+    GROUP BY day, agent_id, model_id
 ),
 b AS (
     SELECT day, agent_id, model_id,
@@ -536,36 +679,55 @@ a AS (
 SELECT k.day,
        k.agent_id,
        k.model_id,
-       COALESCE(b.tokens, m.tokens, a.tokens)  AS total_tokens,
+       COALESCE(g.tokens, b.tokens, m.tokens, a.tokens)  AS total_tokens,
        -- Ba cột này lấy từ CÙNG nguồn với total_tokens, không COALESCE riêng
        -- từng cột: trộn input_tokens của hoá đơn với output_tokens của
        -- monitoring sẽ ra một cặp số không kỳ nguồn nào từng báo cáo.
-       CASE WHEN b.tokens IS NOT NULL THEN b.tok_in
+       CASE WHEN g.tokens IS NOT NULL THEN g.tok_in
+            WHEN b.tokens IS NOT NULL THEN b.tok_in
             WHEN m.tokens IS NOT NULL THEN m.tok_in
             ELSE a.tok_in     END               AS input_tokens,
-       CASE WHEN b.tokens IS NOT NULL THEN b.tok_out
+       CASE WHEN g.tokens IS NOT NULL THEN g.tok_out
+            WHEN b.tokens IS NOT NULL THEN b.tok_out
             WHEN m.tokens IS NOT NULL THEN m.tok_out
             ELSE a.tok_out    END               AS output_tokens,
-       CASE WHEN b.tokens IS NOT NULL THEN b.tok_cached
+       CASE WHEN g.tokens IS NOT NULL THEN g.tok_cached
+            WHEN b.tokens IS NOT NULL THEN b.tok_cached
             WHEN m.tokens IS NOT NULL THEN m.tok_cached
             ELSE a.tok_cached END               AS cached_tokens,
+       -- CHỈ LẤY TIỀN CỦA HOÁ ĐƠN, KỂ CẢ KHI GATEWAY CÓ SỐ TIỀN CỦA NÓ.
+       -- LiteLLM trả về một con số tiền, nhưng nó tự nhân từ bảng giá. Đổ vào
+       -- đây là biến tiền suy ra thành tiền đã xác nhận: giao diện coi
+       -- `cost_usd IS NULL` là "chưa có hoá đơn" và gắn dấu ≈ dựa vào đó. Để
+       -- NULL thì dòng Gateway tự động được tính lại từ ref_price VÀ được ghi
+       -- nhãn suy ra - đúng bản chất của nó cho tới ngày hoá đơn về.
        b.cost                                   AS cost_usd,
-       COALESCE(m.calls, a.calls)               AS calls,
-       CASE WHEN b.tokens IS NOT NULL THEN 'billing'
+       COALESCE(g.calls, m.calls, a.calls)      AS calls,
+       CASE WHEN g.tokens IS NOT NULL THEN 'gateway'
+            WHEN b.tokens IS NOT NULL THEN 'billing'
             WHEN m.tokens IS NOT NULL THEN 'monitoring'
             WHEN a.tokens IS NOT NULL THEN 'app'   END AS token_source,
-       CASE WHEN m.calls  IS NOT NULL THEN 'monitoring'
+       CASE WHEN g.calls  IS NOT NULL THEN 'gateway'
+            WHEN m.calls  IS NOT NULL THEN 'monitoring'
             WHEN a.calls  IS NOT NULL THEN 'app'   END AS call_source,
-       -- 1 = con số này chưa được hoá đơn xác nhận
+       -- 1 = con số này chưa được hoá đơn xác nhận. Gateway KHÔNG làm cờ này
+       -- về 0: nó là bộ đếm của ta, không phải hoá đơn của Google.
        CASE WHEN b.tokens IS NULL THEN 1 ELSE 0 END   AS token_estimated
 FROM keys k
+LEFT JOIN g ON g.day = k.day AND g.agent_id = k.agent_id AND g.model_id = k.model_id
 LEFT JOIN b ON b.day = k.day AND b.agent_id = k.agent_id AND b.model_id = k.model_id
 LEFT JOIN m ON m.day = k.day AND m.agent_id = k.agent_id AND m.model_id = k.model_id
 LEFT JOIN a ON a.day = k.day AND a.agent_id = k.agent_id AND a.model_id = k.model_id;
 
 
--- Cùng số liệu, nhìn theo người dùng. CHỈ phủ phần có nguồn 'app' - hiện là
--- 5,7% tổng token, vì Google không ghi ai gọi.
+-- Cùng số liệu, nhìn theo người dùng. CHỈ phủ phần đến từ nguồn BIẾT NGƯỜI
+-- DÙNG, vì Google không ghi ai gọi.
+--
+-- HỎI ref_source.knows_user, KHÔNG liệt kê tên nguồn (đổi 21/08/2026). Trước đó
+-- câu này là `WHERE f.source = 'app'`, và chuỗi 'app' mang nghĩa ngầm "nguồn
+-- duy nhất biết người dùng". Ngày Gateway ghi dữ liệu có đủ username vào
+-- database, view này vẫn trả y nguyên 320 dòng cũ - đã đo bằng
+-- tools/dien_tap_gateway.py, chèn 4 triệu token thì view nhúc nhích 0.
 --
 -- `unit_id` và `path` lấy từ account, KHÔNG từ fact - xem ghi chú ở hai bảng
 -- đó. Một tài khoản một đơn vị, không còn chuyện cùng một người ra hai phòng
@@ -578,4 +740,10 @@ SELECT f.day, f.agent_id, f.model_id,
 FROM fact_usage_daily f
 JOIN account a ON a.account_id = f.account_id
 JOIN dim_unit u ON u.unit_id = a.unit_id
-WHERE f.source = 'app' AND a.kind = 'real';
+-- Hai điều kiện này hỏi HAI CÂU KHÁC NHAU, đừng gộp:
+--   knows_user   nguồn có nói ai gọi không
+--   kind='real'  cái "ai" đó có phải một CON NGƯỜI không
+-- Tài khoản dịch vụ thoả câu đầu mà không thoả câu sau - và đó là đúng, view
+-- này là bảng người dùng.
+WHERE f.source IN (SELECT source FROM ref_source WHERE knows_user)
+  AND a.kind = 'real';

@@ -40,19 +40,16 @@ DSN = os.environ.get("TOKEN_LEDGER_DSN", connect.DEFAULT_DSN)
 
 @contextmanager
 def open_db():
-    """Kết nối CHỈ ĐỌC, tự động đóng lại."""
-    if connect.is_sqlite(DSN):
-        import sqlite3
-        p = Path(DSN).resolve()
-        if not p.exists():
-            raise FileNotFoundError(
-                f"Khong thay database {p}. Chay: python scripts/rebuild_db.py")
-        cn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
-        ph = "?"
-    else:
-        cn, ph = connect.open_db(DSN)
-        # Postgres tự chặn mọi lệnh ghi ở mức máy chủ, không phụ thuộc mã nguồn.
-        cn.set_session(readonly=True)
+    """Kết nối CHỈ ĐỌC, tự động đóng lại.
+
+    Nhánh SQLite (mở bằng `?mode=ro`) gỡ ngày 24/08/2026 - xem change
+    `drop-the-sqlite-escape-hatch`. `set_session(readonly=True)` bên dưới là thứ
+    duy nhất còn giữ kỷ luật chỉ-đọc của backend, và `check_api.py` có một phép
+    kiểm khẳng định nó (`ReadOnlySqlTransaction`). Đừng gỡ dòng đó.
+    """
+    cn, ph = connect.open_db(DSN)
+    # Postgres tự chặn mọi lệnh ghi ở mức máy chủ, không phụ thuộc mã nguồn.
+    cn.set_session(readonly=True)
     try:
         yield cn, ph
     finally:
@@ -162,20 +159,43 @@ def fx_rate(cn) -> dict | None:
 
 def units(cn) -> list[dict]:
     # ORDER BY phải là MỘT THỨ TỰ TOÀN PHẦN, không được để hai dòng hoà nhau.
-    # `ORDER BY level, name` đã từng đủ: hai dòng 'Chưa quy được' (agent 5 và 8)
+    # `ORDER BY level, name` đã từng đủ: hai dòng 'Chưa quy được' (của Trợ Lý Ảo
+    # Hợp Đồng và Trợ lý ảo Ralli)
     # level bằng nhau tên bằng nhau, và SQLite với PostgreSQL trả về ngược thứ tự
     # nhau. Kết quả: cùng một API cho hai kết quả khác nhau tuỳ database, mà
     # không ai báo gì. Thêm khoá chính vào cuối là hết.
-    return _rows(cn, """
-        SELECT unit_id, agent_id, name, parent_id, level, path, is_technical
+    # `canonical_unit_id` NULL = dòng này LÀ bản chuẩn; có giá trị = bản trùng ở
+    # cây tổ chức của app kia. Frontend cần cột này để gộp hai cây thành một cái
+    # nhìn công ty - trước 20/08/2026 phép gộp đó nằm trong UNIT_ALIASES gõ tay
+    # ở web/js/app.js, tức database không biết gì về nó.
+    r = _rows(cn, """
+        SELECT unit_id, agent_id, name, parent_id, level, path, is_technical,
+               canonical_unit_id, is_report_aggregate
         FROM dim_unit ORDER BY level, name, unit_id""")
+    for x in r:
+        x["is_report_aggregate"] = bool(x["is_report_aggregate"])
+    return r
 
 
 def accounts(cn) -> list[dict]:
     """Danh bạ. `unit_conflict`=1 nghĩa là hai app xếp người này vào hai phòng ban
-    khác nhau và database đã chọn một - màn hình nên cho thấy dấu vết đó."""
+    khác nhau và database đã chọn một - màn hình nên cho thấy dấu vết đó.
+
+    KHÔNG TRẢ `email` (bỏ 20/08/2026). Frontend từng dùng email làm khoá ghép,
+    nhưng `/api/usage-by-account` đã trả `account_id` - ghép bằng khoá số thì
+    chính xác hơn và không phụ thuộc hoa/thường. Bỏ đi thì endpoint này thôi phơi
+    927 địa chỉ thư của nhân viên ra mọi nơi gọi được nó.
+
+    Đây là phòng thủ theo chiều sâu, KHÔNG thay cho xác thực. Từ 21/08/2026 máy
+    chủ đã đòi `Authorization: Bearer <DASHBOARD_KEY>` trên cả 8 endpoint, nên
+    mục C1 của docs/reference/viec-can-lam-truoc-api-gateway.md đã đóng - câu
+    "máy chủ này chưa có xác thực nào" đứng ở đây tới 22/08/2026 và đã sai.
+
+    Hai lớp vẫn cần cả hai: xác thực chặn người ngoài, còn bớt dữ liệu chặn cả
+    sự cố lẫn sơ ý. Và khoá hiện tại là khoá DÙNG CHUNG - nó không biết ai đang
+    đọc, nên "đã có xác thực" không có nghĩa là "đã biết ai xem gì"."""
     r = _rows(cn, """
-        SELECT a.account_id, a.username, a.full_name, a.email, a.kind,
+        SELECT a.account_id, a.username, a.full_name, a.kind,
                a.unit_id, u.name AS unit_name, u.path AS unit_path,
                a.unit_conflict, a.is_shared, a.role, a.is_enabled, a.created_at,
                g.name AS agent,
@@ -186,6 +206,37 @@ def accounts(cn) -> list[dict]:
         FROM account a
         JOIN dim_unit u ON u.unit_id = a.unit_id
         JOIN dim_agent g ON g.agent_id = a.unit_agent_id
+        -- ═══════ DÒNG DUY NHẤT giữ danh bạ chỉ có con người ═══════
+        -- Nới điều kiện này ra là 6 tài khoản dịch vụ (`svc.<code>` của 6 agent
+        -- một-người-dùng) đi thẳng lên màn hình. Đo A/B ngày 22/08/2026 trên
+        -- backend thật và app.js thật, đổi đúng dòng này rồi hoàn nguyên:
+        --
+        --     /api/accounts          937  ->  943
+        --     USER_ACCOUNTS          937  ->  943    (KHÔNG dòng nào bị vứt)
+        --     thẻ "User hoạt động"  26/937 -> 26/943
+        --
+        -- KHÔNG có tấm lưới thứ hai. Hai chỗ trông như đỡ mà đo ra là không:
+        --   - api.js loại đơn vị `is_technical` khỏi cây tổ chức, nhưng đó là
+        --     chặn ĐƠN VỊ, không chặn TÀI KHOẢN
+        --   - buildAccountCatalogueFromDb lọc `u.unitId &&`, nhưng unitOf() luôn
+        --     trả ra một đơn vị `auto:` nên unitId không bao giờ rỗng - đo ra
+        --     đúng 0 dòng bị loại ở cả hai vế
+        --
+        -- NÓI ĐÚNG MỨC: hại đo được dừng ở 6 dòng thừa trong bảng danh bạ và
+        -- mẫu số 937->943. Cây phòng ban KHÔNG đổi - đơn vị gốc 11->11,
+        -- DEPT_PROVISIONED 101 đơn vị / 3.693 không đổi, vì
+        -- rebuildProvisionedFromDirectory lọc `in_directory && !is_shared` từ
+        -- trước. Đây không phải "sập màn hình". Viết quá lên thì người đọc sau
+        -- sẽ nới ra để thử xem có sập thật không.
+        --
+        -- VÌ SAO CHƯA PHƠI 6 tài khoản đó: chúng sẽ rơi vào 6 đơn vị `auto:` mà
+        -- unitOf() chế sẵn - không parent, không mã thật, không ai chủ động tạo
+        -- ra. Phải quyết chỗ đứng của chúng trong cây trước. Và hôm nay
+        -- adoption() đã trả lời được câu "agent này có chạy không" mà không cần
+        -- chúng có mặt ở đây.
+        --
+        -- backend/check_api.py có một phép kiểm khoá dòng này lại. Ghi chú nhắc
+        -- người ĐỌC code; phép kiểm bắt người SỬA code mà không đọc.
         WHERE a.kind = 'real'
         ORDER BY a.username""")
     for x in r:
@@ -236,13 +287,15 @@ def adoption(cn) -> list[dict]:
               AND c.is_shared = 0) AS provisioned,
           (SELECT COUNT(DISTINCT f.account_id)
              FROM fact_usage_daily f JOIN account c ON c.account_id = f.account_id
-            WHERE f.agent_id = g.agent_id AND f.source = 'app' AND c.is_shared = 0
+            WHERE f.agent_id = g.agent_id AND c.is_shared = 0
+              AND f.source IN (SELECT source FROM ref_source WHERE knows_user)
               AND f.account_id IN (SELECT d.account_id FROM dim_user d
                                     WHERE d.agent_id = g.agent_id
                                       AND d.found_in = 'directory')) AS active,
           (SELECT COUNT(DISTINCT f.account_id)
              FROM fact_usage_daily f JOIN account c ON c.account_id = f.account_id
-            WHERE f.agent_id = g.agent_id AND f.source = 'app' AND c.is_shared = 0
+            WHERE f.agent_id = g.agent_id AND c.is_shared = 0
+              AND f.source IN (SELECT source FROM ref_source WHERE knows_user)
               AND c.kind = 'real'
               AND f.account_id NOT IN (SELECT d.account_id FROM dim_user d
                                         WHERE d.agent_id = g.agent_id
@@ -308,7 +361,8 @@ def usage(cn, ph, start: str, end: str) -> list[dict]:
 
 
 def usage_by_account(cn, ph, start: str, end: str) -> list[dict]:
-    """Sử dụng quy về từng người. CHỈ phủ phần có nguồn 'app' - xem `health`."""
+    """Sử dụng quy về từng người. CHỈ phủ phần đến từ nguồn BIẾT NGƯỜI DÙNG
+    (ref_source.knows_user) - xem `health`."""
     r = _rows(cn, f"""
         SELECT v.day, v.agent_id, g.name AS agent, v.model_id, v.account_id,
                v.username, v.full_name, v.unit_id, v.unit_path, v.unit_conflict,
@@ -400,40 +454,119 @@ def health(cn) -> dict:
                          "to": _day(hi) if hi else None, "rows": n}
 
     total = one("SELECT SUM(total_tokens) FROM usage_resolved") or 0
-    real = one("""SELECT SUM(f.total_tokens) FROM fact_usage_daily f
-                  JOIN account a ON a.account_id = f.account_id
-                  WHERE a.kind = 'real'""") or 0
+
+    # ĐỘ PHỦ CHIỀU NGƯỜI - đếm trên `usage_resolved`, KHÔNG trên fact_usage_daily.
+    #
+    # HAI CÁI BẪY đã vấp, ghi lại cả hai (20/08/2026):
+    #
+    # (1) Cộng từ fact_usage_daily là ĐẾM NHIỀU LẦN. Bảng đó để ba nguồn cạnh
+    #     nhau, và tài khoản dịch vụ có token ở CẢ billing lẫn monitoring:
+    #     Chatbot Contact Center 329.110.605 + 176.980.622 = 506.091.227, trong
+    #     khi view chỉ nhận 333.221.182. Đo thử cách cộng đó: 1.248.600.872 /
+    #     867.657.110 = 143,9%, và "phần còn lại" ra -43,9%.
+    #     Bản trước 20/08 chỉ lọc kind='real' nên an toàn một cách TÌNH CỜ -
+    #     token của người thật chỉ tồn tại ở source='app', tức một nguồn duy nhất.
+    #
+    # (2) Cộng token source='app' từ fact_usage_daily cũng vẫn LỆCH, vì nó gồm
+    #     những ngày mà usage_resolved đã CHỌN billing thay cho app. Đo được:
+    #     107.926.810 thay vì 104.990.903 - thừa 2,9 triệu view không dùng.
+    #
+    # Câu hỏi đúng là: "con số dashboard ĐANG HIỆN có chia được theo người
+    # không?" - và nó được trả lời ở mức TỪNG KHOÁ (ngày, agent, model):
+    #     agent một-người-dùng   -> chia được, về đúng một tài khoản dịch vụ
+    #     nguồn knows_user       -> chia được, về người thật (app, gateway)
+    #     billing / monitoring   -> KHÔNG, Google chỉ báo mức project
+    #
+    # HỎI ref_source.knows_user, KHÔNG so với chuỗi 'app' (đổi 21/08/2026).
+    # Chuỗi 'app' mang nghĩa ngầm "nguồn duy nhất biết người dùng"; Gateway
+    # cũng biết người dùng, nên hai nghĩa đó tách nhau ra.
+    #
+    # PHỤ THUỘC: câu này cần kind='service_account' đã có trong database. Với
+    # database dựng trước 20/08 nó không sập, chỉ trả về con số cũ - nên
+    # scripts/audit_db.py có phép kiểm đếm số dòng service_account, để việc chạy
+    # backend mới trên database cũ hỏng ỒN ÀO chứ không âm thầm.
+    cov = _rows(cn, """
+        SELECT
+          SUM(CASE WHEN s.agent_id IS NOT NULL
+                   THEN v.total_tokens ELSE 0 END) AS service_tokens,
+          SUM(CASE WHEN s.agent_id IS NULL AND v.token_source IN
+                    (SELECT source FROM ref_source WHERE knows_user)
+                   THEN v.total_tokens ELSE 0 END) AS people_tokens,
+          SUM(CASE WHEN s.agent_id IS NULL
+                    AND COALESCE(v.token_source, '') NOT IN
+                        (SELECT source FROM ref_source WHERE knows_user)
+                   THEN v.total_tokens ELSE 0 END) AS opaque_tokens
+        FROM usage_resolved v
+        LEFT JOIN (SELECT DISTINCT unit_agent_id AS agent_id FROM account
+                    WHERE kind = 'service_account') s
+               ON s.agent_id = v.agent_id""")[0]
+    real = int(cov["people_tokens"] or 0)        # quy về một CON NGƯỜI
+    service = int(cov["service_tokens"] or 0)    # quy về một tài khoản dịch vụ
+    opaque = int(cov["opaque_tokens"] or 0)      # không quy được về ai
+    attributed = real + service
     missing_tokens = one("SELECT COUNT(*) FROM usage_resolved WHERE total_tokens IS NULL")
     estimated = one("SELECT COUNT(*) FROM usage_resolved WHERE token_estimated = 1")
     conflicts = one("SELECT COUNT(*) FROM account WHERE unit_conflict = 1")
 
     warnings = []
     if total:
-        pct = 100.0 * float(real) / float(total)
+        pct = 100.0 * attributed / float(total)
+        pct_people = 100.0 * real / float(total)
+        # Lấy `opaque` ĐO ĐƯỢC chứ không lấy `100 - pct`. Ba nhóm cộng đúng bằng
+        # tổng, nên nếu chúng KHÔNG cộng đủ thì đó là dấu hiệu truy vấn trên hụt
+        # một trường hợp - và `100 - pct` sẽ che mất đúng dấu hiệu đó.
+        pct_opaque = 100.0 * opaque / float(total)
+        pct_service = 100.0 * service / float(total)
         warnings.append({
             "code": "user_coverage",
-            "level": "high",
+            "level": "medium",
             "value": round(pct, 1),
-            "message": f"Chi {pct:.1f}% token quy duoc ve tai khoan that. Google chi"
-                       f" bao duoc muc project, khong ghi ai goi - moi bao cao theo"
-                       f" NGUOI hay PHONG BAN deu chi phu phan nay."})
+            "value_people": round(pct_people, 1),
+            "value_service": round(pct_service, 1),
+            "value_opaque": round(pct_opaque, 1),
+            # `message` HIỆN RA TRƯỚC MẶT NGƯỜI DÙNG, nên viết tiếng Việt CÓ DẤU.
+            # Trước 17/08/2026 bốn chuỗi này viết không dấu vì chỉ dùng để đọc trong
+            # terminal; frontend chuyển tiếp nguyên văn nên chúng đi thẳng lên màn
+            # hình. Chữ người dùng đọc thì phải có dấu - xem quy ước ở
+            # docs/reference/cay-thu-muc.md.
+            #
+            # NÓI ĐỦ BA CON SỐ, không gộp (sửa 20/08/2026). Bản trước chỉ nói
+            # `real` và gọi phần còn lại là "không quy được" - gộp 6 agent
+            # một-người-dùng vào cùng rổ với phần Google thật sự không biết, làm
+            # lỗ hổng trông lớn gấp ~70 lần thực tế.
+            # Nêu ĐỦ BA tỷ lệ thay vì "phần còn lại". Khi service = 0 - đúng cái
+            # xảy ra nếu chạy trên database dựng trước 20/08/2026 - câu "phần còn
+            # lại là tài khoản dịch vụ" nói về một thứ không tồn tại. Nêu cả ba
+            # thì câu đúng ở MỌI trạng thái, và người đọc cộng kiểm được.
+            "message": f"{pct:.1f}% token quy được về một danh tính"
+                       f" ({pct_people:.1f}% người thật"
+                       f" + {pct_service:.1f}% tài khoản dịch vụ của các agent"
+                       f" một-người-dùng)."
+                       f" {pct_opaque:.1f}% không quy được: phần này chỉ có hoá đơn"
+                       f" Google, nơi ghi được mức project chứ không ghi ai gọi —"
+                       f" riêng nó không chia được theo NGƯỜI hay PHÒNG BAN."})
     if estimated:
         warnings.append({
             "code": "estimated_tokens", "level": "medium", "value": estimated,
-            "message": f"{estimated} dong co token chua duoc hoa don xac nhan (lay tu"
-                       f" Cloud Monitoring hoac tu app). Xem cot token_source."})
+            "message": f"{estimated} dòng có token chưa được hoá đơn xác nhận, lấy từ"
+                       f" Cloud Monitoring hoặc từ chính ứng dụng."})
     if missing_tokens:
         warnings.append({
             "code": "missing_tokens", "level": "low", "value": missing_tokens,
-            "message": f"{missing_tokens} dong co so luot ma khong co token (model"
-                       f" embedding: Monitoring khong co phep do token cho chung)."})
+            "message": f"{missing_tokens} dòng có số lượt nhưng không có token —"
+                       f" model embedding, Cloud Monitoring không đo token cho chúng."})
     if conflicts:
         warnings.append({
             "code": "unit_conflict", "level": "low", "value": conflicts,
-            "message": f"{conflicts} tai khoan duoc hai app xep vao hai phong ban khac"
-                       f" nhau; database da chon mot theo quy tac tat dinh."})
+            "message": f"{conflicts} tài khoản được hai ứng dụng xếp vào hai phòng ban"
+                       f" khác nhau; database đã chọn một theo quy tắc tất định."})
 
+    # Ba con số dưới đây PHẢI cộng đúng bằng total_tokens. Trả cả ba ra ngoài để
+    # người đọc kiểm được phép cộng, thay vì phải tin một tỷ lệ phần trăm.
     return {"ranges": ranges,
             "total_tokens": int(total),
-            "tokens_attributed_to_people": int(real),
+            "tokens_attributed_to_people": real,
+            "tokens_attributed_to_service": service,
+            "tokens_not_attributable": opaque,
+            "tokens_attributed": attributed,
             "warnings": warnings}

@@ -15,10 +15,66 @@
      Mọi màu/spacing kế thừa token dashboard.css.
      ═══════════════════════════════════════════════════════════════ */
 
-  .proto-note{
-    display:flex; align-items:center; gap:8px;
-    background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.28);
-    color:#6ee7b7; font-size:12px; padding:8px 14px; border-radius:8px; margin-bottom:16px;
+  /* Dải trạng thái nạp dữ liệu. Ba mức, phân biệt bằng MÀU và bằng CHỮ - không
+     chỉ bằng màu, để còn đọc được khi in đen trắng hoặc khi người xem không
+     phân biệt được màu. app.js đặt class; mặc định là mức "đang nạp". */
+  /* PHẢI có dòng này: thuộc tính `hidden` chỉ đặt display:none ở mức user-agent,
+     nên một class có display:flex sẽ THẮNG nó và phần tử vẫn hiện — đã dính,
+     dải trạng thái hiện ra rỗng dù hidden=true. */
+  .load-note[hidden]{ display:none; }
+  /* `.status-indicator` trong dashboard.css cũng là display:flex nên cùng lỗi —
+     #freshness-wrap dùng `hidden` sẽ vẫn hiện nếu không có dòng này. */
+  .status-indicator[hidden]{ display:none; }
+  .load-note{
+    display:flex; align-items:flex-start; gap:8px;
+    background:rgba(148,163,184,.08); border:1px solid rgba(148,163,184,.28);
+    color:#cbd5e1; font-size:12px; padding:8px 14px; border-radius:8px; margin-bottom:16px;
+    line-height:1.55;
+  }
+  .load-note.warn{
+    background:rgba(245,158,11,.08); border-color:rgba(245,158,11,.35); color:#fcd34d;
+  }
+  .load-note.error{
+    background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.40); color:#fca5a5;
+    font-size:13px; padding:12px 16px;
+  }
+  .load-note code{
+    font-family:'JetBrains Mono',monospace; font-size:11px;
+    background:rgba(15,23,42,.6); padding:1px 5px; border-radius:4px;
+  }
+
+  /* ─── Ô nhập khoá đọc API ───
+     Cùng cái bẫy `hidden` như .load-note ở trên: một class có display:flex sẽ
+     THẮNG display:none mức user-agent. Khối này là display:flex nên PHẢI có
+     dòng [hidden] riêng, nếu không nó hiện ra rỗng ở mọi trang. */
+  .key-gate[hidden]{ display:none; }
+  .key-gate{
+    display:flex; flex-direction:column; gap:10px;
+    background:rgba(56,189,248,.06); border:1px solid rgba(56,189,248,.30);
+    color:#bae6fd; font-size:13px; padding:14px 16px; border-radius:8px;
+    margin-bottom:16px; line-height:1.55; max-width:640px;
+  }
+  .key-gate.wrong{
+    background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.40); color:#fca5a5;
+  }
+  .key-gate-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .key-gate input{
+    flex:1 1 260px; min-width:0;
+    background:rgba(15,23,42,.75); border:1px solid rgba(148,163,184,.35);
+    color:#e2e8f0; font-family:'JetBrains Mono',monospace; font-size:13px;
+    padding:8px 11px; border-radius:6px;
+  }
+  .key-gate input:focus{ outline:none; border-color:rgba(56,189,248,.65); }
+  .key-gate button{
+    background:rgba(56,189,248,.16); border:1px solid rgba(56,189,248,.45);
+    color:#e0f2fe; font-size:13px; font-weight:600; padding:8px 16px;
+    border-radius:6px; cursor:pointer;
+  }
+  .key-gate button:hover{ background:rgba(56,189,248,.26); }
+  .key-gate-hint{ font-size:11.5px; color:#94a3b8; }
+  .key-gate code{
+    font-family:'JetBrains Mono',monospace; font-size:11px;
+    background:rgba(15,23,42,.6); padding:1px 5px; border-radius:4px;
   }
 
   /* ─── Toolbar (global time range + hành động) ─── */
@@ -255,9 +311,38 @@
   </div>
 </div>
 
-<div class="proto-note">
-  <span>⚙️</span>
-  <span><b>Nhập liệu thủ công theo ngày.</b> Bấm <b>✎ Dữ liệu nguồn</b> → chọn ngày → nhập token/request theo agent → bấm <b>💾 Lưu ngày này</b>. Sửa <b>⚙ Cấu hình giá</b> thì bấm <b>💾 Lưu bảng giá</b>. Sau khi Lưu, dashboard tính lại. <b>Tháng 6 và tháng 7/2026 lấy từ file Excel 4 tuần</b> để trực quan và so sánh. Dữ liệu lưu trong trình duyệt.</span>
+<!-- ═══════════════ TRẠNG THÁI NẠP DỮ LIỆU ═══════════════
+     Thay khối "Nhập liệu thủ công" cũ: nó mô tả luồng nhập tay + Excel đã
+     không còn dùng, và nói "Dữ liệu lưu trong trình duyệt" - điều nay đã sai.
+
+     Khối này do app.js điền, KHÔNG phải chữ tĩnh. `hidden` khi mọi thứ bình
+     thường nên không chiếm chỗ; hiện ra khi đang nạp, khi nạp hỏng, hoặc khi
+     có điều cần nói về độ tin của số liệu. -->
+<div class="load-note" id="load-note" hidden>
+  <span id="load-note-icon">⏳</span>
+  <span id="load-note-text"></span>
+</div>
+
+<!-- ═══════════════ KHOÁ ĐỌC API ═══════════════
+     Backend từ chối mọi endpoint không mang `Authorization: Bearer <khoá>`.
+     Khối này hiện khi CHƯA có khoá, hoặc khi máy chủ trả 401.
+
+     Ô nhập là type="password" nên khoá không nằm phơi trên màn hình lúc trình
+     chiếu hay chụp ảnh. autocomplete="off" để trình duyệt không gợi ý lại
+     khoá của một dashboard khác trên cùng máy.
+
+     KHOÁ KHÔNG ĐI QUA URL - app.js gửi nó trong header. Xem js/api.js. -->
+<div class="key-gate" id="key-gate" hidden>
+  <div id="key-gate-msg"></div>
+  <div class="key-gate-row">
+    <input id="key-input" type="password" autocomplete="off" spellcheck="false"
+           placeholder="Dán khoá đọc API vào đây">
+    <button id="key-submit" type="button">Mở dashboard</button>
+  </div>
+  <div class="key-gate-hint">
+    Khoá do người dựng dashboard cấp — chính là <code>DASHBOARD_KEY</code> đặt cho
+    backend. Trình duyệt này nhớ khoá cho lần sau; khoá không được gửi qua URL.
+  </div>
 </div>
 
 <!-- ═══════════════ NGUỒN DỮ LIỆU ═══════════════ -->
@@ -272,9 +357,19 @@
 </details>
 
 <!-- ═══════════════ STATUS BAR ═══════════════ -->
+<!-- Hai chỉ báo cũ ở đây là CHỮ TĨNH: "Gateway hoạt động" (không có gateway nào
+     tồn tại) và "Cập nhật realtime · lần cuối 2 phút trước" ("2 phút" là hằng
+     số, dữ liệu cũ bao lâu nó cũng nói vậy). Cả hai khẳng định về độ mới mà
+     không gì kiểm chứng, nên thay bằng chỉ báo do app.js điền từ dữ liệu thật. -->
 <div class="status-bar">
-  <div class="status-indicator"><span class="status-dot"></span><span class="status-message">Gateway hoạt động</span></div>
-  <div class="status-indicator"><span class="pulse-dot"></span><span class="status-message">Cập nhật realtime · lần cuối 2 phút trước</span></div>
+  <div class="status-indicator">
+    <span class="status-dot" id="conn-dot"></span>
+    <span class="status-message" id="conn-text">Đang nối database…</span>
+  </div>
+  <div class="status-indicator" id="freshness-wrap" hidden>
+    <span class="status-dot" id="freshness-dot"></span>
+    <span class="status-message" id="freshness-text"></span>
+  </div>
   <div style="margin-left:auto" class="status-message">Kỳ dữ liệu: <b style="color:#cbd5e1" id="status-period">—</b></div>
 </div>
 
@@ -301,7 +396,7 @@
   </div>
   <div class="toolbar-actions">
     <button class="btn btn-secondary" id="btn-config">⚙ Cấu hình giá</button>
-    <button class="btn btn-secondary" id="btn-data">✎ Dữ liệu nguồn</button>
+    <!-- nút "✎ Dữ liệu nguồn" đã bỏ cùng panel nhập tay — xem ghi chú ở chỗ panel -->
     <button class="btn btn-secondary" id="btn-theme">☀️ Sáng</button>
     <button class="btn btn-export" id="btn-export">⬇ Xuất CSV</button>
   </div>
@@ -343,31 +438,16 @@
 </div>
 
 <!-- ═══════════════ PANEL: DỮ LIỆU NGUỒN (nhập theo NGÀY) ═══════════════ -->
-<div class="config-panel" id="data-panel">
-  <div class="panel-title">✎ Dữ liệu nguồn — nhập theo ngày, xong bấm 💾 Lưu</div>
-  <div class="add-model-row" style="margin-top:0;margin-bottom:12px">
-    <label class="subtle" style="align-self:center">Ngày nhập liệu</label>
-    <input type="date" id="data-date" class="date-input">
-    <button class="btn btn-secondary" id="del-day-btn">🗑 Xoá ngày</button>
-    <span class="subtle" id="data-days-hint" style="align-self:center"></span>
-  </div>
-  <div class="table-container" style="max-height:none">
-    <table>
-      <thead><tr>
-        <th>Agent</th><th>Phòng ban</th><th>Model</th>
-        <th class="num">Users</th><th class="num">Chat</th><th class="num">Token in</th><th class="num">Token out</th>
-        <th class="num">Request</th><th class="num">Lỗi %</th><th class="num">Chi phí</th><th></th>
-      </tr></thead>
-      <tbody id="data-tbody"></tbody>
-    </table>
-  </div>
-  <button class="add-row-btn" id="add-row-btn">+ Thêm dòng</button>
-  <div class="add-model-row" style="margin-top:14px">
-    <button class="btn btn-export" id="save-day-btn">💾 Lưu ngày này</button>
-    <span class="config-msg" id="data-msg" style="margin-top:0;align-self:center"></span>
-  </div>
-  <div class="subtle" style="margin-top:8px">Chọn ngày ⇒ nhập dữ liệu từng agent cho ngày đó ⇒ bấm <b>💾 Lưu ngày này</b>. Chi phí = token in ÷ 1M × giá in + token out ÷ 1M × giá out. Dashboard cộng dữ liệu mọi ngày nằm trong <b>Khoảng thời gian</b> ở trên.</div>
-</div>
+<!-- Panel "✎ Dữ liệu nguồn" đã xoá (17/08/2026).
+
+     Nó là bảng nhập tay token/request theo ngày, từ thời dữ liệu gõ từ Excel.
+     Sau khi dashboard chỉ đọc database, nó trở thành cái bẫy: người dùng gõ số,
+     bấm Lưu, số HIỆN LÊN và cộng vào tổng — trộn với số từ database mà không gì
+     nói ra — rồi tải lại trang là mất sạch, vì localStorage không còn giữ số liệu.
+     Một form vừa nói sai vừa không lưu được thì tệ hơn là không có form.
+
+     Panel "⚙ Cấu hình giá" thì GIỮ: nó sửa state.pricing trong phiên để thử
+     "nếu đơn giá khác thì tiền bao nhiêu", vẫn có ích, và không giả vờ là số đo. -->
 
 <!-- ═══════════════ FILTER BAR ═══════════════ -->
 <div class="filter-bar">
@@ -1136,7 +1216,9 @@
   </div>
 </div>
 
-<script src="js/fallback/ralli-users.js"></script>
+<!-- js/fallback/ralli-users.js đã xoá (17/08/2026): 121 KB danh sách user nhúng
+     cứng, chỉ dùng cho nhánh dự phòng dựng danh mục tài khoản bằng hàm băm khi
+     chưa có API. Danh mục nay chỉ đến từ /api/accounts. -->
 <!-- Nạp TRƯỚC app.js. Chỉ bơm dữ liệu từ backend vào, không đụng giao diện.
      Không chạy backend thì tự rút lui, dashboard chạy như cũ. -->
 <script src="js/api.js"></script>

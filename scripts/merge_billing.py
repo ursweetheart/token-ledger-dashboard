@@ -56,7 +56,6 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
-import sqlite3
 import sys
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -65,12 +64,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "db"))
 
+import connect  # noqa: E402
 from rules import guess_kind  # noqa: E402
 
-THU_MUC_THO = ROOT / "data" / "billing"
-MAU_FILE = "*GMSSub*.csv"
-THU_MUC_RA = ROOT / "data" / "da_xu_ly" / "billing"
-DB_MAC_DINH = ROOT / "var" / "token_ledger.sqlite"
+RAW_DIR = ROOT / "data" / "billing"
+FILE_PATTERN = "*GMSSub*.csv"
+OUT_DIR = ROOT / "data" / "da_xu_ly" / "billing"
 
 # Ten hien thi (duoi ten file Console) -> project ID (cot `project` cua database).
 #
@@ -84,7 +83,7 @@ DB_MAC_DINH = ROOT / "var" / "token_ledger.sqlite"
 #
 # Them mot ly do nua: ten hien thi SUA DUOC bat cu luc nao tren Console ma khong
 # anh huong project ID. Ai do doi ten hien thi la anh xa doan truot, IM LANG.
-ANH_XA_PROJECT = {
+PROJECT_MAP = {
     "AI-chatbot-contact-center": "pro-tuner-454203-v3",
     "AI-chatbot-contract-hop-dong": "ai-chatbot-contract",
     "AI-sale_agent": "tranquil-post-471401-c1",
@@ -103,138 +102,145 @@ MONEY_COLS = [
     ("cost_invoiced_usd", "Subtotal ($)"),            # so Gimasys thu tien
 ]
 OUT_COLS = ["day", "project", "service", "sku_id", "sku_name", "kind", "quantity"] \
-    + [ten for ten, _ in MONEY_COLS]
+    + [name for name, _ in MONEY_COLS]
 
-MOT_XU = Decimal("0.01")
+ONE_CENT = Decimal("0.01")
 
 
-class LoiNghiemThu(Exception):
+class CheckFailed(Exception):
     """Moi loi khien script dung. Thong diep phai du de nguoi van hanh hanh dong."""
 
 
-def dung(*dong: str) -> None:
-    raise LoiNghiemThu("\n".join(dong))
+def fail(*rows: str) -> None:
+    raise CheckFailed("\n".join(rows))
 
 
-def tien(chuoi: str, o_dau: str) -> Decimal:
+def money(text: str, where: str) -> Decimal:
     """Doc mot cot tien thanh Decimal, THANG tu chuoi goc, khong qua float."""
-    s = (chuoi or "").strip().replace(",", "")
+    s = (text or "").strip().replace(",", "")
     if s == "":
-        dung(f"Cot tien rong tai {o_dau}.",
+        fail(f"Cot tien rong tai {where}.",
              "  File Console luon dien du 5 cot tien. Rong nghia la file bi cat",
              "  hoac tai thieu. Tai lai file tu Console.")
     try:
         return Decimal(s)
     except InvalidOperation:
-        dung(f"Khong doc duoc so tien {chuoi!r} tai {o_dau}.")
+        fail(f"Khong doc duoc so tien {text!r} tai {where}.")
         raise  # khong toi day, chi de type checker yen tam
 
 
-def so_nguyen(chuoi: str, o_dau: str) -> int:
+def to_int(text: str, where: str) -> int:
     """Boc dau phay ngan nghin: '21,235' -> 21235."""
-    s = (chuoi or "").strip().replace(",", "")
+    s = (text or "").strip().replace(",", "")
     try:
         d = Decimal(s)
     except InvalidOperation:
-        dung(f"Khong doc duoc luong dung {chuoi!r} tai {o_dau}.")
+        fail(f"Khong doc duoc luong dung {text!r} tai {where}.")
         raise
     if d != d.to_integral_value():
-        dung(f"Luong dung {chuoi!r} khong phai so nguyen tai {o_dau}.",
+        fail(f"Luong dung {text!r} khong phai so nguyen tai {where}.",
              "  Cot Usage amount cua SKU token luon la so dem. Kiem tra lai file tho.")
     return int(d)
 
 
-def in_tien(d: Decimal) -> str:
+def fmt_money(d: Decimal) -> str:
     """Giu nguyen do chinh xac cua nguon: 0.123137 -> '0.123137', 0.00 -> '0.00'."""
     return format(d, "f")
 
 
-def tim_file(thu_muc: Path) -> list[Path]:
+def find_files(folder: Path) -> list[Path]:
     """Chon file theo MAU, khong ghim ten.
 
     Ten file Console chua khoang ngay nguoi dung chon ('... 2026-01-01 - 2026-08-31,
     ...') nen doi theo moi lan xuat. Ghim ten se khien ban xuat moi bi bo qua ma
     script VAN BAO THANH CONG.
     """
-    if not thu_muc.is_dir():
-        dung(f"Khong thay thu muc {thu_muc}.")
-    files = sorted(thu_muc.glob(MAU_FILE))
+    if not folder.is_dir():
+        fail(f"Khong thay thu muc {folder}.")
+    files = sorted(folder.glob(FILE_PATTERN))
     if not files:
-        dung(f"Khong file nao khop mau {MAU_FILE!r} trong {thu_muc}.",
+        fail(f"Khong file nao khop mau {FILE_PATTERN!r} trong {folder}.",
              "  Tai cac ban xuat tu Cloud Console (Billing > Reports > Download CSV)",
              "  va dat vao thu muc tren, giu nguyen ten file.")
     return files
 
 
-def ten_hien_thi(f: Path) -> str:
+def display_name(f: Path) -> str:
     """Boc phan sau dau phay CUOI CUNG cua ten file (khong ke duoi .csv).
 
     'rangdong.com.vn - GMSSub_Reports, 2026-01-01 - 2026-08-31,CRM-feedback.csv'
                                                                ^^^^^^^^^^^^
     """
     if "," not in f.stem:
-        dung(f"Ten file khong theo dinh dang Console: {f.name}",
+        fail(f"Ten file khong theo dinh dang Console: {f.name}",
              "  Cho doi dang '... , <khoang ngay>,<ten hien thi>.csv'.")
     return f.stem.rsplit(",", 1)[1].strip()
 
 
-def tra_project(f: Path) -> str:
-    ten = ten_hien_thi(f)
-    if ten not in ANH_XA_PROJECT:
-        dung(f"Ten hien thi la: {ten!r}",
+def lookup_project(f: Path) -> str:
+    name = display_name(f)
+    if name not in PROJECT_MAP:
+        fail(f"Ten hien thi la: {name!r}",
              f"  File   : {f}",
              "  Dang khai bao trong ANH_XA_PROJECT:",
-             *[f"    {k!r} -> {v}" for k, v in sorted(ANH_XA_PROJECT.items())],
+             *[f"    {k!r} -> {v}" for k, v in sorted(PROJECT_MAP.items())],
              "  KHONG doan project ID tu ten hien thi. Mo Cloud Console, lay dung",
              "  project ID cua project nay roi them mot dong vao ANH_XA_PROJECT.")
-    return ANH_XA_PROJECT[ten]
+    return PROJECT_MAP[name]
 
 
-def project_id_trong_dim_agent(db: Path) -> set[str]:
+def project_ids_in_dim_agent(dsn: str) -> set[str]:
     """Doc dim_agent.gcp_project_id o che do CHI DOC.
 
-    URI SQLite coi '\\' cua Windows la ky tu thoat -> phai dung Path.as_posix().
+    Truoc 17/08/2026 ham nay goi sqlite3 THANG va nhan mot Path, nen no ghim
+    cung vao SQLite. Sau khi PostgreSQL thanh mac dinh thi no la buoc [6/10] cua
+    duong ong se DUNG HAN - loi hien ra la "khong thay database", tuc trong nhu
+    loi thieu file chu khong phai loi ghim cung he quan tri.
+
+    Nhanh SQLite go han 24/08/2026 (change `drop-the-sqlite-escape-hatch`). Ghi
+    chu tren giu lai vi no ke dung cai bay ma ham nay tung dinh: ghim cung mot he
+    quan tri roi hong bang mot thong bao noi ve chuyen khac.
     """
-    if not db.is_file():
-        dung(f"Khong thay database {db}.",
-             "  Can no de kiem cheo ANH_XA_PROJECT voi dim_agent.gcp_project_id.",
-             "  Dung --db de tro toi file khac.")
-    cn = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
+    cn, _ = connect.open_db(dsn)
+    # Chi doc o muc MAY CHU, khong phai loi hua trong tai lieu - giong
+    # backend/store.py. Script nay chi kiem cheo, khong duoc ghi gi.
+    cn.set_session(readonly=True)
     try:
-        return {r[0] for r in cn.execute(
-            "SELECT gcp_project_id FROM dim_agent WHERE gcp_project_id IS NOT NULL")}
+        return {r[0] for r in connect.query(
+            cn, "SELECT gcp_project_id FROM dim_agent"
+                " WHERE gcp_project_id IS NOT NULL")}
     finally:
         cn.close()
 
 
-def kiem_cheo_dim_agent(db: Path) -> None:
-    co = project_id_trong_dim_agent(db)
-    thieu = sorted(set(ANH_XA_PROJECT.values()) - co)
-    if thieu:
-        dung("Project ID trong ANH_XA_PROJECT khong tra duoc trong dim_agent:",
-             *[f"    {p}" for p in thieu],
-             f"  Database: {db}",
+def crosscheck_dim_agent(dsn: str) -> None:
+    present = project_ids_in_dim_agent(dsn)
+    missing = sorted(set(PROJECT_MAP.values()) - present)
+    if missing:
+        fail("Project ID trong ANH_XA_PROJECT khong tra duoc trong dim_agent:",
+             *[f"    {p}" for p in missing],
+             f"  Database: {connect.mask_dsn(dsn)}",
              "  Hoac bang anh xa gõ sai, hoac dim_agent chua co agent nay.",
              "  Doi chieu: SELECT agent_id, ten, gcp_project_id FROM dim_agent;")
 
 
-def doc_file(f: Path, project: str) -> list[dict]:
+def read_file(f: Path, project: str) -> list[dict]:
     """Doc mot file tho thanh cac dong da chuan hoa. utf-8-sig de nuot BOM."""
-    ban_ghi = []
+    records = []
     with open(f, encoding="utf-8-sig", newline="") as h:
-        doc = csv.DictReader(h)
-        thieu = [c for _, c in MONEY_COLS if c not in (doc.fieldnames or [])]
-        if thieu:
-            dung(f"File thieu cot: {f.name}",
-                 f"  Thieu   : {thieu}",
-                 f"  Dang co : {doc.fieldnames}",
+        reader = csv.DictReader(h)
+        missing = [c for _, c in MONEY_COLS if c not in (reader.fieldnames or [])]
+        if missing:
+            fail(f"File thieu cot: {f.name}",
+                 f"  Thieu   : {missing}",
+                 f"  Dang co : {reader.fieldnames}",
                  "  Ban xuat Console phai giu du 5 cot tien. Tai lai file.")
-        for i, r in enumerate(doc, start=2):  # dong 1 la header
-            o_dau = f"{f.name} dong {i}"
+        for i, r in enumerate(reader, start=2):  # dong 1 la header
+            where = f"{f.name} dong {i}"
             sku_name = r["SKU description"]
             kind = guess_kind(sku_name)
             if kind is None:
-                dung(f"SKU chua phan loai duoc tai {o_dau}:",
+                fail(f"SKU chua phan loai duoc tai {where}:",
                      f"  Ma SKU : {r['SKU ID']}",
                      f"  Ten SKU: {sku_name}",
                      f"  Tien   : ${r['Unrounded subtotal ($)']}",
@@ -248,16 +254,16 @@ def doc_file(f: Path, project: str) -> list[dict]:
                 "sku_id": r["SKU ID"],
                 "sku_name": sku_name,
                 "kind": kind,
-                "quantity": so_nguyen(r["Usage amount"], o_dau),
-                "_o_dau": o_dau,
+                "quantity": to_int(r["Usage amount"], where),
+                "_o_dau": where,
             }
-            for ten_ra, ten_tho in MONEY_COLS:
-                d[ten_ra] = tien(r[ten_tho], f"{o_dau}, cot {ten_tho!r}")
-            ban_ghi.append(d)
-    return ban_ghi
+            for out_name, raw_name in MONEY_COLS:
+                d[out_name] = money(r[raw_name], f"{where}, cot {raw_name!r}")
+            records.append(d)
+    return records
 
 
-def kiem_tang_1(ban_ghi: list[dict]) -> None:
+def check_tier1(records: list[dict]) -> None:
     """Tung dong: dang thuc gia va dang thuc lam tron. Decimal chinh xac, khong nguong.
 
     DAT O DO CHINH XAC XU, khong phai do chinh xac day du. Cot "Cost ($)" CUNG DA
@@ -272,23 +278,23 @@ def kiem_tang_1(ban_ghi: list[dict]) -> None:
     No la cot duy nhat mang gia tri duoi-xu, ba cot kia deu da tron. Ta tin no vi
     no la cot Google tinh ra, khong phai vi ta chung minh duoc no.
     """
-    def bay_ra(d: dict) -> list[str]:
+    def detail_lines(d: dict) -> list[str]:
         return [f"  Vi tri : {d['_o_dau']}",
                 f"  Khoa   : ngay={d['day']} project={d['project']} sku_id={d['sku_id']}",
-                f"  Cost              = {in_tien(d['cost_list_usd'])}",
-                f"  Savings programs  = {in_tien(d['discount_commit_usd'])}",
-                f"  Other savings     = {in_tien(d['discount_other_usd'])}",
-                f"  Unrounded subtotal= {in_tien(d['cost_usd'])}",
-                f"  Subtotal          = {in_tien(d['cost_invoiced_usd'])}"]
+                f"  Cost              = {fmt_money(d['cost_list_usd'])}",
+                f"  Savings programs  = {fmt_money(d['discount_commit_usd'])}",
+                f"  Other savings     = {fmt_money(d['discount_other_usd'])}",
+                f"  Unrounded subtotal= {fmt_money(d['cost_usd'])}",
+                f"  Subtotal          = {fmt_money(d['cost_invoiced_usd'])}"]
 
-    for d in ban_ghi:
-        con_lai = (d["cost_list_usd"] - d["discount_commit_usd"]
-                   - d["discount_other_usd"]).quantize(MOT_XU, rounding=ROUND_HALF_UP)
-        if con_lai != d["cost_invoiced_usd"]:
-            dung("TANG 1 TRUOT - dang thuc gia sai:",
-                 f"  round(Cost - Savings - Other, 2) = {in_tien(con_lai)}",
-                 f"  nhung Subtotal                   = {in_tien(d['cost_invoiced_usd'])}",
-                 *bay_ra(d),
+    for d in records:
+        remainder = (d["cost_list_usd"] - d["discount_commit_usd"]
+                   - d["discount_other_usd"]).quantize(ONE_CENT, rounding=ROUND_HALF_UP)
+        if remainder != d["cost_invoiced_usd"]:
+            fail("TANG 1 TRUOT - dang thuc gia sai:",
+                 f"  round(Cost - Savings - Other, 2) = {fmt_money(remainder)}",
+                 f"  nhung Subtotal                   = {fmt_money(d['cost_invoiced_usd'])}",
+                 *detail_lines(d),
                  "  Hai kha nang: (a) Google doi cach trinh bay cot giam gia - kiem",
                  "  xem khoan giam ghi so AM hay DUONG, (b) file bi sua tay. Doi",
                  "  chieu voi hoa don tren Console truoc khi sua bat ky dong nao.")
@@ -297,106 +303,106 @@ def kiem_tang_1(ban_ghi: list[dict]) -> None:
         # TRUOC giam con Unrounded la tien SAU giam - hai ve tach nhau la DUNG.
         if d["discount_commit_usd"] == 0 and d["discount_other_usd"] == 0:
             if d["cost_list_usd"] != d["cost_usd"].quantize(
-                    MOT_XU, rounding=ROUND_HALF_UP):
-                dung("TANG 1 TRUOT - Cost khong khop Unrounded (dong khong co giam gia):",
-                     f"  Cost                = {in_tien(d['cost_list_usd'])}",
+                    ONE_CENT, rounding=ROUND_HALF_UP):
+                fail("TANG 1 TRUOT - Cost khong khop Unrounded (dong khong co giam gia):",
+                     f"  Cost                = {fmt_money(d['cost_list_usd'])}",
                      f"  round(Unrounded, 2) = "
-                     f"{in_tien(d['cost_usd'].quantize(MOT_XU, rounding=ROUND_HALF_UP))}",
-                     *bay_ra(d),
+                     f"{fmt_money(d['cost_usd'].quantize(ONE_CENT, rounding=ROUND_HALF_UP))}",
+                     *detail_lines(d),
                      "  Dong khong co khoan giam nao thi hai ve phai bang nhau. Lech",
                      "  nghia la co khoan giam KHONG duoc ghi vao hai cot savings -",
                      "  doi chieu voi hoa don Gimasys.")
 
-        if d["cost_usd"].quantize(MOT_XU, rounding=ROUND_HALF_UP) != d["cost_invoiced_usd"]:
-            dung("TANG 1 TRUOT - dang thuc lam tron sai:",
+        if d["cost_usd"].quantize(ONE_CENT, rounding=ROUND_HALF_UP) != d["cost_invoiced_usd"]:
+            fail("TANG 1 TRUOT - dang thuc lam tron sai:",
                  f"  round(Unrounded, 2) = "
-                 f"{in_tien(d['cost_usd'].quantize(MOT_XU, rounding=ROUND_HALF_UP))}",
-                 f"  nhung Subtotal      = {in_tien(d['cost_invoiced_usd'])}",
-                 *bay_ra(d),
+                 f"{fmt_money(d['cost_usd'].quantize(ONE_CENT, rounding=ROUND_HALF_UP))}",
+                 f"  nhung Subtotal      = {fmt_money(d['cost_invoiced_usd'])}",
+                 *detail_lines(d),
                  "  Co the Google doi quy tac lam tron (dang gia dinh ROUND_HALF_UP,",
                  "  da do khop 2.259/2.259 dong tren ban export 05/08).")
 
 
-def canh_bao_giam_gia(ban_ghi: list[dict]) -> None:
+def warn_discount(records: list[dict]) -> None:
     """Khoan giam gia la SU KIEN HOP LE, khong phai loi - canh bao roi di tiep."""
-    co = [d for d in ban_ghi
+    present = [d for d in records
           if d["discount_commit_usd"] != 0 or d["discount_other_usd"] != 0]
-    if not co:
+    if not present:
         return
-    tong = sum((d["discount_commit_usd"] + d["discount_other_usd"] for d in co), Decimal(0))
+    total_by_project = sum((d["discount_commit_usd"] + d["discount_other_usd"] for d in present), Decimal(0))
     print("")
     print("  " + "!" * 68)
-    print(f"  !! LAN DAU XUAT HIEN KHOAN GIAM GIA: {len(co)} dong, tong ${in_tien(tong)}")
+    print(f"  !! LAN DAU XUAT HIEN KHOAN GIAM GIA: {len(present)} dong, tong ${fmt_money(total_by_project)}")
     print("  !! Tu day chi_phi_usd la tien SAU giam gia, khac chi_phi_niem_yet_usd.")
     print("  !! Moi con so chi phi phia sau doi nghia. Xem lai cac bao cao dang co.")
     print("  " + "!" * 68)
     print("")
 
 
-def kiem_tang_2(theo_file: dict[Path, list[dict]], ban_ghi: list[dict]) -> None:
+def check_tier2(by_file: dict[Path, list[dict]], records: list[dict]) -> None:
     """Tung project: so dong va tong tien phai bang dung chinh file tho cua no.
 
     Mot phep so duy nhat bat duoc ca ba kieu hong cua buoc gop: mat dong, nhan doi
     dong, gan nham project.
     """
-    dem = collections.Counter(d["project"] for d in ban_ghi)
-    tong = collections.defaultdict(Decimal)
-    for d in ban_ghi:
-        tong[d["project"]] += d["cost_usd"]
+    count_by_project = collections.Counter(d["project"] for d in records)
+    total_by_project = collections.defaultdict(Decimal)
+    for d in records:
+        total_by_project[d["project"]] += d["cost_usd"]
 
-    for f, dong_tho in theo_file.items():
-        project = dong_tho[0]["project"] if dong_tho else tra_project(f)
-        n_tho = len(dong_tho)
-        t_tho = sum((d["cost_usd"] for d in dong_tho), Decimal(0))
-        if dem[project] != n_tho or tong[project] != t_tho:
-            dung("TANG 2 TRUOT - project khong khop file tho cua no:",
+    for f, raw_rows in by_file.items():
+        project = raw_rows[0]["project"] if raw_rows else lookup_project(f)
+        n_raw = len(raw_rows)
+        t_raw = sum((d["cost_usd"] for d in raw_rows), Decimal(0))
+        if count_by_project[project] != n_raw or total_by_project[project] != t_raw:
+            fail("TANG 2 TRUOT - project khong khop file tho cua no:",
                  f"  Project  : {project}",
                  f"  File tho : {f.name}",
-                 f"  So dong  : ket qua {dem[project]}  |  file tho {n_tho}",
-                 f"  Tong tien: ket qua ${in_tien(tong[project])}  |  "
-                 f"file tho ${in_tien(t_tho)}",
+                 f"  So dong  : ket qua {count_by_project[project]}  |  file tho {n_raw}",
+                 f"  Tong tien: ket qua ${fmt_money(total_by_project[project])}  |  "
+                 f"file tho ${fmt_money(t_raw)}",
                  "  Kha nang: hai file cung anh xa ve mot project ID, hoac bo loc",
                  "  o buoc doc da bo dong. Kiem ANH_XA_PROJECT truoc.")
 
 
-def khoa_doi_chieu(d: dict) -> tuple:
+def recon_key(d: dict) -> tuple:
     """Bo khoa tang 3. KHONG co `loai`: ban gop tay khong co cot do de so."""
     return (d["day"], d["project"], d["sku_id"], d["quantity"], d["cost_usd"])
 
 
-def in_khoa(k: tuple) -> str:
-    return f"{k[0]}  {k[1]:24s}  {k[2]}  {k[3]:>10d} token  ${in_tien(k[4])}"
+def fmt_key(k: tuple) -> str:
+    return f"{k[0]}  {k[1]:24s}  {k[2]}  {k[3]:>10d} token  ${fmt_money(k[4])}"
 
 
-def doi_chieu(ban_ghi: list[dict], moc: Path) -> None:
+def reconcile(records: list[dict], ref_path: Path) -> None:
     """Tang 3: trung khit ban gop tay - khong dong thua, khong thieu, khong lech."""
-    if not moc.is_file():
-        dung(f"Khong thay file moc doi chieu: {moc}")
-    with open(moc, encoding="utf-8-sig", newline="") as h:
-        cu = list(csv.DictReader(h))
+    if not ref_path.is_file():
+        fail(f"Khong thay file moc doi chieu: {ref_path}")
+    with open(ref_path, encoding="utf-8-sig", newline="") as h:
+        old_rows = list(csv.DictReader(h))
 
-    ben_cu = collections.Counter(
+    old_side = collections.Counter(
         (r["date"], r["project"], r["sku_id"],
-         so_nguyen(r["amount"], f"{moc.name} (ban gop tay)"),
+         to_int(r["amount"], f"{ref_path.name} (ban gop tay)"),
          Decimal(r["cost"]))
-        for r in cu)
-    ben_moi = collections.Counter(khoa_doi_chieu(d) for d in ban_ghi)
+        for r in old_rows)
+    new_side = collections.Counter(recon_key(d) for d in records)
 
-    thua = ben_moi - ben_cu
-    thieu = ben_cu - ben_moi
-    print(f"  tang 3: ban gop tay {len(cu)} dong "
-          f"${in_tien(sum((Decimal(r['cost']) for r in cu), Decimal(0)))}")
-    if not thua and not thieu:
-        print(f"  tang 3: TRUNG KHIT {len(ban_ghi)} dong")
+    extra = new_side - old_side
+    missing = old_side - new_side
+    print(f"  tang 3: ban gop tay {len(old_rows)} dong "
+          f"${fmt_money(sum((Decimal(r['cost']) for r in old_rows), Decimal(0)))}")
+    if not extra and not missing:
+        print(f"  tang 3: TRUNG KHIT {len(records)} dong")
         return
 
-    vd = ([f"    THUA  {in_khoa(k)}" for k in sorted(thua, key=str)[:5]]
-          + [f"    THIEU {in_khoa(k)}" for k in sorted(thieu, key=str)[:5]])
-    dung("TANG 3 TRUOT - khong trung khit ban gop tay:",
-         f"  Moc      : {moc}",
-         f"  Dong thua: {sum(thua.values())}   Dong thieu: {sum(thieu.values())}",
+    examples = ([f"    THUA  {fmt_key(k)}" for k in sorted(extra, key=str)[:5]]
+          + [f"    THIEU {fmt_key(k)}" for k in sorted(missing, key=str)[:5]])
+    fail("TANG 3 TRUOT - khong trung khit ban gop tay:",
+         f"  Moc      : {ref_path}",
+         f"  Dong thua: {sum(extra.values())}   Dong thieu: {sum(missing.values())}",
          "  Toi da 10 vi du (THUA = chi co o ket qua moi, THIEU = chi co o ban gop tay):",
-         *vd,
+         *examples,
          "  Neu chi thieu ma khong thua: dang tai thieu file tho. Doi chieu danh",
          "  sach file da chon o dau ban in nay.")
 
@@ -405,80 +411,80 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # console Windows mac dinh cp1252
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--thu-muc", default=str(THU_MUC_THO),
+    p.add_argument("--thu-muc", dest="folder", default=str(RAW_DIR),
                    help="Thu muc chua file tho (mac dinh data/billing)")
-    p.add_argument("--ra", default=None,
+    p.add_argument("--ra", dest="out_path", default=None,
                    help="Duong dan file dau ra (mac dinh "
                         "data/da_xu_ly/billing/billing_<hom-nay>.csv)")
-    p.add_argument("--db", default=str(DB_MAC_DINH),
-                   help="SQLite de kiem cheo ANH_XA_PROJECT voi dim_agent (chi doc)")
-    p.add_argument("--doi-chieu", default=None, metavar="DUONG_DAN",
+    p.add_argument("--db", default=connect.DEFAULT_DSN,
+                   help="DSN de kiem cheo ANH_XA_PROJECT voi dim_agent (chi doc)")
+    p.add_argument("--doi-chieu", dest="reconcile", default=None, metavar="DUONG_DAN",
                    help="TANG 3 (tuy chon): so trung khit voi ban gop tay")
     args = p.parse_args()
 
     try:
-        kiem_cheo_dim_agent(Path(args.db))
+        crosscheck_dim_agent(args.db)
 
-        files = tim_file(Path(args.thu_muc))
-        theo_file: dict[Path, list[dict]] = {}
-        print(f"Doc {len(files)} file tu {args.thu_muc}:")
+        files = find_files(Path(args.folder))
+        by_file: dict[Path, list[dict]] = {}
+        print(f"Doc {len(files)} file tu {args.folder}:")
         for f in files:
-            project = tra_project(f)
-            dong = doc_file(f, project)
-            theo_file[f] = dong
-            print(f"  {len(dong):5d} dong  {project:26s}  {f.name}")
+            project = lookup_project(f)
+            rows = read_file(f, project)
+            by_file[f] = rows
+            print(f"  {len(rows):5d} dong  {project:26s}  {f.name}")
 
-        ban_ghi = [d for dong in theo_file.values() for d in dong]
-        if not ban_ghi:
-            dung("Khong doc duoc dong nao. Cac file tho deu rong?")
+        records = [d for rows in by_file.values() for d in rows]
+        if not records:
+            fail("Khong doc duoc dong nao. Cac file tho deu rong?")
 
-        kiem_tang_1(ban_ghi)
-        n_giam = sum(1 for d in ban_ghi
+        check_tier1(records)
+        n_discounted = sum(1 for d in records
                      if d["discount_commit_usd"] != 0 or d["discount_other_usd"] != 0)
-        print(f"  tang 1: DAT ({len(ban_ghi)} dong, {len(ban_ghi) - n_giam} dong "
-              f"kiem du 3 dang thuc, {n_giam} dong co giam gia kiem 2)")
-        canh_bao_giam_gia(ban_ghi)
-        kiem_tang_2(theo_file, ban_ghi)
-        print(f"  tang 2: DAT ({len(theo_file)} project)")
+        print(f"  tang 1: DAT ({len(records)} dong, {len(records) - n_discounted} dong "
+              f"kiem du 3 dang thuc, {n_discounted} dong co giam gia kiem 2)")
+        warn_discount(records)
+        check_tier2(by_file, records)
+        print(f"  tang 2: DAT ({len(by_file)} project)")
 
         # Sap xep ON DINH -> hai lan chay cho ra file giong het nhau toi tung byte,
         # dieu kien de `diff` co y nghia.
-        ban_ghi.sort(key=lambda d: (d["project"], d["day"], d["sku_id"]))
+        records.sort(key=lambda d: (d["project"], d["day"], d["sku_id"]))
 
-        if args.doi_chieu:
-            doi_chieu(ban_ghi, Path(args.doi_chieu))
+        if args.reconcile:
+            reconcile(records, Path(args.reconcile))
 
         # Dung XONG toan bo noi dung trong bo nho roi moi mo file: khong bao gio
         # de lai file do dang khi co loi.
-        noi_dung = [[d["day"], d["project"], d["service"], d["sku_id"], d["sku_name"],
+        out_rows = [[d["day"], d["project"], d["service"], d["sku_id"], d["sku_name"],
                      d["kind"], str(d["quantity"])]
-                    + [in_tien(d[ten]) for ten, _ in MONEY_COLS]
-                    for d in ban_ghi]
+                    + [fmt_money(d[name]) for name, _ in MONEY_COLS]
+                    for d in records]
 
-        ra = Path(args.ra) if args.ra else THU_MUC_RA / f"billing_{date.today():%Y-%m-%d}.csv"
-        ra.parent.mkdir(parents=True, exist_ok=True)
-        with open(ra, "w", encoding="utf-8", newline="") as h:
+        out_path = Path(args.out_path) if args.out_path else OUT_DIR / f"billing_{date.today():%Y-%m-%d}.csv"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8", newline="") as h:
             w = csv.writer(h)
             w.writerow(OUT_COLS)
-            w.writerows(noi_dung)
+            w.writerows(out_rows)
 
-    except LoiNghiemThu as e:
+    except CheckFailed as e:
         sys.stdout.flush()  # de thong diep loi khong nhay len truoc phan da in
         print("")
         print(str(e), file=sys.stderr)
         print("KHONG ghi file dau ra.", file=sys.stderr)
         return 1
 
-    tong = sum((d["cost_usd"] for d in ban_ghi), Decimal(0))
-    theo_loai = collections.Counter(d["kind"] for d in ban_ghi)
-    tien_loai = collections.defaultdict(Decimal)
-    for d in ban_ghi:
-        tien_loai[d["kind"]] += d["cost_usd"]
+    total_by_project = sum((d["cost_usd"] for d in records), Decimal(0))
+    rows_by_kind = collections.Counter(d["kind"] for d in records)
+    money_by_kind = collections.defaultdict(Decimal)
+    for d in records:
+        money_by_kind[d["kind"]] += d["cost_usd"]
     print("")
-    print(f"  {len(ban_ghi)} dong | ${in_tien(tong)}")
-    for loai in sorted(theo_loai):
-        print(f"    {loai:8s} {theo_loai[loai]:5d} dong  ${in_tien(tien_loai[loai])}")
-    print(f"  Da ghi: {ra}")
+    print(f"  {len(records)} dong | ${fmt_money(total_by_project)}")
+    for kind in sorted(rows_by_kind):
+        print(f"    {kind:8s} {rows_by_kind[kind]:5d} dong  ${fmt_money(money_by_kind[kind])}")
+    print(f"  Da ghi: {out_path}")
     return 0
 
 

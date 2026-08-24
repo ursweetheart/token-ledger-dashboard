@@ -2,8 +2,25 @@
 #
 #     pip install -r backend/requirements.txt
 #
-# psycopg2 chi can khi doc PostgreSQL. Chay tren SQLite thi bo qua duoc - sqlite3
-# nam san trong Python.
+# psycopg2 BAT BUOC: PostgreSQL la he quan tri DUY NHAT tu 24/08/2026. Truoc do
+# van con mot duong SQLite de doi chieu; no da bi go vi ca ba dieu kien cua mot
+# duong quay ve deu hong - xem change `drop-the-sqlite-escape-hatch`.
 fastapi>=0.110
 uvicorn>=0.27
 psycopg2-binary>=2.9
+
+# alembic BAT BUOC tu 24/08/2026: schema khong con dung tu db/01_schema.sql nua,
+# no den tu chuoi migration trong db/migrations/. Thieu goi nay thi khong dung
+# duoc database, ke ca mot ban trang.
+#
+# NO KEO THEO SQLAlchemy, VA DU AN KHONG DUNG ORM - day la co y:
+#   - migration cua du an nay viet bang SQL THUAN (op.execute doc file .sql),
+#     giu nguyen ghi chu tieng Viet. Khong co model nao ca.
+#   - `alembic --autogenerate` VO DUNG o day va khong duoc dung: no khong quan
+#     ly VIEW, ma usage_resolved / usage_by_account / monitoring_ai moi la thu
+#     quan trong nhat. View viet tay, luon luon.
+#   - Chon Alembic thay vi yoyo-migrations vi no la TAP CHA: van viet duoc SQL
+#     thuan nhu yoyo, nhung ngay nao service nap Gateway muon dung model thi
+#     them vao duoc, khong phai doi cong cu. Doi lai la phu thuoc SQLAlchemy
+#     nam do chua dung toi.
+alembic>=1.13

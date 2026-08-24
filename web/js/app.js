@@ -8,20 +8,30 @@
 "use strict";
 
 /* ─── Hằng số ─── */
-var STORE = "agent-dash-state-v19-du-lieu-13-08"; // v19: dữ liệu tới 13/08/2026 (billing + monitoring gộp 2 đợt + Ralli/TLA HĐ)
+/* v20: localStorage CHỈ giữ lựa chọn người dùng, không còn giữ số liệu — xem
+   PREF_KEYS. Đổi khoá một lần để bỏ state của bản trước, vốn đang chứa 345 KB
+   dữ liệu backend. Từ nay không cần bump khoá theo mỗi lần cập nhật dữ liệu,
+   vì không còn dữ liệu nào trong đó. */
+var STORE = "agent-dash-prefs-v20";
 var TAB_STORE = "agent-dash-tab";
 var THEME_STORE = "agent-dash-theme";
 var RANGE_PRESETS = [["7 ngày",7],["30 ngày",30],["90 ngày",90],["Tất cả",null]]; // preset time-range (kiểu Open WebUI)
-var AGENT_MONTHLY_BUDGETS = [
-  {agent:"Trợ Lý Ảo Hợp Đồng",usd:20,aliases:["Chatbot hợp đồng"]},
-  {agent:"Chatbot Contact Center",usd:30,aliases:["Contact Center"]},
-  {agent:"Phân Loại Dữ Liệu CRM",usd:20,aliases:["CRM Feedback"]},
-  {agent:"Phân Loại Phản Hồi Tiếp Thị",usd:20,aliases:["DMS Feedback"]},
-  {agent:"Multi modal AI Invoice",usd:20,aliases:["Multi Modal"]},
-  {agent:"Sale Agent",usd:50,aliases:["Sale agent"]}
-]; // Theo cấu hình Google Cloud; Tools quizzer được loại khỏi danh sách.
+
+/* Hạn mức CHỈ đến từ `ref_budget` qua /api/catalog — trước 17/08/2026 chỗ này
+   là hằng số gõ tay bị ghi đè ở loadFromBackend() *nếu* backend trả lời, tức hai
+   nguồn cho cùng một con số. Chúng trùng khớp lúc đó, nhưng trùng khớp hôm nay
+   không phải bảo đảm: đổi hạn mức trên Google Cloud thì chỉ database biết.
+
+   BA TRẠNG THÁI, KHÔNG PHẢI HAI. Đã đối chiếu `dim_agent` (8 agent) với
+   `ref_budget` (7 dòng):
+       6 agent  có budget_usd            -> hiện hạn mức USD, tính vào tổng
+       Ralli    chỉ có budget_tokens     -> ĐÃ đặt, nhưng bằng token
+       Tools Quizzer  không có dòng nào  -> CHƯA đặt
+   Gộp hai nhóm sau thành một sẽ nói sai về Ralli. Và cả hai đều KHÔNG được suy
+   ra 0 — 0 nghĩa là "hết hạn mức", khác hẳn "chưa đặt". */
+var AGENT_MONTHLY_BUDGETS = [];
 var BUDGET_ALERT_THRESHOLDS = [50,90,100];
-var MONTHLY_BUDGET = AGENT_MONTHLY_BUDGETS.reduce(function(sum,item){return sum+item.usd;},0);
+var MONTHLY_BUDGET = 0;
 var VND_RATE = 25200;
 var EXCHANGE_RATE_META = { source:"Tỷ giá cấu hình", updated:"Cấu hình cục bộ" };
 var INSIGHT_THRESHOLDS = {
@@ -42,149 +52,37 @@ var INSIGHT_THRESHOLDS = {
   inactivityDays:30
 };
 var EXCLUDED_DEPARTMENTS = {"Đang trong quá trình thử nghiệm":true};
-var EXCLUDED_AGENTS = {"tools quizzer":true,"tool quizzer":true,"tools quizz":true,"tool quizz":true};
-var SEED_DAY = "2026-07-01";                   // ngày gắn dữ liệu tổng hợp tháng 7 (seed)
 
 /* ═══════════════ CÂY ĐƠN VỊ ═══════════════
    Nguồn dữ liệu usage đặt tên phòng ban tự do: mỗi agent trong file Excel là một khối
    riêng và mỗi khối dùng một quy ước viết tắt khác nhau, nên cùng một đơn vị xuất hiện
    dưới nhiều tên (PBH1 / Phòng Bán hàng 1, TMĐT / Thương mại điện tử, C4LED / TT C4LED).
-   ORG_UNITS + UNIT_ALIASES là nguồn sự thật duy nhất để mỗi đơn vị chỉ xuất hiện MỘT lần.
+   Cây đơn vị giờ lấy từ database qua /api/catalog, nên mỗi đơn vị chỉ xuất hiện MỘT lần.
 
    Cây Ralli và số user phân quyền lấy trực tiếp từ data/phong_ban_phan_quyen.xlsx,
    theo mức thụt lề trong sheet "Cơ cấu Tổ chức". Alias tiếp tục chuẩn hóa tên viết tắt
    giữa file usage và file phân quyền: PBH1 / Phòng Bán hàng 1, TMĐT / Thương mại điện tử,
    C4LED / TT C4LED.
    ═══════════════════════════════════════════ */
-var ORG_UNITS = [
-  {id:"company",name:"Toàn công ty",parent:null,level:1},
-  {id:"rd-corp",name:"Tổng công ty Rạng Đông",parent:"company",level:2},
-  {id:"pbh1",name:"PBH1",parent:"rd-corp",level:3},
-  {id:"perm-004",name:"Vùng 1",parent:"pbh1",level:4},
-  {id:"perm-005",name:"Đội chuyên trách - Vùng 1",parent:"perm-004",level:5},
-  {id:"perm-006",name:"Đội 1 - Nam Định",parent:"perm-004",level:5},
-  {id:"perm-007",name:"Đội 2 - Thái Bình",parent:"perm-004",level:5},
-  {id:"perm-008",name:"Đội 3 - Hà Nam - Ninh Bình",parent:"perm-004",level:5},
-  {id:"perm-009",name:"Đội 4 - Thanh Hoá",parent:"perm-004",level:5},
-  {id:"perm-010",name:"Đội 5 - Nghệ An - Hà Tĩnh",parent:"perm-004",level:5},
-  {id:"perm-011",name:"Vùng 2",parent:"pbh1",level:4},
-  {id:"perm-012",name:"Đội chuyên trách - Vùng 2",parent:"perm-011",level:5},
-  {id:"perm-013",name:"Đội 1 - Hà Nội",parent:"perm-011",level:5},
-  {id:"perm-014",name:"Đội 2 - Hà Nội",parent:"perm-011",level:5},
-  {id:"perm-015",name:"Đội 3 - Hà Nội",parent:"perm-011",level:5},
-  {id:"perm-016",name:"Đội 4 - Bắc Ninh",parent:"perm-011",level:5},
-  {id:"perm-017",name:"Đội 5 - Bắc Giang - Lạng Sơn",parent:"perm-011",level:5},
-  {id:"perm-018",name:"Đội 6 - Hưng Yên",parent:"perm-011",level:5},
-  {id:"perm-019",name:"Đội 7 - Hải Dương - Hải Phòng",parent:"perm-011",level:5},
-  {id:"perm-020",name:"Đội 8 - Quảng Ninh",parent:"perm-011",level:5},
-  {id:"perm-021",name:"Vùng 3",parent:"pbh1",level:4},
-  {id:"perm-022",name:"Đội chuyên trách - Vùng 3",parent:"perm-021",level:5},
-  {id:"perm-023",name:"Đội 1 - HN2 - Sơn La - Điện Biên",parent:"perm-021",level:5},
-  {id:"perm-024",name:"Đội 2 - HN2 - Hoà Bình",parent:"perm-021",level:5},
-  {id:"perm-025",name:"Đội 3 - Vĩnh Phúc",parent:"perm-021",level:5},
-  {id:"perm-026",name:"Đội 4 - Thái Nguyên - Cao Bằng",parent:"perm-021",level:5},
-  {id:"perm-027",name:"Đội 5 - Phú Thọ",parent:"perm-021",level:5},
-  {id:"perm-028",name:"Đội 6 - Yên Bái - Tuyên Quang - Hà Giang - Lào Cai - Lai Châu",parent:"perm-021",level:5},
-  {id:"perm-029",name:"TT1",parent:"pbh1",level:4},
-  {id:"perm-030",name:"TT1",parent:"perm-029",level:5},
-  {id:"perm-031",name:"Đội chuyên trách 1 - trung tâm 1",parent:"perm-029",level:5},
-  {id:"perm-032",name:"Đội Chuyên Trách 2",parent:"perm-029",level:5},
-  {id:"pbh2",name:"PBH2",parent:"rd-corp",level:3},
-  {id:"perm-034",name:"CN Đà Nẵng",parent:"pbh2",level:4},
-  {id:"perm-035",name:"Đội Bình Định",parent:"perm-034",level:5},
-  {id:"perm-036",name:"Đội Đà Nẵng",parent:"perm-034",level:5},
-  {id:"perm-037",name:"Đội Huế",parent:"perm-034",level:5},
-  {id:"perm-038",name:"Đội Quảng Bình",parent:"perm-034",level:5},
-  {id:"perm-039",name:"Đội Quảng Nam",parent:"perm-034",level:5},
-  {id:"perm-040",name:"Đội Quảng Trị",parent:"perm-034",level:5},
-  {id:"perm-041",name:"Đội chuyên trách - CN Đà Nẵng",parent:"perm-034",level:5},
-  {id:"perm-042",name:"CN Nha Trang",parent:"pbh2",level:4},
-  {id:"perm-043",name:"Đội Khánh Hòa",parent:"perm-042",level:5},
-  {id:"perm-044",name:"Đội Lâm Đồng",parent:"perm-042",level:5},
-  {id:"perm-045",name:"Đội Ninh Thuận",parent:"perm-042",level:5},
-  {id:"perm-046",name:"Đội Phú Yên",parent:"perm-042",level:5},
-  {id:"perm-047",name:"Đội chuyên trách - CN Nha Trang",parent:"perm-042",level:5},
-  {id:"perm-048",name:"Tây Nguyên",parent:"pbh2",level:4},
-  {id:"perm-049",name:"Đội Đắk Lắk",parent:"perm-048",level:5},
-  {id:"perm-050",name:"Đội Đắk Nông",parent:"perm-048",level:5},
-  {id:"perm-051",name:"Đội Gia Lai",parent:"perm-048",level:5},
-  {id:"perm-052",name:"Đội Kon Tum",parent:"perm-048",level:5},
-  {id:"perm-053",name:"Đội chuyên trách - Tây Nguyên",parent:"perm-048",level:5},
-  {id:"perm-054",name:"TT2",parent:"pbh2",level:4},
-  {id:"perm-055",name:"TT2",parent:"perm-054",level:5},
-  {id:"perm-056",name:"Đội 1 - TT2",parent:"perm-054",level:5},
-  {id:"perm-057",name:"Đội 2 - TT2",parent:"perm-054",level:5},
-  {id:"perm-058",name:"Đội 3 - TT2",parent:"perm-054",level:5},
-  {id:"perm-059",name:"Đội 4 - TT2",parent:"perm-054",level:5},
-  {id:"perm-060",name:"Đội 5 - TT2",parent:"perm-054",level:5},
-  {id:"perm-061",name:"Đội 6 - TT2",parent:"perm-054",level:5},
-  {id:"pbh3",name:"PBH3",parent:"rd-corp",level:3},
-  {id:"perm-063",name:"CN Hồ Chí Minh",parent:"pbh3",level:4},
-  {id:"perm-064",name:"Đội 1",parent:"perm-063",level:5},
-  {id:"perm-065",name:"Đội 2",parent:"perm-063",level:5},
-  {id:"perm-066",name:"Đội 3",parent:"perm-063",level:5},
-  {id:"perm-067",name:"Đội 4",parent:"perm-063",level:5},
-  {id:"perm-068",name:"Đội 5",parent:"perm-063",level:5},
-  {id:"perm-069",name:"Đội Siêu Thị",parent:"perm-063",level:5},
-  {id:"perm-070",name:"Đội chuyên trách - CN Hồ Chí Minh",parent:"perm-063",level:5},
-  {id:"perm-071",name:"CN Biên Hòa",parent:"pbh3",level:4},
-  {id:"perm-072",name:"Đội Bình Dương",parent:"perm-071",level:5},
-  {id:"perm-073",name:"Đội Bình Phước",parent:"perm-071",level:5},
-  {id:"perm-074",name:"Đội Bình Thuận",parent:"perm-071",level:5},
-  {id:"perm-075",name:"Đội Đồng Nai",parent:"perm-071",level:5},
-  {id:"perm-076",name:"Đội Vũng Tàu",parent:"perm-071",level:5},
-  {id:"perm-077",name:"Đội chuyên trách - CN Biên Hòa",parent:"perm-071",level:5},
-  {id:"perm-078",name:"CN Cần Thơ",parent:"pbh3",level:4},
-  {id:"perm-079",name:"Đội An Giang",parent:"perm-078",level:5},
-  {id:"perm-080",name:"Đội Kiên Giang",parent:"perm-078",level:5},
-  {id:"perm-081",name:"Đội Cần Thơ",parent:"perm-078",level:5},
-  {id:"perm-082",name:"Đội Sóc Trăng",parent:"perm-078",level:5},
-  {id:"perm-083",name:"Đội Cà Mau",parent:"perm-078",level:5},
-  {id:"perm-084",name:"Đội Bạc Liêu",parent:"perm-078",level:5},
-  {id:"perm-085",name:"Đội Campuchia",parent:"perm-078",level:5},
-  {id:"perm-086",name:"Đội chuyên trách - CN Cần Thơ",parent:"perm-078",level:5},
-  {id:"perm-087",name:"CN Tiền Giang",parent:"pbh3",level:4},
-  {id:"perm-088",name:"Đội Vĩnh Long",parent:"perm-087",level:5},
-  {id:"perm-089",name:"Đội Đồng Tháp",parent:"perm-087",level:5},
-  {id:"perm-090",name:"Đội Long An",parent:"perm-087",level:5},
-  {id:"perm-091",name:"Đội chuyên trách - CN Tiền Giang",parent:"perm-087",level:5},
-  {id:"perm-092",name:"TT3",parent:"pbh3",level:4},
-  {id:"perm-093",name:"TT4",parent:"pbh3",level:4},
-  {id:"pxk",name:"Xuất khẩu",parent:"rd-corp",level:3},
-  {id:"truyenthong",name:"Truyền thông",parent:"rd-corp",level:3},
-  {id:"ketoan",name:"Kế toán",parent:"rd-corp",level:3},
-  {id:"ecom",name:"TMĐT",parent:"rd-corp",level:3},
-  {id:"c4led",name:"C4LED",parent:"company",level:2},
-  {id:"nctt2",name:"Nghiên cứu thị trường",parent:"company",level:2},
-  {id:"kehoach",name:"Kế hoạch",parent:"company",level:2},
-  {id:"rnd",name:"Trung tâm R&D",parent:"company",level:2},
-  {id:"qths",name:"Quản trị hệ thống",parent:"company",level:2},
-  /* Đơn vị của các agent khác không nằm trong workbook phân quyền Ralli. */
-  {id:"aemkt",name:"Anh Em tiếp thị",parent:null,level:1},
-  {id:"cskh",name:"Chăm sóc khách hàng",parent:null,level:1},
-  {id:"nctt",name:"P.NCTT",parent:null,level:1},
-  {id:"cpbd",name:"Công ty CPBĐ PN Rạng Đông",parent:null,level:1},
-  {id:"ttdl",name:"TTDL&ĐHS",parent:null,level:1},
-  {id:"tttmdt",name:"TT&TMĐT",parent:null,level:1}
-];
-var UNIT_ALIASES = {
-  "Toàn công ty":"company", "Tổng công ty Rạng Đông":"rd-corp",
-  // "Phòng BH1" là cách cây tổ chức của app TLA Hợp Đồng gọi, "PBH1" là cách
-  // Ralli gọi. Cùng một phòng. Thiếu ba dòng này thì người của Hợp Đồng rơi vào
-  // đơn vị tự sinh và không gộp chung với người của Ralli cùng phòng.
-  "PBH1":"pbh1", "Phòng Bán hàng 1":"pbh1", "Phòng BH1":"pbh1",
-  "PBH2":"pbh2", "Phòng Bán hàng 2":"pbh2", "Phòng BH2":"pbh2",
-  "PBH3":"pbh3", "Phòng Bán hàng 3":"pbh3", "Phòng BH3":"pbh3",
-  "TMĐT":"ecom", "Thương mại điện tử":"ecom",            // danh mục chuẩn: TMDT
-  "TT C4LED":"c4led", "C4LED":"c4led",
-  "Cty CPBĐ PN Rạng Đông":"cpbd", "Công ty CPBĐ PN Rạng Đông":"cpbd",
-  "P.NCTT":"nctt",
-  "P.NCTT , TTDL&ĐHS":"nctt", "P.NCTT, TTDL&ĐHS":"nctt", // fallback cho dữ liệu cũ trước khi tách
-  "Anh Em tiếp thị":"aemkt", "Chăm sóc khách hàng":"cskh",
-  "TTDL&DHS":"ttdl", "TTDL&ĐHS":"ttdl", "TT&TMĐT":"tttmdt", "Xuất khẩu":"pxk",
-  "Truyền thông":"truyenthong", "Kế toán":"ketoan", "Kế hoạch":"kehoach",
-  "Nghiên cứu thị trường":"nctt2", "Trung tâm R&D":"rnd", "Quản trị hệ thống":"qths"
-};
+/* Cây đơn vị. RỖNG cho tới khi adoptOrgUnits() nhận dữ liệu từ /api/catalog.
+
+   Trước 20/08/2026 chỗ này là 108 đơn vị GÕ CỨNG (7.207 ký tự) trong khi
+   database có 130. Đó là phần bị bỏ sót của change serve-dashboard-from-
+   database-only: đợt đó bỏ được SEED_DAYS, bảng giá và danh bạ, nhưng quên cây
+   tổ chức - nên một sự thật về cơ cấu công ty vẫn sống trong mã giao diện.
+
+   Đối chiếu trước khi bỏ (tools/doi_chieu_cay_don_vi.py): KHÔNG đơn vị nào lệch
+   cha - đó là kiểu lệch nguy hiểm nhất vì nó không làm mọc thêm hay mất đi hàng
+   nào, chỉ chuyển số sang nhánh khác. 5 đơn vị mọc thêm đều 0 tài khoản/0 token,
+   3 đơn vị mất đi là tên cũ thời Excel không có dòng trong database. */
+var ORG_UNITS = [];
+/* UNIT_ALIASES đã bỏ 20/08/2026. Nó làm HAI việc:
+     1. hoà giải viết tắt  PBH1 / Phòng Bán hàng 1 / Phòng BH1
+     2. gộp hai cây tổ chức thành một cái nhìn công ty
+   Việc (1) hết cần khi ghép bằng `unit_id`. Việc (2) chuyển vào database thành
+   cột `dim_unit.canonical_unit_id` - 4 cặp, người dùng xác nhận 20/08/2026.
+   Cách viết chuẩn của TTDL&DHS lấy đúng như database, không thêm dấu. */
+
 /* Số tài khoản được cấp sẽ được dựng lại từ danh sách user Ralli đã làm sạch.
    Không dùng số demo hoặc số của agent khác cho các KPI/bảng người dùng. */
 var DEPT_PROVISIONED = {};
@@ -241,18 +139,19 @@ function stableHash(str){
   for(var i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
   return (h>>>0);
 }
-/* Các agent/model/nhóm thực tế phục vụ từng đơn vị, đọc từ dữ liệu usage seed. */
+/* Các agent/model/nhóm thực tế phục vụ từng đơn vị, đọc từ dữ liệu trong state.
+
+   Trước 17/08/2026 nhánh `else` ở đây dựng danh mục từ buildJuneExcelWeeks() +
+   SEED_DAYS khi state chưa có. Không còn nguồn nhúng nào, nên chưa có dữ liệu
+   thì trả về danh mục RỖNG — đúng hơn là dựng một danh mục từ số liệu tháng 6. */
 function unitAgentProfiles(){
-  // Ưu tiên dữ liệu đang nạp trong state; khi chưa có state thì dựng từ nguồn seed.
   var byUnit={}, sources=[];
-  // Khi chưa có state, dựng danh mục từ hai bộ dữ liệu Excel tháng 6 và tháng 7.
   if(typeof state!=="undefined" && state && state.days) sources.push(state.days);
-  else sources.push(buildJuneExcelWeeks(), SEED_DAYS);
   sources.forEach(function(src){
     if(!src) return;
     Object.keys(src).forEach(function(day){
       (src[day]||[]).forEach(function(r){
-        var unit=unitOf(r.d);
+        var unit=unitOfRow(r);
         if(!unit||isExcludedUnit(unit)||!r.a) return;
         var list=byUnit[unit.id]=byUnit[unit.id]||[];
         if(!list.some(function(p){return p.a===r.a&&p.m===r.m;})) list.push({a:r.a,m:r.m,ug:r.ug});
@@ -261,8 +160,6 @@ function unitAgentProfiles(){
   });
   return byUnit;
 }
-/* Tỷ lệ tài khoản có khả năng hoạt động của một đơn vị — cố định theo unitId. */
-function adoptionRatio(unitId){ return 0.55 + (stableHash("adopt:"+unitId)%36)/100; }
 /* Danh bạ dựng từ DATABASE (/api/accounts).
 
    Thay cho ralli-users.js - bản Excel 622 dòng, chỉ có người của Ralli. Hậu quả
@@ -276,9 +173,14 @@ function adoptionRatio(unitId){ return 0.55 + (stableHash("adopt:"+unitId)%36)/1
    không hụt, nhưng mang cờ `shared` để chỉ tiêu tỷ lệ áp dụng loại ra. */
 function buildAccountCatalogueFromDb(){
   return REAL_ACCOUNTS.map(function(a){
-    var unit=unitOf(a.unit_name)||null;
+    // Ưu tiên MÃ đơn vị (api.js đã quy về bản chuẩn); tên chỉ là đường lui.
+    var unit=unitById(a.unit_id)||unitOf(a.unit_name)||null;
     return {
-      user:a.email||a.username, login:a.username, email:a.email||"",
+      /* `id` là khoá GHÉP; `user` chỉ để hiển thị và làm khoá hàng trong bảng.
+         Trước 20/08/2026 `user` là `a.email||a.username` và email cũng được dùng
+         làm khoá ghép - xem applyRealAccountUsage(). Ghép bằng chuỗi thì phụ
+         thuộc hoa/thường và khoảng trắng, mà `account_id` thì không. */
+      id:a.account_id, user:a.username, login:a.username,
       n:a.full_name||a.username,
       unitId:unit?unit.id:"", d:a.unit_name||"—",
       a:a.agent||"", m:"", ug:"",
@@ -293,40 +195,20 @@ function buildAccountCatalogueFromDb(){
   }).filter(function(u){ return u.unitId && !isExcludedUnit(unitById(u.unitId)); });
 }
 
+/* Danh mục tài khoản — CHỈ từ database.
+
+   Trước 17/08/2026 hàm này có một nhánh dự phòng 32 dòng dựng danh mục từ
+   window.RALLI_USERS (file web/js/fallback/ralli-users.js, 121 KB) khi chưa có
+   dữ liệu API. Nhánh đó rải request xuống từng người bằng `weight = 1 +
+   hash(login) % 9` — con số hiện ra trông y hệt số đo: có người 40 request,
+   người 7 request, xếp hạng được, vẽ biểu đồ được, mà toàn bộ đến từ băm tên
+   đăng nhập.
+
+   Nay không còn nhánh đó, và cũng không cần: REAL_ACCOUNTS rỗng chỉ xảy ra khi
+   backend hỏng, và lúc đó renderError() đã chiếm màn hình nên renderAll() không
+   chạy. Trả về mảng rỗng là đúng — không có dữ liệu thì không có danh mục. */
 function buildAccountCatalogue(){
-  if(REAL_ACCOUNTS.length) return buildAccountCatalogueFromDb();
-  var out=[], byUnit={};
-  (window.RALLI_USERS||[]).forEach(function(entry){
-    var unit=unitOf(entry.department);
-    if(!unit||isExcludedUnit(unit)) return;
-    (byUnit[unit.id]=byUnit[unit.id]||[]).push({entry:entry,unit:unit});
-  });
-  Object.keys(byUnit).sort().forEach(function(unitId){
-    var group=byUnit[unitId].sort(function(x,y){return x.entry.login.localeCompare(y.entry.login);});
-    var eligible=Math.max(1,Math.round(group.length*adoptionRatio(unitId)));
-    group.forEach(function(item,i){
-      var entry=item.entry, unit=item.unit, h=stableHash(entry.login);
-      var sourceActive=String(entry.status||"").trim().toLowerCase()==="hoạt động";
-      out.push({
-        user:entry.email||entry.login,
-        login:entry.login, email:entry.email, n:entry.name,
-        unitId:unit.id, d:entry.department,
-        a:"Trợ lý ảo Ralli", m:"Gemini 2.5 Flash", ug:"Người dùng Ralli",
-        // weight > 0 ⇒ tài khoản có thể nhận phân bổ; = 0 ⇒ luôn là tài khoản chưa dùng.
-        weight: sourceActive&&i<eligible ? 1+(h%9) : 0,
-        role:entry.accountType==="service"?"Tài khoản chức năng":(entry.role||"Nhân viên"),
-        accountType:entry.accountType||"person", sourceStatus:entry.status||"",
-        // File TLA Ralli.xlsx hiện chỉ có STT, Phòng ban, Họ tên, Tài khoản đăng nhập,
-        // Tên đầy đủ, Tài khoản, Vai trò, trạng thái — chưa có cột ngày cấp. Khi nguồn
-        // bổ sung, chỉ cần map vào đây là cột "Thời gian được cấp" và thẻ "Cấp mới
-        // trong kỳ" cùng hoạt động, không phải sửa gì thêm.
-        created:entry.created||"",
-        disabled:!sourceActive,
-        req:0, ti:0, to:0, last:"", active:false, quotaPct:0
-      });
-    });
-  });
-  return out;
+  return REAL_ACCOUNTS.length ? buildAccountCatalogueFromDb() : [];
 }
 /* Số liệu ĐO ĐƯỢC của từng tài khoản, từ /api/usage-by-account.
 
@@ -345,20 +227,44 @@ function buildAccountCatalogue(){
    Excel) trong khi database có 937 tài khoản thật. Người của TLA Hợp Đồng
    phần lớn không có dòng trong danh bạ đó nên số của họ không hiện lên được ở
    tab này — con số bị bỏ lại được đếm và ghi vào console. */
+var accountFallbackByName = 0;
 function applyRealAccountUsage(){
-  var byKey={};
+  var byKey={}, byId={};
   USER_ACCOUNTS.forEach(function(u){
     u.req=0; u.ti=0; u.to=0; u.active=false; u.last=""; u.quotaPct=0; u.byAgent={};
+    u.costDerived=0; u.costRows=0; u.costRowsPriced=0;
+    if(u.id!=null) byId[u.id]=u;
     if(u.login) byKey[String(u.login).trim().toLowerCase()]=u;
-    if(u.email) byKey[String(u.email).trim().toLowerCase()]=u;
   });
   var r=state&&state.range, bo=0, boLuot=0;
   REAL_BY_ACCOUNT.forEach(function(x){
     if(r&&(x.day<r.start||x.day>r.end)) return;
-    var u=byKey[String(x.username||"").trim().toLowerCase()]
+    /* GHÉP BẰNG `account_id` TRƯỚC. Nó là khoá số, cùng khoá mà database dùng -
+       không phụ thuộc hoa/thường, khoảng trắng, hay việc app ghi tên kiểu nào.
+       Đúng nguyên tắc db/01_schema.sql: "KHÔNG dùng tên đăng nhập làm khoá ngoại
+       ... đã thấy ba dạng khác nhau cho cùng một tài khoản".
+       Nhánh ghép theo tên giữ lại làm đường lui và có biến đếm, để nó không âm
+       thầm gánh việc nếu một ngày `account_id` vắng mặt. */
+    var u=byId[x.account_id];
+    if(!u){
+      u=byKey[String(x.username||"").trim().toLowerCase()]
         ||byKey[String(x.full_name||"").trim().toLowerCase()];
+      if(u) accountFallbackByName++;
+    }
     if(!u){ bo++; boLuot+=x.calls||0; return; }
     var req=x.calls||0, ti=x.input_tokens||0, to=x.output_tokens||0;
+    /* TIỀN TÍNH Ở ĐÂY, MỨC TỪNG DÒNG - không cộng gộp token rồi mới nhân giá.
+       Một tài khoản dùng nhiều model, và đơn giá chênh 12,5 lần (flash-lite
+       $0,10 so với pro $1,25 cho mỗi triệu token vào), nên nhân tổng đã gộp với
+       bất kỳ đơn giá nào cũng ra một con số không model nào tính như thế.
+       Đó đúng là chỗ hỏng cũ: api.js dựng tài khoản với `m: ""`, model bị đánh
+       rơi, `cost()` tra không ra và trả 0 - làm mọi phòng ban thật hiện `0 ₫`
+       ngay cạnh 525,9 nghìn token.
+       Đếm cả `costRowsPriced` để biết có dòng nào KHÔNG tra được giá không -
+       khi đó phải hiện `—` chứ không phải một con số thiếu. */
+    var pr = state.pricingById && state.pricingById[x.model_id];
+    u.costRows++;
+    if(pr){ u.costRowsPriced++; u.costDerived += ti/1e6*num(pr.i) + to/1e6*num(pr.o); }
     u.req+=req; u.ti+=ti; u.to+=to;
     var ag=x.agent||u.a, b=u.byAgent[ag]||(u.byAgent[ag]={req:0,ti:0,to:0});
     b.req+=req; b.ti+=ti; b.to+=to;
@@ -384,7 +290,7 @@ function applyAccountAllocation(rows){
   if(REAL_BY_ACCOUNT.length){ applyRealAccountUsage(); return; }
   var totals={};
   (rows||[]).forEach(function(r){
-    var unit=unitOf(r.d);
+    var unit=unitOfRow(r);
     if(!unit||isExcludedUnit(unit)||!r.a) return;
     var key=unit.id+"::"+r.a;
     var t=totals[key]=totals[key]||{unitId:unit.id, agent:r.a, r:0, ti:0, to:0};
@@ -445,1921 +351,20 @@ function applyAccountAllocation(rows){
 }
 
 /* ─── Bảng giá (USD / 1 triệu token) ───
-   Mọi đơn giá dưới đây suy từ HOÁ ĐƠN Google: lấy số tiền thật chia cho số token
-   thật trong data/billing/. Không chép từ trang giá.
-   Hai giá đã sửa so với bản cũ:
-     Gemini 2.5 Pro   giá ra  3.75 -> 10.00   (hoá đơn: $10.0000/1tr)
-     Gemini 3.5 Flash 0/0     -> 1.50 / 9.00  (trước ghi là "chưa dùng", thực tế có dùng)
-   Bốn model bổ sung vì có phát sinh thật nhưng chưa được khai báo. ─── */
-var basePricing = {
-  "Gemini 2.5 Flash":       {i:0.30, o:2.50},
-  "Gemini 2.5 Flash Lite":  {i:0.10, o:0.40},
-  "Gemini 2.5 Pro":         {i:1.25, o:10.00},
-  "Gemini 2.0 Flash":       {i:0.10, o:0.40},
-  "Gemini 3.0 Flash":       {i:0.50, o:3.00},
-  "Gemini 3.1 Flash Lite":  {i:0.25, o:1.50},
-  "Gemini 3.5 Flash":       {i:1.50, o:9.00},
-  "Gemini 3 Pro":           {i:2.00, o:12.00},
-  "Gemini Embedding 001":   {i:0.1510, o:0},
-  "GPT-4o mini":            {i:0.15, o:0.60},   // OpenAI — giữ sẵn cho nhập thủ công
-  "GPT-4o":                 {i:2.50, o:10.00}   // OpenAI — đã khai báo, chưa dùng
-};
+   ĐÃ BỎ khối gõ tay ở đây (17/08/2026). Bảng giá chỉ đến từ `ref_price` qua
+   /api/catalog — xem `state.pricing`, do loadFromBackend() điền.
 
-/* ═══════════════════════════════════════════════════════════════════
-   SEED_DAYS — sinh tự động từ dữ liệu THẬT đã thu thập.
-   Sinh bởi test/sinh_du_lieu_dashboard.py. KHÔNG sửa tay file này.
+   Khối cũ liệt kê 11 model với đơn giá suy từ hoá đơn Google. Nó đúng lúc viết,
+   nhưng nó là nguồn thứ hai cho cùng một con số: `ref_price` trong database cũng
+   giữ bảng giá, lấy từ Cloud Billing Catalog. Hai nguồn thì sớm muộn lệch nhau,
+   và không có gì báo khi lệch — đổi giá ở Google thì chỉ database biết.
 
-   Nguồn từng cột:
-     ti / to / cached   Google Billing   (số tiền thật đã bị thu)
-     r / er / lat       Google Monitoring (lọc generativelanguage,
-                        chỉ GenerateContent + StreamGenerateContent)
-     Ralli toàn bộ      bảng thô token_usage — Ralli không qua GCP
-     u                  số tài khoản được cấp, gắn vào MỘT ngày duy nhất
+   Hai model OpenAI trong khối cũ ("GPT-4o", "GPT-4o mini") chưa từng phát sinh
+   dữ liệu; chúng ở đó để nhập tay, mà luồng nhập tay cũng đã bỏ. */
 
-   ⚠ Đơn vị của Trợ Lý Ảo Hợp Đồng là SỐ PHÂN BỔ: billing cho tổng theo
-     ngày nhưng không có phòng ban, app cho phòng ban nhưng không có ngày.
-   ═══════════════════════════════════════════════════════════════════ */
-var SEED_DAYS = {
-  "2026-01-01": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:887473,to:62972,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:98487,to:28858,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-02": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:211874,to:17884,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:43263,to:9993,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-03": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:319226,to:23882,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:51564,to:11203,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-04": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:276937,to:18948,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:38006,to:11877,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-05": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:413048,to:29083,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:59535,to:12397,r:0,er:0.0,lat:0.0,cached:1650,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-06": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:416039,to:33011,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:81634,to:29608,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-07": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:831050,to:49242,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:120502,to:44197,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-08": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:362242,to:24171,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:52712,to:11132,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-09": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:264018,to:25136,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:77183,to:25352,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-10": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:197936,to:9334,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:22031,to:4304,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-11": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:268749,to:20381,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:41429,to:9452,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-12": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:216950,to:15854,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:61008,to:8296,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-13": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:142049,to:15056,r:0,er:0.0,lat:0.0,cached:7256,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:408839,to:31061,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:81953,to:10692,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-14": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:15593,to:2915,r:0,er:0.0,lat:0.0,cached:617,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2009113,to:29877,r:0,er:0.0,lat:0.0,cached:367795,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1737432,to:91340,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:721598,to:48296,r:0,er:0.0,lat:0.0,cached:3318,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-15": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2315118,to:20246,r:0,er:0.0,lat:0.0,cached:796689,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1466845,to:105993,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:389140,to:61084,r:0,er:0.0,lat:0.0,cached:5799,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-16": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:6222562,to:24400,r:0,er:0.0,lat:0.0,cached:2954848,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:651380,to:70527,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:141873,to:48547,r:0,er:0.0,lat:0.0,cached:842,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-17": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:63134,to:6993,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:8996,to:1374,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-18": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:477819,to:6755,r:0,er:0.0,lat:0.0,cached:8053,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:553006,to:33828,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:59999,to:14876,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-19": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:53972,to:327,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:359596,to:22568,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:49034,to:10955,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-20": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2614015,to:24214,r:0,er:0.0,lat:0.0,cached:488437,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1722642,to:166385,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:388199,to:53113,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-21": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3 Pro",ug:"Nhóm CSKH",u:0,c:0,ti:11473,to:391,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:816181,to:6506,r:0,er:0.0,lat:0.0,cached:357772,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1005049,to:74006,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:175290,to:38860,r:0,er:0.0,lat:0.0,cached:1660,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-22": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:3724,to:394,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3 Pro",ug:"Nhóm CSKH",u:0,c:0,ti:161266,to:2703,r:41,er:0.0,lat:0.0,cached:97552,think:0,e4:0,e5:0,e429:0,eKnown:41,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:36598,to:1767,r:10,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:433610,to:34832,r:1,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:77187,to:9361,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-23": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3266756,to:29261,r:134,er:0.0,lat:0.0,cached:1371128,think:0,e4:0,e5:0,e429:0,eKnown:134,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:486758,to:32782,r:17,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:17,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:50493,to:11045,r:2,er:0.0,lat:0.0,cached:830,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:0.0}
-  ],
-  "2026-01-24": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:11037,to:174,r:84,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:84,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:226257,to:24095,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:46115,to:8910,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-25": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:34696,to:2544,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:15168,to:422,r:2,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:225149,to:20705,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:43097,to:10344,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-26": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1572147,to:24019,r:7,er:0.0,lat:0.0,cached:119891,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:330465,to:28002,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:89239,to:21668,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:6,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:0.0}
-  ],
-  "2026-01-27": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:7148784,to:82982,r:274,er:0.0,lat:0.0,cached:1906417,think:0,e4:0,e5:0,e429:0,eKnown:274,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1126810,to:66397,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:663916,to:60017,r:0,er:0.0,lat:0.0,cached:1660,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-28": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:963869,to:8659,r:274,er:0.0,lat:0.0,cached:274924,think:0,e4:0,e5:0,e429:0,eKnown:274,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:305790,to:0,r:86,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:86,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:100739,to:10093,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:17815,to:3319,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-29": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:2581,to:209,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4719445,to:29476,r:0,er:0.0,lat:0.0,cached:2251614,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:946296,to:80017,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:246416,to:37064,r:0,er:0.0,lat:0.0,cached:1661,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-30": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1524518,to:17780,r:0,er:0.0,lat:0.0,cached:206936,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:117963,to:11385,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:21629,to:3386,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-01-31": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:316109,to:29780,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:69906,to:17611,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-01": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:241849,to:7067,r:0,er:0.0,lat:0.0,cached:14076,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1042149,to:83776,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:220898,to:44508,r:0,er:0.0,lat:0.0,cached:1656,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-02": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:44222,to:37100,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:15249,to:989,r:0,er:0.0,lat:0.0,cached:4079,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:66257,to:2066,r:0,er:0.0,lat:0.0,cached:3999,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:939849,to:82757,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:25104,to:16614,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:247465,to:54589,r:0,er:0.0,lat:0.0,cached:1658,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-03": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:867571,to:4944,r:0,er:0.0,lat:0.0,cached:56482,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:623765,to:44439,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:98325,to:102285,r:0,er:0.0,lat:0.0,cached:1657,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-04": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:2581,to:210,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:472346,to:4949,r:0,er:0.0,lat:0.0,cached:269006,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:517377,to:35746,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:84123,to:30683,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-05": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:2581,to:426,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:235883,to:7740,r:0,er:0.0,lat:0.0,cached:58318,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:712736,to:51542,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:97656,to:34629,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-06": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1248297,to:6376,r:0,er:0.0,lat:0.0,cached:754657,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:1273635,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:182258,to:21803,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:42587,to:12457,r:0,er:0.0,lat:0.0,cached:840,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-07": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:16232,to:2781,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:50354,to:838,r:0,er:0.0,lat:0.0,cached:16024,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:21910750,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:119657,to:13547,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:39052,to:10764,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-08": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1764387,to:12754,r:0,er:0.0,lat:0.0,cached:833271,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:1701390,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:201999,to:17794,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:60383,to:10363,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-09": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:10020,to:1027,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1141026,to:11169,r:0,er:0.0,lat:0.0,cached:468179,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:1439902,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:76579,to:5776,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:28422,to:10625,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-10": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4985,to:312,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4191566,to:33062,r:0,er:0.0,lat:0.0,cached:1615456,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:4082032,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:504379,to:46458,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:103386,to:30568,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-11": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:85835,to:10190,r:0,er:0.0,lat:0.0,cached:33647,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:204738,to:3315,r:0,er:0.0,lat:0.0,cached:28522,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:1438219,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:859647,to:70277,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:142858,to:47211,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-12": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:3388733,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:245900,to:22318,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:42461,to:15622,r:0,er:0.0,lat:0.0,cached:1680,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-13": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:682196,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:321822,to:15408,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:49738,to:20378,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-14": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:172683,to:11606,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:10924,to:4016,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-15": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:300794,to:12378,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:23427,to:11242,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-17": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:65652,to:5940,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:12361,to:3791,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-18": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:37296,to:3420,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:8210,to:1870,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-19": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:480714,to:11640,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:32756,to:15956,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-20": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:8556,to:404,r:0,er:0.0,lat:0.0,cached:4017,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:323939,to:9027,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:24585,to:13900,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-21": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4989,to:208,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2804457,to:15624,r:0,er:0.0,lat:0.0,cached:1162731,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:2325689,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1131286,to:23461,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:65691,to:30488,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-22": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:19866,to:16424,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:5024,to:612,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:434562,to:6173,r:0,er:0.0,lat:0.0,cached:154647,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:198726,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1610086,to:60916,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:141750,to:61216,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-23": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:45115,to:4688,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:359726,to:5687,r:0,er:0.0,lat:0.0,cached:83199,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:243,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1060220,to:43589,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:125666,to:52807,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-24": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:719445,to:124967,r:0,er:0.0,lat:0.0,cached:170259,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:72854,to:2687,r:0,er:0.0,lat:0.0,cached:14124,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:87536,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:521604,to:32149,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:98039,to:97208,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-25": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:18265,to:3808,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:220125,to:40273,r:0,er:0.0,lat:0.0,cached:39763,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:86907,to:3150,r:0,er:0.0,lat:0.0,cached:12088,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:55564,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:666843,to:19100,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:67804,to:25722,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-26": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:575231,to:11767,r:0,er:0.0,lat:0.0,cached:208987,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:122,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1134557,to:42180,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:127492,to:40416,r:0,er:0.0,lat:0.0,cached:1682,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-27": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:9300,to:10570,r:0,er:0.0,lat:0.0,cached:1206,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:45052,to:45064,r:0,er:0.0,lat:0.0,cached:1018,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2218947,to:6247,r:0,er:0.0,lat:0.0,cached:751377,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:5,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1355704,to:43671,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:139085,to:53859,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-02-28": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:156807,to:3549,r:0,er:0.0,lat:0.0,cached:30284,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:46,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:203255,to:19985,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:48914,to:16965,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-01": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:15525,to:20412,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:262138,to:2381,r:0,er:0.0,lat:0.0,cached:107618,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:65,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:37374,to:4217,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:31530,to:8321,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-02": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:7254,to:5389,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:25986,to:20618,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:468,to:1399,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:682579,to:6306,r:0,er:0.0,lat:0.0,cached:304158,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:44,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:575670,to:29331,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:88060,to:30022,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-03": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1833697,to:9338,r:0,er:0.0,lat:0.0,cached:899320,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:184717,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:680826,to:36259,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:80462,to:30319,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-04": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:75867,to:3531,r:0,er:0.0,lat:0.0,cached:4038,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:22,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:210428,to:15921,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:92888,to:15351,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-05": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:265175,to:5109,r:0,er:0.0,lat:0.0,cached:52746,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:1065346,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:160245,to:7589,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:51132,to:11898,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-06": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:15354,to:751,r:0,er:0.0,lat:0.0,cached:8057,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:246947,to:7308,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:26003,to:6555,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-07": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:263670,to:6470,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:26314,to:12157,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-08": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:59590,to:2272,r:0,er:0.0,lat:0.0,cached:24249,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:28,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:468237,to:17328,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:54131,to:21059,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-09": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4534221,to:4993,r:0,er:0.0,lat:0.0,cached:3758174,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:40,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:526077,to:11385,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:54593,to:85861,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-10": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:531773,to:9308,r:0,er:0.0,lat:0.0,cached:95315,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:139,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:161646,to:12223,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:47214,to:14160,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-11": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:904005,to:8335,r:0,er:0.0,lat:0.0,cached:359301,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:154062,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5553186,to:261760,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3572394,to:377425,r:0,er:0.0,lat:0.0,cached:70943,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-12": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:774,to:646,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1592123,to:5733,r:0,er:0.0,lat:0.0,cached:1084360,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:115,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:6732525,to:202603,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:833265,to:190401,r:0,er:0.0,lat:0.0,cached:254494,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-13": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:703203,to:8192,r:0,er:0.0,lat:0.0,cached:329368,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:326,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:263259,to:6785,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:40231,to:16130,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-14": [
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:322954,to:22680,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:94439,to:37372,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:8711,to:22213,r:13,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-15": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:204394,to:2203,r:0,er:0.0,lat:0.0,cached:67106,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:53,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:341656,to:23183,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:116083,to:36783,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:591,to:5581,r:2,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-16": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:10324,to:634,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:5301,to:390,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1054196,to:19558,r:0,er:0.0,lat:0.0,cached:648886,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:59,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1835501,to:41973,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:155507,to:58611,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-17": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:61944,to:5983,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:19079,to:7368,r:0,er:0.0,lat:0.0,cached:603,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:70944,to:2123,r:0,er:0.0,lat:0.0,cached:4024,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:416703,to:27503,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:89652,to:22583,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1694,to:6772,r:3,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-18": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:725667,to:11628,r:0,er:0.0,lat:0.0,cached:526234,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:74,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:516193,to:34238,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:106097,to:29472,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:828,to:3200,r:2,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-19": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:42854,to:6912,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2129881,to:13848,r:0,er:0.0,lat:0.0,cached:1683581,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:83,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:8702124,to:660124,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2869350,to:373539,r:0,er:0.0,lat:0.0,cached:390457,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-20": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2079686,to:29213,r:0,er:0.0,lat:0.0,cached:1195433,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:96,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:602144,to:28502,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:148055,to:38686,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-21": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1585403,to:21153,r:0,er:0.0,lat:0.0,cached:981802,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:99,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:173816,to:7848,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:64601,to:19970,r:0,er:0.0,lat:0.0,cached:859,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-22": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:430824,to:10286,r:0,er:0.0,lat:0.0,cached:244522,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:54,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:587914,to:51756,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:264897,to:39766,r:0,er:0.0,lat:0.0,cached:22521,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-23": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:730308,to:31849,r:0,er:0.0,lat:0.0,cached:313653,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:141,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:174067,to:7909,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:40304,to:14338,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2211,to:71,r:1,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-24": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:566968,to:163440,r:0,er:0.0,lat:0.0,cached:35219,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:9546526,to:29728,r:0,er:0.0,lat:0.0,cached:7222649,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:200,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:413438,to:21320,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:57722,to:20416,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-25": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:139046,to:7614,r:0,er:0.0,lat:0.0,cached:28465,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:9,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:316204,to:20293,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:37328,to:13327,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:19630,to:4823,r:10,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-26": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:21231,to:1957,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:244060,to:7197,r:0,er:0.0,lat:0.0,cached:107692,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:21,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:659463,to:43872,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:109839,to:35421,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-27": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:84924,to:9502,r:0,er:0.0,lat:0.0,cached:5030,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3352681,to:16822,r:0,er:0.0,lat:0.0,cached:2158756,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:63,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:409658,to:29698,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:51731,to:20080,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-28": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:55347,to:3774,r:0,er:0.0,lat:0.0,cached:26359,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:44,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:93723,to:3294,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:18807,to:4343,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:806122,to:272432,r:171,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-29": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:433194,to:5949,r:0,er:0.0,lat:0.0,cached:305435,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:35,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:251902,to:8206,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:32461,to:13581,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:80935,to:12915,r:25,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-30": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:48431,to:5047,r:0,er:0.0,lat:0.0,cached:8066,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:36,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:417371,to:20657,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:54831,to:83143,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:107954,to:10577,r:36,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-03-31": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:398251,to:10846,r:0,er:0.0,lat:0.0,cached:160970,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:45,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:570700,to:30649,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:89853,to:32499,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:96298,to:33305,r:1,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-01": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:291836,to:11510,r:0,er:0.0,lat:0.0,cached:56924,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:34,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:231008,to:13874,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:37885,to:12103,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:11215,to:4877,r:3,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-02": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:332591,to:13640,r:0,er:0.0,lat:0.0,cached:173399,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:28,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:883540,to:39142,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:122364,to:47249,r:0,er:0.0,lat:0.0,cached:5073,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3201,to:94,r:1,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-03": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:300240,to:13045,r:0,er:0.0,lat:0.0,cached:121816,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:101,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:407814,to:13520,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:65921,to:27337,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-04": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2711509,to:31486,r:0,er:0.0,lat:0.0,cached:1716783,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:232,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4211996,to:112960,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:738612,to:297206,r:0,er:0.0,lat:0.0,cached:41397,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-05": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:25564,to:1180,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:450466,to:23507,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:87944,to:31697,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-06": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:22451,to:1512,r:0,er:0.0,lat:0.0,cached:2000,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:503770,to:21653,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:93482,to:26848,r:0,er:0.0,lat:0.0,cached:1695,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-07": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2273926,to:31536,r:0,er:0.0,lat:0.0,cached:1340150,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:33732,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:672840,to:26119,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:150774,to:19012,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:91548,to:26401,r:21,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-08": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:2428,to:2032,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:991439,to:21777,r:0,er:0.0,lat:0.0,cached:537811,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:151,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:352450,to:31907,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3280,to:2736,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:60876,to:36459,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:496092,to:133765,r:50,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-09": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:118948,to:37251,r:0,er:0.0,lat:0.0,cached:5033,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:23146,to:71624,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:244756,to:8720,r:0,er:0.0,lat:0.0,cached:89544,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:32,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:507591,to:15611,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:67450,to:95068,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-10": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:63647,to:5891,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:143549,to:464100,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:130908,to:5282,r:0,er:0.0,lat:0.0,cached:20350,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:45,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:530218,to:26883,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:84109,to:33394,r:0,er:0.0,lat:0.0,cached:2535,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-11": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:292570,to:11520,r:0,er:0.0,lat:0.0,cached:93454,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:85,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:364511,to:16071,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:44680,to:15332,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-12": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:59940,to:184753,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:607834,to:15484,r:0,er:0.0,lat:0.0,cached:151797,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:53,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:142665,to:11018,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:46282,to:22510,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:6038,to:1548,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-13": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:20105,to:61437,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:359176,to:14873,r:0,er:0.0,lat:0.0,cached:83328,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:36,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:122418,to:4052,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:16861,to:8189,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5918,to:605,r:3,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-14": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:83927,to:7956,r:0,er:0.0,lat:0.0,cached:16131,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:93,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:293890,to:12683,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:51761,to:21209,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-15": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:129480,to:31915,r:0,er:0.0,lat:0.0,cached:5032,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:9714,to:32860,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:143707,to:8326,r:0,er:0.0,lat:0.0,cached:59109,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:22,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1043195,to:23871,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:101602,to:46520,r:0,er:0.0,lat:0.0,cached:2537,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:721672,to:188155,r:202,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-16": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:60231,to:17479,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2309797,to:16942,r:0,er:0.0,lat:0.0,cached:1697224,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:108,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:516831,to:20790,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:55892,to:23818,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:216415,to:142467,r:30,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-17": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:2581,to:426,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:298703,to:103792,r:0,er:0.0,lat:0.0,cached:1012,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:5852699,to:22466,r:0,er:0.0,lat:0.0,cached:4647059,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:72,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:101673,to:5366,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:34737,to:11260,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:206902,to:87878,r:20,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-18": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:44893,to:20585,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:892000,to:17034,r:0,er:0.0,lat:0.0,cached:498688,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:107,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:198409,to:8289,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:35080,to:11308,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:21353,to:1602,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-19": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:83509,to:24417,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1087924,to:16695,r:0,er:0.0,lat:0.0,cached:706928,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:9,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:292236,to:17782,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:58226,to:20589,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:21579,to:1629,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-20": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:78563,to:23839,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:887400,to:18516,r:0,er:0.0,lat:0.0,cached:375523,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:277,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:248540,to:7987,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:62909,to:21784,r:0,er:0.0,lat:0.0,cached:3376,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:55147,to:3606,r:10,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-21": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.0 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:4645,to:380,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:72809,to:26516,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:822297,to:25050,r:0,er:0.0,lat:0.0,cached:363727,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:138,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:77121,to:6023,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:65163,to:15764,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:637536,to:196411,r:206,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-22": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:15260,to:6186,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:258102,to:11626,r:0,er:0.0,lat:0.0,cached:111571,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:57,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:9489,to:1170,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:674245,to:173142,r:0,er:0.0,lat:0.0,cached:10018,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:199255,to:37358,r:74,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-23": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:49248,to:22176,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:74222,to:4383,r:0,er:0.0,lat:0.0,cached:14133,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:35,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:487314,to:124732,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:13147,to:406,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-24": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:538557,to:12549,r:0,er:0.0,lat:0.0,cached:369379,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:81,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2238818,to:613804,r:0,er:0.0,lat:0.0,cached:592325,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:31244,to:5071,r:12,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-25": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:115792,to:4107,r:0,er:0.0,lat:0.0,cached:52855,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:31,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2743246,to:942182,r:0,er:0.0,lat:0.0,cached:119636,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:352190,to:78635,r:126,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-26": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:208302,to:5979,r:0,er:0.0,lat:0.0,cached:128525,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:29,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:51539,to:19097,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:201306,to:22330,r:52,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-27": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:3844,to:4785,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:15885,to:1557,r:0,er:0.0,lat:0.0,cached:2022,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:27,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:120041,to:43031,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:453467,to:50837,r:101,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-28": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:21221,to:5094,r:0,er:0.0,lat:0.0,cached:1429,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:597883,to:15391,r:0,er:0.0,lat:0.0,cached:272725,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:89,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:118616,to:47597,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1205192,to:141275,r:248,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-29": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:232470,to:1808,r:0,er:0.0,lat:0.0,cached:75866,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:24095318,to:1366481,r:0,er:0.0,lat:0.0,cached:9669291,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:669383,to:30325,r:99,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-04-30": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:145366,to:1842,r:0,er:0.0,lat:0.0,cached:12644,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:109926,to:17028,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:17144,to:396,r:3,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-01": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:250786,to:3000,r:14,er:0.0,lat:3.93,cached:113797,think:0,e4:0,e5:0,e429:0,eKnown:14,lat99:4.14},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:57724,to:25559,r:8,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:8.3}
-  ],
-  "2026-05-02": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:41864,to:719,r:15,er:0.0,lat:2.86,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:15,lat99:3.09},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:159543,to:39545,r:32,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:32,lat99:8.35}
-  ],
-  "2026-05-03": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:178619,to:5829,r:1,er:0.0,lat:2.04,cached:87569,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:2.09},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:49,to:0,r:0,er:0.0,lat:2.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:2.09},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:181030,to:57565,r:55,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:55,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:59847,to:2389,r:19,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-04": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:252550,to:3443,r:5,er:0.0,lat:4.09,cached:52007,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:9920,to:435,r:0,er:0.0,lat:0.51,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.52},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1702447,to:28770,r:11,er:0.0,lat:0.51,cached:931293,think:0,e4:0,e5:0,e429:0,eKnown:11,lat99:0.52},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:1333254,to:0,r:8,er:0.0,lat:0.51,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:0.52},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:486606,to:150312,r:134,er:0.0,lat:8.07,cached:13270,think:0,e4:0,e5:0,e429:0,eKnown:134,lat99:8.33},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:146454,to:13544,r:28,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-05": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:188310,to:8627,r:92,er:4.3478,lat:1.02,cached:32534,think:0,e4:4,e5:0,e429:0,eKnown:92,lat99:1.04},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:75,to:0,r:0,er:4.3478,lat:1.02,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:1.04},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:254343,to:103358,r:106,er:0.9434,lat:8.18,cached:3059,think:0,e4:0,e5:1,e429:0,eKnown:106,lat99:8.35},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:20,er:0.0,lat:3.93,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:20,lat99:4.14},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:25599,to:500,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-06": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:448742,to:5420,r:0,er:0.0,lat:0.0,cached:101153,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:72938,to:233840,r:38,er:0.0,lat:7.65,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:38,lat99:8.24},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:467230,to:22827,r:61,er:0.0,lat:7.65,cached:107415,think:0,e4:0,e5:0,e429:0,eKnown:61,lat99:8.24},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:272,to:0,r:0,er:0.0,lat:7.65,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.24},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:846102,to:158528,r:94,er:1.0638,lat:8.18,cached:7151,think:0,e4:0,e5:1,e429:0,eKnown:94,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:103478,to:4973,r:18,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-07": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:744,to:562,r:44,er:0.0,lat:3.77,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:44,lat99:4.11},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:51419,to:122131,r:42,er:0.0,lat:7.13,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:42,lat99:8.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:910645,to:25472,r:227,er:0.0,lat:7.13,cached:331291,think:0,e4:0,e5:0,e429:0,eKnown:227,lat99:8.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:475,to:0,r:0,er:0.0,lat:7.13,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.14},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:232247,to:87712,r:170,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:170,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:17158,to:377,r:3,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-08": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:210960,to:2576,r:5,er:0.0,lat:2.91,cached:25288,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:3.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:25008,to:65970,r:89,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:89,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:204802,to:15287,r:216,er:0.0,lat:3.98,cached:38428,think:0,e4:0,e5:0,e429:0,eKnown:216,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:221,to:0,r:0,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:48129,to:101515,r:47,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:47,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:91052,to:3168,r:19,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-09": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:92150,to:296775,r:144,er:0.0,lat:11.43,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:144,lat99:12.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:161291,to:4398,r:61,er:0.0,lat:11.43,cached:79568,think:0,e4:0,e5:0,e429:0,eKnown:61,lat99:12.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:20,to:0,r:0,er:0.0,lat:11.43,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:12.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:301344,to:422196,r:355,er:0.0,lat:15.94,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:355,lat99:16.61},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:15,er:0.0,lat:2.91,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:15,lat99:3.1},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:34261,to:726,r:6,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-10": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:6999569,to:51924,r:4,er:0.0,lat:3.01,cached:6591449,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:3.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:37938,to:118610,r:12,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:12,lat99:16.69},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:631098,to:18577,r:49,er:0.0,lat:16.36,cached:269939,think:0,e4:0,e5:0,e429:0,eKnown:49,lat99:16.69},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:9781,to:0,r:1,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:16.69},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:230106,to:67103,r:60,er:1.6667,lat:8.18,cached:0,think:0,e4:1,e5:0,e429:0,eKnown:60,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:25553,to:473,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-11": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:215025,to:5479,r:114,er:0.0,lat:5.4,cached:124341,think:0,e4:0,e5:0,e429:0,eKnown:114,lat99:6.11},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:47,to:0,r:0,er:0.0,lat:5.4,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:6.11},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:533949,to:210153,r:100,er:0.0,lat:15.1,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:100,lat99:16.44},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:551,er:0.0,lat:2.08,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:551,lat99:3.43},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:314960,to:16500,r:58,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-12": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:465616,to:76525,r:5,er:0.0,lat:6.13,cached:281027,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:6.26},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1432,to:7479,r:0,er:0.0,lat:3.03,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:3.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:327440,to:8650,r:14,er:0.0,lat:3.03,cached:173416,think:0,e4:0,e5:0,e429:0,eKnown:14,lat99:3.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:44,to:0,r:0,er:0.0,lat:3.03,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:3.12},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:735110,to:195477,r:147,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:147,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:38514,to:1273,r:10,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-13": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:222803,to:8090,r:72,er:0.0,lat:4.09,cached:37932,think:0,e4:0,e5:0,e429:0,eKnown:72,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:53471,to:159170,r:24,er:0.0,lat:7.55,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:24,lat99:8.22},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:447111,to:17467,r:52,er:0.0,lat:7.55,cached:85277,think:0,e4:0,e5:0,e429:0,eKnown:52,lat99:8.22},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:287,to:0,r:0,er:0.0,lat:7.55,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.22},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:155049,to:56874,r:128,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:128,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:141079,to:4787,r:30,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-14": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:138621,to:330612,r:99,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:99,lat99:16.69},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:271440,to:12274,r:60,er:0.0,lat:16.36,cached:62740,think:0,e4:0,e5:0,e429:0,eKnown:60,lat99:16.69},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:107,to:0,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:224651,to:101342,r:74,er:0.0,lat:8.18,cached:1021,think:0,e4:0,e5:0,e429:0,eKnown:74,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:18410,to:493,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-15": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:10116,to:30382,r:6,er:0.0,lat:12.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:12.49},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:120534,to:6524,r:19,er:0.0,lat:12.09,cached:26455,think:0,e4:0,e5:0,e429:0,eKnown:19,lat99:12.49},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:52,to:0,r:0,er:0.0,lat:12.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:12.49},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:428689,to:61026,r:90,er:0.0,lat:8.18,cached:30328,think:0,e4:0,e5:0,e429:0,eKnown:90,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:345618,to:78238,r:79,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-16": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:21531,to:1698,r:19,er:0.0,lat:7.97,cached:10056,think:0,e4:0,e5:0,e429:0,eKnown:19,lat99:8.3},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:415406,to:80018,r:88,er:0.0,lat:8.1,cached:35449,think:0,e4:0,e5:0,e429:0,eKnown:88,lat99:8.33},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:928448,to:169739,r:197,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-17": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3257,to:11282,r:0,er:0.0,lat:3.01,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:3.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:244664,to:3036,r:8,er:0.0,lat:3.01,cached:100095,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:3.12},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:95594,to:33677,r:62,er:0.0,lat:8.07,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:62,lat99:8.33},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:30104,to:753,r:7,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-18": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:21640,to:67653,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:11950273,to:42717,r:67,er:0.0,lat:8.18,cached:9912030,think:0,e4:0,e5:0,e429:0,eKnown:67,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:87806,to:0,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:35700,to:8867,r:27,er:0.0,lat:7.76,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:27,lat99:8.26},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:185020,to:10513,r:50,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-19": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:405844,to:4395,r:37,er:0.0,lat:4.09,cached:282931,think:0,e4:0,e5:0,e429:0,eKnown:37,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:49483,to:145760,r:50,er:0.0,lat:3.9,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:50,lat99:4.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:240771,to:15085,r:66,er:0.0,lat:3.9,cached:40429,think:0,e4:0,e5:0,e429:0,eKnown:66,lat99:4.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:67,to:0,r:0,er:0.0,lat:3.9,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.14},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:514567,to:108401,r:76,er:0.0,lat:8.13,cached:90980,think:0,e4:0,e5:0,e429:0,eKnown:76,lat99:8.34},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:284741,to:14185,r:54,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-20": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:120783,to:374232,r:46,er:0.0,lat:15.52,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:46,lat99:16.53},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:889660,to:14201,r:85,er:0.0,lat:15.52,cached:424358,think:0,e4:0,e5:0,e429:0,eKnown:85,lat99:16.53},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:227,to:0,r:0,er:0.0,lat:15.52,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.53},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:162878,to:29926,r:70,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:70,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:636794,to:26524,r:111,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-21": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:22366,to:51450,r:14,er:0.0,lat:11.43,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:14,lat99:12.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:554025,to:20380,r:109,er:0.0,lat:11.43,cached:195188,think:0,e4:0,e5:0,e429:0,eKnown:109,lat99:12.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:43210,to:0,r:8,er:0.0,lat:11.43,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:12.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:551377,to:156952,r:92,er:0.0,lat:8.18,cached:5104,think:0,e4:0,e5:0,e429:0,eKnown:92,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:20704,to:1138,r:6,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-22": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1501026,to:46320,r:58,er:0.0,lat:7.86,cached:768364,think:0,e4:0,e5:0,e429:0,eKnown:58,lat99:8.28},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:93,to:0,r:0,er:0.0,lat:7.86,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.28},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:339599,to:102204,r:148,er:0.6757,lat:8.18,cached:6127,think:0,e4:0,e5:1,e429:0,eKnown:148,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:104301,to:4690,r:22,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-23": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:6418,to:18146,r:7,er:0.0,lat:7.03,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:8.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:257732,to:12460,r:81,er:0.0,lat:7.03,cached:99455,think:0,e4:0,e5:0,e429:0,eKnown:81,lat99:8.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:53,to:0,r:0,er:0.0,lat:7.03,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.12},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:523482,to:68589,r:55,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:55,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:188249,to:6681,r:31,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-24": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:50179,to:1977,r:11,er:0.0,lat:3.98,cached:20288,think:0,e4:0,e5:0,e429:0,eKnown:11,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:11,to:0,r:0,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:281207,to:49868,r:63,er:0.0,lat:13.84,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:63,lat99:16.19},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1119284,to:33201,r:173,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-25": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:29737,to:102904,r:3,er:0.0,lat:4.59,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:5.11},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:282864,to:11124,r:8,er:0.0,lat:4.59,cached:99073,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:5.11},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:64,to:0,r:0,er:0.0,lat:4.59,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:5.11},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3383467,to:1448992,r:128,er:0.0,lat:8.18,cached:144739,think:0,e4:0,e5:0,e429:0,eKnown:128,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:112619,to:8146,r:26,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-26": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:58753,to:202447,r:54,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:54,lat99:16.69},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:150269,to:7463,r:33,er:0.0,lat:16.36,cached:46829,think:0,e4:0,e5:0,e429:0,eKnown:33,lat99:16.69},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:112,to:0,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4195885,to:2029142,r:2469,er:0.0,lat:8.18,cached:68663,think:0,e4:0,e5:0,e429:0,eKnown:2469,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:422966,to:32590,r:80,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-27": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:282439,to:12118,r:37,er:0.0,lat:14.68,cached:97779,think:0,e4:0,e5:0,e429:0,eKnown:37,lat99:16.36},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:29908,to:0,r:4,er:0.0,lat:14.68,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:16.36},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:144748,to:8631,r:88,er:0.0,lat:15.31,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:88,lat99:16.48},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:520699,to:142314,r:380,er:0.0,lat:15.31,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:380,lat99:16.48},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:702439,to:62806,r:112,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-28": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:2921772,to:35728,r:0,er:0.0,lat:0.0,cached:1839723,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:6552,to:16532,r:1,er:0.0,lat:4.05,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1689547,to:29120,r:64,er:0.0,lat:4.05,cached:965209,think:0,e4:0,e5:0,e429:0,eKnown:64,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:280,to:0,r:0,er:0.0,lat:4.05,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:322,to:49,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:244421,to:88328,r:164,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:164,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2435797,to:434963,r:448,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-29": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:239554,to:6753,r:299,er:0.0,lat:4.09,cached:15503,think:0,e4:0,e5:0,e429:0,eKnown:299,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:43849,to:143407,r:20,er:0.0,lat:7.76,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:20,lat99:8.26},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:187372,to:8483,r:21,er:0.0,lat:7.76,cached:65051,think:0,e4:0,e5:0,e429:0,eKnown:21,lat99:8.26},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:107,to:0,r:0,er:0.0,lat:7.76,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.26},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:476031,to:9163,r:125,er:2.2222,lat:2.7,cached:0,think:0,e4:3,e5:0,e429:0,eKnown:125,lat99:3.06},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:182241,to:34031,r:55,er:2.2222,lat:2.7,cached:0,think:0,e4:1,e5:0,e429:0,eKnown:55,lat99:3.06},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:303478,to:18434,r:60,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-30": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:52740,to:655,r:6,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:10083,to:30777,r:32,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:32,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:64768,to:3861,r:53,er:0.0,lat:8.18,cached:20250,think:0,e4:0,e5:0,e429:0,eKnown:53,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:51,to:0,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.0 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:203911,to:6096,r:43,er:0.0,lat:4.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:43,lat99:4.16},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:158723,to:46751,r:42,er:0.0,lat:4.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:42,lat99:4.16},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:38868,to:1970,r:9,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-05-31": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:266992,to:3955,r:32,er:0.0,lat:3.93,cached:25288,think:0,e4:0,e5:0,e429:0,eKnown:32,lat99:4.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:115441,to:10118,r:6,er:0.0,lat:3.93,cached:28301,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:4.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:20,to:0,r:0,er:0.0,lat:3.93,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.14},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:44811,to:19147,r:47,er:0.0,lat:8.07,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:47,lat99:8.33},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:28866,to:4081,r:6,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-01": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:524085,to:5809,r:5,er:0.0,lat:2.91,cached:227597,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:3.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:18635,to:61903,r:2,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1154757,to:41794,r:37,er:0.0,lat:8.18,cached:290713,think:0,e4:0,e5:0,e429:0,eKnown:37,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:109,to:0,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:665446,to:138165,r:53,er:0.0,lat:8.18,cached:20097,think:0,e4:0,e5:0,e429:0,eKnown:53,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 3.1 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:9882,to:927,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 3.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3294,to:2969,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:84242,to:8586,r:18,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-02": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:559287,to:7097,r:43,er:0.0,lat:2.04,cached:164378,think:0,e4:0,e5:0,e429:0,eKnown:43,lat99:2.09},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:23555,to:73490,r:1,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:7925211,to:77054,r:116,er:0.0,lat:7.97,cached:5677536,think:0,e4:0,e5:0,e429:0,eKnown:116,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:310,to:0,r:0,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.3},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:273012,to:55260,r:183,er:1.6393,lat:4.09,cached:20032,think:0,e4:3,e5:0,e429:0,eKnown:183,lat99:4.17},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:28650,to:4442,r:7,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-03": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:1157732,to:13187,r:94,er:0.0,lat:3.77,cached:392929,think:0,e4:0,e5:0,e429:0,eKnown:94,lat99:4.11},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:5837,to:17403,r:1,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3195058,to:96154,r:183,er:0.0,lat:7.97,cached:1452015,think:0,e4:0,e5:0,e429:0,eKnown:183,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:175,to:0,r:0,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.3},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:893206,to:282602,r:95,er:0.0,lat:8.18,cached:33209,think:0,e4:0,e5:0,e429:0,eKnown:95,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:639926,to:77047,r:138,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-04": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:78316,to:855,r:70,er:0.0,lat:3.88,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:70,lat99:4.13},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:11483609,to:107839,r:246,er:0.0,lat:8.02,cached:7751675,think:0,e4:0,e5:0,e429:0,eKnown:246,lat99:8.32},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:357,to:0,r:0,er:0.0,lat:8.02,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.32},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:335341,to:45515,r:248,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:248,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:477046,to:39020,r:90,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-05": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:117128,to:3259,r:24,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:24,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3716,to:11831,r:1,er:0.0,lat:7.76,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.26},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3616056,to:73488,r:153,er:0.0,lat:7.76,cached:1414070,think:0,e4:0,e5:0,e429:0,eKnown:153,lat99:8.26},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:101,to:0,r:0,er:0.0,lat:7.76,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.26},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:259073,to:74122,r:64,er:0.0,lat:8.18,cached:1006,think:0,e4:0,e5:0,e429:0,eKnown:64,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:348595,to:13584,r:68,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-06": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:108828,to:1746,r:12,er:0.0,lat:4.04,cached:12644,think:0,e4:0,e5:0,e429:0,eKnown:12,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:13094,to:40008,r:17,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:17,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:485029,to:16876,r:160,er:0.0,lat:4.09,cached:55781,think:0,e4:0,e5:0,e429:0,eKnown:160,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:6,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:78965,to:40784,r:75,er:1.3333,lat:8.18,cached:0,think:0,e4:1,e5:0,e429:0,eKnown:75,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3312479,to:158765,r:615,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-07": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:474786,to:5495,r:35,er:0.0,lat:3.88,cached:75865,think:0,e4:0,e5:0,e429:0,eKnown:35,lat99:4.13},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:12272,to:39775,r:0,er:0.0,lat:7.55,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.22},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1976553,to:55054,r:16,er:0.0,lat:7.55,cached:1068418,think:0,e4:0,e5:0,e429:0,eKnown:16,lat99:8.22},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:290,to:0,r:0,er:0.0,lat:7.55,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.22},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:166666,to:43718,r:15,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:15,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2420684,to:118211,r:440,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-08": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:2023333,to:23642,r:130,er:0.0,lat:3.77,cached:742806,think:0,e4:0,e5:0,e429:0,eKnown:130,lat99:4.11},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:10759,to:38835,r:5,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2109322,to:61065,r:223,er:0.0,lat:7.97,cached:531927,think:0,e4:0,e5:0,e429:0,eKnown:223,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:194,to:0,r:0,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.3},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:578972,to:114925,r:116,er:1.7241,lat:8.18,cached:0,think:0,e4:0,e5:2,e429:0,eKnown:116,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1126716,to:43148,r:203,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-09": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:7103,to:23200,r:2,er:0.0,lat:7.34,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.18},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1519854,to:34232,r:112,er:0.0,lat:7.34,cached:674488,think:0,e4:0,e5:0,e429:0,eKnown:112,lat99:8.18},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:211,to:0,r:0,er:0.0,lat:7.34,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.18},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:271693,to:61395,r:83,er:1.2048,lat:8.18,cached:13291,think:0,e4:0,e5:1,e429:0,eKnown:83,lat99:8.35},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:68,er:0.0,lat:3.77,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:68,lat99:4.11},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:19835,to:1415,r:5,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-10": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:6102,to:20136,r:2,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1635779,to:27089,r:109,er:0.0,lat:4.09,cached:995587,think:0,e4:0,e5:0,e429:0,eKnown:109,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:169,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:718880,to:166891,r:145,er:0.0,lat:8.18,cached:30326,think:0,e4:0,e5:0,e429:0,eKnown:145,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:228122,to:6463,r:49,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-11": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:11804,to:40414,r:5,er:0.0,lat:14.68,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:16.36},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:338216,to:17207,r:31,er:0.0,lat:14.68,cached:97270,think:0,e4:0,e5:0,e429:0,eKnown:31,lat99:16.36},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:70,to:0,r:0,er:0.0,lat:14.68,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.36},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5947955,to:266715,r:304,er:0.0,lat:8.18,cached:345155,think:0,e4:0,e5:0,e429:0,eKnown:304,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:63993,to:1897,r:14,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-12": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:26388,to:88300,r:2,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:6416528,to:34144,r:123,er:0.0,lat:4.09,cached:4770529,think:0,e4:0,e5:0,e429:0,eKnown:123,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:514,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1380409,to:165058,r:149,er:0.0,lat:7.97,cached:296032,think:0,e4:0,e5:0,e429:0,eKnown:149,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:170874,to:10673,r:37,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-13": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:105508,to:1197,r:0,er:0.0,lat:0.0,cached:12645,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:7272872,to:65491,r:264,er:0.0,lat:4.02,cached:4507074,think:0,e4:0,e5:0,e429:0,eKnown:264,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:696,to:0,r:0,er:0.0,lat:4.02,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.16},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:498617,to:126510,r:126,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:126,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:48215,to:2165,r:11,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-14": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:52754,to:592,r:15,er:0.0,lat:3.07,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:15,lat99:3.13},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2547307,to:38944,r:12,er:0.0,lat:2.27,cached:1511372,think:0,e4:0,e5:0,e429:0,eKnown:12,lat99:2.34},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:226,to:0,r:0,er:0.0,lat:2.27,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:2.34},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:209743,to:37546,r:47,er:0.0,lat:7.76,cached:7151,think:0,e4:0,e5:0,e429:0,eKnown:47,lat99:8.26},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:269196,to:10132,r:49,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-15": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:1660,to:265,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:877529,to:7829,r:94,er:0.0,lat:4.04,cached:515066,think:0,e4:0,e5:0,e429:0,eKnown:94,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:54,to:0,r:0,er:0.0,lat:4.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.16},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:552219,to:116060,r:75,er:1.3333,lat:8.18,cached:0,think:0,e4:0,e5:1,e429:0,eKnown:75,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:259182,to:7697,r:54,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-16": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:8300,to:1527,r:1,er:0.0,lat:4.09,cached:1436,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:5971,to:18492,r:2,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:639543,to:11836,r:42,er:0.0,lat:4.09,cached:144539,think:0,e4:0,e5:0,e429:0,eKnown:42,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:63,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:888042,to:199435,r:194,er:0.0,lat:8.18,cached:10221,think:0,e4:0,e5:0,e429:0,eKnown:194,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:56197,to:2542,r:14,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-17": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:684142,to:7627,r:34,er:0.0,lat:3.98,cached:101155,think:0,e4:0,e5:0,e429:0,eKnown:34,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:41687,to:146141,r:24,er:0.0,lat:23.17,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:24,lat99:24.77},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:62786,to:2360,r:8,er:0.0,lat:23.17,cached:34369,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:24.77},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:567841,to:101319,r:153,er:0.6536,lat:8.18,cached:30338,think:0,e4:0,e5:1,e429:0,eKnown:153,lat99:8.35},
-    {a:"Tools Quizzer",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Nội bộ",u:0,c:0,ti:0,to:0,r:1,er:100.0,lat:0.26,cached:0,think:0,e4:1,e5:0,e429:0,eKnown:1,lat99:0.26},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:66718,to:2769,r:15,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-18": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:386975,to:6405,r:46,er:2.1739,lat:3.93,cached:179240,think:0,e4:0,e5:1,e429:0,eKnown:46,lat99:4.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:5019,to:16382,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:532643,to:19318,r:35,er:0.0,lat:8.18,cached:195162,think:0,e4:0,e5:0,e429:0,eKnown:35,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:191,to:0,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1114657,to:200514,r:130,er:0.0,lat:8.13,cached:90338,think:0,e4:0,e5:0,e429:0,eKnown:130,lat99:8.34},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:57882,to:10799,r:16,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-19": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:580235,to:6506,r:39,er:0.0,lat:6.29,cached:63220,think:0,e4:0,e5:0,e429:0,eKnown:39,lat99:7.97},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:309471,to:5212,r:50,er:0.0,lat:3.98,cached:147066,think:0,e4:0,e5:0,e429:0,eKnown:50,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:5,to:0,r:0,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:24990490,to:10057724,r:386,er:0.7772,lat:15.1,cached:0,think:0,e4:0,e5:3,e429:0,eKnown:386,lat99:16.44},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:74694,to:2772,r:15,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-20": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2360,to:7663,r:1,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:163275,to:5308,r:13,er:0.0,lat:7.97,cached:40629,think:0,e4:0,e5:0,e429:0,eKnown:13,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:24,to:0,r:0,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.3},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:45,er:0.0,lat:3.67,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:45,lat99:4.09},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:5795,er:0.0863,lat:15.31,cached:0,think:0,e4:4,e5:1,e429:0,eKnown:5795,lat99:16.48},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1996244,to:206647,r:407,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-21": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:220165,to:6735,r:0,er:0.0,lat:0.0,cached:40806,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:26,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:412037,to:93081,r:28,er:35.7143,lat:0.26,cached:44638,think:0,e4:10,e5:0,e429:0,eKnown:28,lat99:0.26},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:266576,to:12947,r:51,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-22": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:158262,to:1764,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2176093,to:29523,r:18,er:0.0,lat:7.55,cached:1038926,think:0,e4:0,e5:0,e429:0,eKnown:18,lat99:8.22},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:42,to:0,r:0,er:0.0,lat:7.55,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.22},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:583117,to:127122,r:161,er:0.0,lat:8.0,cached:1705,think:0,e4:0,e5:0,e429:0,eKnown:161,lat99:8.31},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:158307,to:6070,r:37,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-23": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:318184,to:3891,r:25,er:0.0,lat:2.91,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:25,lat99:3.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:6044178,to:42992,r:173,er:0.0,lat:4.09,cached:4451812,think:0,e4:0,e5:0,e429:0,eKnown:173,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:173,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:279304,to:63012,r:121,er:0.0,lat:8.07,cached:30328,think:0,e4:0,e5:0,e429:0,eKnown:121,lat99:8.33},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:343677,to:26246,r:66,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-24": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:132316,to:1425,r:33,er:0.0,lat:3.88,cached:50576,think:0,e4:0,e5:0,e429:0,eKnown:33,lat99:4.13},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2056662,to:26713,r:57,er:0.0,lat:4.05,cached:1396635,think:0,e4:0,e5:0,e429:0,eKnown:57,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:82,to:0,r:0,er:0.0,lat:4.05,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Tools Quizzer",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Nội bộ",u:0,c:0,ti:7957,to:4464,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:314812,to:68287,r:33,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:33,lat99:4.17},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:168536,to:12057,r:40,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-25": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:233267,to:2270,r:0,er:0.0,lat:0.0,cached:63222,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:10116,to:34226,r:5,er:0.0,lat:4.56,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:5.95},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1101729,to:24795,r:115,er:0.0,lat:4.56,cached:508630,think:0,e4:0,e5:0,e429:0,eKnown:115,lat99:5.95},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:145,to:0,r:0,er:0.0,lat:4.56,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:5.95},
-    {a:"Tools Quizzer",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Nội bộ",u:0,c:0,ti:5118,to:7580,r:9,er:44.4444,lat:0.64,cached:0,think:0,e4:4,e5:0,e429:0,eKnown:9,lat99:0.65},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:704111,to:146091,r:111,er:0.0,lat:8.18,cached:151660,think:0,e4:0,e5:0,e429:0,eKnown:111,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:27265,to:676,r:5,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-26": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:137375,to:7449,r:25,er:0.0,lat:4.09,cached:42540,think:0,e4:0,e5:0,e429:0,eKnown:25,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:27,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:552679,to:111975,r:193,er:0.5181,lat:8.18,cached:863,think:0,e4:0,e5:1,e429:0,eKnown:193,lat99:8.35},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:21,er:4.7619,lat:2.04,cached:0,think:0,e4:0,e5:1,e429:0,eKnown:21,lat99:2.09},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:230928,to:4496,r:35,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-27": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:10116,to:33280,r:10,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:18038,to:1744,r:5,er:0.0,lat:3.98,cached:2023,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.1 Flash Lite",ug:"Nhóm CSKH",u:0,c:0,ti:9059,to:131,r:2,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:507540,to:103247,r:71,er:0.0,lat:8.18,cached:47701,think:0,e4:0,e5:0,e429:0,eKnown:71,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:92279,to:2428,r:19,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-28": [
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:498523,to:13347,r:34,er:0.0,lat:2.04,cached:212006,think:0,e4:0,e5:0,e429:0,eKnown:34,lat99:2.09},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:84,to:0,r:0,er:0.0,lat:2.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:2.09},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:400343,to:112427,r:122,er:0.8197,lat:8.18,cached:0,think:0,e4:0,e5:1,e429:0,eKnown:122,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:37618,to:1275,r:8,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-29": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:1660,to:265,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:945834,to:20828,r:27,er:0.0,lat:4.09,cached:519949,think:0,e4:0,e5:0,e429:0,eKnown:27,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:179,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Tools Quizzer",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Nội bộ",u:0,c:0,ti:23626,to:599,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:369247,to:113316,r:124,er:2.4194,lat:7.97,cached:1013,think:0,e4:3,e5:0,e429:0,eKnown:124,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:74202,to:2270,r:15,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-06-30": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:119924,to:1498,r:3,er:0.0,lat:4.09,cached:37933,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:794099,to:23587,r:61,er:0.0,lat:4.06,cached:436492,think:0,e4:0,e5:0,e429:0,eKnown:61,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:85,to:0,r:0,er:0.0,lat:4.06,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Tools Quizzer",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Nội bộ",u:0,c:0,ti:1193,to:543,r:6,er:0.0,lat:3.07,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:3.13},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:354460,to:121518,r:102,er:0.0,lat:8.18,cached:1014,think:0,e4:0,e5:0,e429:0,eKnown:102,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:27277,to:644,r:5,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-01": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:345402,to:4426,r:9,er:0.0,lat:5.91,cached:63221,think:0,e4:0,e5:0,e429:0,eKnown:9,lat99:6.22},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4320,to:13191,r:0,er:0.0,lat:5.82,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:6.2},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3062786,to:53915,r:57,er:0.0,lat:5.82,cached:1965107,think:0,e4:0,e5:0,e429:0,eKnown:57,lat99:6.2},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:219,to:0,r:0,er:0.0,lat:5.82,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:6.2},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:959019,to:241264,r:203,er:0.0,lat:8.07,cached:20290,think:0,e4:0,e5:0,e429:0,eKnown:203,lat99:8.33},
-    {a:"Tools Quizzer",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash",ug:"Nhóm Nội bộ",u:0,c:0,ti:0,to:0,r:3,er:0.0,lat:1.02,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:1.04},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:125118,to:2755,r:20,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-02": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2634,to:615,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:664,to:155,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:509,to:119,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:288,to:67,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:276,to:64,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:271,to:63,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:160,to:37,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:110,to:26,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:23303,to:8157,r:4,er:0.0,lat:16.36,cached:2181,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5876,to:2057,r:1,er:0.0,lat:16.36,cached:550,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4504,to:1577,r:1,er:0.0,lat:16.36,cached:422,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2552,to:893,r:0,er:0.0,lat:16.36,cached:239,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2438,to:853,r:0,er:0.0,lat:16.36,cached:228,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2401,to:841,r:0,er:0.0,lat:16.36,cached:225,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1415,to:495,r:0,er:0.0,lat:16.36,cached:132,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:977,to:342,r:0,er:0.0,lat:16.36,cached:91,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:105508,to:1213,r:34,er:0.0,lat:4.04,cached:25288,think:0,e4:0,e5:0,e429:0,eKnown:34,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1248767,to:100585,r:235,er:0.0,lat:5.77,cached:537323,think:0,e4:0,e5:0,e429:0,eKnown:235,lat99:7.86},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:97,to:0,r:0,er:0.0,lat:5.77,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:7.86},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:408005,to:124460,r:138,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:138,lat99:8.35}
-  ],
-  "2026-07-03": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:212676,to:2728,r:31,er:0.0,lat:3.77,cached:37932,think:0,e4:0,e5:0,e429:0,eKnown:31,lat99:4.11},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1036386,to:18177,r:66,er:0.0,lat:6.92,cached:644963,think:0,e4:0,e5:0,e429:0,eKnown:66,lat99:8.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:65,to:0,r:0,er:0.0,lat:6.92,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.1},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:201065,to:63199,r:85,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:85,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:83529,to:2449,r:17,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-04": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:126672,to:1837,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:585388,to:11296,r:5,er:0.0,lat:10.2,cached:183764,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:10.43},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:58856,to:25758,r:46,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:46,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:257239,to:21090,r:58,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-05": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:224153,to:2386,r:36,er:0.0,lat:3.88,cached:75865,think:0,e4:0,e5:0,e429:0,eKnown:36,lat99:4.13},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:351111,to:83045,r:66,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:66,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:0,to:0,r:31,er:0.0,lat:6.71,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:31,lat99:8.05},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:36917,to:1210,r:7,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-06": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:1650824,to:1693669,r:0,er:0.0,lat:0.0,cached:241362,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:10,to:134,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:301490,to:64423,r:0,er:0.0,lat:0.0,cached:42712,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1959950,to:26597,r:21,er:0.0,lat:4.06,cached:1154890,think:0,e4:0,e5:0,e429:0,eKnown:21,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:54,to:0,r:0,er:0.0,lat:4.06,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:234218,to:57198,r:57,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:57,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:789688,to:18176,r:120,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-07": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:481747,to:522956,r:251,er:0.0,lat:32.72,cached:30288,think:0,e4:0,e5:0,e429:0,eKnown:251,lat99:33.39},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:29046,to:27136,r:11,er:0.0,lat:16.15,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:11,lat99:16.65},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:8120035,to:130168,r:47,er:0.0,lat:3.98,cached:6082675,think:0,e4:0,e5:0,e429:0,eKnown:47,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:84040,to:2708,r:45,er:0.0,lat:7.97,cached:40705,think:0,e4:0,e5:0,e429:0,eKnown:45,lat99:8.3},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:230527,to:79134,r:78,er:1.2821,lat:7.97,cached:0,think:0,e4:0,e5:1,e429:0,eKnown:78,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1434436,to:33139,r:201,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-08": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:28986,to:33665,r:72,er:0.0,lat:60.4,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:72,lat99:65.77},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:187229,to:193094,r:0,er:0.0,lat:0.0,cached:26374,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:23435731,to:857657,r:2739,er:0.2921,lat:4.09,cached:17463654,think:0,e4:0,e5:8,e429:0,eKnown:2739,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:569199,to:19010,r:27,er:0.0,lat:7.97,cached:261119,think:0,e4:0,e5:0,e429:0,eKnown:27,lat99:8.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:14,to:0,r:0,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.3},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:679147,to:183673,r:96,er:0.0,lat:11.01,cached:1023,think:0,e4:0,e5:0,e429:0,eKnown:96,lat99:12.27},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1108965,to:44289,r:141,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-09": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:31488,to:33712,r:5,er:0.0,lat:32.3,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:33.3},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:3682316,to:309913,r:605,er:0.0,lat:6.19,cached:2579654,think:0,e4:0,e5:0,e429:0,eKnown:605,lat99:7.95},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1875191,to:27139,r:82,er:0.0,lat:4.08,cached:1162721,think:0,e4:0,e5:0,e429:0,eKnown:82,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:149,to:0,r:0,er:0.0,lat:4.08,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:607374,to:96009,r:154,er:0.0,lat:8.02,cached:130663,think:0,e4:0,e5:0,e429:0,eKnown:154,lat99:8.32},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:39,er:0.0,lat:62.08,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:39,lat99:66.1},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:27214,to:638,r:5,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-10": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:98274,to:119235,r:5,er:0.0,lat:64.17,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:66.52},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:103860,to:138047,r:0,er:0.0,lat:0.0,cached:32462,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:1829160,to:20104,r:340,er:0.0,lat:4.04,cached:1204063,think:0,e4:0,e5:0,e429:0,eKnown:340,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1340165,to:26035,r:30,er:0.0,lat:7.76,cached:411973,think:0,e4:0,e5:0,e429:0,eKnown:30,lat99:8.26},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:34,to:0,r:0,er:0.0,lat:7.76,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.26},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:277371,to:64292,r:131,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:131,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:564497,to:64764,r:107,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-11": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:35932,to:45934,r:15,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:15,lat99:33.39},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:95008,to:79512,r:43,er:0.0,lat:63.75,cached:21289,think:0,e4:0,e5:0,e429:0,eKnown:43,lat99:66.44},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:79981,to:1084,r:8,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1279397,to:22100,r:94,er:0.0,lat:4.09,cached:744026,think:0,e4:0,e5:0,e429:0,eKnown:94,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:111,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:171700,to:62992,r:41,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:41,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:590005,to:89734,r:131,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-12": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:65259,to:80209,r:6,er:0.0,lat:62.08,cached:3015,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:66.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:53450,to:172809,r:11,er:1.6667,lat:4.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:11,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:971943,to:22876,r:49,er:1.6667,lat:4.04,cached:553449,think:0,e4:0,e5:1,e429:0,eKnown:49,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:79,to:0,r:0,er:1.6667,lat:4.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.16},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:309212,to:49587,r:65,er:0.0,lat:7.97,cached:30332,think:0,e4:0,e5:0,e429:0,eKnown:65,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:206661,to:13659,r:41,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-13": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:150704,to:180619,r:10,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:33.39},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:2991611,to:41022,r:5,er:0.0,lat:3.06,cached:2101093,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:3.13},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3298,to:14589,r:2,er:0.0,lat:15.94,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:16.61},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1314533,to:23001,r:137,er:0.0,lat:15.94,cached:697041,think:0,e4:0,e5:0,e429:0,eKnown:137,lat99:16.61},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:91,to:0,r:0,er:0.0,lat:15.94,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.61},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:100574,to:30834,r:21,er:0.0,lat:11.22,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:21,lat99:12.31},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:370932,to:28491,r:75,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-14": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:65639,to:31659,r:0,er:0.0,lat:0.0,cached:15207,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:16552,to:7984,r:0,er:0.0,lat:0.0,cached:3835,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:12686,to:6119,r:0,er:0.0,lat:0.0,cached:2939,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:7187,to:3467,r:0,er:0.0,lat:0.0,cached:1665,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:6868,to:3312,r:0,er:0.0,lat:0.0,cached:1591,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:6764,to:3262,r:0,er:0.0,lat:0.0,cached:1567,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3987,to:1923,r:0,er:0.0,lat:0.0,cached:924,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2753,to:1328,r:0,er:0.0,lat:0.0,cached:638,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:121157,to:156787,r:23,er:0.0,lat:59.56,cached:3025,think:0,e4:0,e5:0,e429:0,eKnown:23,lat99:65.6},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:4478498,to:54884,r:328,er:0.0,lat:4.09,cached:3600602,think:0,e4:0,e5:0,e429:0,eKnown:328,lat99:7.3},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:6372275,to:23059,r:63,er:1.5873,lat:7.86,cached:4648283,think:0,e4:1,e5:0,e429:0,eKnown:63,lat99:8.28},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:104,to:0,r:0,er:1.5873,lat:7.86,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.28},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:126206,to:50669,r:32,er:6.25,lat:7.76,cached:0,think:0,e4:2,e5:0,e429:0,eKnown:32,lat99:8.26},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:663815,to:79592,r:146,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-15": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:22679,to:27182,r:22,er:0.0,lat:57.88,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:22,lat99:65.26},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:289490,to:382131,r:57,er:0.0,lat:63.75,cached:194812,think:0,e4:0,e5:0,e429:0,eKnown:57,lat99:66.44},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:7613992,to:100450,r:801,er:0.0,lat:5.98,cached:6134299,think:0,e4:0,e5:0,e429:0,eKnown:801,lat99:7.94},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:8344,to:25417,r:2,er:0.0,lat:7.44,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.2},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2247381,to:37785,r:117,er:0.0,lat:7.44,cached:1221376,think:0,e4:0,e5:0,e429:0,eKnown:117,lat99:8.2},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:164,to:0,r:0,er:0.0,lat:7.44,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.2},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4049337,to:774314,r:72,er:5.5556,lat:8.18,cached:94162,think:0,e4:4,e5:0,e429:0,eKnown:72,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:10,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:3,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:2,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:33.39},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:345096,to:18184,r:77,er:0.0,lat:0.0,cached:59608,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-16": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:52747,to:61061,r:4,er:0.0,lat:63.75,cached:6016,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:66.44},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:2296800,to:298276,r:567,er:0.0,lat:4.09,cached:1840550,think:0,e4:0,e5:0,e429:0,eKnown:567,lat99:7.84},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:7070,to:22648,r:2,er:0.0,lat:6.92,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1580786,to:20187,r:83,er:0.0,lat:6.92,cached:1150860,think:0,e4:0,e5:0,e429:0,eKnown:83,lat99:8.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:109,to:0,r:0,er:0.0,lat:6.92,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.1},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:821826,to:270140,r:807,er:0.0,lat:13.0,cached:2696,think:0,e4:0,e5:0,e429:0,eKnown:807,lat99:16.02},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:258843,to:26284,r:56,er:0.0,lat:0.0,cached:50468,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-17": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:83112,to:110057,r:10,er:0.0,lat:46.56,cached:6025,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:49.58},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:206977,to:259051,r:0,er:0.0,lat:0.0,cached:74070,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:970571,to:13191,r:6,er:0.0,lat:4.09,cached:594937,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1724814,to:19404,r:48,er:0.0,lat:7.13,cached:1356391,think:0,e4:0,e5:0,e429:0,eKnown:48,lat99:8.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:219,to:0,r:0,er:0.0,lat:7.13,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.14},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:281062,to:75765,r:62,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:62,lat99:8.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:393323,to:31629,r:82,er:0.0,lat:0.0,cached:226218,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-18": [
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:132704,to:1461,r:94,er:0.0,lat:3.83,cached:12644,think:0,e4:0,e5:0,e429:0,eKnown:94,lat99:4.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:580098,to:12498,r:21,er:0.0,lat:5.56,cached:220782,think:0,e4:0,e5:0,e429:0,eKnown:21,lat99:6.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:13,to:0,r:0,er:0.0,lat:5.56,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:6.14},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:84661,to:31219,r:59,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:59,lat99:8.3},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:15,er:0.0,lat:57.88,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:15,lat99:65.26},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:40,er:0.0,lat:63.75,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:40,lat99:66.44},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:286644,to:10665,r:51,er:0.0,lat:0.0,cached:149395,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-19": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:374274,to:48541,r:0,er:0.0,lat:0.0,cached:89757,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:94382,to:12241,r:0,er:0.0,lat:0.0,cached:22634,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:72338,to:9382,r:0,er:0.0,lat:0.0,cached:17348,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:40983,to:5315,r:0,er:0.0,lat:0.0,cached:9828,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:39160,to:5079,r:0,er:0.0,lat:0.0,cached:9391,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:38568,to:5002,r:0,er:0.0,lat:0.0,cached:9249,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:22733,to:2948,r:0,er:0.0,lat:0.0,cached:5452,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:15698,to:2036,r:0,er:0.0,lat:0.0,cached:3765,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:28056,to:35549,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:157244,to:194726,r:0,er:0.0,lat:0.0,cached:64947,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:239852,to:3304,r:13,er:0.0,lat:2.04,cached:89944,think:0,e4:0,e5:0,e429:0,eKnown:13,lat99:2.09},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:474888,to:14558,r:47,er:0.0,lat:4.04,cached:191506,think:0,e4:0,e5:0,e429:0,eKnown:47,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:133,to:0,r:0,er:0.0,lat:4.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.16},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:161877,to:42645,r:10,er:0.0,lat:9.8,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:10.35},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:13258,to:2075,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-20": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:126585,to:42121,r:13,er:0.0,lat:55.36,cached:30520,think:0,e4:0,e5:0,e429:0,eKnown:13,lat99:64.76},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:31921,to:10622,r:3,er:0.0,lat:55.36,cached:7696,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:64.76},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:24466,to:8141,r:3,er:0.0,lat:55.36,cached:5899,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:64.76},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:13861,to:4612,r:1,er:0.0,lat:55.36,cached:3342,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:64.76},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:13244,to:4407,r:1,er:0.0,lat:55.36,cached:3193,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:64.76},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:13044,to:4341,r:1,er:0.0,lat:55.36,cached:3145,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:64.76},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:7689,to:2558,r:1,er:0.0,lat:55.36,cached:1854,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:64.76},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5309,to:1767,r:1,er:0.0,lat:55.36,cached:1280,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:64.76},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:3714,to:2059,r:5,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:33.39},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:10060,to:8060,r:33,er:0.0,lat:63.75,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:33,lat99:66.44},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:171043,to:1930,r:35,er:0.0,lat:3.77,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:35,lat99:4.11},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1165411,to:28326,r:49,er:0.0,lat:7.76,cached:494630,think:0,e4:0,e5:0,e429:0,eKnown:49,lat99:8.26},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:105,to:0,r:0,er:0.0,lat:7.76,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.26},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:234389,to:24699,r:49,er:0.0,lat:8.07,cached:22291,think:0,e4:0,e5:0,e429:0,eKnown:49,lat99:8.33},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:84498,to:2405,r:16,er:0.0,lat:0.0,cached:40392,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-21": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:3694,to:2681,r:1,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:16.69},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:87879,to:58811,r:18,er:0.0,lat:32.3,cached:43607,think:0,e4:0,e5:0,e429:0,eKnown:18,lat99:33.3},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:52754,to:605,r:5,er:0.0,lat:3.01,cached:12644,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:3.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:8671080,to:57831,r:115,er:0.0,lat:6.08,cached:6336660,think:0,e4:0,e5:0,e429:0,eKnown:115,lat99:7.93},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:244,to:0,r:0,er:0.0,lat:6.08,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:7.93},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:314999,to:41452,r:86,er:0.0,lat:5.66,cached:34416,think:0,e4:0,e5:0,e429:0,eKnown:86,lat99:6.17},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:12,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:12,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:3,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:2,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:46093,to:1527,r:8,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-22": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:10871,to:14395,r:1,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:16.69},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:947200,to:13372,r:5,er:0.0,lat:2.91,cached:491044,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:3.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:475808,to:11384,r:114,er:0.0,lat:7.13,cached:222244,think:0,e4:0,e5:0,e429:0,eKnown:114,lat99:8.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:41,to:0,r:0,er:0.0,lat:7.13,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.14},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:199511,to:48618,r:112,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:112,lat99:4.17},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:609093,to:43066,r:117,er:0.0,lat:0.0,cached:349427,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-23": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:19170,to:8393,r:0,er:0.0,lat:0.0,cached:6551,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4834,to:2117,r:0,er:0.0,lat:0.0,cached:1652,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3705,to:1622,r:0,er:0.0,lat:0.0,cached:1266,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2099,to:919,r:0,er:0.0,lat:0.0,cached:717,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2006,to:878,r:0,er:0.0,lat:0.0,cached:685,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1975,to:865,r:0,er:0.0,lat:0.0,cached:675,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1164,to:510,r:0,er:0.0,lat:0.0,cached:398,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:804,to:352,r:0,er:0.0,lat:0.0,cached:275,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:62159,to:80723,r:2,er:0.0,lat:49.07,cached:3022,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:50.08},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:1744093,to:23447,r:204,er:0.0,lat:3.93,cached:1097600,think:0,e4:0,e5:0,e429:0,eKnown:204,lat99:4.14},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2855745,to:70310,r:167,er:0.0,lat:7.71,cached:1566028,think:0,e4:0,e5:0,e429:0,eKnown:167,lat99:8.25},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:177,to:0,r:0,er:0.0,lat:7.71,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.25},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:861226,to:124891,r:62,er:0.0,lat:7.76,cached:45032,think:0,e4:0,e5:0,e429:0,eKnown:62,lat99:8.26},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:144973,to:19796,r:32,er:0.0,lat:0.0,cached:26276,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-24": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:353322,to:111855,r:40,er:0.0,lat:32.72,cached:96139,think:0,e4:0,e5:0,e429:0,eKnown:40,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:89099,to:28207,r:10,er:0.0,lat:32.72,cached:24244,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:68288,to:21619,r:8,er:0.0,lat:32.72,cached:18581,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:38689,to:12248,r:4,er:0.0,lat:32.72,cached:10527,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:36967,to:11703,r:4,er:0.0,lat:32.72,cached:10059,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:36409,to:11526,r:4,er:0.0,lat:32.72,cached:9907,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:21460,to:6794,r:2,er:0.0,lat:32.72,cached:5839,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:14819,to:4691,r:2,er:0.0,lat:32.72,cached:4032,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:33.39},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:110775,to:139769,r:11,er:0.0,lat:32.72,cached:6003,think:0,e4:0,e5:0,e429:0,eKnown:11,lat99:33.39},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:52754,to:608,r:81,er:0.0,lat:3.89,cached:25289,think:0,e4:0,e5:0,e429:0,eKnown:81,lat99:4.13},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:44993,to:133567,r:7,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:16.69},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:923209,to:10392,r:36,er:0.0,lat:16.36,cached:396073,think:0,e4:0,e5:0,e429:0,eKnown:36,lat99:16.69},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:32,to:0,r:0,er:0.0,lat:16.36,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.69},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:118775,to:55147,r:162,er:0.6173,lat:4.09,cached:855,think:0,e4:0,e5:1,e429:0,eKnown:162,lat99:4.17},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:126537,to:3346,r:23,er:0.0,lat:0.0,cached:64818,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-25": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:113678,to:150422,r:20,er:0.0,lat:32.49,cached:12094,think:0,e4:0,e5:0,e429:0,eKnown:20,lat99:33.34},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:629600,to:8108,r:58,er:0.0,lat:4.8,cached:469881,think:0,e4:0,e5:0,e429:0,eKnown:58,lat99:5.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1079683,to:8833,r:42,er:0.0,lat:3.98,cached:656610,think:0,e4:0,e5:0,e429:0,eKnown:42,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:39,to:0,r:0,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:141517,to:49018,r:60,er:0.0,lat:14.68,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:60,lat99:16.36},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:224913,to:4789,r:38,er:0.0,lat:0.0,cached:107281,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-26": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:39649,to:49169,r:21,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:21,lat99:33.39},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1370098,to:36394,r:28,er:0.0,lat:8.18,cached:599487,think:0,e4:0,e5:0,e429:0,eKnown:28,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:48,to:0,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:290264,to:101719,r:100,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:100,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:241444,to:7602,r:49,er:0.0,lat:0.0,cached:145766,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-27": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:125635,to:165780,r:7,er:0.0,lat:32.51,cached:6031,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:33.34},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2581322,to:43873,r:136,er:0.0,lat:4.01,cached:1228559,think:0,e4:0,e5:0,e429:0,eKnown:136,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:269725,to:0,r:14,er:0.0,lat:4.01,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:14,lat99:4.16},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:221282,to:77963,r:60,er:0.0,lat:7.97,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:60,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:158674,to:8924,r:30,er:0.0,lat:0.0,cached:56690,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-28": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:90505,to:114436,r:22,er:0.0,lat:32.72,cached:3016,think:0,e4:0,e5:0,e429:0,eKnown:22,lat99:33.39},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4707867,to:51880,r:147,er:0.0,lat:3.83,cached:2908994,think:0,e4:0,e5:0,e429:0,eKnown:147,lat99:4.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:184900,to:0,r:6,er:0.0,lat:3.83,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:4.12},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2474003,to:139722,r:114,er:0.0,lat:7.65,cached:319223,think:0,e4:0,e5:0,e429:0,eKnown:114,lat99:8.24},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:79296,to:2629,r:16,er:0.0,lat:0.0,cached:8101,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-29": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:50486,to:59837,r:16,er:0.0,lat:32.61,cached:3024,think:0,e4:0,e5:0,e429:0,eKnown:16,lat99:33.37},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:196313,to:6359,r:38,er:0.0,lat:3.95,cached:4041,think:0,e4:0,e5:0,e429:0,eKnown:38,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5318852,to:234386,r:992,er:0.3024,lat:3.67,cached:674288,think:0,e4:0,e5:3,e429:0,eKnown:992,lat99:4.09},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:430787,to:51484,r:89,er:0.0,lat:0.0,cached:222055,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"PBH3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:9402,to:267,r:2,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:56618,to:2543,r:17,er:0.0,lat:0.0,cached:24305,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 2 - TT2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5724,to:221,r:2,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - CN Biên Hòa",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:14307,to:533,r:5,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:26108,to:396,r:3,er:0.0,lat:0.0,cached:8106,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-30": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:109968,to:141821,r:9,er:0.0,lat:32.72,cached:3025,think:0,e4:0,e5:0,e429:0,eKnown:9,lat99:33.39},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:3167,to:16282,r:2,er:0.0,lat:3.01,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:3.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:28294,to:1000,r:4,er:0.0,lat:3.01,cached:8149,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:3.12},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3541807,to:280671,r:1205,er:0.0,lat:3.72,cached:332236,think:0,e4:0,e5:0,e429:0,eKnown:1205,lat99:4.1},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:318344,to:24651,r:56,er:0.0,lat:0.0,cached:145886,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"PBH3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:120052,to:18121,r:25,er:0.0,lat:0.0,cached:95451,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:144784,to:4578,r:26,er:0.0,lat:0.0,cached:48609,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Toàn công ty",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:59514,to:2541,r:11,er:0.0,lat:0.0,cached:48611,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:45039,to:4283,r:12,er:0.0,lat:0.0,cached:24304,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:19391,to:864,r:4,er:0.0,lat:0.0,cached:16205,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-07-31": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:246023,to:306639,r:19,er:0.0,lat:62.08,cached:21133,think:0,e4:0,e5:0,e429:0,eKnown:19,lat99:66.1},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:776379,to:977484,r:0,er:0.0,lat:0.0,cached:365368,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:328991,to:9379,r:22,er:0.0,lat:3.98,cached:134774,think:0,e4:0,e5:0,e429:0,eKnown:22,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:5,to:0,r:0,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5043129,to:225843,r:1249,er:0.0801,lat:3.88,cached:854050,think:0,e4:0,e5:1,e429:0,eKnown:1249,lat99:4.13},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:137743,to:8654,r:25,er:0.0,lat:0.0,cached:89126,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:161548,to:4365,r:31,er:0.0,lat:0.0,cached:81040,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:73546,to:1716,r:13,er:0.0,lat:0.0,cached:56713,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-01": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1242647,to:241084,r:0,er:0.0,lat:0.0,cached:594550,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:313363,to:60795,r:0,er:0.0,lat:0.0,cached:149930,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:240172,to:46595,r:0,er:0.0,lat:0.0,cached:114911,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:136071,to:26399,r:0,er:0.0,lat:0.0,cached:65104,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:130016,to:25224,r:0,er:0.0,lat:0.0,cached:62207,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:128052,to:24843,r:0,er:0.0,lat:0.0,cached:61267,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:75477,to:14643,r:0,er:0.0,lat:0.0,cached:36112,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:52119,to:10111,r:0,er:0.0,lat:0.0,cached:24936,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:52318,to:68345,r:44,er:0.0,lat:32.38,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:44,lat99:33.32},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:408631,to:13253,r:40,er:0.0,lat:4.01,cached:89724,think:0,e4:0,e5:0,e429:0,eKnown:40,lat99:4.16},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:77,to:0,r:0,er:0.0,lat:4.01,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.16},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:74619,to:13903,r:60,er:0.0,lat:3.88,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:60,lat99:4.13},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:146,er:0.0,lat:63.75,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:146,lat99:66.44},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:187086,to:5428,r:37,er:0.0,lat:0.0,cached:105329,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:45592,to:3809,r:7,er:0.0,lat:0.0,cached:16202,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Toàn công ty",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:66408,to:1317,r:12,er:0.0,lat:0.0,cached:42555,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-02": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:4597,to:6442,r:9,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:9,lat99:33.39},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:42986,to:146988,r:2,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:2283995,to:55647,r:18,er:0.0,lat:3.98,cached:1575349,think:0,e4:0,e5:0,e429:0,eKnown:18,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:281,to:0,r:0,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:385809,to:54424,r:58,er:1.7241,lat:7.13,cached:19979,think:0,e4:0,e5:1,e429:0,eKnown:58,lat99:8.14},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:66,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:66,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:17,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:17,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:13,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:13,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:7,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:7,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:7,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:4,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:3,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:33.39},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:56031,to:1754,r:11,er:0.0,lat:0.0,cached:16204,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-03": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:476470,to:51418,r:0,er:0.0,lat:0.0,cached:105132,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:120153,to:12966,r:0,er:0.0,lat:0.0,cached:26512,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:92090,to:9938,r:0,er:0.0,lat:0.0,cached:20319,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:52174,to:5630,r:0,er:0.0,lat:0.0,cached:11512,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:49852,to:5380,r:0,er:0.0,lat:0.0,cached:11000,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:49099,to:5299,r:0,er:0.0,lat:0.0,cached:10834,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:28940,to:3123,r:0,er:0.0,lat:0.0,cached:6386,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:19984,to:2157,r:0,er:0.0,lat:0.0,cached:4409,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:55843,to:70767,r:1,er:0.0,lat:32.72,cached:3026,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:33.39},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:9590,to:32788,r:10,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:530749,to:17427,r:123,er:0.0,lat:8.18,cached:113940,think:0,e4:0,e5:0,e429:0,eKnown:123,lat99:8.35},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:41,to:0,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1110902,to:66474,r:112,er:0.0,lat:7.76,cached:189332,think:0,e4:0,e5:0,e429:0,eKnown:112,lat99:8.26},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:126903,to:6509,r:22,er:0.0,lat:0.0,cached:64816,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-04": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:201409,to:57711,r:36,er:0.0,lat:32.72,cached:45826,think:0,e4:0,e5:0,e429:0,eKnown:36,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:50790,to:14553,r:9,er:0.0,lat:32.72,cached:11556,think:0,e4:0,e5:0,e429:0,eKnown:9,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:38927,to:11154,r:7,er:0.0,lat:32.72,cached:8857,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:22054,to:6319,r:4,er:0.0,lat:32.72,cached:5018,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:21073,to:6038,r:4,er:0.0,lat:32.72,cached:4795,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:20755,to:5947,r:4,er:0.0,lat:32.72,cached:4722,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:12233,to:3505,r:2,er:0.0,lat:32.72,cached:2783,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:33.39},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:8447,to:2420,r:2,er:0.0,lat:32.72,cached:1922,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:33.39},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:37402,to:49255,r:10,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:10,lat99:33.39},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:7211,to:21235,r:0,er:0.0,lat:7.03,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:4253440,to:38141,r:38,er:0.0,lat:7.03,cached:2646520,think:0,e4:0,e5:0,e429:0,eKnown:38,lat99:8.12},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:317,to:0,r:0,er:0.0,lat:7.03,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.12},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1459674,to:97784,r:253,er:0.0,lat:2.04,cached:69236,think:0,e4:0,e5:0,e429:0,eKnown:253,lat99:2.09},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:36206,to:835,r:6,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-05": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:24547,to:29496,r:7,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:33.39},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:508428,to:14465,r:138,er:0.0,lat:3.96,cached:138861,think:0,e4:0,e5:0,e429:0,eKnown:138,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:37,to:0,r:0,er:0.0,lat:3.96,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:562165,to:65906,r:217,er:0.0,lat:7.03,cached:142189,think:0,e4:0,e5:0,e429:0,eKnown:217,lat99:8.12},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:182688,to:6900,r:34,er:0.0,lat:0.0,cached:64822,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:154803,to:4814,r:32,er:0.0,lat:0.0,cached:85018,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Toàn công ty",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:75019,to:1473,r:13,er:0.0,lat:0.0,cached:48643,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-06": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:61532,to:78459,r:5,er:0.0,lat:32.3,cached:3021,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:33.3},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:148806,to:123339,r:30,er:0.0,lat:32.3,cached:40577,think:0,e4:0,e5:0,e429:0,eKnown:30,lat99:33.3},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:27203,to:273,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1984131,to:28447,r:36,er:0.0,lat:3.98,cached:880661,think:0,e4:0,e5:0,e429:0,eKnown:36,lat99:4.15},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:110,to:0,r:0,er:0.0,lat:3.98,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.15},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1088483,to:144796,r:168,er:0.0,lat:7.97,cached:108017,think:0,e4:0,e5:0,e429:0,eKnown:168,lat99:8.3},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:36190,to:824,r:6,er:0.0,lat:0.0,cached:8102,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:38007,to:1067,r:9,er:0.0,lat:0.0,cached:8103,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Toàn công ty",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:28703,to:2828,r:4,er:0.0,lat:0.0,cached:8102,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-07": [
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:156995,to:198145,r:11,er:0.0,lat:60.4,cached:6046,think:0,e4:0,e5:0,e429:0,eKnown:11,lat99:65.77},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:254228,to:291055,r:48,er:0.0,lat:62.91,cached:123809,think:0,e4:0,e5:0,e429:0,eKnown:48,lat99:66.27},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:145223,to:7599,r:37,er:0.0,lat:7.86,cached:16258,think:0,e4:0,e5:0,e429:0,eKnown:37,lat99:8.28},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:60,to:0,r:0,er:0.0,lat:7.86,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.28},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:976357,to:82602,r:319,er:0.3135,lat:3.67,cached:85882,think:0,e4:0,e5:1,e429:0,eKnown:319,lat99:4.09},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:3,er:0.0,lat:2.04,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:2.09},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:126399,to:5005,r:18,er:0.0,lat:0.0,cached:81021,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:149756,to:5277,r:30,er:0.0,lat:0.0,cached:81013,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:18911,to:502,r:4,er:0.0,lat:0.0,cached:8101,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-08": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:75792,to:14367,r:0,er:0.0,lat:0.0,cached:12712,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:19113,to:3623,r:0,er:0.0,lat:0.0,cached:3206,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:14649,to:2777,r:0,er:0.0,lat:0.0,cached:2457,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:8299,to:1573,r:0,er:0.0,lat:0.0,cached:1392,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:7930,to:1503,r:0,er:0.0,lat:0.0,cached:1330,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:7810,to:1480,r:0,er:0.0,lat:0.0,cached:1310,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4604,to:873,r:0,er:0.0,lat:0.0,cached:772,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3179,to:603,r:0,er:0.0,lat:0.0,cached:533,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:32419,to:41790,r:28,er:0.0,lat:44.88,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:28,lat99:49.24},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:25906,to:92064,r:39,er:0.0,lat:7.86,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:39,lat99:8.28},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:103038,to:46923,r:79,er:0.0,lat:15.1,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:79,lat99:16.44},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:67163,to:1905,r:13,er:0.0,lat:0.0,cached:40512,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:39858,to:10557,r:10,er:0.0,lat:0.0,cached:7904,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Nghiên cứu thị trường",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:42942,to:7932,r:8,er:0.0,lat:0.0,cached:7904,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:0,c:0,ti:19127,to:357,r:4,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-09": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:609416,to:73803,r:60,er:0.9009,lat:8.07,cached:81092,think:0,e4:1,e5:0,e429:0,eKnown:60,lat99:8.33},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:153679,to:18611,r:15,er:0.9009,lat:8.07,cached:20449,think:0,e4:0,e5:0,e429:0,eKnown:15,lat99:8.33},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:117785,to:14264,r:12,er:0.9009,lat:8.07,cached:15673,think:0,e4:0,e5:0,e429:0,eKnown:12,lat99:8.33},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:66731,to:8081,r:7,er:0.9009,lat:8.07,cached:8880,think:0,e4:0,e5:0,e429:0,eKnown:7,lat99:8.33},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:63762,to:7722,r:6,er:0.9009,lat:8.07,cached:8484,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:8.33},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:62799,to:7605,r:6,er:0.9009,lat:8.07,cached:8356,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:8.33},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:37015,to:4483,r:4,er:0.9009,lat:8.07,cached:4925,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:8.33},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:25560,to:3095,r:2,er:0.9009,lat:8.07,cached:3401,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.33},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:11445,to:13695,r:6,er:0.0,lat:32.51,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:33.34},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:129471,to:142461,r:0,er:0.0,lat:0.0,cached:56837,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:175319,to:6062,r:5,er:0.0,lat:5.87,cached:40818,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:6.21},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:957253,to:72146,r:40,er:0.0,lat:4.04,cached:56285,think:0,e4:0,e5:0,e429:0,eKnown:40,lat99:4.16},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:632418,to:40841,r:44,er:0.0,lat:0.0,cached:74018,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Nghiên cứu thị trường",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:407878,to:67172,r:41,er:0.0,lat:0.0,cached:45620,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:26789,to:9379,r:7,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-10": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:39782,to:5750,r:12,er:0.0,lat:43.62,cached:8476,think:0,e4:0,e5:0,e429:0,eKnown:12,lat99:62.41},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:10032,to:1450,r:3,er:0.0,lat:43.62,cached:2138,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:62.41},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:7689,to:1111,r:2,er:0.0,lat:43.62,cached:1638,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:62.41},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4356,to:630,r:1,er:0.0,lat:43.62,cached:928,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:62.41},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4162,to:602,r:1,er:0.0,lat:43.62,cached:887,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:62.41},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4099,to:593,r:1,er:0.0,lat:43.62,cached:873,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:62.41},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2416,to:349,r:1,er:0.0,lat:43.62,cached:515,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:62.41},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1669,to:241,r:1,er:0.0,lat:43.62,cached:356,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:62.41},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:274390,to:329717,r:36,er:0.0,lat:63.75,cached:146137,think:0,e4:0,e5:0,e429:0,eKnown:36,lat99:66.44},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:13709,to:46731,r:1,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1169042,to:26865,r:23,er:0.0,lat:4.09,cached:431872,think:0,e4:0,e5:0,e429:0,eKnown:23,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:77,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:681020,to:72560,r:182,er:0.5495,lat:4.09,cached:45954,think:0,e4:0,e5:1,e429:0,eKnown:182,lat99:4.17},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:2,er:0.0,lat:32.72,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:33.39},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:128239,to:28582,r:23,er:0.0,lat:0.0,cached:39527,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-11": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:110723,to:56410,r:9,er:0.0,lat:4.09,cached:29665,think:0,e4:0,e5:0,e429:0,eKnown:9,lat99:4.17},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:27922,to:14225,r:2,er:0.0,lat:4.09,cached:7481,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:4.17},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:21400,to:10903,r:2,er:0.0,lat:4.09,cached:5734,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:4.17},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:12124,to:6177,r:1,er:0.0,lat:4.09,cached:3248,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:4.17},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:11585,to:5902,r:1,er:0.0,lat:4.09,cached:3104,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:4.17},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:11410,to:5813,r:1,er:0.0,lat:4.09,cached:3057,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:4.17},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:6725,to:3426,r:1,er:0.0,lat:4.09,cached:1802,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:4.17},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4644,to:2366,r:0,er:0.0,lat:4.09,cached:1244,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:123918,to:149869,r:0,er:0.0,lat:0.0,cached:18095,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Phân Loại Phản Hồi Tiếp Thị",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:129502,to:144011,r:64,er:0.0,lat:63.75,cached:56847,think:0,e4:0,e5:0,e429:0,eKnown:64,lat99:66.44},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:15469,to:50361,r:6,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1050522,to:45964,r:102,er:0.0,lat:4.09,cached:320159,think:0,e4:0,e5:0,e429:0,eKnown:102,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:135,to:0,r:0,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:4.17},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:2739807,to:279251,r:393,er:0.2545,lat:7.76,cached:240138,think:0,e4:0,e5:1,e429:0,eKnown:393,lat99:8.26},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:36206,to:5124,r:6,er:0.0,lat:0.0,cached:7907,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:5748,to:903,r:2,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Toàn công ty",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:32252,to:4699,r:8,er:0.0,lat:0.0,cached:7904,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-12": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:18136,to:2786,r:18,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:18,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:4574,to:702,r:5,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:5,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3505,to:538,r:3,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:3,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1986,to:305,r:2,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1898,to:291,r:2,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1869,to:287,r:2,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:1102,to:169,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:761,to:117,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:3579,to:1644,r:4,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:4,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:902,to:414,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:692,to:318,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:392,to:180,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:374,to:172,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:369,to:169,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:217,to:100,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:150,to:69,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:44818,to:54837,r:22,er:0.0,lat:57.04,cached:3022,think:0,e4:0,e5:0,e429:0,eKnown:22,lat99:65.1},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 2.5 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:53261,to:173983,r:18,er:0.0,lat:15.94,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:18,lat99:16.61},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:1272464,to:9383,r:100,er:0.0,lat:15.94,cached:761092,think:0,e4:0,e5:0,e429:0,eKnown:100,lat99:16.61},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini Embedding 001",ug:"Nhóm CSKH",u:0,c:0,ti:25,to:0,r:0,er:0.0,lat:15.94,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:16.61},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:407294,to:47462,r:329,er:0.0,lat:3.72,cached:5029,think:0,e4:0,e5:0,e429:0,eKnown:329,lat99:4.1},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:152533,to:88226,r:24,er:0.0,lat:0.0,cached:39525,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:30398,to:9038,r:6,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:48048,to:11451,r:9,er:0.0,lat:0.0,cached:15810,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Tổng công ty Rạng Đông",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:9384,to:1702,r:2,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ],
-  "2026-08-13": [
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:8,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:2,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:2,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:1,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:1,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:0,er:0.0,lat:8.18,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:8.35},
-    {a:"Phân Loại Dữ Liệu CRM",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:8,er:0.0,lat:60.4,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:8,lat99:65.77},
-    {a:"Multi modal AI Invoice",d:"P.NCTT , TTDL&ĐHS",m:"Gemini 2.5 Flash",ug:"Nhóm Dữ liệu",u:0,c:0,ti:0,to:0,r:6,er:0.0,lat:4.09,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:6,lat99:4.17},
-    {a:"Chatbot Contact Center",d:"Chăm sóc khách hàng",m:"Gemini 3.0 Flash",ug:"Nhóm CSKH",u:0,c:0,ti:0,to:0,r:46,er:0.0,lat:16.22,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:46,lat99:16.67},
-    {a:"Sale Agent",d:"Anh Em tiếp thị",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:0,to:0,r:115,er:0.0,lat:5.61,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:115,lat99:6.16},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:47993,to:8641,r:9,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"PBH3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:10355,to:4190,r:2,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash",ug:"Nhóm Kinh doanh",u:0,c:0,ti:10570,to:4084,r:3,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"C4LED",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:13,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"CN Biên Hòa",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:12,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"CN Cần Thơ",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"CN Hồ Chí Minh",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:19,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"CN Nha Trang",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:12,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"CN Tiền Giang",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"CN Đà Nẵng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:16,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Chưa xác định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:2,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Kế hoạch",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Kế toán",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:1,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Nghiên cứu thị trường",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:12,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"PBH1",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:30,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"PBH2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:12,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"PBH3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Quản trị hệ thống",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:18,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TMĐT",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:27,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT1",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:3,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:14,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"TT4",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Toàn công ty",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:10,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Trung tâm R&D",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:20,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Truyền thông",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Tây Nguyên",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:14,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Tổng công ty Rạng Đông",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:74,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Vùng 1",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:10,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Vùng 2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:13,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Vùng 3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:10,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Xuất khẩu",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:25,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 1",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:9,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 1 - HN2 - Sơn La - Điện Biên",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:18,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 1 - Hà Nội",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:10,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 1 - Nam Định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 1 - TT2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:2,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 2 - HN2 - Hoà Bình",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 2 - Hà Nội",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 2 - TT2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:2,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 2 - Thái Bình",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 3 - Hà Nam - Ninh Bình",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 3 - Hà Nội",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:10,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 3 - TT2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:1,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 3 - Vĩnh Phúc",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 4",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 4 - Bắc Ninh",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 4 - TT2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:2,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 4 - Thanh Hoá",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:13,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 4 - Thái Nguyên - Cao Bằng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 5",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 5 - Bắc Giang - Lạng Sơn",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:10,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 5 - Nghệ An - Hà Tĩnh",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 5 - Phú Thọ",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 5 - TT2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:1,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 6 - Hưng Yên",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 6 - TT2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:1,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 6 - Yên Bái - Tuyên Quang - Hà Giang - Lào Cai - Lai Châu",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:19,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 7 - Hải Dương - Hải Phòng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:12,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội 8 - Quảng Ninh",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội An Giang",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Bình Dương",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Bình Phước",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Bình Thuận",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Bình Định",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Bạc Liêu",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Cà Mau",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Cần Thơ",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Gia Lai",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:9,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Huế",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:3,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Khánh Hòa",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Kiên Giang",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:13,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Kon Tum",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Long An",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Lâm Đồng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Ninh Thuận",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Phú Yên",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:3,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Quảng Bình",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Quảng Nam",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Quảng Trị",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:5,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Siêu Thị",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:2,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Sóc Trăng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Vĩnh Long",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Vũng Tàu",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:9,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - CN Biên Hòa",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - CN Cần Thơ",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - CN Hồ Chí Minh",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:10,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - CN Nha Trang",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - CN Tiền Giang",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - CN Đà Nẵng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 1",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:7,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 2",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách - Vùng 3",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:3,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội chuyên trách 1 - trung tâm 1",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Đà Nẵng",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Đắk Lắk",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Đắk Nông",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:4,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Đồng Nai",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:9,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ lý ảo Ralli",d:"Đội Đồng Tháp",m:"Gemini 2.5 Flash Lite",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"CN Tiền Giang",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:1,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Chưa xác định",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:1,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Công ty CPBĐ PN Rạng Đông",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:2,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH1",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:8,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH2",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:9,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"Phòng BH3",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:11,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT C4LED",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:3,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TT&TMĐT",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:3,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0},
-    {a:"Trợ Lý Ảo Hợp Đồng",d:"TTDL&DHS",m:"Gemini 2.5 Pro",ug:"Nhóm Kinh doanh",u:6,c:0,ti:0,to:0,r:0,er:0.0,lat:0.0,cached:0,think:0,e4:0,e5:0,e429:0,eKnown:0,lat99:0.0}
-  ]
-};
-
-function juneExcelRow(a,d,m,ug,ti,to,r,er,lat,u){
-  return {a:a,d:d,m:m,ug:ug,u:u||0,c:0,ti:ti||0,to:to||0,r:r||0,er:er||0,lat:lat||0,cached:0,think:0};
-}
-function buildJuneExcelWeeks(){
-  // Đọc và chuẩn hóa từ “Bảng tổng hợp chi phí token AI agent tháng 6 (3).xlsx”.
-  // Các dòng tuần 1 bị lệch cột và ô 967.585 được chuẩn hóa theo ngữ nghĩa token.
-  var k="Nhóm Kinh doanh", cs="Nhóm CSKH", data="Nhóm Dữ liệu", internal="Nhóm Nội bộ";
-  var days={
-    "2026-06-01":[
-      juneExcelRow("Sale Agent","Anh Em tiếp thị","Gemini 3.1 Flash Lite",k,0,927,1),
-      juneExcelRow("Sale Agent","Anh Em tiếp thị","Gemini 3.5 Flash",k,0,2969,1),
-      juneExcelRow("Sale Agent","Anh Em tiếp thị","Gemini 2.5 Flash",k,0,681499,136),
-      juneExcelRow("Chatbot Contact Center","Chăm sóc khách hàng","Gemini 3.1 Flash Lite",cs,0,0,0),
-      juneExcelRow("Chatbot Contact Center","Thương mại điện tử","Gemini 3.0 Flash",cs,30500000,420712,973),
-      juneExcelRow("Chatbot Contact Center","Thương mại điện tử","Gemini 2.5 Flash",cs,77130,204635,86),
-      juneExcelRow("Phân Loại Phản Hồi Tiếp Thị","P.NCTT , TTDL&ĐHS","Gemini 2.5 Flash",data,2559100,1206600,188,0,4.5,3),
-      juneExcelRow("Phân Loại Dữ Liệu CRM","P.NCTT , TTDL&ĐHS","Gemini 2.5 Flash",data,1735334,1209481,147,0,4.5,3)
-    ],
-    "2026-06-08":[
-      juneExcelRow("Sale Agent","Anh Em tiếp thị","Gemini 2.5 Flash",k,0,922587,185),
-      juneExcelRow("Chatbot Contact Center","Thương mại điện tử","Gemini 3.0 Flash",cs,21680000,297545,761),
-      juneExcelRow("Chatbot Contact Center","Thương mại điện tử","Gemini 2.5 Flash",cs,62270,250660,72),
-      juneExcelRow("Phân Loại Phản Hồi Tiếp Thị","P.NCTT , TTDL&ĐHS","Gemini 2.5 Flash",data,1559100,1066000,104,0,4.5),
-      juneExcelRow("Phân Loại Dữ Liệu CRM","P.NCTT , TTDL&ĐHS","Gemini 2.5 Flash",data,1388267,967585,186,0,4.5)
-    ],
-    "2026-06-15":[
-      juneExcelRow("Sale Agent","Anh Em tiếp thị","Gemini 2.5 Flash",k,0,10737006,2147),
-      juneExcelRow("Chatbot Contact Center","Thương mại điện tử","Gemini 3.0 Flash",cs,2750000,91908,145),
-      juneExcelRow("Chatbot Contact Center","Thương mại điện tử","Gemini 2.5 Flash",cs,55140,188678,49),
-      juneExcelRow("Phân Loại Phản Hồi Tiếp Thị","P.NCTT , TTDL&ĐHS","Gemini 2.5 Flash",data,1339100,1006600,97,0,4.5),
-      juneExcelRow("Phân Loại Dữ Liệu CRM","P.NCTT , TTDL&ĐHS","Gemini 2.5 Flash",data,2776534,1935170,248,0,4.5)
-    ],
-    "2026-06-22":[
-      juneExcelRow("Sale Agent","Anh Em tiếp thị","Gemini 2.5 Flash",k,0,685476,137),
-      juneExcelRow("Chatbot Contact Center","Chăm sóc khách hàng","Gemini 3.1 Flash Lite",cs,9060,131,2),
-      juneExcelRow("Chatbot Contact Center","Thương mại điện tử","Gemini 3.0 Flash",cs,13060000,188678,481),
-      juneExcelRow("Chatbot Contact Center","Thương mại điện tử","Gemini 2.5 Flash",cs,20240,34226,12),
-      juneExcelRow("Phân Loại Phản Hồi Tiếp Thị","P.NCTT , TTDL&ĐHS","Gemini 2.5 Flash",data,2059133,1306621,155,0,4.5),
-      juneExcelRow("Phân Loại Dữ Liệu CRM","P.NCTT , TTDL&ĐHS","Gemini 2.5 Flash",data,1653300,1109400,188,0,4.5)
-    ]
-  };
-  var contractUnits=[["Công ty CPBĐ PN Rạng Đông",5],["Phòng Bán hàng 1",19],["Phòng Bán hàng 2",10],["Phòng Bán hàng 3",10],["TT C4LED",2],["TT&TMĐT",3],["TTDL&DHS",6]];
-  var ralliUnits=[["PBH1",257],["PBH2",155],["PBH3",247],["Xuất khẩu",25],["Truyền thông",7],["Kế toán",1],["TMĐT",27],["C4LED",15],["Nghiên cứu thị trường",11],["Kế hoạch",8],["Trung tâm R&D",20],["Quản trị hệ thống",18]];
-  contractUnits.forEach(function(x){days["2026-06-01"].push(juneExcelRow("Trợ Lý Ảo Hợp Đồng",x[0],"Gemini 2.5 Flash",k,0,0,0,0,0,x[1]));});
-  ralliUnits.forEach(function(x){days["2026-06-01"].push(juneExcelRow("Trợ lý ảo Ralli",x[0],"Gemini 2.5 Flash",k,0,0,0,0,0,x[1]));});
-  return days;
-}
 
 /* ─── Tiện ích ─── */
 function num(v){ var n = Number(v); return isNaN(n) ? 0 : n; }
-function rid(){ return "r" + Math.random().toString(36).slice(2,8); }
-function clone(o){ var n={}; Object.keys(o).forEach(function(k){ n[k]={i:num(o[k].i), o:num(o[k].o)}; }); return n; }
 function fmt(n){ return Math.round(num(n)).toLocaleString("vi-VN"); }
 function fmtDecimal(n, digits){
   return num(n).toLocaleString("vi-VN", {minimumFractionDigits:0, maximumFractionDigits:digits==null?1:digits});
@@ -2418,8 +423,57 @@ function setToken(id, tokenValue){
   e.innerHTML=fmtTok(tokenValue);
   e.title=fmtTokFull(tokenValue);
 }
-function moneyCell(usdValue, cls){
-  return "<td class='"+(cls||"num cost")+"' title='"+esc(usdReference(usdValue))+"'>"+money(usdValue)+"</td>";
+/* Dưới ngưỡng này thì KHÔNG gắn dấu `≈` ở mức nhìn thấy ngay - tooltip vẫn nói đủ.
+   224/1.189 dòng là suy ra nhưng chúng dồn cục, nên gắn dấu lên mọi ô có dính một
+   dòng sẽ làm gần cả bảng có dấu, và một dấu hiệu xuất hiện khắp nơi thì hết là
+   dấu hiệu. 2% chọn để Chatbot Contact Center (2,8%) vẫn được đánh dấu còn nhiễu
+   lẻ thì không - đây là ngưỡng thẩm mỹ, sửa được, không phải hằng số thiêng. */
+/* Agent CHƯA NỐI Google Billing, do api.js lấy từ `dim_agent.has_google_source`.
+   Rỗng cho tới khi nạp xong - khi đó mọi phần suy ra được coi là "hoá đơn về
+   trễ", tức phía an toàn: nói nhẹ hơn sự thật chứ không nặng hơn. */
+var NO_BILLING_AGENTS = {};
+var DERIVED_COST_VISIBLE_PCT = 2;
+
+/* Lời giải thích cho một ô tiền. `est` là phần suy từ bảng giá trong `total`.
+
+   NÓI TỶ LỆ, không chỉ nói "có phần suy ra": với Trợ lý ảo Ralli là 100% còn với
+   Chatbot Contact Center là 2,8% - hai chuyện rất khác nhau mà cùng một câu sẽ
+   làm chúng trông giống hệt.
+
+   VÀ PHÂN BIỆT HAI LÝ DO. Hoá đơn về trễ thì vài ngày tự hết; agent chưa nối
+   Google Billing thì suy ra mãi. `tla-ralli` thuộc loại thứ hai - $7,6643 chi phí
+   thật không dòng hoá đơn nào ghi. Gộp hai thứ vào một nhãn "ước tính" là chôn
+   mất một việc cần người xử lý. */
+function costProvenanceTitle(total, agg){
+  var base = usdReference(total);
+  if(!agg) return base;
+  var est = num(agg.costEst);
+  if(!(est > 0)) return base;
+  var pct = total > 0 ? 100 * est / total : 100,
+      chua = num(agg.costEstNoBilling), tre = num(agg.costEstLate),
+      dau = "Trong số này có " + moneyCompact(est) + " (" + pct.toFixed(0)
+          + "%) suy từ bảng giá. ";
+  if(chua > 0 && tre <= 0)
+    dau = (pct >= 99.5 ? "TOÀN BỘ số này suy từ bảng giá. " : dau)
+        + "Agent CHƯA NỐI Google Billing nên không có hoá đơn nào — việc này sẽ"
+        + " không tự hết. ";
+  else if(chua > 0)
+    dau += "Trong đó " + moneyCompact(chua) + " của agent chưa nối Google Billing"
+         + " (không tự hết), phần còn lại do hoá đơn Google về trễ ~1 ngày. ";
+  else
+    dau += "Hoá đơn Google về trễ khoảng một ngày; vài ngày nữa những dòng này sẽ"
+         + " có hoá đơn. ";
+  return dau + base;
+}
+function costIsMarked(total, est){
+  return est > 0 && (total <= 0 || 100 * est / total >= DERIVED_COST_VISIBLE_PCT);
+}
+/* Ô tiền chung. Truyền `agg` (kết quả aggregate) thì tự lấy phần suy ra. */
+function moneyCell(usdValue, cls, agg){
+  var est = agg ? num(agg.costEst) : 0,
+      dau = costIsMarked(usdValue, est) ? "≈ " : "";
+  return "<td class='" + (cls || "num cost") + "' title='"
+    + esc(costProvenanceTitle(usdValue, agg)) + "'>" + dau + money(usdValue) + "</td>";
 }
 function shortModel(m){ return String(m||"").replace("Gemini ",""); }
 function emptyRow(cols){ return "<tr><td colspan='"+cols+"' class='subtle' style='text-align:center;padding:14px'>Không có dữ liệu khớp bộ lọc.</td></tr>"; }
@@ -2447,58 +501,87 @@ function dayLabel(iso){ var p=String(iso).split("-"); return p.length===3? (p[2]
    $26,9370, còn nhân lại ra $26,36 - lệch 2,1% ngay cả khi bảng giá đúng.
    `cached` chỉ được cộng ở nhánh ước tính, và chỉ khi nó nằm NGOÀI input
    (api.js đã lọc sẵn) - xem ghi chú "ba nghĩa của cached" ở đó. */
-function cost(r){
+/* Tiền của MỘT dòng, hoặc null khi KHÔNG tính được.
+
+   Phân biệt hai chuyện mà bản trước 20/08/2026 gộp làm một:
+       0     đã đo, và bằng không
+       null  không có cách nào tính ra
+   Tiền chỉ tồn tại ở hoá đơn Google (`r.cost`), mà hoá đơn ở mức project nên
+   KHÔNG có chiều người dùng - `/api/usage-by-account` không trả `cost_usd`, và
+   đó là đúng chứ không phải thiếu sót. Đường còn lại là ước tính từ bảng giá,
+   cần `r.m` để tra; đối tượng tài khoản có `m: ""` nên tra không ra.
+   Hệ quả của việc trả 0: mọi phòng ban THẬT trên tab Phòng ban hiện `0 ₫` trong
+   khi có tới 525,9 nghìn token - một con số bịa ra, đúng loại lỗi "không đo
+   được trông y hệt bằng không" mà database này sinh ra để chống. */
+function costOrNull(r){
   if(r.cost!=null) return num(r.cost);
-  var p = state.pricing[r.m]; if(!p) return 0;
+  var p = state.pricing[r.m]; if(!p) return null;
   return num(r.ti)/1e6*num(p.i) + num(r.to)/1e6*num(p.o)
        + num(r.cached)/1e6*num(p.c||0);
 }
+/* Giữ nguyên hợp đồng cũ - trả số - để mọi phép CỘNG đang có không đổi hành vi.
+   Chỗ nào cần phân biệt "không đo được" thì gọi costOrNull(). */
+function cost(r){ var v = costOrNull(r); return v == null ? 0 : v; }
 function isExcludedDepartment(name){ return !!EXCLUDED_DEPARTMENTS[String(name||"").trim()]; }
-function isExcludedAgent(name){ return !!EXCLUDED_AGENTS[String(name||"").trim().toLowerCase()]; }
-/* File nguồn đang gộp P.NCTT và TTDL&ĐHS trong một nhãn. Tách theo đúng agent nghiệp vụ
-   để không nhân đôi request/token: phản hồi tiếp thị thuộc P.NCTT, dữ liệu CRM thuộc TTDL&ĐHS. */
-function splitCombinedDepartment(row){
-  var dept=String(row&&row.d||"").trim().replace(/\s*,\s*/g,",").toLowerCase();
-  if(dept!=="p.nctt,ttdl&đhs") return row.d;
-  if(row.a==="Phân Loại Phản Hồi Tiếp Thị") return "P.NCTT";
-  if(row.a==="Phân Loại Dữ Liệu CRM") return "TTDL&ĐHS";
-  return row.d;
-}
-function sanitizeUsageRows(rows){
-  return (rows||[]).filter(function(r){return !isExcludedDepartment(r.d)&&!isExcludedAgent(r.a);})
-    .map(function(r){
-      var dept=splitCombinedDepartment(r);
-      return dept===r.d?r:Object.assign({},r,{d:dept});
-    });
-}
 
 /* ═══════════════ TRUY VẤN CÂY ĐƠN VỊ ═══════════════ */
 var unitIndex = {}, unitChildIndex = {}, autoUnitSeq = 0;
-(function buildUnitIndex(){
+/* Dựng lại chỉ mục cây. Gọi ở mức module (lúc đó ORG_UNITS còn rỗng) và gọi LẠI
+   sau khi nạp xong dữ liệu - cây đến từ /api/catalog chứ không còn gõ cứng. */
+function buildUnitIndex(){
   unitIndex = {}; unitChildIndex = {};
   ORG_UNITS.forEach(function(u){
     unitIndex[u.id] = u;
     var p = u.parent || "";
     (unitChildIndex[p] = unitChildIndex[p] || []).push(u);
   });
-})();
+}
+buildUnitIndex();
+/* Thay ORG_UNITS bằng cây từ database, rồi dựng lại mọi thứ phụ thuộc nó.
+
+   `units` do api.js giao đã GỘP sẵn hai cây tổ chức qua `canonical_unit_id`, đã
+   nối lại con của bản trùng, đã bỏ dòng kỹ thuật. app.js không cần biết database
+   có hai cây - đó là việc của lớp dịch.
+
+   Trước 20/08/2026 chỗ này là mảng 108 đơn vị gõ cứng cộng 33 dòng UNIT_ALIASES,
+   trong khi database có 130 dòng. Đối chiếu trước khi thay (tools/
+   doi_chieu_cay_don_vi.py): không đơn vị nào lệch cha, và gốc báo cáo suy từ
+   database ra đúng 15 đơn vị - trùng khít bản gõ cứng. */
+function adoptOrgUnits(units){
+  if(!units || !units.length) return false;
+  ORG_UNITS = units.map(function(u){
+    return {id:u.id, name:u.name, parent:u.parent, level:u.level,
+            agentId:u.agentId, reportAggregate:!!u.reportAggregate};
+  });
+  buildUnitIndex();
+  rebuildProvisionedFromDirectory();
+  return true;
+}
 /* Phân giải chuỗi phòng ban tự do về một đơn vị. Chuỗi lạ KHÔNG bị loại: tự sinh một
    đơn vị cấp 1 để không mất số liệu và không gom sai vào đơn vị khác. */
+/* Đơn vị của MỘT DÒNG usage. Ưu tiên mã, chỉ rơi về tên khi không có mã.
+
+   api.js gắn `unitId` (đã quy về bản chuẩn) lên từng dòng từ 20/08/2026. Ghép
+   bằng mã thì đổi nhãn tiếng Việt không làm gãy gì; ghép bằng tên thì gãy, và
+   gãy LẶNG LẼ - dòng không tra ra đơn vị sẽ rơi vào một đơn vị tự sinh
+   (`app.js:591`) chứ không báo lỗi, nên số vẫn hiện ra, chỉ là hiện sai chỗ.
+
+   Nhánh theo tên giữ lại để phòng backend cũ chưa trả `unitId`. Đếm số lần nó
+   được dùng, không để nó âm thầm gánh việc - xem `unitFallbackByName`. */
+var unitFallbackByName = 0;
+function unitOfRow(r){
+  if(r && r.unitId){
+    var hit = unitIndex[r.unitId];
+    if(hit) return hit;
+  }
+  unitFallbackByName++;
+  return unitOf(r && r.d);
+}
 function unitOf(deptString){
   var key = String(deptString==null?"":deptString).trim();
   if(!key || key==="—") return null;
-  var id = UNIT_ALIASES[key];
-  if(id && unitIndex[id]) return unitIndex[id];
   // Khớp lỏng: bỏ khoảng trắng thừa quanh dấu phẩy để chịu được lệch dấu cách.
   var loose = key.replace(/\s*,\s*/g, ",").toLowerCase();
-  for(var alias in UNIT_ALIASES){
-    if(alias.replace(/\s*,\s*/g, ",").toLowerCase() === loose){
-      var hit = unitIndex[UNIT_ALIASES[alias]];
-      if(hit) return hit;
-    }
-  }
-  // Danh sách Ralli dùng tên đầy đủ của 86 phòng/đội trong ORG_UNITS. Khớp trực tiếp
-  // trước khi tạo auto-unit để tài khoản luôn nằm đúng nhánh vùng/chi nhánh.
   for(var i=0;i<ORG_UNITS.length;i++){
     if(ORG_UNITS[i].name.trim().toLowerCase()===loose) return ORG_UNITS[i];
   }
@@ -2518,11 +601,26 @@ function unitRoots(){ return unitChildren(""); }
 /* Các phòng/đơn vị hiển thị ở cấp đầu của dashboard. Hai dòng tổng hợp
    "Toàn công ty" và "Tổng công ty Rạng Đông" vẫn giữ trong cây để tính đúng 887/807,
    nhưng không chiếm hai cấp drilldown trước khi người dùng thấy phòng ban thực tế. */
+/* Cấp 1 của báo cáo: bỏ qua các CẤP GOM thuần tuý.
+
+   'Toàn công ty' và 'Tổng công ty Rạng Đông' có thật trong cây, nhưng mọi phòng
+   ban đều nằm dưới cả hai - để chúng làm cấp 1 thì người xem phải bung hai lần
+   mới thấy thứ đầu tiên phân biệt được với nhau.
+
+   Trước 20/08/2026 hai dòng đó được nhận ra bằng hai MÃ GÕ CỨNG `"company"` và
+   `"rd-corp"`, tức một quyết định về cách công ty đọc báo cáo sống trong mã giao
+   diện. Giờ database đánh dấu bằng `dim_unit.is_report_aggregate`. */
+function isReportAggregate(u){ return !!(u && u.reportAggregate); }
 function reportingRoots(){
-  var companyChildren=unitChildren("company"), corpChildren=unitChildren("rd-corp");
-  var companyDirect=companyChildren.filter(function(u){return u.id!=="rd-corp";});
-  var outsideCompany=unitRoots().filter(function(u){return u.id!=="company";});
-  return corpChildren.concat(companyDirect,outsideCompany);
+  var out=[];
+  function xet(list){
+    list.forEach(function(u){
+      if(isReportAggregate(u)) xet(unitChildren(u.id));   // đi xuyên qua cấp gom
+      else out.push(u);
+    });
+  }
+  xet(unitRoots());
+  return out;
 }
 function reportingRootOf(unitId){
   var ids={}; reportingRoots().forEach(function(u){ids[u.id]=true;});
@@ -2544,24 +642,30 @@ function unitDescendants(unitId){
 function isExcludedUnit(unit){ return !unit || isExcludedDepartment(unit.name); }
 /* Đếm 622 tài khoản Ralli theo phòng trực tiếp, sau đó cộng vào toàn bộ cấp cha.
    Nhờ đó company/PBH/vùng/đội đều có mẫu số đúng nhưng mỗi tài khoản chỉ tồn tại một lần. */
-function rebuildRalliProvisioned(){
+/* Số tài khoản ĐƯỢC CẤP QUYỀN theo đơn vị, cộng dồn lên mọi cấp cha.
+
+   Đếm từ danh bạ THẬT: chỉ người có trong danh bạ của app (`in_directory`) và
+   không phải tài khoản dùng chung. Đó đúng là định nghĩa "được cấp quyền", và là
+   MẪU SỐ của tỷ lệ áp dụng - tử số phải lọc y hệt, xem deptRowHtml.
+
+   Đổi tên 20/08/2026 (cũ: `rebuildRalliProvisioned`) vì nó đếm MỌI tài khoản chứ
+   không riêng Trợ lý ảo Ralli - tên cũ nói sai phạm vi.
+
+   Ghép bằng `unit_id` chứ không bằng `unit_name`: tên phòng ban do app tự khai,
+   đổi nhãn là hụt mẫu số mà không có gì báo. */
+function rebuildProvisionedFromDirectory(){
   DEPT_PROVISIONED={};
-  // Có database thì đếm từ danh bạ THẬT: chỉ người có trong danh bạ của app
-  // (in_directory) và không phải tài khoản dùng chung. Đó đúng là định nghĩa
-  // "được cấp quyền". Không có backend thì quay về file Excel như cũ.
-  var phong = REAL_ACCOUNTS.length
-    ? REAL_ACCOUNTS.filter(function(a){ return a.in_directory && !a.is_shared; })
-                   .map(function(a){ return a.unit_name; })
-    : (window.RALLI_USERS||[]).map(function(e){ return e.department; });
-  phong.forEach(function(dept){
-    var unit=unitOf(dept);
-    if(!unit||isExcludedUnit(unit)) return;
-    unitPath(unit.id).forEach(function(node){
-      DEPT_PROVISIONED[node.id]=(DEPT_PROVISIONED[node.id]||0)+1;
+  REAL_ACCOUNTS
+    .filter(function(a){ return a.in_directory && !a.is_shared; })
+    .forEach(function(a){
+      var unit=unitById(a.unit_id)||unitOf(a.unit_name);
+      if(!unit||isExcludedUnit(unit)) return;
+      unitPath(unit.id).forEach(function(node){
+        DEPT_PROVISIONED[node.id]=(DEPT_PROVISIONED[node.id]||0)+1;
+      });
     });
-  });
 }
-rebuildRalliProvisioned();
+rebuildProvisionedFromDirectory();
 /* Số tài khoản được cấp: khai báo ở cấp lá, cấp cha cộng dồn từ con.
    Trả về null khi không có dữ liệu — KHÔNG suy ra từ số user active. */
 function provisionedOf(unitId){
@@ -2587,56 +691,94 @@ function directProvisionedOf(unitId){
 
 /* ─── State (day-based) ─── */
 var state;
+/* ─── LỰA CHỌN NGƯỜI DÙNG vs DỮ LIỆU: hai thứ khác nhau ───────────────────
+   `localStorage` CHỈ giữ lựa chọn của người dùng. Số liệu MUST NOT được ghi
+   vào đó.
+
+   Danh sách dưới đây là DANH SÁCH CHO PHÉP, không phải danh sách loại trừ. Đó
+   là điểm cốt yếu: thêm một trường dữ liệu mới vào `state` về sau sẽ KHÔNG tự
+   động bị ghi xuống. Danh sách loại trừ thì đòi mọi người sau này phải nhớ bổ
+   sung vào đó — và một lần quên là số liệu lại rò ra cache.
+
+   VÌ SAO PHẢI LÀM VIỆC NÀY
+   ------------------------
+   Trước 17/08/2026, `saveState()` ghi TOÀN BỘ `state` gồm cả `state.days`.
+   loadFromBackend() cố ý không gọi saveState(), nhưng 9 chỗ khác thì có (đổi bộ
+   lọc, sửa bảng giá, bung cây phòng ban), nên chỉ cần một cú bấm là dữ liệu
+   backend nằm trong localStorage. Đã đo trên trình duyệt thật: 345 KB, 224
+   ngày, 1.154 dòng. Và khi backend chết thì màn hình hiện CHÍNH cache đó -
+   không phải dữ liệu nhúng - nên xoá SEED_DAYS mà không sửa chỗ này thì không
+   đóng được đường dữ liệu cũ nào. */
+var PREF_KEYS = ["range", "filters", "activeDay",
+                 "deptExpanded", "deptExpandedInit", "deptSearch",
+                 "matrixExpanded", "matrixSearch", "pmCollapsed"];
+
+/* State rỗng: KHÔNG dữ liệu, chỉ lựa chọn mặc định.
+   `days`/`dayOrder` để rỗng và `pricing` để rỗng — cả ba chỉ được điền từ
+   database qua loadFromBackend(). Trước đây hàm này trộn buildJuneExcelWeeks()
+   với SEED_DAYS, tức mở trang là đã có số trên màn hình trước khi hỏi ai. */
 function defaultState(){
-  // Seed dữ liệu Excel thật tháng 6 làm kỳ so sánh và tháng 7 làm kỳ hiện tại.
-  var sourceDays=Object.assign({},buildJuneExcelWeeks(),SEED_DAYS), days={}, order=Object.keys(sourceDays).sort();
-  order.forEach(function(d){ days[d] = sanitizeUsageRows(sourceDays[d]).map(function(r){ return Object.assign({}, r, { id:rid() }); }); });
-  return { days:days, dayOrder:order, activeDay:order[order.length-1],
-    range:{start:"2026-08-01",end:"2026-08-13"},
+  return { days:{}, dayOrder:[], activeDay:null,
+    range:null,
     filters:{dept:"",user:"",provider:"",model:"",agent:""},
     deptExpanded:defaultDeptExpanded(), deptExpandedInit:1, deptSearch:"",
-    matrixExpanded:{}, matrixSearch:"", pmCollapsed:{}, pricing:clone(basePricing) };
+    matrixExpanded:{}, matrixSearch:"", pmCollapsed:{}, pricing:{}, pricingById:{} };
 }
 /* Cấp 1 của cây giờ đã là phòng ban thật (xem buildDeptRows dùng reportingRoots),
    nên mở dashboard là thấy ngay danh sách phòng ban mà không cần bung sẵn cấp nào —
    giống hệt ma trận tab Agents. */
 function defaultDeptExpanded(){ return {}; }
+/* Đọc LỰA CHỌN đã lưu, phủ lên state rỗng. Chỉ nhận đúng các khoá trong
+   PREF_KEYS — mọi khoá khác trong cache cũ bị bỏ, kể cả `days` của bản trước. */
 function loadState(){
-  try{ var raw = localStorage.getItem(STORE); if(!raw) return defaultState();
-    var s = JSON.parse(raw);
-    if(!s || !s.days || !s.dayOrder || !s.pricing) return defaultState();
-    if(!s.filters) s.filters = {dept:"",user:"",provider:"",model:"",agent:""};
-    // State mới: bỏ qua an toàn khi đọc localStorage của phiên bản cũ.
-    if(!s.deptExpanded||typeof s.deptExpanded!=="object") s.deptExpanded={};
-    if(!s.matrixExpanded||typeof s.matrixExpanded!=="object") s.matrixExpanded={};
-    if(typeof s.matrixSearch!=="string") s.matrixSearch="";
-    if(typeof s.deptSearch!=="string") s.deptSearch="";
-    // Cây nhà cung cấp → model mặc định MỞ, nên chỉ lưu những nhánh bị thu lại.
-    if(!s.pmCollapsed||typeof s.pmCollapsed!=="object") s.pmCollapsed={};
-    // Chỉ seed trạng thái mở mặc định MỘT lần. Không có cờ này thì người dùng thu gọn
-    // hết rồi tải lại trang sẽ bị bung ra lần nữa.
-    if(!s.deptExpandedInit){ s.deptExpanded=defaultDeptExpanded(); s.deptExpandedInit=1; }
-    // Bản cũ dùng breadcrumb theo cột; ma trận giờ là cây accordion nên bỏ hai khoá này.
-    delete s.matrixPath; delete s.matrixUser;
-    // Khoá đơn vị không còn hợp lệ sau khi chuẩn hoá cây thì loại bỏ. Cây phòng ban
-    // giờ cũng dùng khoá "<unitId>::direct" nên kiểm theo phần trước "::".
-    Object.keys(s.deptExpanded).forEach(function(id){
-      if(!unitById(String(id).split("::")[0])) delete s.deptExpanded[id];
-    });
-    // Khoá "<unitId>::direct" là nút gom tài khoản trực thuộc, không phải một đơn vị
-    // trong ORG_UNITS ⇒ kiểm theo phần trước "::" để không bị xoá oan khi tải lại.
-    Object.keys(s.matrixExpanded).forEach(function(id){
-      if(!unitById(String(id).split("::")[0])) delete s.matrixExpanded[id];
-    });
-    s.dayOrder.forEach(function(d){if(s.days[d]) s.days[d]=sanitizeUsageRows(s.days[d]);});
-    s.dayOrder = s.dayOrder.filter(function(d){ return s.days[d]&&s.days[d].length; }).sort();
-    if(isExcludedDepartment(s.filters.dept)) s.filters.dept="";
-    if(!s.activeDay) s.activeDay = s.dayOrder[s.dayOrder.length-1] || SEED_DAY;
-    if(!s.range || !s.range.start || !s.range.end){ s.range = {start:"2026-08-01",end:"2026-08-13"}; }
-    return s;
-  }catch(e){ return defaultState(); }
+  var s = defaultState();
+  var raw;
+  try{ raw = localStorage.getItem(STORE); }catch(e){ return s; }
+  if(!raw) return s;
+  var p;
+  try{ p = JSON.parse(raw); }catch(e){ return s; }
+  if(!p || typeof p !== "object") return s;
+
+  PREF_KEYS.forEach(function(k){ if(p[k] !== undefined) s[k] = p[k]; });
+
+  // Chuẩn hoá lại từng khoá: cache có thể do phiên bản cũ ghi, hoặc bị sửa tay.
+  if(!s.filters || typeof s.filters!=="object") s.filters={dept:"",user:"",provider:"",model:"",agent:""};
+  if(!s.deptExpanded||typeof s.deptExpanded!=="object") s.deptExpanded={};
+  if(!s.matrixExpanded||typeof s.matrixExpanded!=="object") s.matrixExpanded={};
+  if(typeof s.matrixSearch!=="string") s.matrixSearch="";
+  if(typeof s.deptSearch!=="string") s.deptSearch="";
+  // Cây nhà cung cấp → model mặc định MỞ, nên chỉ lưu những nhánh bị thu lại.
+  if(!s.pmCollapsed||typeof s.pmCollapsed!=="object") s.pmCollapsed={};
+  // Chỉ seed trạng thái mở mặc định MỘT lần. Không có cờ này thì người dùng thu gọn
+  // hết rồi tải lại trang sẽ bị bung ra lần nữa.
+  if(!s.deptExpandedInit){ s.deptExpanded=defaultDeptExpanded(); s.deptExpandedInit=1; }
+  // Khoá đơn vị không còn hợp lệ sau khi chuẩn hoá cây thì loại bỏ. Cây phòng ban
+  // giờ cũng dùng khoá "<unitId>::direct" nên kiểm theo phần trước "::".
+  Object.keys(s.deptExpanded).forEach(function(id){
+    if(!unitById(String(id).split("::")[0])) delete s.deptExpanded[id];
+  });
+  // Khoá "<unitId>::direct" là nút gom tài khoản trực thuộc, không phải một đơn vị
+  // trong ORG_UNITS ⇒ kiểm theo phần trước "::" để không bị xoá oan khi tải lại.
+  Object.keys(s.matrixExpanded).forEach(function(id){
+    if(!unitById(String(id).split("::")[0])) delete s.matrixExpanded[id];
+  });
+  if(isExcludedDepartment(s.filters.dept)) s.filters.dept="";
+  // `range` để null nếu chưa hợp lệ: loadFromBackend() sẽ đặt nó theo khoảng ngày
+  // THẬT của database, thay vì gán một kỳ cứng có thể nằm ngoài dữ liệu.
+  if(!s.range || !s.range.start || !s.range.end) s.range = null;
+  return s;
 }
-function saveState(){ try{ localStorage.setItem(STORE, JSON.stringify(state)); }catch(e){} }
+
+/* Ghi ĐÚNG các khoá trong PREF_KEYS. Không JSON.stringify(state) nữa: state có
+   chứa `days` (hàng nghìn dòng số liệu), và ghi nó xuống là tạo ra một nguồn dữ
+   liệu cũ mà lần mở sau sẽ đọc lên rồi vẽ như số mới. */
+function saveState(){
+  try{
+    var p = {};
+    PREF_KEYS.forEach(function(k){ if(state[k] !== undefined) p[k] = state[k]; });
+    localStorage.setItem(STORE, JSON.stringify(p));
+  }catch(e){}
+}
 
 /* ─── Chọn phạm vi rows theo kỳ (time range) + bộ lọc ─── */
 function dayRows(iso){ if(!state.days[iso]) state.days[iso]=[]; return state.days[iso]; }
@@ -2664,7 +806,7 @@ function applyFilters(rows){
     }
   }
   return rows.filter(function(r){
-    if(wantIds){ var u=unitOf(r.d); if(!u||!wantIds[u.id]) return false; }
+    if(wantIds){ var u=unitOfRow(r); if(!u||!wantIds[u.id]) return false; }
     if(f.user && r.ug !== f.user) return false;
     if(f.provider && modelProvider(r.m) !== f.provider) return false;
     if(f.model && r.m !== f.model) return false;
@@ -2688,8 +830,14 @@ function provisionedTotal(){
 }
 
 /* ─── Ngày dữ liệu min/max (cho preset time range) ─── */
-function minDataDate(){ return state.dayOrder.length ? parseISO(state.dayOrder[0]) : parseISO(SEED_DAY); }
-function maxDataDate(){ return state.dayOrder.length ? parseISO(state.dayOrder[state.dayOrder.length-1]) : parseISO(SEED_DAY); }
+/* Mốc đầu/cuối của dữ liệu THẬT. Trước 17/08/2026 hai hàm này lùi về hằng số
+   SEED_DAY = "2026-07-01" khi dayOrder rỗng — tức BỊA một ngày ra khi không có
+   dữ liệu nào, và mọi thứ tính từ nó trông như số đo. Giờ dayOrder rỗng chỉ xảy
+   ra khi chưa nạp được, và lúc đó renderError() đã chiếm màn hình rồi, nên lùi
+   về hôm nay là đủ an toàn và không giả vờ biết gì về dữ liệu. */
+function today0(){ var d=new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); }
+function minDataDate(){ return state.dayOrder.length ? parseISO(state.dayOrder[0]) : today0(); }
+function maxDataDate(){ return state.dayOrder.length ? parseISO(state.dayOrder[state.dayOrder.length-1]) : today0(); }
 function normalizeRange(){ if(parseISO(state.range.start) > parseISO(state.range.end)){ var t=state.range.start; state.range.start=state.range.end; state.range.end=t; } }
 
 /* ─── So sánh kỳ trước / cùng kỳ năm trước ───
@@ -2796,13 +944,43 @@ function renderSingleDelta(id, cur, prev, fmtFn){
 }
 
 /* ─── Tổng hợp ─── */
+/* `costEst` / `costInv` — TIỀN NÀY TỪ ĐÂU RA (thêm 20/08/2026)
+
+   28,2% số tiền hiển thị trên dashboard không đến từ hoá đơn nào: $114,4465 trên
+   $406,4321 của kỳ 01/01-17/08. Nó được nhân ra từ `ref_price` khi
+   `usage_resolved.cost_usd` là NULL, và trước hôm nay không ô nào nói điều đó.
+
+   Không rải đều, nên trung bình cả kỳ không thay được con số của từng chỗ:
+       Trợ lý ảo Ralli           100,0% suy ra   (chưa nối Google Billing)
+       Trợ Lý Ảo Hợp Đồng         77,7%
+       Chatbot Contact Center      2,8%
+   Và 22/228 ngày có hơn một nửa tiền là suy ra — ngày mới nhất luôn 100%, vì
+   Google phát hành hoá đơn trễ khoảng một ngày.
+
+   Đây là ĐIỂM NGHẼN DUY NHẤT: 7 chỗ gọi aggregate() nuôi mọi con số tiền trên cả
+   6 tab, nên đếm ở đây là phủ hết. */
 function aggregate(rows){
   var a = {u:0,c:0,ti:0,to:0,r:0,cached:0,think:0,cost:0,erW:0,latW:0,latR:0,
-           e4:0,e5:0,e429:0,eKnown:0,lat99W:0,lat99R:0};
+           e4:0,e5:0,e429:0,eKnown:0,lat99W:0,lat99R:0,
+           costEst:0, costInv:0, costRowsInv:0, costRowsEst:0, costRowsUnknown:0,
+           costEstNoBilling:0, costEstLate:0};
   rows.forEach(function(row){
     a.u+=num(row.u); a.c+=num(row.c); a.ti+=num(row.ti); a.to+=num(row.to);
     a.r+=num(row.r); a.cached+=num(row.cached); a.think+=num(row.think);
-    a.cost+=cost(row); a.erW+=num(row.er)*num(row.r);
+    var _c=cost(row);
+    a.cost+=_c; a.erW+=num(row.er)*num(row.r);
+    if(row.cost!=null){ a.costInv+=_c; a.costRowsInv++; }
+    else if(costOrNull(row)!=null){
+      a.costEst+=_c; a.costRowsEst++;
+      /* HAI LÝ DO, KHÔNG MỘT. Trước đó phân biệt bằng `costRowsInv===0`, và điều
+         kiện đó gộp nhầm "agent này không bao giờ có hoá đơn" với "kỳ này chưa có
+         hoá đơn nào". Chọn riêng ngày 17/08 là mọi agent đều 0 dòng hoá đơn, nên
+         màn hình báo "chưa nối billing" cho cả 7 agent đã nối. */
+      if(NO_BILLING_AGENTS[row.a]) a.costEstNoBilling+=_c; else a.costEstLate+=_c;
+    }
+    // Dòng không có hoá đơn VÀ không tra được giá: không cộng vào đâu cả, nhưng
+    // phải đếm - nếu không thì `cost` hụt đúng phần đó mà không gì nói ra.
+    else a.costRowsUnknown++;
     if(num(row.lat)>0&&num(row.r)>0){a.latW+=num(row.lat)*num(row.r);a.latR+=num(row.r);}
     // Mã lỗi đếm theo SỐ LƯỢT, không theo tỷ lệ: cộng số lượt thì đúng ở mọi
     // mức gộp, còn cộng tỷ lệ thì phải nhớ trọng số và rất dễ sai.
@@ -3165,7 +1343,15 @@ function renderOverview(rows){
   set("m-ov-users",fmtCompactNum(activeUsers));
   setWithTitle("m-ov-requests",fmtCompactNum(A.r),fmt(A.r)+" request");
   setWithTitle("m-ov-tokens",fmtCompactNum(A.tokens),fmtTokFull(A.tokens));
-  setWithTitle("m-ov-cost",usageCompact(A.cost),money(A.cost)+" · "+usdReference(A.cost));
+  /* Thẻ tiền nói độ tin CỦA KỲ ĐANG CHỌN, không của toàn bộ dữ liệu. Tỷ lệ suy ra
+     lệch rất mạnh theo ngày - 22/228 ngày có hơn một nửa là suy ra, ngày mới nhất
+     luôn 100% - nên một con số trung bình cả kỳ sẽ nói dối về chính kỳ đang xem.
+     Đúng cái bẫy đã mắc 17/08: tính tỷ lệ trên 224 ngày trong khi thẻ chỉ hiện kỳ
+     được chọn, báo 28% cạnh một con số mà tỷ lệ thật là 32%. `A` ở đây là
+     aggregate() của CHÍNH tập dòng đang hiện, nên không lệch được. */
+  setWithTitle("m-ov-cost",
+    (costIsMarked(A.cost, A.costEst) ? "≈ " : "") + usageCompact(A.cost),
+    money(A.cost) + " · " + costProvenanceTitle(A.cost, A));
   setWithTitle("m-ov-costuser",usageCompact(costPerUser),money(costPerUser)+" / user hoạt động");
   set("m-ov-error",A.er.toFixed(1).replace(".",","));
 
@@ -3185,6 +1371,12 @@ function renderOverview(rows){
   set("i-ov-tokens",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.tokens,A.tokens).toFixed(0)+"% token.":"Chưa có token trong kỳ.");
   set("i-ov-cost",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.cost,A.cost).toFixed(0)+"% tổng mức sử dụng.":"Chưa phát sinh mức sử dụng.");
   set("i-ov-costuser","Bình quân trên "+fmt(activeUsers)+" user hoạt động.");
+  /* Nói thẳng phần suy ra ra màn hình, không chỉ giấu trong tooltip: đây là thẻ
+     tiền chính, và người đọc báo cáo hiếm khi trỏ chuột. */
+  if(A.costEst>0)
+    set("i-ov-cost", "Trong đó " + moneyCompact(A.costEst) + " ("
+      + (A.cost>0 ? (100*A.costEst/A.cost).toFixed(0) : "100")
+      + "%) suy từ bảng giá vì chưa có hoá đơn.");
   set("i-ov-error",topError&&topError.er>0?esc(topError.key)+" cao nhất: "+topError.er.toFixed(1)+"%.":"Không ghi nhận lỗi.");
 
   set("ov-cost-total",moneyCompact(A.cost));
@@ -3206,13 +1398,18 @@ function deptDisplayName(dept){
 }
 function renderOverviewDetail(rows,active){
   var agents=active.slice().sort(function(a,b){return b.cost-a.cost;});
-  var html="", totals={u:0,r:0,tokens:0,cost:0,erW:0};
+  var html="", totals={u:0,r:0,tokens:0,cost:0,erW:0,costEst:0,costRowsInv:0,costEstNoBilling:0,costEstLate:0};
   agents.forEach(function(g){
     var agentRows=rows.filter(function(r){return r.a===g.key;});
     var byDept=groupAgg(agentRows,function(r){return deptDisplayName(r.d);})
       .sort(function(a,b){return (b.cost-a.cost)||(b.r-a.r)||a.key.localeCompare(b.key,"vi");});
     if(!byDept.length) return;
     totals.u+=g.u; totals.r+=g.r; totals.tokens+=g.tokens; totals.cost+=g.cost; totals.erW+=g.er*g.r;
+    // Cộng cả phần suy ra: quên hai dòng này thì hàng Tổng cộng KHÔNG BAO GIỜ
+    // mang dấu `≈`, và đó là kiểu hỏng không ném lỗi - chỉ im lặng nói thiếu.
+    totals.costEst+=num(g.costEst); totals.costRowsInv+=num(g.costRowsInv);
+    totals.costEstNoBilling+=num(g.costEstNoBilling);
+    totals.costEstLate+=num(g.costEstLate);
     var usingDepts=byDept.filter(function(d){return d.r>0;}).length;
     var agentCell="<td class='detail-agent-cell' rowspan='"+byDept.length+"'>"+
       "<span class='detail-agent-name'>"+esc(g.key)+"</span>"+
@@ -3230,7 +1427,7 @@ function renderOverviewDetail(rows,active){
         "<td class='num'>"+fmt(d.u)+"</td>"+
         "<td class='num' title='"+esc(fmt(d.r)+" request")+"'>"+fmtCompactNum(d.r)+"</td>"+
         "<td class='num' title='"+esc(fmtTokFull(d.tokens))+"'>"+fmtCompactNum(d.tokens)+"</td>"+
-        "<td class='num cost' title='"+esc(usdReference(d.cost))+"'>"+moneyCompact(d.cost)+"</td>"+
+        "<td class='num cost' title='"+esc(costProvenanceTitle(d.cost,d))+"'>"+(costIsMarked(d.cost,d.costEst)?"≈ ":"")+moneyCompact(d.cost)+"</td>"+
         "<td class='num"+(d.er>=2?" text-red":"")+"'>"+d.er.toFixed(1)+"%</td>"+
         // Không có request thì không có cơ sở đo độ ổn định — để trống thay vì 100%.
         "<td>"+(d.r>0
@@ -3244,7 +1441,7 @@ function renderOverviewDetail(rows,active){
     html+="<tr class='detail-total-row'><td>Tổng cộng</td><td>"+fmt(agents.length)+" AI Agent</td>"+
       "<td class='num'>"+fmt(totals.u)+"</td><td class='num'>"+fmtCompactNum(totals.r)+"</td>"+
       "<td class='num' title='"+esc(fmtTokFull(totals.tokens))+"'>"+fmtCompactNum(totals.tokens)+"</td>"+
-      "<td class='num cost'>"+moneyCompact(totals.cost)+"</td><td class='num'>"+totalEr.toFixed(1)+"%</td>"+
+      "<td class='num cost' title='"+esc(costProvenanceTitle(totals.cost,totals))+"'>"+(costIsMarked(totals.cost,totals.costEst)?"≈ ":"")+moneyCompact(totals.cost)+"</td>"+"<td class='num'>"+totalEr.toFixed(1)+"%</td>"+
       "<td><div class='overview-success-cell'><span><i style='width:"+totalStable.toFixed(1)+"%'></i></span><b>"+totalStable.toFixed(1)+"%</b></div></td></tr>";
   }
   set("ov-detail-tbody",html||emptyRow(8));
@@ -3358,7 +1555,7 @@ function trendSeries(){
 function groupRowsByUnit(rows){
   var map={};
   (rows||[]).forEach(function(r){
-    var unit=unitOf(r.d);
+    var unit=unitOfRow(r);
     if(!unit||isExcludedUnit(unit)) return;
     var g=map[unit.id]=map[unit.id]||{unit:unit,rows:[],agents:{}};
     g.rows.push(r);
@@ -3374,12 +1571,20 @@ function accountsUnderUnit(unitId, pool){
 }
 /* Ô tỷ lệ áp dụng: dùng đúng ngưỡng đã cấu hình, không đặt ngưỡng mới.
    Thiếu mẫu số => nêu rõ chưa có dữ liệu, không suy ra 100%, không chia cho zero. */
-function adoptionCell(activeCount, provisioned){
+/* `outside` = tài khoản CÓ request nhưng KHÔNG nằm trong danh bạ, nên không thuộc
+   mẫu số. Không cộng vào tử số - cộng thì tỷ lệ vượt 100%, đúng lỗi vừa sửa - nhưng
+   phải NÓI RA trong tooltip: hàng 'Chưa quy được' hiện 0/1 · 0% cạnh 2.544 request,
+   và nếu không giải thích thì con số đúng đó vẫn đọc ra như một con số sai.
+   Cùng khái niệm với cột `outside_directory` mà backend/store.py adoption() trả về. */
+function adoptionCell(activeCount, provisioned, outside){
   if(provisioned==null||provisioned<=0) return "<td class='num'><span class='metric-na'>—</span></td>";
   var rate=activeCount/provisioned*100;
   var cls=rate<INSIGHT_THRESHOLDS.adoptionCritical?"text-red":
     (rate<INSIGHT_THRESHOLDS.adoptionWarning?"text-orange":"text-green");
-  return "<td class='num "+cls+"' title='"+esc(fmt(activeCount)+" tài khoản có request / "+fmt(provisioned)+" tài khoản được cấp")+"'>"+
+  var title=fmt(activeCount)+" tài khoản có request / "+fmt(provisioned)+" tài khoản được cấp";
+  if(outside>0) title+=" · thêm "+fmt(outside)+" tài khoản có request nhưng không có"
+    +" trong danh bạ nên không tính vào tỷ lệ này";
+  return "<td class='num "+cls+"' title='"+esc(title)+"'>"+
     fmt(activeCount)+"/"+fmt(provisioned)+" · "+rate.toFixed(0)+"%</td>";
 }
 function naCell(){ return "<td class='num'><span class='metric-na'>—</span></td>"; }
@@ -3389,7 +1594,7 @@ function sortAccounts(list){
 function usageUnderUnit(unitId, rows){
   var ids={};
   [unitId].concat(unitDescendants(unitId).map(function(u){return u.id;})).forEach(function(id){ids[id]=true;});
-  var scoped=(rows||[]).filter(function(r){var u=unitOf(r.d);return u&&ids[u.id];});
+  var scoped=(rows||[]).filter(function(r){var u=unitOfRow(r);return u&&ids[u.id];});
   var agents={}; scoped.forEach(function(r){if(r.a)agents[r.a]=1;});
   return {agg:aggregate(scoped),agents:Object.keys(agents),hasRows:scoped.length>0};
 }
@@ -3434,7 +1639,7 @@ function deptTreeNode(unit, byUnit, usageIds){
 function deptUsageUnitIds(rows){
   var ids={};
   (rows||[]).forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(!u||isExcludedUnit(u)) return;
     unitPath(u.id).forEach(function(n){ ids[n.id]=true; });
   });
@@ -3446,13 +1651,22 @@ function deptUsageUnitIds(rows){
 function buildDeptUsageIndex(rows){
   var map={};
   (rows||[]).forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(!u||isExcludedUnit(u)) return;
     var rq=num(r.r), c=cost(r), ti=num(r.ti), to=num(r.to), ca=num(r.cached),
         erW=num(r.er)*rq;
+    /* Tách phần tiền SUY RA khỏi phần lấy từ hoá đơn. `cost(r)` ước tính từ bảng
+       giá bất cứ khi nào `r.cost` là NULL - tức những ngày hoá đơn chưa về - và
+       trước 20/08/2026 ô hiện ra không phân biệt hai loại.
+       Đo trên kỳ 19/07-17/08: Chatbot Contact Center $15,30 hoá đơn + $1,58 suy
+       ra; Phân Loại Phản Hồi Tiếp Thị $6,02 + $2,68; Trợ lý ảo Ralli $0,00 hoá
+       đơn + $2,51 suy ra - agent này chưa nối Google Billing nên TOÀN BỘ số tiền
+       của nó là suy ra, mà màn hình không nói gì. */
+    var est = (r.cost == null) ? c : 0;
     unitPath(u.id).forEach(function(n){
-      var m=map[n.id]||(map[n.id]={r:0,ti:0,to:0,cached:0,tokens:0,cost:0,erW:0,rowCount:0,agentSet:{}});
-      m.r+=rq; m.ti+=ti; m.to+=to; m.cached+=ca; m.cost+=c; m.erW+=erW; m.rowCount++;
+      var m=map[n.id]||(map[n.id]={r:0,ti:0,to:0,cached:0,tokens:0,cost:0,costEst:0,erW:0,rowCount:0,agentSet:{}});
+      m.r+=rq; m.ti+=ti; m.to+=to; m.cached+=ca; m.cost+=c; m.costEst+=est;
+      m.erW+=erW; m.rowCount++;
       if(r.a) m.agentSet[r.a]=1;
     });
   });
@@ -3468,14 +1682,60 @@ function buildDeptUsageIndex(rows){
    (vùng/đội) thì lấy phần đã phân bổ xuống tài khoản, để tổng cấp con khớp cấp cha. */
 function deptUnitMetrics(unit, usageIndex, accounts){
   var hit=usageIndex&&usageIndex[unit.id];
-  if(hit&&hit.rowCount>0) return {agg:hit, agents:hit.agents};
-  var a={r:0,ti:0,to:0,tokens:0,cost:0,er:0}, agentMap={};
+  // Nhánh này có dòng usage thật. Tiền tính được, NHƯNG có thể trộn hoá đơn với
+  // phần suy ra của những ngày hoá đơn chưa về - `costEst` nói phần đó bao nhiêu.
+  if(hit&&hit.rowCount>0)
+    return {agg:hit, agents:hit.agents, costKnown:true,
+            costDerived: num(hit.costEst)>0, costEst: num(hit.costEst)};
+  var a={r:0,ti:0,to:0,tokens:0,cost:0,er:0}, agentMap={}, rows=0, priced=0;
   (accounts||[]).forEach(function(u){
-    a.r+=num(u.req); a.ti+=num(u.ti); a.to+=num(u.to); a.cost+=accountCost(u);
+    a.r+=num(u.req); a.ti+=num(u.ti); a.to+=num(u.to);
+    // Tiền SUY RA, đã tính sẵn ở mức dòng trong applyRealAccountUsage().
+    a.cost+=num(u.costDerived);
+    rows+=num(u.costRows); priced+=num(u.costRowsPriced);
     if(u.a&&u.a!=="—") agentMap[u.a]=1;
   });
   a.tokens=a.ti+a.to;
-  return {agg:a, agents:Object.keys(agentMap).length};
+  /* Ba trạng thái, không phải hai:
+       không lưu lượng nào          -> `0 ₫` ĐÚNG, đó là số thật
+       mọi dòng đều tra được giá    -> con số suy ra
+       có dòng KHÔNG tra được giá   -> `—`, vì con số sẽ thiếu đúng phần đó
+     Nói `0 ₫` cạnh `525,9 nghìn token` là một khẳng định sai; mà nói một con số
+     thiếu vài dòng cũng vậy, chỉ khó thấy hơn. */
+  // Nhánh này KHÔNG có dòng hoá đơn nào - toàn bộ số tiền là suy từ bảng giá.
+  return {agg:a, agents:Object.keys(agentMap).length,
+          costDerived: rows>0, costEst: a.cost,
+          costKnown: (rows>0 && priced===rows) || (a.r===0 && a.tokens===0)};
+}
+/* Ô tiền của một hàng đơn vị. Ba trạng thái, mỗi trạng thái một câu khác nhau.
+
+   VÌ SAO TIỀN SUY RA PHẢI TỰ KHAI LÀ SUY RA
+   Tiền của hàng đơn vị KHÔNG lấy từ hoá đơn được: hoá đơn Google tính theo
+   project và không ghi ai gọi, nên /api/usage-by-account không có cột cost_usd.
+   Con số ở đây nhân token với ref_price - mà ref_price lấy từ chính Cloud
+   Billing Catalog của Google (`price_source='google'`), nên nó dựng lại rất sát:
+   đối chiếu 965 dòng có cả hai vế cho lệch tổng −0,1% và lệch trung vị 0,0%.
+   Sát đến vậy vẫn KHÔNG phải hoá đơn, và người đọc có quyền biết mình đang xem
+   con số nào. Dấu `≈` và tooltip làm đúng việc đó.
+
+   Trước 20/08/2026 ô này in `0 ₫` cho mọi phòng ban thật - xem deptUnitMetrics. */
+function deptCostCell(m, g){
+  if(!m.costKnown)
+    return "<td class='num cost' title='"+esc("Chưa tính được: có dòng sử dụng mang model"
+      +" không tra được đơn giá trong bảng giá")+"'><span class='metric-na'>—</span></td>";
+  if(!m.costDerived)   // toàn bộ từ hoá đơn Google
+    return "<td class='num cost' title='"+esc(usdReference(g.cost))+"'>"
+      +moneyCompact(g.cost)+"</td>";
+  /* Có phần suy ra. NÓI ĐỦ BAO NHIÊU, không chỉ nói "có" — với Trợ lý ảo Ralli
+     thì toàn bộ là suy ra, với Chatbot Contact Center chỉ 9%. Hai chuyện rất
+     khác nhau mà cùng một dấu `≈` sẽ làm chúng trông giống hệt. */
+  var est=num(m.costEst), pct=g.cost>0 ? 100*est/g.cost : 100;
+  return "<td class='num cost' title='"+esc(
+      (pct>=99.5 ? "Toàn bộ số này SUY TỪ BẢNG GIÁ, không có dòng hoá đơn nào."
+                 : "Trong số này có "+moneyCompact(est)+" ("+pct.toFixed(0)
+                   +"%) suy từ bảng giá, phần còn lại lấy từ hoá đơn.")
+      +" Hoá đơn Google tính theo project nên không chia được theo phòng ban. "
+      +usdReference(g.cost))+"'>≈ "+moneyCompact(g.cost)+"</td>";
 }
 function deptQuotaCell(u){
   var c=accountCost(u), q=Math.max(0,Math.min(100,num(u.quotaPct)));
@@ -3524,15 +1784,29 @@ function deptRowHtml(row, usageIndex, light){
     return html;
   }
   var m=deptUnitMetrics(row.unit,usageIndex,row.accounts), g=m.agg;
-  var activeCount=row.accounts.filter(function(u){return u.active&&!u.disabled;}).length;
+  /* TỬ SỐ VÀ MẪU SỐ PHẢI ĐẾM CÙNG MỘT TẬP.
+     Mẫu số `DEPT_PROVISIONED` (rebuildRalliProvisioned) chỉ tính tài khoản
+     `in_directory && !is_shared` - đúng định nghĩa "được cấp quyền". Tử số
+     trước 20/08/2026 không lọc gì, nên tài khoản CÓ request mà KHÔNG có trong
+     danh bạ vẫn vào tử số dù không có trong mẫu số: hàng 'Chưa quy được' hiện
+     3/1 = 300%.
+     backend/store.py adoption() không mắc lỗi này - nó tách hẳn
+     `outside_directory` ra cột riêng thay vì cộng vào tử số. scripts/audit_db.py
+     có phép kiểm "Ty le ap dung khong vuot 100%" và nó vẫn ĐẠT, vì phép kiểm đó
+     soi database chứ không soi frontend. */
+  var eligible=row.accounts.filter(function(u){return u.inDirectory&&!u.shared;});
+  var activeCount=eligible.filter(function(u){return u.active&&!u.disabled;}).length;
+  var outsideCount=row.accounts.filter(function(u){
+    return u.active&&!u.disabled&&!(u.inDirectory&&!u.shared);
+  }).length;
   // Cấp "Trực thuộc" chỉ gom tài khoản gắn thẳng vào đơn vị nên mẫu số là chính nó,
   // không phải số cấp phát của cả đơn vị cha.
-  var prov=row.tier==="direct"?row.accounts.length:provisionedOf(row.unit.id);
+  var prov=row.tier==="direct"?eligible.length:provisionedOf(row.unit.id);
   html+="<td class='num'>"+fmt(m.agents)+"</td>"+
-    adoptionCell(activeCount,prov)+
+    adoptionCell(activeCount,prov,outsideCount)+
     "<td class='num'>"+fmt(g.r)+"</td>"+
     "<td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtCompactNum(g.tokens)+"</td>"+
-    "<td class='num cost' title='"+esc(usdReference(g.cost))+"'>"+moneyCompact(g.cost)+"</td>"+
+    deptCostCell(m, g)+
     "<td class='num"+(g.er>2?" text-red":"")+"'>"+num(g.er).toFixed(1)+"%</td>"+
     naCell()+"</tr>";
   return html;
@@ -4015,7 +2289,7 @@ function flattenMatrixTree(node, depth, guides, isLast, group, parent, out, isOp
 function matrixUsageIndex(rows){
   var map={};
   (rows||[]).forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(!u||isExcludedUnit(u)||!r.a) return;
     unitPath(u.id).forEach(function(node){
       var m=map[node.id]=map[node.id]||{};
@@ -4221,7 +2495,7 @@ function renderMatrixNote(rows, scopeRows, idleAgents){
   rows.forEach(function(r){ if(r.depth===1) shown+=r.total; });
   var real=0;
   (scopeRows||[]).forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(u&&!isExcludedUnit(u)&&r.a) real+=num(r.r);
   });
   var accounts=0, blind=0;
@@ -4743,7 +3017,7 @@ function renderCostTable(rows){
      nên đối chiếu được thẳng với giá niêm yết. Chia theo lượt gọi thì mỗi agent có độ dài
      prompt khác nhau, con số không so ngang được giữa các agent. */
   set("co-tbody", groups.map(function(g){
-    return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.tokens?moneyCell(g.cost/(g.tokens/1e6),"num"):"<td class='num'>—</td>")+moneyCell(g.cost)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
+    return "<tr><td>"+esc(g.key)+"</td><td class='num' title='"+esc(fmtTokFull(g.tokens))+"'>"+fmtTok(g.tokens)+"</td><td class='num'>"+fmt(g.r)+"</td>"+(g.tokens?moneyCell(g.cost/(g.tokens/1e6),"num",{costEst:num(g.costEst)/(g.tokens/1e6),costRowsInv:g.costRowsInv}):"<td class='num'>—</td>")+moneyCell(g.cost,null,g)+"<td><div class='progress-bar'><div class='progress-fill' style='width:"+pct(g.cost,total).toFixed(0)+"%'></div><span class='progress-text'>"+pct(g.cost,total).toFixed(0)+"%</span></div></td></tr>";
   }).join("") || emptyRow(6));
 }
 /* ─── Chi phí theo thời gian, tách theo phòng ban ───
@@ -4755,7 +3029,7 @@ function deptCostTrend(){
   var perDay=dates.map(function(d){
     var m={};
     applyFilters(state.days[d]||[]).forEach(function(r){
-      var u=unitOf(r.d);
+      var u=unitOfRow(r);
       if(!u||isExcludedUnit(u)) return;
       var c=cost(r);
       m[u.name]=(m[u.name]||0)+c;
@@ -5041,47 +3315,6 @@ function renderStatus(){
   set("header-data-date", esc(fmtDateUS(toISO(maxDataDate()))));
 }
 
-/* ═══════════════ NHẬP LIỆU THEO NGÀY ═══════════════ */
-function insertDayOrdered(iso){
-  var at=state.dayOrder.length;
-  for(var i=0;i<state.dayOrder.length;i++){ if(iso < state.dayOrder[i]){ at=i; break; } }
-  state.dayOrder.splice(at,0,iso);
-}
-function renderDataDay(){
-  var d=document.getElementById("data-date");
-  if(d){
-    d.value=state.activeDay;
-    d.onchange=function(){ if(this.value){ state.activeDay=this.value; dayRows(state.activeDay); renderDataPanel(); renderDataDayHint(); } };
-  }
-  var del=document.getElementById("del-day-btn"); if(del) del.disabled = state.dayOrder.indexOf(state.activeDay)<0;
-  renderDataDayHint();
-}
-function renderDataDayHint(){
-  var h=document.getElementById("data-days-hint"); if(!h) return;
-  var saved = state.dayOrder.indexOf(state.activeDay)>=0;
-  var base = state.dayOrder.length ? ("Đã lưu "+state.dayOrder.length+" ngày. ") : "Chưa có ngày nào được lưu. ";
-  h.textContent = base + (saved ? "Ngày này đã có dữ liệu — đang sửa." : "Ngày mới — nhập xong bấm 💾 Lưu.");
-}
-function dataMsg(t, err){ var e=document.getElementById("data-msg"); if(!e) return; e.textContent=t; e.className="config-msg"+(err?" error":""); setTimeout(function(){ if(e.textContent===t) e.textContent=""; },4000); }
-function saveDay(){
-  var iso=state.activeDay;
-  var rows=sanitizeUsageRows(state.days[iso]||[]);
-  state.days[iso]=rows;
-  var idx=state.dayOrder.indexOf(iso);
-  if(rows.length>0){ if(idx<0) insertDayOrdered(iso); }
-  else { if(idx>=0) state.dayOrder.splice(idx,1); delete state.days[iso]; }
-  saveState(); renderAll();
-  dataMsg(rows.length>0 ? ("✅ Đã lưu ngày "+iso+" — dashboard đã cập nhật.") : ("Ngày "+iso+" trống nên không được lưu."), rows.length===0);
-}
-function delDay(){
-  var iso=state.activeDay, idx=state.dayOrder.indexOf(iso);
-  if(idx<0){ dataMsg("Ngày "+iso+" chưa được lưu nên không có gì để xoá.", true); return; }
-  if(!confirm("Xoá toàn bộ dữ liệu ngày "+iso+"? Hành động này không thể hoàn tác.")) return;
-  state.dayOrder.splice(idx,1); delete state.days[iso];
-  state.activeDay = state.dayOrder.length ? state.dayOrder[Math.max(0,idx-1)] : iso;
-  saveState(); renderAll();
-  dataMsg("🗑 Đã xoá ngày "+iso, false);
-}
 
 /* ═══════════════ BỘ LỌC ═══════════════ */
 function fillSelect(id, opts, val, allLabel){
@@ -5101,7 +3334,7 @@ function renderFilters(){
   // Dropdown hiển thị TÊN ĐƠN VỊ chuẩn hoá, mỗi phòng chỉ một lựa chọn.
   var deptNames=[], seenDept={};
   rows.forEach(function(r){
-    var u=unitOf(r.d);
+    var u=unitOfRow(r);
     if(!u||isExcludedUnit(u)) return;
     var root=reportingRootOf(u.id)||u;
     if(!seenDept[root.name]){ seenDept[root.name]=true; deptNames.push(root.name); }
@@ -5125,10 +3358,10 @@ function renderPricing(){
   Object.keys(state.pricing).forEach(function(m){
     var p=state.pricing[m];
     var name=document.createElement("div"); name.textContent=m;
-    var i=priceInput(p.i, function(v){ state.pricing[m].i=v; renderDataPanel(); });
-    var o=priceInput(p.o, function(v){ state.pricing[m].o=v; renderDataPanel(); });
+    var i=priceInput(p.i, function(v){ state.pricing[m].i=v; });
+    var o=priceInput(p.o, function(v){ state.pricing[m].o=v; });
     var x=document.createElement("button"); x.className="icon-x"; x.innerHTML="&times;"; x.title="Xoá model";
-    x.onclick=function(){ if(Object.keys(state.pricing).length<=1){ configMsg("Cần giữ ít nhất 1 model.",true); return; } delete state.pricing[m]; renderPricing(); renderDataPanel(); };
+    x.onclick=function(){ if(Object.keys(state.pricing).length<=1){ configMsg("Cần giữ ít nhất 1 model.",true); return; } delete state.pricing[m]; renderPricing(); };
     el.appendChild(name); el.appendChild(i); el.appendChild(o); el.appendChild(x);
   });
 }
@@ -5136,61 +3369,24 @@ function priceInput(val, on){ var i=document.createElement("input"); i.type="num
 
 /* ═══════════════ BẢNG DỮ LIỆU NGUỒN (editable, theo ngày) ═══════════════ */
 function td(child){ var t=document.createElement("td"); t.appendChild(child); return t; }
-function tdNum(child){ var t=document.createElement("td"); t.className="num"; t.appendChild(child); return t; }
-function textInput(v, on){ var i=document.createElement("input"); i.type="text"; i.className="text-input"; i.value=v; i.onchange=function(){ on(this.value); renderDataPanel(); }; return i; }
-function numInput(v, on){ var i=document.createElement("input"); i.type="number"; i.className="cell-input"; i.value=v; i.onchange=function(){ on(num(this.value)); renderDataPanel(); }; return i; }
-function modelSelect(v, on){
-  var s=document.createElement("select"); s.className="cell-select";
-  Object.keys(state.pricing).forEach(function(m){ var o=document.createElement("option"); o.value=m; o.textContent=m; if(m===v) o.selected=true; s.appendChild(o); });
-  s.onchange=function(){ on(this.value); renderDataPanel(); }; return s;
-}
-function renderDataPanel(){
-  var tb=document.getElementById("data-tbody"); if(!tb) return;
-  var rows=dayRows(state.activeDay); tb.innerHTML="";
-  rows.forEach(function(row){
-    var tr=document.createElement("tr");
-    tr.appendChild(td(textInput(row.a, function(v){ row.a=v; })));
-    tr.appendChild(td(textInput(row.d, function(v){ row.d=v; })));
-    tr.appendChild(td(modelSelect(row.m, function(v){ row.m=v; })));
-    tr.appendChild(tdNum(numInput(row.u, function(v){ row.u=v; })));
-    tr.appendChild(tdNum(numInput(row.c, function(v){ row.c=v; })));
-    tr.appendChild(tdNum(numInput(row.ti, function(v){ row.ti=v; })));
-    tr.appendChild(tdNum(numInput(row.to, function(v){ row.to=v; })));
-    tr.appendChild(tdNum(numInput(row.r, function(v){ row.r=v; })));
-    tr.appendChild(tdNum(numInput(row.er, function(v){ row.er=v; })));
-    var rowCost=cost(row);
-    var c=document.createElement("td"); c.className="num cost"; c.textContent=money(rowCost); c.title=usdReference(rowCost); tr.appendChild(c);
-    var xtd=document.createElement("td"); var xb=document.createElement("button"); xb.className="icon-x"; xb.innerHTML="&times;"; xb.title="Xoá dòng";
-    xb.onclick=function(){ var idx=rows.indexOf(row); if(idx>=0){ rows.splice(idx,1); renderDataPanel(); } };
-    xtd.appendChild(xb); tr.appendChild(xtd);
-    tb.appendChild(tr);
-  });
-  // Dòng Tổng (giống bảng gốc): cộng dồn u/c/token/request + tổng chi phí
-  var t = rows.reduce(function(a,r){
-    a.u+=num(r.u); a.c+=num(r.c); a.ti+=num(r.ti); a.to+=num(r.to); a.r+=num(r.r); a.cost+=cost(r); return a;
-  }, {u:0,c:0,ti:0,to:0,r:0,cost:0});
-  var trt=document.createElement("tr"); trt.className="data-total-row";
-  trt.innerHTML =
-    "<td colspan='3'>Tổng</td>"+
-    "<td class='num'>"+fmt(t.u)+"</td>"+
-    "<td class='num'>"+fmt(t.c)+"</td>"+
-    "<td class='num'>"+fmt(t.ti)+"</td>"+
-    "<td class='num'>"+fmt(t.to)+"</td>"+
-    "<td class='num'>"+fmt(t.r)+"</td>"+
-    "<td class='num'></td>"+
-    "<td class='num' title='"+esc(usdReference(t.cost))+"'>"+money(t.cost)+"</td>"+
-    "<td></td>";
-  tb.appendChild(trt);
-}
 
 /* ═══════════════ CSV ═══════════════ */
 function csv(v){ v=v==null?"":String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
 function exportCSV(){
   var rows=scopedRows();
   var period = state.range.start+" → "+state.range.end;
-  var lines=["Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình"];
+  /* Cột `Nguồn tiền` là bắt buộc, không phải trang trí: 28,2% số tiền trên
+     dashboard suy từ bảng giá chứ không từ hoá đơn. Số mang ra khỏi màn hình mà
+     mất dấu vết thì người nhận file không có cách nào biết - và file CSV thường
+     đi xa hơn màn hình, vào bảng tính rồi vào báo cáo. */
+  var lines=["Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,"
+            +"Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình,Nguồn tiền"];
   rows.forEach(function(r){
-    lines.push([period,r.a,r.d,r.m,modelProvider(r.m),r.u,r.c,r.ti,r.to,r.r,num(r.er).toFixed(2),cost(r).toFixed(2),toVnd(cost(r)),VND_RATE].map(csv).join(","));
+    var nguon = r.cost!=null ? "hoá đơn"
+              : (costOrNull(r)!=null ? "suy từ bảng giá" : "không tính được");
+    lines.push([period,r.a,r.d,r.m,modelProvider(r.m),r.u,r.c,r.ti,r.to,r.r,
+                num(r.er).toFixed(2),cost(r).toFixed(2),toVnd(cost(r)),VND_RATE,
+                nguon].map(csv).join(","));
   });
   var blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8;"});
   var url=URL.createObjectURL(blob); var a=document.createElement("a");
@@ -5214,11 +3410,9 @@ function renderChartsFor(tab, rows){
 }
 function renderAll(){
   renderRange();
-  renderDataDay();
   renderStatus();
   renderFilters();
   renderPricing();
-  renderDataPanel();
   var rows = scopedRows();
   // Phân bổ lại số liệu tài khoản theo kỳ + bộ lọc hiện tại TRƯỚC mọi renderer,
   // để tổng ở cấp tài khoản luôn khớp tổng phòng ban của đúng phạm vi đang xem.
@@ -5276,18 +3470,9 @@ function init(){
 
   // toolbar buttons
   document.getElementById("btn-config").onclick=function(){ document.getElementById("pricing-panel").classList.toggle("open"); };
-  document.getElementById("btn-data").onclick=function(){ document.getElementById("data-panel").classList.toggle("open"); };
   document.getElementById("btn-export").onclick=exportCSV;
   var themeBtn=document.getElementById("btn-theme");
   if(themeBtn) themeBtn.onclick=function(){ applyTheme(currentTheme()==="light"?"dark":"light"); renderAll(); };
-
-  // dữ liệu nguồn theo ngày
-  document.getElementById("add-row-btn").onclick=function(){
-    dayRows(state.activeDay).push({ id:rid(), a:"Agent mới", d:"—", m:Object.keys(state.pricing)[0], u:0,c:0,ti:0,to:0,r:0,er:0,lat:2.0,cached:0,think:0 });
-    renderDataPanel();
-  };
-  var saveDayBtn=document.getElementById("save-day-btn"); if(saveDayBtn) saveDayBtn.onclick=saveDay;
-  var delDayBtn=document.getElementById("del-day-btn"); if(delDayBtn) delDayBtn.onclick=delDay;
 
   document.getElementById("f-reset").onclick=function(){ state.filters={dept:"",user:"",provider:"",model:"",agent:""}; renderAll(); };
 
@@ -5305,7 +3490,7 @@ function init(){
     state.pricing[name]={i:0,o:0};
     preset.value=""; custom.value=""; custom.style.display="none";
     configMsg("Đã thêm \""+name+"\" — điền giá rồi bấm 💾 Lưu bảng giá.", false);
-    renderPricing(); renderDataPanel();
+    renderPricing();
   };
   var savePriceBtn=document.getElementById("save-price-btn");
   if(savePriceBtn) savePriceBtn.onclick=function(){ saveState(); renderAll(); configMsg("✅ Đã lưu bảng giá — dashboard đã cập nhật.", false); };
@@ -5318,28 +3503,212 @@ function init(){
   }catch(e){}
   applyTheme(savedTheme);
 
-  renderAll();
-  napTuBackend();
+  /* NẠP TRƯỚC, VẼ SAU. Trước 17/08/2026 chỗ này gọi renderAll() ngay, tức vẽ
+     số cũ ra màn hình rồi mới hỏi backend — và nếu backend không trả lời thì
+     "không có gì xảy ra", số cũ ở lại và trông y hệt số mới. Đã đo: ba thẻ to
+     nhất (request / token / tiền) trùng nhau giữa hai trạng thái, nên mắt không
+     bắt được. Giờ chỉ vẽ khung, và renderAll() chỉ chạy khi đã có dữ liệu thật. */
+  wireKeyGate();
+  renderShell();
+  loadFromBackend();
+}
+
+/* ─── Trạng thái nạp dữ liệu ──────────────────────────────────────────────
+   Ba hàm dưới đây là CHỖ DUY NHẤT nói với người xem về tình trạng dữ liệu.
+   Chúng viết vào #load-note và thanh trạng thái, không viết vào chỗ nào khác. */
+
+function loadNote(level, icon, html){
+  var box=document.getElementById("load-note");
+  if(!box) return;
+  box.className = "load-note" + (level ? " "+level : "");
+  box.hidden = false;
+  var i=document.getElementById("load-note-icon"), t=document.getElementById("load-note-text");
+  if(i) i.textContent = icon;
+  if(t) t.innerHTML = html;
+}
+function hideLoadNote(){
+  var box=document.getElementById("load-note");
+  if(box) box.hidden = true;
+}
+function setConnIndicator(level, text){
+  var d=document.getElementById("conn-dot"), t=document.getElementById("conn-text");
+  if(d) d.className = "status-dot" + (level ? " "+level : "");
+  if(t) t.textContent = text;
+}
+
+/* Khung trống kèm "đang nạp". KHÔNG vẽ số, và KHÔNG vẽ biểu đồ rỗng: một biểu
+   đồ rỗng trông giống "kỳ này không có dữ liệu", tức đúng loại nhập nhằng mà
+   thay đổi này đang đi dọn. */
+function renderShell(){
+  setConnIndicator("warning", "Đang nối database…");
+  loadNote("", "⏳", "Đang nạp dữ liệu từ database…");
+}
+
+/* Nạp hỏng. Bốn lý do, bốn câu trả lời khác nhau — trước đây cả bốn đều thành
+   `null` nên trông y hệt nhau. MỌI nhánh đều KHÔNG hiện con số nào. */
+/* ─── Ô nhập khoá ─────────────────────────────────────────────────────────
+   HAI trạng thái, KHÔNG dùng chung lời:
+
+       chưa nhập khoá bao giờ   -> "dashboard cần một khoá"      (mức warn)
+       máy chủ trả 401          -> "khoá không đúng, nhập lại"   (mức error)
+
+   Gộp hai câu này lại là nói sai chuyện đang xảy ra với người mở lần đầu: họ
+   chưa làm gì sai cả. Và nó cũng khác hẳn "chưa bật backend" - ba tình huống,
+   ba hành động: nhập khoá / nhập lại khoá / chạy uvicorn.
+
+   Khoá sai thì XOÁ khỏi localStorage luôn. Giữ lại thì mỗi lần tải trang là
+   một dòng 401 nữa trong log máy chủ, và người dùng thấy "khoá không đúng"
+   cho một khoá họ không hề vừa nhập. */
+function showKeyGate(sai){
+  var box=document.getElementById("key-gate"),
+      msg=document.getElementById("key-gate-msg"),
+      inp=document.getElementById("key-input"),
+      btn=document.getElementById("key-submit");
+  if(!box || !msg || !inp || !btn){
+    /* Thiếu markup thì phải nói ra, không im lặng bỏ qua - im lặng ở đây nghĩa
+       là dashboard trắng trơn mà không có chữ nào giải thích. */
+    loadNote("error","⛔","<b>Thiếu ô nhập khoá trong <code>index.html</code>.</b> "
+           + "Dashboard cần <code>#key-gate</code>, <code>#key-input</code>, "
+           + "<code>#key-submit</code>.");
+    return;
+  }
+  box.className = "key-gate" + (sai ? " wrong" : "");
+  box.hidden = false;
+  msg.innerHTML = sai
+    ? "<b>Khoá không đúng.</b> Máy chủ trả <b>HTTP 401</b>. "
+      + "Khoá có thể đã bị đổi — hỏi lại người dựng dashboard rồi nhập lại."
+    : "<b>Dashboard cần một khoá để đọc dữ liệu.</b> "
+      + "Backend không trả số nào khi chưa có khoá — đây là chủ ý, không phải lỗi.";
+  hideLoadNote();
+  setConnIndicator("error", sai ? "Khoá không đúng" : "Chưa nhập khoá");
+  var p=document.getElementById("status-period"); if(p) p.textContent = "—";
+  var h=document.getElementById("header-data-date"); if(h) h.textContent = "—";
+  inp.value = "";
+  try{ inp.focus(); }catch(e){}
+}
+
+function hideKeyGate(){
+  var box=document.getElementById("key-gate");
+  if(box) box.hidden = true;
+}
+
+/* Gắn sự kiện ĐÚNG MỘT LẦN. Markup nằm tĩnh trong index.html chứ không bơm
+   bằng innerHTML, nên không phải gắn lại sau mỗi lần vẽ - và không có nút nào
+   bị nhân đôi handler. */
+function wireKeyGate(){
+  var inp=document.getElementById("key-input"),
+      btn=document.getElementById("key-submit");
+  if(!inp || !btn) return;
+  function gui(){
+    var v=(inp.value||"").trim();
+    if(!v){ try{ inp.focus(); }catch(e){} return; }
+    if(!window.TokenLedgerAPI || !window.TokenLedgerAPI.datKhoa(v)){
+      var m=document.getElementById("key-gate-msg");
+      if(m) m.innerHTML = "<b>Trình duyệt không cho lưu khoá.</b> "
+        + "Cửa sổ ẩn danh hoặc thiết lập chặn lưu trữ. Mở bằng cửa sổ thường.";
+      return;
+    }
+    hideKeyGate();
+    renderShell();
+    loadFromBackend();
+  }
+  btn.addEventListener("click", gui);
+  inp.addEventListener("keydown", function(e){ if(e.key==="Enter") gui(); });
+}
+
+function renderError(err){
+  var addr = (err && err.apiBase) || "—";
+  var html;
+  switch(err && err.kind){
+    /* Hai nhánh này TỰ VẼ rồi thoát - chúng cần một ô nhập, không phải một
+       đoạn chữ. Đặt trước mọi nhánh khác để không rơi vào `default`. */
+    case "need-key":
+      showKeyGate(false);
+      return;
+    case "unauthorized":
+      if(window.TokenLedgerAPI) window.TokenLedgerAPI.datKhoa("");
+      showKeyGate(true);
+      return;
+  }
+  switch(err && err.kind){
+    case "file-protocol":
+      html = "<b>Đang mở bằng <code>file://</code> nên không gọi được API.</b><br>"
+           + "Dashboard chỉ hiển thị dữ liệu từ database — không còn dữ liệu dự phòng "
+           + "nhúng trong mã. Cần chạy hai lệnh:<br>"
+           + "<code>docker compose up -d</code> · "
+           + "<code>python -m uvicorn backend.main:app --port 8000</code> · "
+           + "<code>cd web &amp;&amp; python -m http.server 8080 --bind 127.0.0.1</code><br>"
+           + "rồi mở <code>http://127.0.0.1:8080</code>.";
+      break;
+    case "unreachable":
+      html = "<b>Không nối được backend.</b> Đã thử <code>"+addr+"</code>.<br>"
+           + "Kiểm: database đã lên chưa (<code>docker compose ps</code>), backend đã chạy "
+           + "chưa (<code>python -m uvicorn backend.main:app --port 8000</code>). "
+           + "Backend ở địa chỉ khác thì thêm <code>?api=http://may-khac:8000</code> vào URL.";
+      break;
+    case "endpoint-error":
+      html = "<b>Backend trả về lỗi.</b> Endpoint <code>"+(err.endpoint||"?")+"</code> "
+           + "trả mã HTTP <b>"+(err.httpStatus||"?")+"</b> tại <code>"+addr+"</code>.<br>"
+           + "Xem log của uvicorn để biết nguyên nhân. Dashboard không hiện số vì "
+           + "một phần dữ liệu bị thiếu thì tổng sẽ sai mà không nói ra.";
+      break;
+    case "empty-database":
+      html = "<b>Nối được backend, nhưng database chưa có dữ liệu sử dụng.</b><br>"
+           + "Khác với không nối được: máy chủ trả lời bình thường, chỉ là "
+           + "<code>/api/health</code> không báo khoảng ngày nào cho usage.<br>"
+           + "Nạp dữ liệu bằng <code>python scripts/rebuild_db.py</code>, "
+           + "rồi soát bằng <code>python scripts/audit_db.py</code>.";
+      break;
+    default:
+      html = "<b>Không nạp được dữ liệu.</b> <code>"+addr+"</code> — "
+           + ((err && err.message) || "không rõ nguyên nhân") + ".";
+  }
+  setConnIndicator("error", "Không có dữ liệu");
+  loadNote("error", "⛔", html);
+  var p=document.getElementById("status-period"); if(p) p.textContent = "—";
+  var h=document.getElementById("header-data-date"); if(h) h.textContent = "—";
 }
 
 /* ─── Nạp dữ liệu thật từ backend đọc database ───────────────────────────
-   CHỈ THAY DỮ LIỆU. Không đụng vào giao diện: không thêm phần tử, không đổi
-   chữ, không đổi màu. Dashboard trông y hệt như trước, chỉ khác là số bên
-   trong đến từ database thay vì từ khối nhúng sẵn.
+   DATABASE LÀ NGUỒN DUY NHẤT. Không còn dữ liệu nhúng để rơi về, nên hàm này
+   là đường duy nhất đưa số lên màn hình — và MỌI nhánh thất bại đều phải nói
+   ra, không nhánh nào được im lặng.
 
-   Chạy SAU renderAll(): dashboard hiện ra ngay bằng dữ liệu nhúng, rồi số
-   thật thay vào khi backend trả lời. Không có backend thì không có gì xảy ra.
+   Chạy SAU renderShell(): màn hình có khung và chữ "đang nạp", chưa có số nào.
+   renderAll() chỉ được gọi trong nhánh thành công.
 
-   KHÔNG gọi saveState() ở đây. Ghi dữ liệu backend vào localStorage sẽ khiến
-   lần mở sau dùng bản cũ mà tưởng là mới; để nguyên thì mỗi lần tải trang là
-   một lần hỏi lại database. */
-function napTuBackend(){
-  if(!window.TokenLedgerAPI) return;
-  window.TokenLedgerAPI.load().then(function(kq){
-    if(!kq || !kq.dayOrder.length) return;
+   BA ĐƯỜNG THOÁT IM LẶNG ĐÃ BỊ BỎ (17/08/2026):
+       if(!window.TokenLedgerAPI) return;      -> giờ báo lỗi ra màn hình
+       if(!kq) return;                          -> giờ đọc kq.error rồi báo
+       if(!kq.dayOrder.length) return;          -> giờ báo "database rỗng"
+
+   Ba lệnh `return` đó nghĩa là "không làm gì cả", nên số cũ ở lại trên màn
+   hình và trông y hệt số mới. Dấu hiệu duy nhất là một dòng console.warn -
+   phải mở DevTools mới thấy, mà không ai mở DevTools khi đang đọc báo cáo. */
+function loadFromBackend(){
+  if(!window.TokenLedgerAPI){
+    renderError({ kind: "unknown",
+                  message: "js/api.js không nạp được — kiểm thẻ <script> trong index.html" });
+    return;
+  }
+  window.TokenLedgerAPI.load().then(function(kt){
+    if(!kt || !kt.ok){ renderError(kt && kt.error); return; }
+    hideKeyGate();
+    var kq = kt.data;
+    if(!kq.dayOrder || !kq.dayOrder.length){
+      renderError({ kind: "empty-database",
+                    message: "backend trả về 0 ngày dữ liệu",
+                    apiBase: window.TokenLedgerAPI.base() });
+      return;
+    }
     state.days=kq.days;
     state.dayOrder=kq.dayOrder;
     if(Object.keys(kq.pricing||{}).length) state.pricing=kq.pricing;
+    /* Bản chỉ mục thứ hai của cùng bảng giá, khoá theo model_id. CHÉP RIÊNG,
+       không suy ra từ state.pricing: bảng kia khoá theo TÊN model, mà
+       /api/usage-by-account chỉ trả `model_id`. Quên dòng này thì tiền theo
+       phòng ban im lặng rơi hết về '—' - đã dính đúng vậy lúc apply 20/08. */
+    if(Object.keys(kq.pricingById||{}).length) state.pricingById=kq.pricingById;
     if(kq.fxRate && kq.fxRate.vnd_per_usd) VND_RATE=kq.fxRate.vnd_per_usd;
     state.activeDay=kq.dayOrder[kq.dayOrder.length-1];
     // Kỳ đang chọn có thể nằm ngoài khoảng dữ liệu vừa nạp — kéo về cuối kỳ.
@@ -5349,24 +3718,78 @@ function napTuBackend(){
     // Tỷ lệ áp dụng theo agent, tính TÍCH LUỸ trên toàn bộ dữ liệu (không đổi
     // theo thanh trượt ngày). Không có backend thì để rỗng và biểu đồ tự quay
     // về cách tính cũ theo phòng ban.
-    // Ngân sách từ ref_budget. Giữ nguyên `aliases` đang cấu hình cho những
-    // agent nào còn khớp được, để tên cũ trong dữ liệu nhúng vẫn tra ra.
-    if(kq.budgets&&kq.budgets.length){
-      var aliasCu={};
-      AGENT_MONTHLY_BUDGETS.forEach(function(x){ aliasCu[x.agent]=x.aliases||[]; });
-      AGENT_MONTHLY_BUDGETS=kq.budgets.map(function(b){
-        return {agent:b.agent, usd:b.usd, aliases:aliasCu[b.agent]||[]};
-      });
-      MONTHLY_BUDGET=AGENT_MONTHLY_BUDGETS.reduce(function(s,x){return s+x.usd;},0);
-    }
+    /* Ngân sách từ ref_budget — nguồn DUY NHẤT. `aliases` đã bỏ: nó tồn tại để
+       khớp tên agent cũ trong dữ liệu nhúng, mà dữ liệu nhúng không còn. Đã đối
+       chiếu: cả 8 tên trong `dim_agent` tra ra `ref_budget` không cần alias nào.
+
+       api.js chỉ đưa vào đây những agent CÓ `budget_usd`, nên agent chưa đặt
+       hạn mức (Tools Quizzer) và agent đặt bằng token (Ralli) không xuất hiện —
+       đúng ý: chúng phải hiện là "chưa đặt hạn mức USD", KHÔNG phải 0. */
+    AGENT_MONTHLY_BUDGETS = (kq.budgets||[]).map(function(b){
+      return {agent:b.agent, usd:b.usd};
+    });
+    MONTHLY_BUDGET = AGENT_MONTHLY_BUDGETS.reduce(function(s,x){return s+num(x.usd);},0);
     ADOPTION_BY_AGENT=kq.adoption||[];
     REAL_BY_ACCOUNT=kq.byAccount||[];
     REAL_ACCOUNTS=kq.accounts||[];
-    rebuildRalliProvisioned();
+    /* THỨ TỰ QUAN TRỌNG: nhận cây từ database TRƯỚC, rồi mới dựng danh mục tài
+       khoản. buildAccountCatalogue() tra đơn vị của từng tài khoản, nên chạy nó
+       trên cây cũ sẽ gán 937 tài khoản vào các đơn vị sắp bị thay. */
+    NO_BILLING_AGENTS = kq.noBillingAgents || {};
+    if(!adoptOrgUnits(kq.units)) rebuildProvisionedFromDirectory();
     USER_ACCOUNTS=buildAccountCatalogue();
     renderAll();
+    renderDataProvenance(kq);
   });
 }
+
+/* ─── Nói rõ số liệu đang xem đáng tin đến đâu ─────────────────────────────
+   Backend đã tính sẵn mọi thứ ở đây và đã gắn cảnh báo độ phủ vào chính
+   /api/usage-by-account để người gọi không phải nhớ đi hỏi /api/health. Bỏ
+   chúng ở tầng hiển thị là làm mất công đó, và làm người xem tin con số hơn
+   mức nó đáng được. */
+function renderDataProvenance(kq){
+  setConnIndicator("", "Đọc từ database");
+
+  /* ĐỘ MỚI tính từ NGÀY THẬT của dữ liệu, không phải chữ tĩnh. Chỗ này trước
+     đây ghi cứng "Cập nhật realtime · lần cuối 2 phút trước" — dữ liệu cũ bao
+     lâu nó cũng nói vậy. */
+  var lastDay = kq.dayOrder[kq.dayOrder.length-1];
+  var daysStale = Math.round((new Date().setHours(0,0,0,0) - parseISO(lastDay)) / 86400000);
+  var wrap=document.getElementById("freshness-wrap"),
+      fdot=document.getElementById("freshness-dot"),
+      ftext=document.getElementById("freshness-text");
+  if(wrap && fdot && ftext){
+    wrap.hidden = false;
+    fdot.className = "status-dot" + (daysStale >= 3 ? " warning" : "");
+    // fmtDateUS nhận CHUỖI ISO, không nhận Date — truyền Date vào nó trả về
+    // nguyên chuỗi "Thu Aug 13 2026 07:00:00 GMT+0700".
+    ftext.textContent = daysStale <= 0 ? "Dữ liệu tới hôm nay"
+                      : "Dữ liệu cũ " + daysStale + " ngày (mới nhất " + fmtDateUS(lastDay) + ")";
+  }
+
+  /* KHÔNG viết vấn đề của dữ liệu lên đầu dashboard.
+
+     Bản trước bơm cả 5 chú thích lên dải này: tỷ lệ tiền ước tính, độ phủ 12,6%,
+     dòng chưa có hoá đơn, model embedding, tài khoản bị hai app xếp khác nhau.
+     Đã bỏ hết (17/08/2026) — quyết định của người dùng dự án, và nó đúng:
+
+       · bốn cái sau là thuộc tính THƯỜNG TRỰC của dữ liệu, không đổi theo ngày.
+         Một dải vàng luôn hiện thì người xem học cách phớt nó, và lúc có vấn đề
+         thật thì nó không còn tác dụng nào.
+       · chúng viết cho lập trình viên, có cả tên cột database.
+       · dashboard là chỗ ĐỌC SỐ. Bàn về giới hạn của dữ liệu là việc của tài
+         liệu và của người, không phải của một dải chữ trên đầu mọi trang.
+
+     #load-note giờ CHỈ dùng cho renderError() — tức khi không nạp được dữ liệu,
+     lúc đó nó là thứ duy nhất trên màn hình và người xem buộc phải đọc.
+
+     Các con số về độ tin cậy vẫn có trong `/api/health`; xem
+     docs/reference/mo-ta-database.md và `python scripts/audit_db.py`. */
+  hideLoadNote();
+}
+
+
 
 if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", init);
 else init();

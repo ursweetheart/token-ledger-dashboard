@@ -35,7 +35,7 @@
 |---|---|---|
 | ① Lấy | Internet | `data/billing/`, `data/raw_web/`, `data/raw_google_console/` |
 | ② Gộp | `data/` thô | `data/da_xu_ly/` |
-| ③ Nạp | `data/da_xu_ly/` + `data/raw_web/` | `var/token_ledger.sqlite` |
+| ③ Nạp | `data/da_xu_ly/` + `data/raw_web/` | PostgreSQL (volume `pgdata`) |
 | ④ Dọn | database | JSON qua HTTP |
 
 ---
@@ -43,7 +43,7 @@
 ## Chạy lại tất cả — một lệnh
 
 Nếu chỉ muốn làm cho nó chạy, đây là toàn bộ. **Không cần gọi tay script gộp
-nào** — `update_dashboard.py` chạy đủ 10 bước, gồm cả chặng ② và chặng ③:
+nào** — `update_dashboard.py` chạy đủ 9 bước, gồm cả chặng ② và chặng ③:
 
 ```bash
 python scripts/update_dashboard.py                # ① + ② + ③  (~15 phút, có 1 bước tay)
@@ -174,9 +174,15 @@ Ba cái bẫy script này đã xử:
 # ③ NẠP VÀO DATABASE
 
 ```bash
-python scripts/rebuild_db.py                    # SQLite (mặc định)
-python scripts/rebuild_db.py --db "postgresql://token:token_local@127.0.0.1:5432/token_ledger"
+docker compose up -d                            # PHẢI lên trước
+python scripts/rebuild_db.py                    # PostgreSQL (mặc định từ 17/08/2026)
+python scripts/rebuild_db.py --db var/token_ledger.sqlite   # bản SQLite để đối chiếu
 ```
+
+Đích mặc định lấy từ `connect.DEFAULT_DSN` — **một** chỗ duy nhất, dựng từ `PG*` khớp
+`docker-compose.yml`, và `TOKEN_LEDGER_DSN` ghi đè được cho cả hệ thống. Trước 17/08/2026
+`rebuild_db.py` có hằng số DSN riêng, mà `update_dashboard.py` gọi nó không truyền `--db`
+— nên đổi `connect.py` xong đường ống vẫn dựng lại database cũ, không lỗi nào báo.
 
 ## Bảy bước, và thứ tự là bắt buộc
 
@@ -348,13 +354,17 @@ ra bằng hệ số — số suy ra trông y hệt số đo.
 ## Kiểm backend
 
 ```bash
-python backend/check_api.py
-python backend/check_api.py --doi-chieu http://127.0.0.1:8001   # so hai hệ
+python backend/check_api.py                                   # 16 phép kiểm
+python backend/check_api.py --compare http://127.0.0.1:8001   # 24, so hai hệ
 ```
 
-21 phép kiểm: số khớp database, tham số rác bị từ chối bằng 400 (**không** âm
+**16 phép kiểm**: số khớp database, tham số rác bị từ chối bằng 400 (**không** âm
 thầm trả bảng rỗng), và **thử ghi thật** qua chính kết nối của backend để chắc
 là nó bị từ chối.
+
+Thêm `--compare` thì thành **24**: 8 phép so nữa, đối chiếu **từng byte JSON** giữa
+máy chủ chạy SQLite và máy chủ chạy PostgreSQL trên cả 8 endpoint. Cờ là
+`--compare`, không phải `--doi-chieu`.
 
 ---
 

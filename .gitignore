@@ -16,6 +16,14 @@ data/raw_google_console/*
 
 # File dữ liệu bảng tính / dữ liệu thô
 *.xlsx
+# NGOAI LE: Master Plan la TAI LIEU KE HOACH, khong phai du lieu. Truoc
+# 24/08/2026 no nam ngoai git nen khong co lich su phien ban nao - va da
+# tung bi danh roi mot dong ("Do hien trang lam moc") ma khong ai truy
+# lai duoc bang git. Ban luu co ngay dat o docs/reference/ban-luu/.
+!Master Plan API Gateway.xlsx
+# Ban luu CO NGAY cua .xlsx/.docx truoc moi lan sua. Phai vao git, neu
+# khong thi ban luu chinh la thu khong duoc luu - dung cai no sinh ra de chong.
+!docs/reference/ban-luu/**
 *.xls
 *.xlsm
 *.csv

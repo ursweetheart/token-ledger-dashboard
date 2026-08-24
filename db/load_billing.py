@@ -56,7 +56,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default=connect.DEFAULT_DSN,
-                   help="Duong dan .sqlite, hoac chuoi ket noi PostgreSQL")
+                   help="Chuoi ket noi PostgreSQL. Mac dinh: connect.DEFAULT_DSN")
     p.add_argument("--file", default=str(BILLING))
     p.add_argument("--rebuild", action="store_true",
                    help="Xoa sach va dung lai schema + danh muc truoc khi nap")
@@ -64,7 +64,7 @@ def main() -> None:
 
     if args.rebuild:
         cn, ph = connect.rebuild(args.db)
-        print(f"Da dung lai schema + danh muc tren {args.db}")
+        print(f"Da dung lai schema + danh muc tren {connect.mask_dsn(args.db)}")
     else:
         cn, ph = connect.open_db(args.db)
 

@@ -8,11 +8,19 @@
 Đổi database:
     set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger
 
-VÌ SAO CHỈ CHẠY TRÊN 127.0.0.1
-------------------------------
-Database này chứa danh sách 932 nhân viên kèm email và phòng ban. Nó không được
-ra mạng. Uvicorn mặc định gắn 127.0.0.1; dùng `--host 0.0.0.0` là mở ra cả mạng
-nội bộ, đừng làm nếu chưa bàn với ai.
+PHẢI CÓ KHOÁ MỚI CHẠY ĐƯỢC
+--------------------------
+    python -c "import secrets; print(secrets.token_urlsafe(32))"   # sinh khoá
+    DASHBOARD_KEY=<khoá vừa sinh>            # vào .env, HOẶC set/export
+
+Thiếu biến này thì máy chủ KHÔNG khởi động - xem khối `nguoi_goi()` bên dưới.
+Đó là chủ ý: chế độ hỏng phải là "không chạy", tuyệt đối không phải "chạy mở".
+
+TRƯỚC 21/08/2026 chỗ này ghi "VÌ SAO CHỈ CHẠY TRÊN 127.0.0.1" và dựa vào đúng
+một dòng cấu hình của uvicorn để giữ 937 họ tên khỏi ra ngoài. Nay đã có một cơ
+chế thật, nhưng lời khuyên cũ vẫn đúng và giữ nguyên: database này chứa danh
+sách nhân viên kèm phòng ban, `--host 0.0.0.0` là mở ra cả mạng nội bộ, đừng
+làm nếu chưa bàn với ai.
 
 VÌ SAO API TRẢ CẢ "SỐ NÀY TỪ ĐÂU RA"
 ------------------------------------
@@ -25,13 +33,175 @@ còn hơn, vì khi đó người xem sẽ tin vào con số nhiều hơn mức n
 
 from __future__ import annotations
 
+import os
 import re
+import secrets
+import sys
+from dataclasses import dataclass
 from datetime import date, timedelta
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from . import store
+
+# ═══════════════════════════════════════════════════════════════════════════
+# XÁC THỰC
+#
+# Một khoá dùng chung, gửi trong `Authorization: Bearer <khoá>`.
+#
+# VÌ SAO KHÔNG PHẢI JWT THEO NGƯỜI (quyết định 21/08/2026)
+# --------------------------------------------------------
+# 8/8 endpoint là GET, 0 hành động đặc quyền, và `account` không có cột mật
+# khẩu - không có kho người dùng nào để đăng nhập vào. Không có gì để phân biệt
+# thì phân vai bây giờ là viết code không dùng tới.
+#
+# Nói thẳng phần này KHÔNG cho: không biết AI đã xem gì, không thu hồi được
+# quyền của MỘT người, không phân biệt Admin/User. Nó chỉ làm đúng một việc -
+# chặn người lạ đọc 937 họ tên kèm phòng ban - và biến "an toàn vì bind
+# 127.0.0.1" từ một dòng cấu hình thành một cơ chế.
+#
+# CORS KHÔNG THAY ĐƯỢC CHỖ NÀY. CORS là luật của trình duyệt; `curl` không đọc
+# CORS bao giờ và vẫn nhận đủ dữ liệu.
+#
+# BA ĐƯỜNG CỐ Ý ĐỂ MỞ - nói ra để không ai tưởng là sót:
+#     /healthz                    giám sát cần biết máy chủ sống, KHÔNG trả dữ liệu
+#     /docs · /redoc              trang thử API do FastAPI tự sinh
+#     /openapi.json               lược đồ API
+# Ba đường sau chỉ mô tả HÌNH DẠNG của API, không trả một dòng dữ liệu nào -
+# bấm thử từ /docs mà không dán khoá thì vẫn nhận 401. Để mở là có ích: đó là
+# chỗ người mới học được cách gửi khoá. Ngày máy chủ ra khỏi 127.0.0.1 thì cân
+# nhắc lại, vì khi đó lược đồ là thứ giúp người lạ dò nhanh hơn.
+def _doc_env(ten: str) -> str:
+    """Đọc một biến: môi trường thật trước, rồi tới file `.env` ở gốc repo.
+
+    VÌ SAO PHẢI ĐỌC `.env` Ở ĐÂY
+    ----------------------------
+    Đo ngày 21/08: không file Python nào của backend đọc `.env`. Nó chỉ được
+    docker-compose và scripts/pull_web_apps.py đọc. Nếu để nguyên, đồng nghiệp
+    làm ĐÚNG theo `.env.example` sẽ dán khoá vào đó rồi máy chủ vẫn từ chối
+    khởi động - và thông báo lỗi lại bảo họ dán vào `.env`. Một lời hướng dẫn
+    sai còn tệ hơn không có hướng dẫn.
+
+    Thứ tự ưu tiên giống hệt `.env.example` đã ghi từ trước: "Bien moi truong
+    that (export/set) luon thang gia tri trong file nay."
+
+    Bản đọc `.env` thứ hai nằm ở scripts/pull_web_apps.py:127 (`read_env`).
+    Không dùng chung được vì backend là thứ đem đi triển khai, không được phụ
+    thuộc vào scripts/. Cả hai đều chỉ tách `KEY=VALUE` nên khó trôi, nhưng
+    sửa một bên thì ngó sang bên kia.
+    """
+    gia_tri = os.environ.get(ten, "").strip()
+    if gia_tri:
+        return gia_tri
+    env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                       ".env")
+    try:
+        with open(env, encoding="utf-8-sig", errors="replace") as f:
+            for dong in f:
+                dong = dong.strip()
+                if not dong or dong.startswith("#") or "=" not in dong:
+                    continue
+                k, v = dong.split("=", 1)
+                if k.strip() == ten:
+                    return v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    # `errors="replace"` chứ không để mặc định: `.env` do người gõ tay trên
+    # Windows, một ký tự lưu bằng codepage hệ thống là đủ ném UnicodeDecodeError
+    # ngay lúc import - máy chủ chết kèm một vệt traceback không nói được rằng
+    # vấn đề nằm ở file `.env`. Khoá vốn nên là ASCII; ký tự hỏng bị thay thế
+    # thì khoá không khớp và người dùng nhận 401 - một câu trả lời hiểu được.
+    return ""
+
+
+DASHBOARD_KEY = _doc_env("DASHBOARD_KEY")
+DASHBOARD_OPEN = _doc_env("DASHBOARD_OPEN") == "1"
+
+# Thiếu cấu hình thì KHÔNG khởi động. `raise SystemExit` ở mức module nên uvicorn
+# vấp ngay lúc nạp `backend.main:app` - đối tượng `app` chưa kịp tồn tại, không
+# cổng nào được mở.
+#
+# Đây là dòng quan trọng nhất file này. Nếu quên đặt biến mà máy chủ vẫn chạy
+# bình thường, ta có đúng lỗ hổng của hôm qua CỘNG THÊM niềm tin sai rằng đã
+# khoá - cùng hạng lỗi với mọi thứ sửa ngày 20/08: sai một cách im lặng.
+if not DASHBOARD_KEY and not DASHBOARD_OPEN:
+    raise SystemExit(
+        "\nTHIEU BIEN MOI TRUONG: DASHBOARD_KEY\n"
+        "  May chu tu choi khoi dong. Khong mo cong nao.\n\n"
+        "  Sinh mot khoa:\n"
+        '    python -c "import secrets; print(secrets.token_urlsafe(32))"\n\n'
+        "  Roi chon MOT trong hai cach:\n"
+        "    a) them mot dong vao file .env o goc repo  (khong co chu 'set'):\n"
+        "         DASHBOARD_KEY=<khoa vua sinh>\n"
+        "    b) dat bien moi truong cho phien lam viec:\n"
+        "         set DASHBOARD_KEY=<khoa vua sinh>      (cmd)\n"
+        "         $env:DASHBOARD_KEY=\"<khoa vua sinh>\"    (PowerShell)\n"
+        "         export DASHBOARD_KEY=<khoa vua sinh>   (bash)\n\n"
+        "  Chi khi PHAT TRIEN va CHAP NHAN chay khong xac thuc:\n"
+        "    DASHBOARD_OPEN=1\n")
+
+if DASHBOARD_OPEN:
+    # In ra stderr MỖI LẦN khởi động. Chế độ mở phải luôn nhìn thấy được - một
+    # cảnh báo chỉ hiện một lần rồi thôi là một cảnh báo bị quên.
+    print("\n" + "!" * 72
+          + "\n  DASHBOARD_OPEN=1 - MAY CHU DANG CHAY KHONG XAC THUC."
+            "\n  Moi nguoi goi duoc /api/accounts deu lay duoc 937 ho ten"
+            " kem phong ban."
+          + ("\n  (DASHBOARD_KEY CO duoc dat, nhung DANG BI BO QUA.)"
+             if DASHBOARD_KEY else "")
+          + "\n  Bo bien nay truoc khi may chu ra khoi 127.0.0.1.\n"
+          + "!" * 72 + "\n", file=sys.stderr)
+
+
+@dataclass(frozen=True)
+class Principal:
+    """AI đang gọi. Trả về ĐỐI TƯỢNG, không trả True/False.
+
+    Hôm nay chỉ có một giá trị thật (`shared_key`), nên nhìn thì thừa. Nó không
+    thừa vì ngày lên JWT theo người, `nguoi_goi()` trả
+    `Principal(kind='user', name='bh1.longnt')` và 8 endpoint không phải sửa
+    một chữ. Trả boolean thì ngày đó phải mở lại từng endpoint để lấy tên người
+    - tức là sửa 8 chỗ thay vì 1.
+    """
+
+    kind: str   # 'shared_key' | 'open_mode'  (mai sau: 'user')
+    name: str
+
+
+# auto_error=False là BẮT BUỘC, không phải tuỳ chọn phong cách.
+#
+# HTTPBearer mặc định (auto_error=True) trả **403** khi thiếu header, không phải
+# 401 - và spec đòi 401. Để mặc định thì phép kiểm "gọi không khoá phải nhận
+# 401" sẽ trượt vì một lý do chẳng liên quan gì tới xác thực.
+_bearer = HTTPBearer(auto_error=False,
+                     description="Khoa dashboard. Dan vao o 'Value', khong kem"
+                                 " chu 'Bearer'.")
+
+
+def nguoi_goi(cred: HTTPAuthorizationCredentials | None
+              = Depends(_bearer)) -> Principal:
+    """Kiểm chứng danh. Đây là hàm DUY NHẤT phải sửa khi lên JWT."""
+    if DASHBOARD_OPEN:
+        return Principal(kind="open_mode", name="khong-kiem")
+    if cred is None or not cred.credentials:
+        raise HTTPException(401, "Thieu header 'Authorization: Bearer <khoa>'",
+                            headers={"WWW-Authenticate": "Bearer"})
+    # compare_digest chứ không phải `==`: phép so bằng của Python thoát ra ngay
+    # ký tự đầu khác nhau, nên thời gian trả lời rò rỉ số ký tự đầu đã đoán đúng.
+    #
+    # PHẢI .encode() TRƯỚC. Đo ngày 21/08: compare_digest với hai chuỗi `str`
+    # ném `TypeError: comparing strings with non-ASCII characters is not
+    # supported`. Người gọi điều khiển được vế trái, nên chỉ cần gửi
+    # `Authorization: Bearer á` là mọi endpoint trả 500 thay vì 401 - một đường
+    # sập gọi được mà không cần biết khoá. Với `bytes` thì không có giới hạn đó.
+    if not secrets.compare_digest(cred.credentials.encode("utf-8"),
+                                  DASHBOARD_KEY.encode("utf-8")):
+        raise HTTPException(401, "Khoa khong dung",
+                            headers={"WWW-Authenticate": "Bearer"})
+    return Principal(kind="shared_key", name="dashboard")
+
 
 app = FastAPI(
     title="Token Ledger API",
@@ -40,11 +210,24 @@ app = FastAPI(
                 " Chi doc, khong ghi.",
 )
 
-# Dashboard mở bằng file:// (origin 'null') hoặc từ một cổng khác. Mở CORS ở đây
-# chấp nhận được vì máy chủ chỉ lắng nghe trên 127.0.0.1 và không có endpoint
-# ghi nào - không có gì để CSRF.
+# Dashboard mở bằng file:// (origin 'null') hoặc từ một cổng khác.
+#
+# TRƯỚC 20/08/2026 chỗ này là `allow_origins=["*"]`, và ghi chú tự biện minh:
+# "chấp nhận được vì máy chủ chỉ lắng nghe trên 127.0.0.1". Lý do đó hết hiệu lực
+# đúng vào ngày Gateway lên - kiến trúc đó có load balancer và nhiều instance,
+# tức máy chủ này sẽ ra khỏi 127.0.0.1. Một biện minh gắn với một dòng cấu hình
+# thì mất hiệu lực cùng lúc dòng cấu hình đó đổi, mà không ai được báo.
+#
+# Mặc định vẫn cho `null` (file://) và localhost để không phá cách chạy hiện tại.
+# Đặt DASHBOARD_ORIGINS để siết lại, hoặc "*" để quay về hành vi cũ - nhưng khi đó
+# là một lựa chọn tường minh, không phải một mặc định bị quên.
+DEFAULT_ORIGINS = "null,http://127.0.0.1:8080,http://localhost:8080"
+ALLOWED_ORIGINS = [o.strip() for o in
+                   os.environ.get("DASHBOARD_ORIGINS", DEFAULT_ORIGINS).split(",")
+                   if o.strip()]
 app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["GET"], allow_headers=["*"],
+    CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET"],
+    allow_headers=["*"],
 )
 
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -75,14 +258,32 @@ def date_range(start: str | None, end: str | None) -> tuple[str, str]:
     return start, end
 
 
+@app.get("/healthz", summary="May chu con song khong - KHONG tra du lieu nghiep vu")
+def healthz():
+    """Điểm thăm dò sống-chết. Endpoint DUY NHẤT không đòi khoá.
+
+    KHÔNG dùng /api/health cho việc này. Tên hai cái giống nhau nhưng chúng trả
+    lời hai câu khác hẳn:
+
+        /healthz      "tiến trình này còn thở không"   -> giám sát, không khoá
+        /api/health   "dữ liệu có gì, mới đến đâu,
+                       thiếu chỗ nào"                  -> nghiệp vụ, PHẢI có khoá
+
+    Nó cố tình KHÔNG chạm database: câu nó trả lời là về tiến trình, không phải
+    về dữ liệu. Trả `ok` khi Postgres đã chết là đúng chức năng, không phải lỗi -
+    thứ nói về dữ liệu là /api/health, và đó là lý do cái kia có khoá.
+    """
+    return {"status": "ok"}
+
+
 @app.get("/api/health", summary="Du lieu co gi, moi den dau, thieu cho nao")
-def health():
+def health(who: Principal = Depends(nguoi_goi)):
     with store.open_db() as (cn, _):
         return store.health(cn)
 
 
 @app.get("/api/catalog", summary="Agent, model, don vi, ty gia - doi rat it")
-def catalog():
+def catalog(who: Principal = Depends(nguoi_goi)):
     with store.open_db() as (cn, _):
         return {"agents": store.agents(cn), "models": store.models(cn),
                 "units": store.units(cn), "fx_rate": store.fx_rate(cn)}
@@ -90,7 +291,8 @@ def catalog():
 
 @app.get("/api/usage", summary="Token va chi phi theo ngay/agent/model")
 def usage(start: str | None = Query(None, description="YYYY-MM-DD"),
-          end: str | None = Query(None, description="YYYY-MM-DD")):
+          end: str | None = Query(None, description="YYYY-MM-DD"),
+          who: Principal = Depends(nguoi_goi)):
     start, end = date_range(start, end)
     with store.open_db() as (cn, ph):
         rows = store.usage(cn, ph, start, end)
@@ -98,13 +300,13 @@ def usage(start: str | None = Query(None, description="YYYY-MM-DD"),
 
 
 @app.get("/api/accounts", summary="Danh ba nhan vien kem don vi")
-def accounts():
+def accounts(who: Principal = Depends(nguoi_goi)):
     with store.open_db() as (cn, _):
         return {"rows": store.accounts(cn)}
 
 
 @app.get("/api/adoption", summary="Ty le tai khoan duoc cap co phat sinh request")
-def adoption():
+def adoption(who: Principal = Depends(nguoi_goi)):
     """KHONG nhan khoang ngay - day la chi tieu TICH LUY.
 
     Xem ghi chu o store.adoption(): ep no theo thanh truot ngay thi cung mot
@@ -116,7 +318,8 @@ def adoption():
 
 
 @app.get("/api/usage-by-account", summary="Su dung quy ve tung nguoi")
-def usage_by_account(start: str | None = None, end: str | None = None):
+def usage_by_account(start: str | None = None, end: str | None = None,
+                     who: Principal = Depends(nguoi_goi)):
     start, end = date_range(start, end)
     with store.open_db() as (cn, ph):
         rows = store.usage_by_account(cn, ph, start, end)
@@ -130,7 +333,8 @@ def usage_by_account(start: str | None = None, end: str | None = None):
 
 
 @app.get("/api/performance", summary="Ma tra ve va do tre - hai do min khac nhau")
-def performance(start: str | None = None, end: str | None = None):
+def performance(start: str | None = None, end: str | None = None,
+                who: Principal = Depends(nguoi_goi)):
     start, end = date_range(start, end)
     with store.open_db() as (cn, ph):
         result = store.performance(cn, ph, start, end)
@@ -138,7 +342,8 @@ def performance(start: str | None = None, end: str | None = None):
 
 
 @app.get("/api/thinking", summary="Token co bat che do thinking (chi Monitoring)")
-def thinking(start: str | None = None, end: str | None = None):
+def thinking(start: str | None = None, end: str | None = None,
+             who: Principal = Depends(nguoi_goi)):
     start, end = date_range(start, end)
     with store.open_db() as (cn, ph):
         return {"start": start, "end": end, "rows": store.thinking(cn, ph, start, end)}

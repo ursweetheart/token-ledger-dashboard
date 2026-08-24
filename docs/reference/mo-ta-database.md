@@ -1,7 +1,8 @@
 # Đọc hiểu database (số liệu ngày 14/08/2026)
 
 > Dành cho người mở pgAdmin lên và không biết mình đang nhìn gì.
-> 18 bảng + 3 view, 577.819 dòng. Chạy được trên cả SQLite lẫn PostgreSQL.
+> 18 bảng + 3 view, 577.819 dòng. **PostgreSQL là mặc định** từ 17/08/2026; SQLite vẫn
+> dựng được để đối chiếu.
 >
 > Muốn biết dữ liệu **đến đây bằng đường nào**: `toan-trinh-du-lieu.md`.
 >
@@ -337,7 +338,20 @@ Cột `don_vi_xung_dot = 1` **giữ lại dấu vết**: các nguồn đã khôn
 Tỷ giá USD → VND.
 
 ### `ref_budget` — 7 dòng
-Ngân sách theo `(agent_id, thang)`. Tools Quizzer và Ralli không có ngân sách.
+Hạn mức theo `(agent_id, thang)`. **Ba trạng thái, không phải hai** — đã đối chiếu 8 agent
+trong `dim_agent` với 7 dòng ở đây:
+
+| Trạng thái | Agent | Cột có giá trị |
+|---|---|---|
+| Có hạn mức **USD** | 6 agent (30 · 50 · 20 · 20 · 20 · 20 US$) | `budget_usd` |
+| Có hạn mức, nhưng theo **TOKEN** | `Trợ lý ảo Ralli` — 50.000.000 token | `budget_tokens` |
+| **Chưa đặt** hạn mức | `Tools Quizzer` — không có dòng nào | — |
+
+⚠️ Ralli **có** hạn mức, chỉ là bằng đơn vị khác. Gộp nó vào nhóm "chưa đặt" là nói sai, và
+suy cả hai về `0` thì sai nặng hơn: `0` nghĩa là *hết hạn mức*, khác hẳn *chưa đặt*.
+
+⚠️ Không có hạn mức USD **không** đồng nghĩa với bị loại khỏi báo cáo. Cả Ralli lẫn Tools
+Quizzer đều xuất hiện đầy đủ trong mọi số liệu sử dụng.
 
 ---
 
@@ -486,9 +500,34 @@ SELECT SUM(so_luong) FROM fact_billing_daily WHERE loai IN ('input','cached');
 ## Dựng lại database
 
 ```bash
-python scripts/rebuild_db.py                                  # SQLite,  ~14 giây
-python scripts/rebuild_db.py --db "postgresql://token:token_local@127.0.0.1:5432/token_ledger"
+docker compose up -d                                          # PHẢI lên trước
+python scripts/rebuild_db.py                                  # PostgreSQL, ~56 giây
+python scripts/rebuild_db.py --db var/token_ledger.sqlite      # SQLite,     ~14 giây
 ```
+
+Cả 7 khâu nạp chạy được trên **cả hai** hệ mà không sửa dòng SQL nào — đã đo 17/08/2026:
+dựng thẳng từ `data/` vào PostgreSQL cho ra database khớp từng dòng với bản sao từ SQLite,
+và `audit_db.py` trên hai bên cho đầu ra giống nhau từng byte.
+
+### Hai chênh lệch KIỂU giữa hai hệ quản trị
+
+Cùng một cột trả về kiểu Python khác nhau. Đã đo, cả hai vô hại tới màn hình — nhưng ghi
+lại vì loại lỗi này không ném exception, nó chỉ trả số sai:
+
+| Cột | PostgreSQL | SQLite | JSON frontend nhận |
+|---|---|---|---|
+| `total/input/output/cached_tokens` | `Decimal` | `int` | **số, giống nhau** |
+| `dim_unit.is_technical` | `True` | `1` | `true` vs `1` |
+
+**`Decimal` là chỗ nguy hiểm nhất, và đã kiểm tận nơi:** `jsonable_encoder` của FastAPI đổi
+`Decimal` có phần thập phân bằng 0 thành `int`, nên JSON ra số nguyên ở cả hai bên. Nếu nó
+ra **chuỗi** thì `ti + to + cached` trong `web/js/app.js` sẽ thành **nối chuỗi** thay vì
+phép cộng — số sai mà không lỗi nào báo.
+
+**`is_technical`:** SQLite không có BOOLEAN thật, nó lưu 0/1 (`scripts/copy_to_postgres.py`
+phải chuyển kiểu vì thế). Hiện không thành phần nào trong `web/` đọc cột này.
+⚠ Nếu sau này có phần hiển thị đọc nó thì **đừng so bằng `=== true`** — dùng phép kiểm
+đúng/sai thông thường, không thì nó chạy trên hệ này và vỡ trên hệ kia.
 
 Nguồn là thư mục `data/` — thứ các script `pull_*` thu thập về. `data/` **không lên git**, nên bản clone thuần chỉ dựng được schema rỗng kèm danh mục.
 

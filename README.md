@@ -6,26 +6,54 @@ và hai web app nội bộ, gom vào một database rồi hiển thị qua API c
 ## Cách chạy
 
 ```bash
-# 1. Backend chỉ-đọc — phục vụ dữ liệu từ database
+# 1. Database — PHẢI lên trước, PostgreSQL là mặc định từ 17/08/2026
+docker compose up -d
+
+# 2. Backend chỉ-đọc — phục vụ dữ liệu từ database
 python -m uvicorn backend.main:app --port 8000
 
-# 2. Dashboard — LƯU Ý cả hai vế của lệnh này đều cần thiết
+# 3. Dashboard — LƯU Ý cả hai vế của lệnh này đều cần thiết
 cd web && python -m http.server 8080 --bind 127.0.0.1
 ```
 
 Mở `http://127.0.0.1:8080`.
 
+**Vì sao PostgreSQL, không phải SQLite:** SQLite là *một file* — không đi qua mạng nên
+container khác không đọc được, và không có schema riêng lẫn `GRANT` theo user nên không
+chia quyền theo service được. Cả hai chặn đường việc chạy nhiều bản sau một load balancer.
+
+Đường SQLite **đã bị gỡ hẳn** ngày 24/08/2026: nó không còn dữ liệu (file bị xoá 17/08),
+không dựng lại được (`01_schema.sql` hỏng cú pháp trên SQLite từ 21/08), và chưa từng có
+phép kiểm nào chạy trên nó. Đưa vào một DSN `.sqlite` nay dừng ngay với thông báo rõ.
+
+Đổi database bằng **một** biến, có hiệu lực cho cả backend và mọi script:
+
+```bash
+export TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger_v2
+```
+
+Thông số kết nối lấy từ `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` —
+**cùng tên** với `docker-compose.yml`, nên đặt trong `.env` là cả container lẫn script đều
+theo.
+
+> ⚠️ `docker compose down -v` **xoá sạch** volume `pgdata`, tức mất database đang chạy.
+> Dựng lại được bằng `python scripts/rebuild_db.py` (~1 phút) **miễn là `data/` còn** —
+> `data/` là thứ duy nhất mất là mất vĩnh viễn.
+
 **`cd web`** chặn *cái gì* lộ ra: chạy ở gốc repo thì `.env`, database (937 nhân viên
 kèm email) và `data/` đều tải được qua HTTP. **`--bind 127.0.0.1`** chặn *ai* vào được:
 mặc định của `http.server` là mọi giao diện mạng, tức cả LAN công ty.
 
-Không có backend thì mở `web/index.html` bằng cách bấm đúp vẫn xem được — dashboard
-quay về dữ liệu dự phòng đã vá sẵn trong `app.js`, nhưng số sẽ cũ.
+**Không có backend thì dashboard KHÔNG hiện số** — nó báo lỗi kèm địa chỉ đã thử và
+cách khắc phục. Trước 17/08/2026 bấm đúp `index.html` vẫn xem được nhờ dữ liệu dự phòng
+vá sẵn trong `app.js`; đã bỏ, vì chính cơ chế đó che mất mọi lỗi backend: dữ liệu dự
+phòng không tự biết mình cũ, nên số cũ hiện lên trông y hệt số mới. Đã đo lúc bỏ — khối
+dự phòng lệch 15,6% so với database, chỉ 25/224 ngày khớp.
 
 ## Cập nhật dữ liệu
 
 ```bash
-python scripts/update_dashboard.py        # 10 bước, ~15 phút, có 1 bước tay
+python scripts/update_dashboard.py        # 9 bước, ~15 phút, có 1 bước tay
 ```
 
 Chi tiết từng chặng: [`docs/reference/toan-trinh-du-lieu.md`](docs/reference/toan-trinh-du-lieu.md)
@@ -37,9 +65,9 @@ Chi tiết từng chặng: [`docs/reference/toan-trinh-du-lieu.md`](docs/referen
 | `web/` | Dashboard — **document root**, chỉ thư mục này được phục vụ ra mạng |
 | `backend/` | API chỉ-đọc, 8 endpoint |
 | `scripts/` | Đường ống: kéo → gộp → điều phối |
-| `db/` | Schema `.sql` và các module nạp |
+| `db/` | Migration, danh mục `.sql`, và các module nạp |
 | `data/` | Dữ liệu thô — mất là mất vĩnh viễn |
-| `var/` | Database đang chạy — dựng lại được bằng `rebuild_db.py` |
+| `var/` | Database nằm trong volume Docker `pgdata`; `var/` chứa bản chụp bộ số bất biến |
 | `tests/` | Phải luôn xanh |
 | `tools/` | Chẩn đoán một lần — được phép mục |
 | `docs/` | `reference/` đang là gì · `decisions/` · `archive/` |
@@ -49,7 +77,7 @@ Quy tắc đầy đủ, kèm bảng "thêm file mới thì để đâu":
 
 ## Tài liệu
 
-- [Toàn trình dữ liệu](docs/reference/toan-trinh-du-lieu.md) — 10 bước từ nguồn tới màn hình
+- [Toàn trình dữ liệu](docs/reference/toan-trinh-du-lieu.md) — 9 bước từ nguồn tới màn hình
 - [Mô tả database](docs/reference/mo-ta-database.md) — 18 bảng, 30 phép kiểm
 - [Cây thư mục](docs/reference/cay-thu-muc.md)
 - [API TLA Hợp Đồng](docs/reference/api-map-tla-hd.md)
@@ -65,14 +93,18 @@ thế hoàn toàn bởi đường ống dữ liệu. Giữ lại để đối ch
 <details>
 <summary>Hướng dẫn cũ (nhập liệu tay)</summary>
 
-**Nhập liệu theo ngày:** Bấm ✎ Dữ liệu nguồn → chọn Ngày nhập liệu → nhập
-token/request cho từng agent → 💾 Lưu ngày này. Xoá một ngày: chọn ngày rồi 🗑 Xoá ngày.
+**Nhập liệu theo ngày:** panel `✎ Dữ liệu nguồn` (nút, form, và cả hai nút 💾 Lưu ngày
+này / 🗑 Xoá ngày) **đã bị xoá 17/08/2026**. Nó trở thành cái bẫy khi dashboard chỉ đọc
+database: người dùng gõ số, số hiện lên và cộng vào tổng — trộn với số từ database mà
+không gì nói ra — rồi tải lại trang là mất sạch.
 
-**Cấu hình giá:** ⚙ Cấu hình giá → sửa đơn giá input/output theo model → 💾 Lưu bảng giá.
+**Cấu hình giá:** `⚙ Cấu hình giá` **vẫn còn và vẫn dùng được** — sửa đơn giá
+input/output theo model để thử "nếu giá khác thì tiền bao nhiêu". Nó chỉ đổi trong phiên,
+không ghi xuống đâu, và không giả vờ là số đo.
 
-**Lưu ý cũ:** Dữ liệu nhập lưu trong `localStorage` của máy đang mở; gửi thư mục sang
-máy khác thì máy đó bắt đầu từ dữ liệu Excel tháng 6 và tháng 7. Cây phòng ban và số
-user Ralli chuẩn hoá từ `data/phong_ban_phan_quyen.xlsx` rồi nhúng vào `app.js`.
+**Lưu ý cũ:** `localStorage` từng giữ cả số liệu; nay nó **chỉ giữ lựa chọn** (tab, giao
+diện, khoảng ngày, cây đang bung). Cây phòng ban còn nhúng trong `app.js`, nhưng danh bạ
+937 tài khoản thì đến từ `/api/accounts` — bản Excel 622 dòng nhúng cứng đã bỏ.
 
 </details>
 

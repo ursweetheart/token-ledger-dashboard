@@ -56,10 +56,10 @@ def _latest(parent: Path, *required: str) -> Path:
     for p in children:
         if all((p / f).exists() for f in required):
             return p
-    thieu = [f for f in required if not (children[0] / f).exists()]
+    missing = [f for f in required if not (children[0] / f).exists()]
     raise SystemExit(
         f"Khong dot nao trong {parent} co du file can thiet."
-        f" Dot moi nhat ({children[0].name}) thieu: {', '.join(thieu)}."
+        f" Dot moi nhat ({children[0].name}) thieu: {', '.join(missing)}."
         f" Chay scripts/pull_web_apps.py truoc.")
 
 
@@ -160,6 +160,89 @@ def walk_up(nid: str, parent: dict[str, str], name: dict[str, str]) -> list[str]
     return list(reversed(path))
 
 
+# Bốn phòng ban mà HAI app gọi bằng hai tên. Trái: tên trong cây Trợ Lý Ảo Hợp
+# Đồng. Phải: tên trong cây Trợ lý ảo Ralli, và đó là bản CHUẨN.
+#
+# Vì sao Ralli làm chuẩn: cây của nó mô hình hoá CẢ công ty - một gốc 'Toàn công
+# ty', 102 đơn vị, 892/937 tài khoản. Cây Hợp Đồng chỉ 20 đơn vị với BỐN gốc
+# rời, tức một phần chứ không phải một cây đầy đủ.
+#
+# Danh sách này gõ tay vì không suy ra được: 'Phòng BH1' và 'PBH1' không có quy
+# tắc chuẩn hoá nào nối được, cũng như 'TT C4LED' với 'C4LED'. Người dùng xác
+# nhận đủ bốn cặp ngày 20/08/2026.
+#
+# ĐÃ ĐO trước khi chốt - mỗi cặp đều có một bên nhiều tài khoản, bên kia nhiều
+# token, nên bỏ gộp là chẻ đôi cả hai chỉ tiêu:
+#     TT C4LED  3 tk / 1.222.467 tok   <->  C4LED 13 tk /         0 tok
+#     Phòng BH1 7 tk /         0 tok   <->  PBH1  30 tk /   105.187 tok
+#     Phòng BH2 9 tk /         0 tok   <->  PBH2  12 tk /    17.718 tok
+#     Phòng BH3 9 tk /         0 tok   <->  PBH3   4 tk / 1.138.839 tok
+#
+# Trước 20/08/2026 phép gộp này nằm trong UNIT_ALIASES ở web/js/app.js - một sự
+# thật về tổ chức công ty sống trong mã giao diện.
+CANONICAL_UNIT_PAIRS = [
+    ("TT C4LED", "C4LED"),
+    ("Phòng BH1", "PBH1"),
+    ("Phòng BH2", "PBH2"),
+    ("Phòng BH3", "PBH3"),
+]
+
+# Hai cấp gom thuần tuý trong cây Trợ lý ảo Ralli. Báo cáo bắt đầu từ BÊN DƯỚI
+# chúng: mọi phòng ban đều nằm dưới cả hai, nên để chúng làm cấp 1 thì người xem
+# phải bung hai lần mới thấy được thứ đầu tiên phân biệt được với nhau.
+#
+# Đây là QUY ƯỚC TRÌNH BÀY, không phải thuộc tính của tổ chức - xem ghi chú ở
+# db/01_schema.sql. Trước 20/08/2026 nó sống trong web/js/app.js dưới dạng hai mã
+# gõ cứng `unitChildren("company")` và `unitChildren("rd-corp")`.
+#
+# `Công ty CPBĐ PN Rạng Đông` (cây Hợp Đồng) KHÔNG nằm trong danh sách này dù tên
+# nghe tương tự: nó có 2 tài khoản của riêng mình, tức là một hàng có nội dung
+# chứ không phải một cấp gom rỗng.
+REPORT_AGGREGATE_UNITS = [
+    (RALLI, "Toàn công ty"),
+    (RALLI, "Tổng công ty Rạng Đông"),
+]
+
+
+def resolve_canonical(rows: list[tuple]) -> dict[str, str]:
+    """Tra bốn cặp trong CANONICAL_UNIT_PAIRS thành {unit_id trùng: unit_id chuẩn}.
+
+    rows: (unit_id, agent_id, name, parent_id, level, path, is_technical)
+
+    HỎNG ỒN ÀO khi một vế không tìm thấy hoặc tìm thấy nhiều hơn một. Tên phòng
+    ban do hai app tự khai; app đổi nhãn là phép gộp lặng lẽ mất tác dụng, và
+    hậu quả - hai hàng thay vì một, mẫu số tỷ lệ áp dụng chẻ đôi - không có gì
+    báo ra. Thà dừng khâu nạp còn hơn.
+    """
+    def find(agent: int, unit_name: str) -> str:
+        hit = [r[0] for r in rows
+               if r[1] == agent and r[2].strip() == unit_name and not r[6]]
+        if len(hit) != 1:
+            raise SystemExit(
+                f"CANONICAL_UNIT_PAIRS: tim '{unit_name}' trong cay agent"
+                f" {agent} ra {len(hit)} ket qua, phai dung 1."
+                f" App co the da doi ten don vi - xem lai cap nay.")
+        return hit[0]
+
+    return {find(TLA_HD, hd): find(RALLI, ralli)
+            for hd, ralli in CANONICAL_UNIT_PAIRS}
+
+
+def resolve_report_aggregates(rows: list[tuple]) -> list[str]:
+    """Tra REPORT_AGGREGATE_UNITS thành danh sách unit_id. Hỏng ồn ào như trên."""
+    out = []
+    for agent, unit_name in REPORT_AGGREGATE_UNITS:
+        hit = [r[0] for r in rows
+               if r[1] == agent and r[2].strip() == unit_name and not r[6]]
+        if len(hit) != 1:
+            raise SystemExit(
+                f"REPORT_AGGREGATE_UNITS: tim '{unit_name}' trong cay agent"
+                f" {agent} ra {len(hit)} ket qua, phai dung 1."
+                f" App co the da doi ten don vi.")
+        out.append(hit[0])
+    return out
+
+
 def collect_units() -> list[tuple]:
     """Trả danh sách dòng dim_unit cho cả Ralli lẫn TLA HĐ."""
     rows: list[tuple] = []
@@ -211,6 +294,10 @@ def main() -> None:
     cur = cn.cursor()
 
     agent_name = dict(connect.query(cn, "SELECT agent_id, name FROM dim_agent"))
+    # `code` để dựng username của tài khoản dịch vụ: svc.<code> (quyết định A3,
+    # chốt 20/08). SUY TỪ dim_agent chứ không gõ tay 6 lần - gõ tay thì ngày
+    # thêm agent thứ 9 sẽ quên một chỗ.
+    agent_code = dict(connect.query(cn, "SELECT agent_id, code FROM dim_agent"))
 
     # ================================================== (2) dim_unit
     unit_rows = collect_units()
@@ -237,6 +324,22 @@ def main() -> None:
     cur.executemany(
         f"INSERT INTO dim_unit (unit_id, agent_id, name, parent_id, level, path,"
         f" is_technical) VALUES ({','.join([ph] * 7)})", unit_rows)
+
+    # canonical_unit_id đặt bằng UPDATE SAU khi chèn xong, không đặt trong INSERT.
+    # Nó là khoá ngoại TỰ TRỎ, mà vòng chèn ở trên sắp theo `level` tăng dần để
+    # cha có trước con. Bản chuẩn không nhất thiết nông hơn bản trùng - PBH1 ở
+    # cây Ralli sâu hơn 'Phòng BH1' ở cây Hợp Đồng - nên chèn thẳng sẽ vấp khoá
+    # ngoại tuỳ dữ liệu, tức hỏng theo kiểu chỉ xuất hiện ở một số lần chạy.
+    canonical = resolve_canonical(unit_rows)
+    cur.executemany(
+        f"UPDATE dim_unit SET canonical_unit_id = {ph} WHERE unit_id = {ph}",
+        [(v, k) for k, v in canonical.items()])
+    aggregates = resolve_report_aggregates(unit_rows)
+    cur.executemany(
+        f"UPDATE dim_unit SET is_report_aggregate = TRUE WHERE unit_id = {ph}",
+        [(x,) for x in aggregates])
+    print(f"  gop {len(canonical)} don vi trung giua hai cay to chuc"
+          f" | {len(aggregates)} cap gom, bao cao bat dau ben duoi")
 
     # ================================================== (3) dim_user từ danh bạ
     # Tuple: (user_id, agent_id, username, full_name, email, unit_id,
@@ -273,9 +376,9 @@ def main() -> None:
     #
     # Chỉ dùng filter-options để VÁ chỗ thiếu, không dùng thay: nó không có
     # email, nạp từ đó cho tất cả là mất email của 43 người kia mà không ai báo.
-    da_co = {d[0] for d in user_rows if d[1] == TLA_HD}
+    existing = {d[0] for d in user_rows if d[1] == TLA_HD}
     for r in read_json(TLA_DIR / "token-usage-filter-options.json").get("users") or []:
-        if r["id"] in da_co:
+        if r["id"] in existing:
             continue
         raw_unit = r.get("unit_id")
         unit = raw_unit if raw_unit in known_units else f"__unattributed_{TLA_HD}__"
@@ -329,12 +432,12 @@ def main() -> None:
     hd_ids = {d[0] for d in user_rows if d[1] == TLA_HD}
     hd_extra: dict[str, str] = {}
     for r in read_json(HD_USAGE_DIR / "usage-day-user-model.json")["rows"]:
-        ten = (r.get("username") or "").strip()
-        if not ten or ten.lower() in hd_names:
+        name = (r.get("username") or "").strip()
+        if not name or name.lower() in hd_names:
             continue
         # Không có user_id thì lấy chính username làm khoá - đúng cách Ralli đã
         # xử lý cho các bản ghi cũ ghi username vào ô user_id.
-        hd_extra[r.get("user_id") or ten] = ten
+        hd_extra[r.get("user_id") or name] = name
     for uid, display in sorted(hd_extra.items()):
         if uid in hd_ids:
             continue
@@ -447,15 +550,52 @@ def main() -> None:
     i = len(by_username)
     technical_account: dict[tuple[str, int], int] = {}
     for aid in sorted(agent_name):
-        for kind in ("whole_agent", "unattributed"):
+        for slot in ("whole_agent", "unattributed"):
             i += 1
-            technical_account[(kind, aid)] = i
-            label = (f"Cả {agent_name[aid]}" if kind == "whole_agent"
+            technical_account[(slot, aid)] = i
+            label = (f"Cả {agent_name[aid]}" if slot == "whole_agent"
                      else "Chưa quy được")
+            # `slot` là CHỖ NGỒI trong khoá của fact_usage_daily; `kind` là điều
+            # ta NÓI VỚI người đọc về dòng đó. Hai chuyện này chỉ khác nhau ở
+            # đúng một trường hợp - agent một-người-dùng:
+            #
+            #   'whole_agent'     Google chỉ báo mức project, KHÔNG biết ai
+            #                     trong 45 / 892 người đã gọi. Không quy được.
+            #   'service_account' agent chạy bằng MỘT tài khoản dịch vụ. Biết
+            #                     chính xác là ai - chỉ là "ai" đó không phải
+            #                     một con người. QUY ĐƯỢC.
+            #
+            # Trước 20/08/2026 cả hai dùng chung 'whole_agent', nên health() đếm
+            # 749 triệu token của 6 agent này vào phần "không quy được về người"
+            # và báo độ phủ 12,4% trong khi lỗ hổng thật chỉ 1,2%.
+            #
+            kind = ("service_account"
+                    if slot == "whole_agent" and aid in SINGLE_USER_AGENTS
+                    else slot)
+            # TÊN ĐĂNG NHẬP CỦA TÀI KHOẢN DỊCH VỤ = `svc.` + dim_agent.code
+            # (quyết định A3, chốt 20/08/2026).
+            #
+            # Đây KHÔNG phải đổi tên cho đẹp. Ngày Gateway chạy, 6 agent
+            # một-người-dùng gửi lên đúng chuỗi này làm username, và Gateway tra
+            # nó ra account_id. Để tên tạm `__whole_agent_<id>__` thì username
+            # Gateway gửi lên KHÔNG TRA RA TÀI KHOẢN NÀO.
+            #
+            # Hai loại còn lại GIỮ tên tạm, có lý do:
+            #   whole_agent   Ralli và Hợp Đồng - Gateway gửi username THẬT của
+            #                 người dùng, không ai gửi tên chỗ ngồi này lên
+            #   unattributed  không phải tài khoản, chỉ là chỗ dồn phần không
+            #                 quy được
+            #
+            # Trước 21/08 build_usage_daily.py tra tài khoản này BẰNG TÊN ĐĂNG
+            # NHẬP, nên đổi tên ở đây là gãy khâu nạp. Đã sửa cùng lúc: nó tra
+            # bằng (kind, unit_agent_id) - hỏi đúng câu nó cần hỏi, và không còn
+            # phụ thuộc vào một chuỗi ký tự nữa.
+            username = (f"svc.{agent_code[aid]}" if kind == "service_account"
+                        else f"__{slot}_{aid}__")
             # is_shared = 1: theo đúng định nghĩa, đây không phải tài khoản của
             # một người. Nhờ vậy chỉ tiêu tỷ lệ áp dụng chỉ cần lọc `is_shared`
             # là đủ, không phải liệt kê thêm điều kiện về `kind`.
-            accounts.append((i, f"__{kind}_{aid}__", label, None, kind,
+            accounts.append((i, username, label, None, kind,
                              technical_unit[aid], 1, None, None, None, aid, 0))
 
     cur.executemany(
