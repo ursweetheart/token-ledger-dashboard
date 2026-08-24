@@ -343,7 +343,7 @@ việc trái ngược — và chỉ một loại là việc phải làm:
 
 Không có lỗi nào. Chỉ là một dashboard đã có dữ liệu tốt mà không chịu hiển thị.
 
-→ Việc: đổi từ liệt kê giá trị sang **một khái niệm có tên**, ví dụ một bảng nhỏ `ref_source(source, knows_user BOOLEAN, has_cost BOOLEAN)` hoặc tối thiểu một hằng số dùng chung. Thêm nguồn thứ tư khi đó là thêm **một dòng dữ liệu**, không phải sửa 8 câu SQL nằm rải ở 4 file.
+Việc đúng — và **đã làm xong 21/08**, xem khung ngay dưới: đổi từ liệt kê giá trị sang một khái niệm có tên. Thêm nguồn thứ năm nay là thêm **một dòng dữ liệu** vào `ref_source`, không phải sửa 8 câu SQL nằm rải ở 4 file.
 
 > ### ✅ Làm xong 21/08/2026 — change `admit-gateway-as-a-fourth-source`
 >
@@ -418,7 +418,32 @@ Schema hôm nay **gộp hai chuyện làm một**: `fact_billing_daily` có cả
 > | Nửa | Trạng thái |
 > |---|---|
 > | `health()` + phép kiểm độ phủ | ✅ **Xong 20/08.** `kind` nay có `service_account`; `/api/health` báo 98,5% quy được thay vì 12,4% |
-> | `accounts()` → 6 tài khoản hiện trên ma trận | ⏸️ **Hoãn, đi cùng B1.** Làm riêng thì ô ma trận đổi từ `—` ("chưa biết") thành `0/1` ("đã đo, bằng 0") cho **Chatbot Contact Center** — agent tiêu nhiều nhất, 333 triệu token. Đó là lời khẳng định sai, tệ hơn `—` |
+> | `accounts()` → 6 tài khoản hiện trên ma trận | ✅ **Đóng lại 22/08 — quyết định GIỮ NGUYÊN.** Lý do hoãn ghi 20/08 nhắm sai hàm; xem khung dưới |
+>
+> ### ⚠️ Lý do hoãn ghi 20/08 nhắm sai hàm — đính chính 22/08/2026
+>
+> Ghi chú cũ: *"Làm riêng thì ô ma trận đổi từ `—` thành `0/1` cho Chatbot Contact
+> Center — lời khẳng định sai, tệ hơn `—`."* **Ma trận ăn từ `adoption()`, không phải
+> `accounts()`.** `adoption()` đã sửa xong 21/08 và nay không phân nhánh theo loại agent,
+> nên hai hàm không dính nhau.
+>
+> Đo A/B thật ngày 22/08 (uvicorn thật + `app.js` thật, đổi đúng một dòng rồi hoàn nguyên):
+>
+> | | trước | sau |
+> |---|---:|---:|
+> | `/api/accounts` · `USER_ACCOUNTS` | 937 · 937 | **943 · 943** |
+> | dòng `svc.*` lên màn hình | 0 | **6** |
+> | thẻ "User hoạt động" | 26/937 | **26/943** |
+> | đơn vị gốc · trong đó tự tạo | 11 · 7 | **11 · 7** |
+> | `DEPT_PROVISIONED` | 101 / 3.693 | **101 / 3.693** |
+>
+> **Hại thật gói gọn ở hai chỗ:** 6 dòng *"Cả &lt;tên agent&gt;"* trong bảng danh bạ, và
+> mẫu số thẻ "User hoạt động" 937→943. Cây phòng ban **không đổi** — sáu đơn vị *"Đơn vị
+> sử dụng …"* đã có sẵn ở cấp gốc từ trước, do các dòng usage chế ra qua `unitOf()`.
+>
+> Việc đúng vì thế **không phải gỡ bộ lọc** mà là đặt tên cho nó: `store.accounts()` giữ
+> `kind='real'`, có ghi chú tại chỗ nói đây là tấm lưới duy nhất, và `check_api.py` có
+> phép kiểm khoá lại — change `pin-the-directory-to-real-people`, 22/08/2026.
 >
 > **Đã sửa:** `db/load_org.py` `db/01_schema.sql` `backend/store.py` `scripts/audit_db.py`
 > **Nghiệm thu:** rebuild 7/7 · `audit_db.py` 32 phép / 0 hỏng · `check_api.py` 16/16 · test JS 6 + 7
@@ -541,7 +566,8 @@ Hiện tại an toàn **chỉ vì** uvicorn gắn `127.0.0.1`. Đó là một d�
 > **không cần Docker** (`soat_khoa.py`, **24/24**) — đo được rằng `main.py` import xong
 > mà không chạm database, nên mọi đường 401 kiểm được ngay.
 >
-> **Ba chỗ đo lại thì khác lúc soạn proposal** — ghi vì cùng loại bẫy sẽ quay lại:
+> **Năm chỗ đo lại thì khác lúc soạn proposal** — ghi vì cùng loại bẫy sẽ quay lại.
+> (Tới 22/08 dòng này ghi "Ba chỗ" trong khi bảng có năm hàng — đếm lại rồi sửa.)
 >
 > | Tưởng | Đo ra |
 > |---|---|
@@ -550,6 +576,7 @@ Hiện tại an toàn **chỉ vì** uvicorn gắn `127.0.0.1`. Đó là một d�
 > | `HTTPBearer` mặc định là đủ | Nó trả **403** khi thiếu header, không phải 401. Phải `auto_error=False` rồi tự ném 401 |
 > | Đặt khoá vào `.env` là chạy | **Không file Python nào của backend đọc `.env`** — chỉ docker-compose và `pull_web_apps.py` đọc. Đồng nghiệp làm đúng theo `.env.example` sẽ vẫn không khởi động được |
 > | Test JS không liên quan | Cả **4 kịch bản** hỏng cũ dừng ở ô nhập khoá và không chạm tới nhánh chúng đang kiểm. Phải gieo khoá vào `localStorage` giả |
+> | Chỉ `tests/` dính bẫy khoá | **Chỗ thứ năm: `tools/chay_dashboard_trong_node.js`.** Đo 22/08: exit **0**, in "nạp OK" hai lần, nhật ký uvicorn **0 lần gọi `/api/`**. Nằm ở `tools/` nên không ai chạy, không ai thấy. Đã vá cùng change `pin-the-directory-to-real-people` |
 
 #### ⚪ C3. Base URL của frontend
 
@@ -563,11 +590,28 @@ Master Plan ghi 3 người: An Thanh (chủ trì), Chí Thanh, Tuấn (CTV). Hô
 
 #### 🟡 D1. `db/gen_catalog.py` không chạy lại được
 
-Thiếu `data/raw_web/tla-hd/2026-08-14/token-usage-year.json` → không sinh lại được `db/02_catalog.sql` → **không kiểm được** catalog trong repo có còn khớp thực tế không. `data/` nằm trong `.gitignore`, nên người khác clone về sẽ vấp đúng chỗ này.
+> **Đính chính 22/08/2026 — bản đầu chỉ nhầm thư mục.** `db/gen_catalog.py:57-58` không
+> ghim ngày, nó gọi `_latest_dir()`, và thư mục mới nhất là `2026-08-17` — nơi
+> `token-usage-year.json` **có mặt** ở cả `ralli/` lẫn `tla-hd/`. Thư mục
+> `tla-hd/2026-08-14/` là của `pull_hd_usage.py` (chỉ chứa `usage-day-user-model.json`),
+> `gen_catalog` không bao giờ đọc tới đó. Và nó chỉ lấy `costs.by_model` — **tập tên
+> model**, không lấy số, không lấy ngày — rồi `raise SystemExit` nếu gặp model lạ. Tức
+> là nó hỏng **to tiếng**, không hỏng im lặng.
+
+Việc D1 thật nằm chỗ khác: `data/` nằm trong `.gitignore`, nên người khác clone về có
+**số không** đầu vào — không sinh lại được `db/02_catalog.sql` để đối chiếu với bản trong
+repo. Đây cùng một bài toán với D2 và D3, không phải một file thiếu.
 
 #### 🟡 D2. Không có test Python nào
 
-`tests/` chỉ có 2 file `.js`. Bộ kiểm thật của dự án là `audit_db.py` (30 phép) và `check_api.py` (16 phép) — nhưng cả hai đều cần **database sống + máy chủ đang chạy**. Không có gì chạy được trên một máy trắng, và không có gì chạy được trong CI.
+`tests/` chỉ có 2 file `.js`. Bộ kiểm thật của dự án là `audit_db.py` (**36 phép**, đo
+22/08) và `check_api.py` (**19 phép**) — cả hai đều cần **database sống + máy chủ đang
+chạy**.
+
+**Tiền đề này đã nhỏ đi một nửa từ 21/08:** `tools/soat_khoa_api.py` dựng uvicorn thật và
+khẳng định 24 kỳ vọng **không cần Docker, không cần database** — nó chạy được vì
+`backend/main.py` import xong mà chưa chạm PostgreSQL. Đó là thứ đầu tiên trong repo chạy
+được trên một máy trắng, và là mẫu để nhân bản. Vẫn chưa có pytest và chưa có CI.
 
 Master Plan giai đoạn 7 yêu cầu *"Phép kiểm mới trong `scripts/audit_db.py` và `backend/check_api.py` cho nguồn gateway"* — tức chính hai file này sẽ là nơi nghiệm thu Gateway. Chúng cần chạy được trên máy người khác **trước** ngày đó.
 
@@ -625,6 +669,18 @@ Một phép thử duy nhất, làm được trong ngày:
 
 **Kết quả mong đợi khi ĐÃ sẵn sàng:** token và tiền của dòng giả **hiện lên** dashboard, tỷ lệ áp dụng **nhúc nhích**, `usage_by_account` **có thêm dòng**, và mọi phép kiểm vẫn xanh.
 
-**Kết quả nếu CHƯA sẵn sàng (dự đoán hôm nay):** mọi phép kiểm vẫn xanh, nhưng dashboard **không đổi một con số nào** — vì 8 chỗ hardcode `source='app'` đã lặng lẽ lọc hết dữ liệu Gateway ra ngoài.
+> ### ✅ Phép thử này ĐÃ CHẠY — 21/08/2026, `tools/dien_tap_gateway.py`
+>
+> Mục này viết ở thì *"dự đoán"* cho tới 22/08. Nó đã được chạy thật, và dự đoán đúng
+> từng chữ.
+>
+> **Chạy trên code CHƯA sửa:** mọi phép kiểm vẫn xanh, dashboard **đứng im** trước 4
+> triệu token — `usage_resolved` có thêm khoá nhưng `COALESCE(b,m,a)` không biết
+> `gateway` nên trả `NULL`. Kỳ vọng đạt **0/8**.
+>
+> **Chạy trên code đã sửa:** `usage_by_account` **+3 dòng / +3.000.000 token**, tỷ lệ áp
+> dụng **+3**, quy về người thật **+3.000.000**, gateway thắng billing. Kỳ vọng **7/7**.
+>
+> Dòng giả chèn trong TRANSACTION và `ROLLBACK` ở cuối, kể cả khi lỗi giữa chừng.
 
-Chính sự im lặng đó là thứ cần loại bỏ trước khi bước vào giai đoạn 6.
+Chính sự im lặng đó là thứ đã được loại bỏ trước khi bước vào giai đoạn 6.
