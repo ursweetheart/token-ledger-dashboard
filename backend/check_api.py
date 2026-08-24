@@ -6,7 +6,7 @@
     python backend/check_api.py
     python backend/check_api.py --compare http://127.0.0.1:8001
 
-BỐN VIỆC NÀY KIỂM
+NĂM VIỆC NÀY KIỂM
 -----------------
 1. API trả đúng số mà database có. Không phải "trả về 200 là xong" - một
    endpoint trả bảng rỗng cũng trả về 200.
@@ -17,6 +17,9 @@ BỐN VIỆC NÀY KIỂM
    thứ duy nhất bắt được chuyện đó.
 4. Máy chủ THẬT SỰ chỉ đọc. Thử ghi qua chính kết nối của backend và đợi bị từ
    chối - không tin vào việc "không có endpoint ghi nào".
+5. Endpoint không phơi thứ không được phơi. `/api/accounts` chỉ được trả
+   tài khoản là NGƯỜI; 6 tài khoản dịch vụ lọt vào đó sẽ bị đếm như 6 nhân
+   viên, và không tầng nào phía sau loại chúng ra.
 
 CẦN KHOÁ ĐỂ CHẠY
 ----------------
@@ -154,8 +157,13 @@ def against_database(c: Check, base: str) -> None:
     cat = get(base, "/api/catalog")
     c.expect(len(cat["units"]) == n_units, "So don vi khop",
              f"{len(cat['units'])} != {n_units}")
-    c.expect(len(get(base, "/api/accounts")["rows"]) == n_accounts,
-             "So tai khoan khop", "")
+    # Mẫu số lấy từ `kind='real'` - CÙNG điều kiện mà store.accounts() dùng.
+    # Nghĩa là phép kiểm này soi gương chính bản cài đặt: sửa cả hai chỗ cho
+    # khớp nhau thì nó vẫn xanh. Phép kiểm khẳng định TÍNH CHẤT nằm ở
+    # directory_is_people_only() bên dưới, và đó là chỗ nói rõ dòng nào lọt.
+    n_api = len(get(base, "/api/accounts")["rows"])
+    c.expect(n_api == n_accounts, "So tai khoan khop",
+             f"api {n_api} != db {n_accounts} (db dem kind='real')")
 
     # Cột "số này từ đâu ra" phải có thật, không chỉ có trong tài liệu.
     missing = [k for k in ("token_source", "call_source", "token_estimated")
@@ -198,10 +206,13 @@ def bad_params(c: Check, base: str) -> None:
 def xac_thuc(c: Check, base: str) -> None:
     """Gọi KHÔNG khoá phải bị từ chối.
 
-    Đây là phép kiểm giữ cho cả bộ này khỏi nói dối. 16 phép kiểm cũ đều gửi
-    khoá, nên chúng vẫn xanh y nguyên kể cả khi xác thực bị gỡ khỏi mọi
-    endpoint. Không có phép kiểm này thì bộ kiểm báo "đạt" cho một máy chủ đang
-    mở toang - đúng loại sai im lặng mà cả change này đi bịt.
+    Đây là phép kiểm giữ cho cả bộ này khỏi nói dối. MỌI phép kiểm khác đều
+    gửi khoá, nên chúng vẫn xanh y nguyên kể cả khi xác thực bị gỡ khỏi mọi
+    endpoint. Không có phép kiểm này thì bộ kiểm báo "đạt" cho một máy chủ
+    đang mở toang - đúng loại sai im lặng mà cả change này đi bịt.
+
+    (Tới 22/08/2026 câu trên ghi "16 phép kiểm cũ". Một con số nằm trong văn
+    xuôi thì cũ đi mỗi lần thêm một phép kiểm, nên đã bỏ.)
     """
     code = status(base, "/api/accounts", auth=False)
     # Liệt kê CẢ BA nguyên nhân, không đoán lấy một.
@@ -222,6 +233,29 @@ def xac_thuc(c: Check, base: str) -> None:
     code = status(base, "/healthz", auth=False)
     c.expect(code == 200, "Diem tham do /healthz van mo khong can khoa",
              f"tra ve {code}, dang le 200")
+
+
+def directory_is_people_only(c: Check, base: str) -> None:
+    """Danh bạ chỉ được chứa con người.
+
+    `/api/accounts` là thứ duy nhất nuôi USER_ACCOUNTS ở frontend, và mọi dòng
+    lọt vào đó đều được đếm như một con người. Bộ lọc `kind='real'` trong
+    store.accounts() là tấm lưới DUY NHẤT - đo A/B ngày 22/08/2026: nới nó ra
+    thì danh bạ 937 -> 943, sáu tài khoản dịch vụ `svc.<code>` lên thẳng màn
+    hình, và KHÔNG tầng nào phía sau loại chúng (đo được đúng 0 dòng bị vứt).
+
+    Hỏi DỮ LIỆU TRẢ VỀ, không đọc mã nguồn. Phép kiểm đọc mã nguồn sẽ vẫn xanh
+    vào ngày ai đó thêm một endpoint thứ hai cũng trả danh bạ - và ngày 21/08 đã
+    có một lần grep đếm nhầm `Depends` rồi báo hai endpoint hở trong khi cả tám
+    đều kín.
+    """
+    rows = get(base, "/api/accounts")["rows"]
+    la = [r for r in rows if r.get("kind") != "real"]
+    # Nói RÕ dòng nào lọt. "Co dong la" thì người đọc phải tự đi tìm.
+    ten = ", ".join(f"{r.get('username')}({r.get('kind')})" for r in la[:5])
+    c.expect(not la, "Danh ba /api/accounts chi co tai khoan la nguoi",
+             f"{len(la)} dong khong phai kind='real': {ten}"
+             + (" ..." if len(la) > 5 else ""))
 
 
 def read_only(c: Check) -> None:
@@ -276,6 +310,8 @@ def main() -> None:
     bad_params(c, args.base)
     print("\nXac thuc\n" + "─" * 72)
     xac_thuc(c, args.base)
+    print("\nPham vi du lieu phoi ra\n" + "─" * 72)
+    directory_is_people_only(c, args.base)
     print("\nChi doc\n" + "─" * 72)
     read_only(c)
     if args.compare:

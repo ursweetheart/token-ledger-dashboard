@@ -189,9 +189,14 @@ def accounts(cn) -> list[dict]:
     chính xác hơn và không phụ thuộc hoa/thường. Bỏ đi thì endpoint này thôi phơi
     927 địa chỉ thư của nhân viên ra mọi nơi gọi được nó.
 
-    Đây là phòng thủ theo chiều sâu, KHÔNG thay cho xác thực: máy chủ này vẫn
-    chưa có xác thực nào (xem docs/reference/viec-can-lam-truoc-api-gateway.md
-    mục C1). Xác thực chặn người ngoài; bớt dữ liệu chặn cả sự cố lẫn sơ ý."""
+    Đây là phòng thủ theo chiều sâu, KHÔNG thay cho xác thực. Từ 21/08/2026 máy
+    chủ đã đòi `Authorization: Bearer <DASHBOARD_KEY>` trên cả 8 endpoint, nên
+    mục C1 của docs/reference/viec-can-lam-truoc-api-gateway.md đã đóng - câu
+    "máy chủ này chưa có xác thực nào" đứng ở đây tới 22/08/2026 và đã sai.
+
+    Hai lớp vẫn cần cả hai: xác thực chặn người ngoài, còn bớt dữ liệu chặn cả
+    sự cố lẫn sơ ý. Và khoá hiện tại là khoá DÙNG CHUNG - nó không biết ai đang
+    đọc, nên "đã có xác thực" không có nghĩa là "đã biết ai xem gì"."""
     r = _rows(cn, """
         SELECT a.account_id, a.username, a.full_name, a.kind,
                a.unit_id, u.name AS unit_name, u.path AS unit_path,
@@ -204,6 +209,37 @@ def accounts(cn) -> list[dict]:
         FROM account a
         JOIN dim_unit u ON u.unit_id = a.unit_id
         JOIN dim_agent g ON g.agent_id = a.unit_agent_id
+        -- ═══════ DÒNG DUY NHẤT giữ danh bạ chỉ có con người ═══════
+        -- Nới điều kiện này ra là 6 tài khoản dịch vụ (`svc.<code>` của 6 agent
+        -- một-người-dùng) đi thẳng lên màn hình. Đo A/B ngày 22/08/2026 trên
+        -- backend thật và app.js thật, đổi đúng dòng này rồi hoàn nguyên:
+        --
+        --     /api/accounts          937  ->  943
+        --     USER_ACCOUNTS          937  ->  943    (KHÔNG dòng nào bị vứt)
+        --     thẻ "User hoạt động"  26/937 -> 26/943
+        --
+        -- KHÔNG có tấm lưới thứ hai. Hai chỗ trông như đỡ mà đo ra là không:
+        --   - api.js loại đơn vị `is_technical` khỏi cây tổ chức, nhưng đó là
+        --     chặn ĐƠN VỊ, không chặn TÀI KHOẢN
+        --   - buildAccountCatalogueFromDb lọc `u.unitId &&`, nhưng unitOf() luôn
+        --     trả ra một đơn vị `auto:` nên unitId không bao giờ rỗng - đo ra
+        --     đúng 0 dòng bị loại ở cả hai vế
+        --
+        -- NÓI ĐÚNG MỨC: hại đo được dừng ở 6 dòng thừa trong bảng danh bạ và
+        -- mẫu số 937->943. Cây phòng ban KHÔNG đổi - đơn vị gốc 11->11,
+        -- DEPT_PROVISIONED 101 đơn vị / 3.693 không đổi, vì
+        -- rebuildProvisionedFromDirectory lọc `in_directory && !is_shared` từ
+        -- trước. Đây không phải "sập màn hình". Viết quá lên thì người đọc sau
+        -- sẽ nới ra để thử xem có sập thật không.
+        --
+        -- VÌ SAO CHƯA PHƠI 6 tài khoản đó: chúng sẽ rơi vào 6 đơn vị `auto:` mà
+        -- unitOf() chế sẵn - không parent, không mã thật, không ai chủ động tạo
+        -- ra. Phải quyết chỗ đứng của chúng trong cây trước. Và hôm nay
+        -- adoption() đã trả lời được câu "agent này có chạy không" mà không cần
+        -- chúng có mặt ở đây.
+        --
+        -- backend/check_api.py có một phép kiểm khoá dòng này lại. Ghi chú nhắc
+        -- người ĐỌC code; phép kiểm bắt người SỬA code mà không đọc.
         WHERE a.kind = 'real'
         ORDER BY a.username""")
     for x in r:
