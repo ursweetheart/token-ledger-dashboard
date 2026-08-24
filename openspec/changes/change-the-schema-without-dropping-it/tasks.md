@@ -156,16 +156,48 @@ lại được, và một bước sai ở đó không có đường lùi.
 
 ## 3. Migration 001 — bản đóng băng của schema hôm nay
 
-- [ ] 3.1 Chép `db/01_schema.sql` sang `db/migrations/sql/001_baseline.sql`, **nguyên văn**, giữ
-      đủ ghi chú tiếng Việt. Đây là trí nhớ thiết kế của dự án, không phải chú thích thừa
-- [ ] 3.2 Ghi vào đầu file một dòng: *"ĐÓNG BĂNG 24/08/2026. Migration đã chạy thì không
-      bao giờ được sửa. Đổi schema = thêm migration mới."*
-- [ ] 3.3 Viết `001_baseline.py` chỉ làm một việc: đọc `001_baseline.sql` rồi `op.execute()`. Không
-      nhét SQL vào chuỗi Python — mất khả năng đọc
-- [ ] 3.4 `downgrade()` để `raise NotImplementedError` kèm lý do: change này chọn
-      forward-only, quay lui bằng bản lưu chứ không bằng migration lùi
-- [ ] 3.5 ⚠️ Kiểm `001_baseline.sql` **giữ trung lập hai hệ** như bản gốc — không `SERIAL`, khoá
-      gán tường minh. Đường SQLite chưa bị gỡ (`connect.is_sqlite()`, `store.py:44`)
+- [x] 3.1 ✅ Chép sang `db/migrations/sql/001_baseline.sql`. **Thân file trùng khít từng
+      byte** với `db/01_schema.sql` — 749 dòng, `sha256` thân `750a12d30263c158` ở cả hai
+- [x] 3.2 ✅ 18 dòng đầu là ghi chú đóng băng: *"KHÔNG BAO GIỜ ĐƯỢC SỬA FILE NÀY"*, kèm lý
+      do (máy này áp bản cũ, máy đồng nghiệp áp bản mới, `alembic_version` ở cả hai đều nói
+      "đã áp 001") và nhắc ràng buộc trung lập hai hệ
+- [x] 3.3 ✅ `versions/001_baseline_baseline.py` chỉ đọc file `.sql` rồi chạy. SQL **không**
+      nhét vào chuỗi Python: 749 dòng đó là trí nhớ thiết kế của dự án, nhét vào chuỗi là
+      mất tô màu cú pháp và không `grep` ra được.
+
+      ⚠️ **Ba đường gọi đều hỏng, và hỏng vì cùng một thứ** — 11 dấu `%` trong ghi chú
+      tiếng Việt (`"12,4%"`, `"85,6%"`) cộng một `LIKE '%token_count'`:
+
+      | Cách gọi | Kết quả |
+      |---|---|
+      | `op.execute(chuoi)` | qua SQLAlchemy `text()` — `:tên` thành tham số buộc, `%` qua paramstyle `pyformat` |
+      | `op.get_bind().exec_driver_sql(chuoi)` | **`TypeError: immutabledict is not a sequence`** — đo thật, không phải suy |
+      | `exec_driver_sql(chuoi, ())` | có tham số = **bật** nội suy `%` → 11 dấu kia vỡ |
+
+      Đúng: lấy **kết nối DBAPI thật** rồi `cur.execute(sql)` **không đối số thứ hai** —
+      psycopg2 chỉ bỏ qua `%` khi gọi không tham số. Đây chính là cách
+      `db/connect.py:run_sql_file()` đã làm, và là lý do hàm đó tồn tại.
+- [x] 3.4 ✅ `downgrade()` ném `NotImplementedError` kèm lý do và chỉ đường thay thế. Kiểm
+      thật: `alembic downgrade base` → **exit 1**, in đúng thông điệp
+- [x] 3.5 ✅ **Trung lập hai hệ, và vốn đã đạt sẵn.** Quét `SERIAL|BIGSERIAL|AUTOINCREMENT|
+      JSONB|GENERATED`: đúng **1** dòng khớp, và nó là *ghi chú* nói *"Không dùng SERIAL —
+      mọi khoá đều gán tường minh"*. `upgrade()` vẫn có nhánh `executescript` cho SQLite vì
+      `sqlite3.execute()` chỉ chạy một câu lệnh
+
+### ✅ Nghiệm thu nhóm 3 — schema dựng bằng migration giống hệt schema đang chạy
+
+Dựng database rác `scratch_001`, chạy `alembic upgrade head`, so `information_schema` với
+`token_ledger` (đã bỏ `alembic_version` là bảng của chính Alembic):
+
+| | `token_ledger` | `scratch_001` | |
+|---|---:|---:|---|
+| bảng | 19 | 19 | **khớp** |
+| view | 3 | 3 | **khớp** |
+| cột | 199 | 199 | **khớp** |
+| ràng buộc khoá | 66 | 66 | **khớp** |
+
+`alembic current` trên bản rác: `001_baseline (head)`. Database rác đã xoá; `token_ledger`
+so lại **23/23 khớp**, không đụng một token.
 
 ## 4. Đổi nguồn schema trong `connect.rebuild()` — giữ nguyên bước xoá sạch
 
