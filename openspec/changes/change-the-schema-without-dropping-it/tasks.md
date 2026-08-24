@@ -117,15 +117,42 @@ lại được, và một bước sai ở đó không có đường lùi.
 
 ## 2. Dựng Alembic, chưa đụng database nào
 
-- [ ] 2.1 `pip install alembic`, thêm vào `backend/requirements.txt` kèm ghi chú vì sao
-- [ ] 2.2 `alembic init db/migrations`
-- [ ] 2.3 ⚠️ Sửa `db/migrations/env.py` lấy DSN từ **`connect.DEFAULT_DSN`**, không để
-      Alembic tự đọc biến môi trường của nó. Đây là bẫy số 3 trong proposal — `connect.py`
-      tự nhận là *"chỗ DUY NHẤT quyết định database mặc định"* và đã ghi lại một sự cố đúng
-      hình dạng đó
-- [ ] 2.4 Bỏ `sqlalchemy.url` khỏi `alembic.ini` để không còn chỗ thứ hai khai DSN
-- [ ] 2.5 Kiểm: `alembic current` chạy được, in ra DSN đã che mật khẩu qua
-      `connect.mask_dsn()`
+- [x] 2.1 ✅ `alembic 1.19.1` (kéo theo `SQLAlchemy 2.0.52`, `Mako`, `greenlet`,
+      `MarkupSafe`). Đã thêm vào `backend/requirements.txt` kèm ghi chú vì sao chọn Alembic
+      dù dự án **không dùng ORM**: nó là **tập cha** của `yoyo` — vẫn viết được SQL thuần,
+      mà ngày nào service nạp Gateway muốn dùng model thì thêm được, không phải đổi công cụ
+- [x] 2.2 ✅ `alembic init db/migrations` → `alembic.ini` (gốc repo) + `db/migrations/`
+      (`env.py`, `script.py.mako`, `versions/`)
+- [x] 2.3 ✅ `env.py` viết lại: DSN lấy từ `connect.DEFAULT_DSN`, thêm hai đường ghi đè cho
+      nhóm 5, và **in DSN đã che** mỗi lần chạy vì `upgrade` là lệnh sửa schema — nhầm
+      database là chuyện đắt giá.
+
+      Thêm `_sqlalchemy_url()` vì quy ước DSN của dự án **không phải** URL SQLAlchemy:
+      `connect.py` phân biệt hai hệ bằng **đuôi file**, nên đường dẫn SQLite trần phải được
+      thêm tiền tố. Đã kiểm 4 trường hợp:
+
+      | DSN dự án | → URL SQLAlchemy |
+      |---|---|
+      | `postgresql://…/token_ledger` | giữ nguyên |
+      | `postgresql://…/token_ledger_v2` | giữ nguyên |
+      | `var	oken_ledger.sqlite` | `sqlite:///var/token_ledger.sqlite` |
+      | `var/doi_chieu.db` | `sqlite:///var/doi_chieu.db` |
+
+      `target_metadata = None` là **cố ý**, có ghi chú tại chỗ: `--autogenerate` vô dụng ở
+      đây vì Alembic **không quản view**, mà `usage_resolved` mới là *"cửa chính để hỏi số
+      liệu"*. Autogenerate sẽ im lặng bỏ qua cả ba view rồi báo "không có gì thay đổi".
+- [x] 2.4 ✅ Gỡ `sqlalchemy.url` khỏi `alembic.ini`, thay bằng ghi chú giải thích vì sao để
+      trống — để người sau không "sửa lại cho đủ"
+- [x] 2.5 ✅ **Ba phép kiểm, đều đạt:**
+
+      ```
+         alembic current                      -> postgresql://token:***@127.0.0.1:5432/token_ledger
+         alembic -x db=<dsn khac> current     -> doi dung theo -x
+         TOKEN_LEDGER_DSN=<dsn khac> alembic  -> doi dung theo bien moi truong
+      ```
+
+      Mật khẩu che ở cả ba. `token_ledger` **chưa có bảng `alembic_*` nào** — đúng, vì
+      `current` chỉ đọc. Bộ số bất biến so lại sau nhóm 2: **23/23 khớp**.
 
 ## 3. Migration 001 — bản đóng băng của schema hôm nay
 
