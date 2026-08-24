@@ -109,6 +109,58 @@ existing audit read-only contract remained covered.
   "change-the-schema-without-dropping-it" --json` — state `ready`, progress
   33/44, 11 remaining; task 8.5 remains unchecked.
 
+## Fix round 2 — missing SQLSTATE regression
+
+Scoped re-review confirmed the production classifier from fix round 1 already
+fails an execute exception that has neither `pgcode` nor `sqlstate`, but that
+specific old `RuntimeError` scenario was no longer tracked by a test. This
+round adds coverage only; final production code is byte-for-byte unchanged
+from commit `0968838`.
+
+### Current-behavior check
+
+After adding
+`test_api_probe_execute_error_without_sqlstate_rolls_back_and_fails`, running:
+
+```powershell
+python -m unittest tests.test_acceptance_safety -v
+```
+
+exited 0 with 8/8 tests passed against the current exact-`25006` classifier.
+
+### Mutation RED
+
+To prove the regression detects the original defect, the production branch was
+temporarily changed with `apply_patch` to the old broad rule where every
+execute exception records success. Running only the new production-behavior
+test:
+
+```powershell
+python -m unittest tests.test_acceptance_safety.AcceptanceSafetyTests.test_api_probe_execute_error_without_sqlstate_rolls_back_and_fails -v
+```
+
+exited 1: 1 test run, 1 failed. Rollback still ran and commit remained unused,
+but production incremented `Check.passed` to 1 instead of the expected 0.
+
+The exact-`25006` implementation was then restored with `apply_patch`.
+`git diff --exit-code HEAD -- backend/check_api.py` exited 0, proving no
+production change remains.
+
+### Restored GREEN and full validation
+
+- `python -m unittest tests.test_acceptance_safety -v` — exit 0, 8/8 passed.
+- `node --test tests/*.test.js` — exit 0, 18/18 passed.
+- `python -m unittest discover -s tests -p "test_*.py" -v` — exit 0, 11/11
+  passed.
+- Production and immutable baseline diff check — exit 0. Baseline hashes remain
+  `1B44C4BA007A0BBC772FAE61899EC161DCD13A236754F919AB806135F8ECAEBD` and
+  `5EF4DBD92DB6F451D5978C28A6D7606E2CE0E7DEF970EFFD009845F84411A993`.
+- `git diff --check` — exit 0, no whitespace errors; Git emitted Windows
+  LF-to-CRLF normalization warnings for checked tracked files.
+- `openspec.cmd instructions apply --change
+  "change-the-schema-without-dropping-it" --json` — state `ready`, progress
+  33/44, 11 remaining; task 8.5 remains unchecked.
+
 ## Full local validation
 
 Commands and observed results:

@@ -161,6 +161,16 @@ class AcceptanceSafetyTests(unittest.TestCase):
         self.assertEqual(check.passed, 0)
         self.assertEqual(len(check.failures), 1)
 
+    def test_api_probe_execute_error_without_sqlstate_rolls_back_and_fails(self):
+        connection = FakeConnection(
+            execute_error=RuntimeError("connection lost during execute"))
+        check = self.run_api_probe(FakeOpenDb(connection))
+
+        self.assertEqual(connection.rollback_calls, 1)
+        self.assertEqual(connection.commit_calls, 0)
+        self.assertEqual(check.passed, 0)
+        self.assertEqual(len(check.failures), 1)
+
     def test_api_probe_connection_failure_is_not_readonly_success(self):
         check = self.run_api_probe(
             FakeOpenDb(open_error=RuntimeError("offline")))
