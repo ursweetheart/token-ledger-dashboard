@@ -283,8 +283,15 @@ def read_only(c: Check) -> None:
                     if rejection is None:
                         detail = "GHI DUOC - database khong o che do chi doc"
                     else:
-                        ok = True
-                        result_label = f"{label} ({type(rejection).__name__})"
+                        sqlstate = (getattr(rejection, "pgcode", None)
+                                    or getattr(rejection, "sqlstate", None))
+                        if sqlstate == "25006":
+                            ok = True
+                            result_label = f"{label} ({type(rejection).__name__})"
+                        else:
+                            detail = ("LENH GHI HONG NHUNG KHONG PHAI LOI CHI DOC "
+                                      f"({type(rejection).__name__}, "
+                                      f"SQLSTATE={sqlstate or 'khong co'}): {rejection}")
     except Exception as e:
         detail = f"KHONG MO DUOC KET NOI ({type(e).__name__}): {e}"
 

@@ -55,6 +55,60 @@ python -m unittest tests.test_acceptance_safety -v
 Observed after the minimal production changes and test cleanup: both commands
 exited 0; Node passed 1/1 and Python passed 6/6.
 
+## Fix round 1 — exact read-only rejection classification
+
+Review found that the first implementation counted every `execute()`
+exception as proof of read-only enforcement. That included syntax, permission,
+aborted-transaction, and connection/protocol failures. Only PostgreSQL SQLSTATE
+`25006` proves a read-only SQL transaction violation.
+
+### RED
+
+Command:
+
+```powershell
+python -m unittest tests.test_acceptance_safety -v
+```
+
+Observed before the classification fix: exit 1, 7 tests run, 6 passed, 1
+failed. `test_api_probe_non_readonly_execute_error_rolls_back_and_fails`
+supplied a PostgreSQL-like syntax error with `pgcode="42601"`; rollback ran,
+but production incorrectly incremented `Check.passed` to 1 instead of
+recording a failure.
+
+The accepted-path test now uses realistic driver-neutral shapes:
+`pgcode="25006"` for psycopg2 and `sqlstate="25006"` for psycopg. It imports
+neither driver.
+
+### Focused GREEN
+
+Command:
+
+```powershell
+python -m unittest tests.test_acceptance_safety -v
+```
+
+Observed after the minimal classification change: exit 0, 7/7 passed. Both
+`25006` attribute shapes passed after rollback, while `42601` rolled back and
+recorded failure. Unexpected write success, connection failure, cursor failure,
+rollback failure, no-commit behavior, temporary-table behavior, and the
+existing audit read-only contract remained covered.
+
+### Full validation after fix round 1
+
+- `node --test tests/*.test.js` — exit 0, 18/18 passed.
+- `python -m unittest discover -s tests -p "test_*.py" -v` — exit 0, 10/10
+  passed.
+- Immutable baseline diff check — exit 0; hashes remain
+  `1B44C4BA007A0BBC772FAE61899EC161DCD13A236754F919AB806135F8ECAEBD` and
+  `5EF4DBD92DB6F451D5978C28A6D7606E2CE0E7DEF970EFFD009845F84411A993`.
+- `git diff --check` — exit 0, no whitespace errors; Git emitted Windows
+  LF-to-CRLF normalization warnings for the two modified tracked source/test
+  files.
+- `openspec.cmd instructions apply --change
+  "change-the-schema-without-dropping-it" --json` — state `ready`, progress
+  33/44, 11 remaining; task 8.5 remains unchecked.
+
 ## Full local validation
 
 Commands and observed results:

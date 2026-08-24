@@ -10,6 +10,13 @@ from backend import store
 from scripts import audit_db
 
 
+class FakeDatabaseError(Exception):
+    def __init__(self, message, *, pgcode=None, sqlstate=None):
+        super().__init__(message)
+        self.pgcode = pgcode
+        self.sqlstate = sqlstate
+
+
 class FakeConnection:
     def __init__(self, *, execute_error=None, cursor_error=None,
                  rollback_error=None):
@@ -127,16 +134,32 @@ class AcceptanceSafetyTests(unittest.TestCase):
         self.assertEqual(check.passed, 0)
         self.assertEqual(len(check.failures), 1)
 
-    def test_api_probe_rolls_back_a_rejected_write_and_records_success(self):
-        connection = FakeConnection(execute_error=RuntimeError("read only"))
+    def test_api_probe_accepts_only_readonly_sqlstate_after_rollback(self):
+        for attribute in ("pgcode", "sqlstate"):
+            with self.subTest(attribute=attribute):
+                error = FakeDatabaseError(
+                    "cannot execute CREATE TABLE in a read-only transaction",
+                    **{attribute: "25006"},
+                )
+                connection = FakeConnection(execute_error=error)
+                check = self.run_api_probe(FakeOpenDb(connection))
+
+                self.assertEqual(connection.rollback_calls, 1)
+                self.assertEqual(connection.commit_calls, 0)
+                self.assertTrue(connection.executed[0].lstrip().upper().startswith(
+                    "CREATE TEMP TABLE "))
+                self.assertEqual(check.passed, 1)
+                self.assertEqual(check.failures, [])
+
+    def test_api_probe_non_readonly_execute_error_rolls_back_and_fails(self):
+        connection = FakeConnection(execute_error=FakeDatabaseError(
+            "syntax error at or near CREATE", pgcode="42601"))
         check = self.run_api_probe(FakeOpenDb(connection))
 
         self.assertEqual(connection.rollback_calls, 1)
         self.assertEqual(connection.commit_calls, 0)
-        self.assertTrue(connection.executed[0].lstrip().upper().startswith(
-            "CREATE TEMP TABLE "))
-        self.assertEqual(check.passed, 1)
-        self.assertEqual(check.failures, [])
+        self.assertEqual(check.passed, 0)
+        self.assertEqual(len(check.failures), 1)
 
     def test_api_probe_connection_failure_is_not_readonly_success(self):
         check = self.run_api_probe(
@@ -154,7 +177,7 @@ class AcceptanceSafetyTests(unittest.TestCase):
 
     def test_api_probe_rollback_failure_is_not_readonly_success(self):
         connection = FakeConnection(
-            execute_error=RuntimeError("read only"),
+            execute_error=FakeDatabaseError("read only", pgcode="25006"),
             rollback_error=RuntimeError("rollback failed"),
         )
         check = self.run_api_probe(FakeOpenDb(connection))
