@@ -56,7 +56,6 @@ from __future__ import annotations
 import argparse
 import collections
 import csv
-import sqlite3
 import sys
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -191,27 +190,21 @@ def lookup_project(f: Path) -> str:
 
 
 def project_ids_in_dim_agent(dsn: str) -> set[str]:
-    """Doc dim_agent.gcp_project_id o che do CHI DOC, ca PostgreSQL lan SQLite.
+    """Doc dim_agent.gcp_project_id o che do CHI DOC.
 
     Truoc 17/08/2026 ham nay goi sqlite3 THANG va nhan mot Path, nen no ghim
     cung vao SQLite. Sau khi PostgreSQL thanh mac dinh thi no la buoc [6/10] cua
     duong ong se DUNG HAN - loi hien ra la "khong thay database", tuc trong nhu
     loi thieu file chu khong phai loi ghim cung he quan tri.
 
-    URI SQLite coi '\\' cua Windows la ky tu thoat -> phai dung Path.as_posix().
+    Nhanh SQLite go han 24/08/2026 (change `drop-the-sqlite-escape-hatch`). Ghi
+    chu tren giu lai vi no ke dung cai bay ma ham nay tung dinh: ghim cung mot he
+    quan tri roi hong bang mot thong bao noi ve chuyen khac.
     """
-    if connect.is_sqlite(dsn):
-        p = Path(dsn)
-        if not p.is_file():
-            fail(f"Khong thay database {p}.",
-                 "  Can no de kiem cheo ANH_XA_PROJECT voi dim_agent.gcp_project_id.",
-                 "  Dung --db de tro toi database khac.")
-        cn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
-    else:
-        cn, _ = connect.open_db(dsn)
-        # Chi doc o muc MAY CHU, khong phai loi hua trong tai lieu - giong
-        # backend/store.py. Script nay chi kiem cheo, khong duoc ghi gi.
-        cn.set_session(readonly=True)
+    cn, _ = connect.open_db(dsn)
+    # Chi doc o muc MAY CHU, khong phai loi hua trong tai lieu - giong
+    # backend/store.py. Script nay chi kiem cheo, khong duoc ghi gi.
+    cn.set_session(readonly=True)
     try:
         return {r[0] for r in connect.query(
             cn, "SELECT gcp_project_id FROM dim_agent"

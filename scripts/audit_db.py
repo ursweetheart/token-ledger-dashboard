@@ -39,11 +39,12 @@ OK, WARN, FAIL = "DAT", "CANH BAO", "HONG"
 
 
 def open_read_only(dsn: str):
-    """Như connect.open_db nhưng SQLite mở ở chế độ chỉ đọc thật sự."""
-    if connect.is_sqlite(dsn):
-        import sqlite3
-        p = Path(dsn).resolve().as_posix()
-        return sqlite3.connect(f"file:{p}?mode=ro", uri=True), "?"
+    """Mở kết nối để soát. Nhánh SQLite gỡ 24/08/2026.
+
+    Hàm giữ tên và chữ ký cũ vì chỗ gọi không cần biết bên trong đã đổi. Nó nay
+    chỉ còn là một lớp mỏng quanh `connect.open_db` - giữ lại thay vì gọi thẳng
+    để chỗ đặt kỷ luật chỉ-đọc của script này vẫn có một cái tên.
+    """
     return connect.open_db(dsn)
 
 

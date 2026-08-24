@@ -29,19 +29,17 @@ Thiếu thì script này thoát ngay lúc import - xem ghi chú ở chỗ import
 Với --compare: gọi cả hai máy chủ và so từng byte JSON. Hai hệ quản trị phải trả
 về giống hệt nhau, kể cả thứ tự dòng.
 
-LƯU Ý VỀ --compare (từ 17/08/2026)
-----------------------------------
-PostgreSQL là mặc định và var/token_ledger.sqlite đã bị xoá, nên --compare cần
-DỰNG một bản SQLite trước:
+LƯU Ý VỀ --compare (sửa 24/08/2026)
+-----------------------------------
+Trước đây --compare dùng để đối chiếu PostgreSQL với một bản SQLite. SQLite đã bị
+gỡ khỏi dự án (change `drop-the-sqlite-escape-hatch`), nên nay nó dùng để so hai
+database PostgreSQL - ví dụ bản đang chạy với một bản vừa dựng lại:
 
-    python scripts/rebuild_db.py --db var/token_ledger.sqlite
-    TOKEN_LEDGER_DSN=var/token_ledger.sqlite \\
+    TOKEN_LEDGER_DSN=postgresql://.../token_ledger_v2 \\
         python -m uvicorn backend.main:app --port 8001
 
-Hai chênh lệch KIỂU đã biết giữa hai hệ, cả hai vô hại tới JSON - xem
-docs/reference/mo-ta-database.md:
-    token       Decimal (pg) vs int (sqlite) -> jsonable_encoder cho ra so nguyen
-    is_technical  true (pg) vs 1 (sqlite)    -> khong thanh phan nao doc cot nay
+Hai chênh lệch KIỂU từng ghi ở đây (Decimal vs int, true vs 1) là chênh lệch giữa
+psycopg2 và sqlite3. Chúng không còn xảy ra vì chỉ còn một driver.
 """
 
 from __future__ import annotations

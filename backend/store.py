@@ -40,19 +40,16 @@ DSN = os.environ.get("TOKEN_LEDGER_DSN", connect.DEFAULT_DSN)
 
 @contextmanager
 def open_db():
-    """Kết nối CHỈ ĐỌC, tự động đóng lại."""
-    if connect.is_sqlite(DSN):
-        import sqlite3
-        p = Path(DSN).resolve()
-        if not p.exists():
-            raise FileNotFoundError(
-                f"Khong thay database {p}. Chay: python scripts/rebuild_db.py")
-        cn = sqlite3.connect(f"file:{p.as_posix()}?mode=ro", uri=True)
-        ph = "?"
-    else:
-        cn, ph = connect.open_db(DSN)
-        # Postgres tự chặn mọi lệnh ghi ở mức máy chủ, không phụ thuộc mã nguồn.
-        cn.set_session(readonly=True)
+    """Kết nối CHỈ ĐỌC, tự động đóng lại.
+
+    Nhánh SQLite (mở bằng `?mode=ro`) gỡ ngày 24/08/2026 - xem change
+    `drop-the-sqlite-escape-hatch`. `set_session(readonly=True)` bên dưới là thứ
+    duy nhất còn giữ kỷ luật chỉ-đọc của backend, và `check_api.py` có một phép
+    kiểm khẳng định nó (`ReadOnlySqlTransaction`). Đừng gỡ dòng đó.
+    """
+    cn, ph = connect.open_db(DSN)
+    # Postgres tự chặn mọi lệnh ghi ở mức máy chủ, không phụ thuộc mã nguồn.
+    cn.set_session(readonly=True)
     try:
         yield cn, ph
     finally:

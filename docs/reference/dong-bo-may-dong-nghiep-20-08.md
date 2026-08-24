@@ -65,8 +65,9 @@ PGHOST=127.0.0.1  PGPORT=5432  PGUSER=token  PGPASSWORD=token_local  PGDATABASE=
 Muốn đổi thì `cp .env.example .env` rồi sửa. Đổi mật khẩu thì phải `docker compose down -v`
 rồi `up -d` lại — mật khẩu chỉ được đặt lúc container khởi tạo lần đầu.
 
-Vẫn chạy được SQLite làm bản đối chiếu, nhưng phải chỉ định tường minh:
-`python scripts/rebuild_db.py --db var/token_ledger.sqlite`.
+~~Vẫn chạy được SQLite làm bản đối chiếu.~~ **Hết hiệu lực 24/08/2026** — SQLite đã bị
+gỡ khỏi dự án (change `drop-the-sqlite-escape-hatch`). Đưa vào một DSN `.sqlite` nay
+dừng ngay với thông báo nói rõ, chứ không im lặng tạo file.
 
 ### 🔴 `1de289f` — dashboard chỉ đọc từ database, không còn dữ liệu nhúng cứng
 
