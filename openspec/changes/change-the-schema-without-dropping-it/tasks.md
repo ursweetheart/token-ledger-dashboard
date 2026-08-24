@@ -304,14 +304,34 @@ chữ.
 
 Chỉ làm nhóm này khi nhóm 5 khớp **hết**.
 
-- [ ] 6.1 Đổi `connect.DEFAULT_DSN` sang `token_ledger_v2`
-- [ ] 6.2 Chạy dashboard thật, xem bằng mắt: tổng token, tổng tiền, ma trận, cây phòng ban
-- [ ] 6.3 **Chờ vài ngày.** Một database rỗng không tốn gì ngoài dung lượng đĩa, và đây là
-      chỗ rẻ nhất để mua sự an tâm
+- [x] 6.1 ✅ `connect.PG_DATABASE` mặc định đổi sang `token_ledger_v2`, kèm ghi chú tại chỗ
+      nói đây là **tạm** và liệt kê hai việc còn lại. Quay lui = sửa đúng một dòng
+- [x] 6.2 ✅ Dashboard thật nạp được từ v2 — `tools/chay_dashboard_trong_node.js`, exit 0:
+
+      ```
+         REAL_ACCOUNTS 937 · USER_ACCOUNTS 937 · dong svc.* 0
+         User hoat dong 26/937 · don vi goc 11 (tu tao 7)
+         conn-text "Doc tu database" · ky 19/07 -> 17/08
+      ```
+
+      Trùng khít mốc ghi trong `nhat-ky-22-08-sang.md`. `/api/health` trả đúng 4 cảnh báo
+      quen thuộc (`user_coverage`, `estimated_tokens`, `missing_tokens`, `unit_conflict`) —
+      không cảnh báo mới nào.
+
+      *(`/api/usage` trả 159 dòng / 97,1 triệu token — đó là cửa sổ 30 ngày mặc định của
+      endpoint, không phải lệch. Toàn kỳ đã so ở task 5.4: 1.189 dòng / 867.657.110.)*
+
+- [ ] 6.3 ⏸ **CHỜ VÀI NGÀY — dừng ở đây, và đây là quyết định của anh Tuấn.**
+
+      Ba task dưới không hoàn tác được. Một database rỗng chỉ tốn dung lượng đĩa; xoá sớm
+      để tiết kiệm vài trăm MB là đổi một thứ không mua lại được lấy một thứ rẻ tiền.
+
+      Trong lúc chờ: `token_ledger` cũ **còn nguyên**, chưa qua migration lần nào, và quay
+      lui chỉ là sửa `PG_DATABASE` về `"token_ledger"`.
 - [ ] 6.4 `DROP DATABASE token_ledger`
 - [ ] 6.5 ⚠️ Đóng backend, pgAdmin và mọi script, rồi `ALTER DATABASE token_ledger_v2
       RENAME TO token_ledger`. Còn kết nối thì lệnh **treo** chứ không báo lỗi rõ
-- [ ] 6.6 Trả `connect.DEFAULT_DSN` về `token_ledger`. Sau bước này không còn chữ `_v2` ở
+- [ ] 6.6 Trả `connect.PG_DATABASE` về `token_ledger`. Sau bước này không còn chữ `_v2` ở
       đâu — kiểm bằng `grep -rn "_v2"` trên toàn repo
 - [ ] 6.7 Chạy lại `audit_db.py` + `check_api.py` lần cuối
 
