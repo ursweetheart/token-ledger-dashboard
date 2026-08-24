@@ -6,7 +6,24 @@
  * khong the "luon xanh". Phep kiem khong can backend nam o
  * tests/load-failure-states.test.js.
  *
+ *     set DASHBOARD_KEY=<khoa cua may chu>
  *     node tools/chay_dashboard_trong_node.js
+ *
+ * PHAI CO KHOA (tu 21/08/2026)
+ * ---------------------------
+ * api.js doc khoa tu localStorage theo tung dia chi backend, o ten kho
+ * `tokenledger.key:<base>`. localStorage gia cua file nay truoc day RONG, nen
+ * load() dung ngay o o nhap khoa va KHONG goi mot endpoint nao - trong khi
+ * harness van in "nap OK" va thoat 0. Do ngay 22/08/2026: exit 0, "nap OK" hai
+ * lan, nhat ky uvicorn 0 dong GET /api/. Day la cho thu NAM dinh bay do; bon
+ * cho kia la bon kich ban trong tests/load-failure-states.test.js.
+ *
+ * BAY KHI CHEN PHEP DO VAO app.js
+ * ------------------------------
+ * app.js boc trong mot IIFE: `(function(){ ... })();`. Moi bien cua no la bien
+ * RIENG - noi code vao SAU `})();` thi khong thay gi ca, chi nhan
+ * ReferenceError. Muon doc REAL_ACCOUNTS / USER_ACCOUNTS thi phai chen vao
+ * TRUOC dau dong IIFE, nhu PROBE ben duoi lam.
  */
 "use strict";
 const fs = require("node:fs");
@@ -64,8 +81,14 @@ const document = {
   createDocumentFragment() { return makeEl("__frag"); }
 };
 
+// Dia chi backend phai KHOP voi DEFAULT_BASE cua api.js, vi ten kho khoa co
+// chua dia chi. Sai mot ky tu la api.js coi nhu chua co khoa.
+const BASE = process.env.DASHBOARD_BASE || "http://127.0.0.1:8000";
+const KHOA = process.env.DASHBOARD_KEY || "";
+
 const localStorage = {
-  _d: {},
+  // Gieo khoa tu bien moi truong, KHONG go cung mot chuoi vao file nay.
+  _d: KHOA ? { ["tokenledger.key:" + BASE]: KHOA } : {},
   getItem(k) { return Object.prototype.hasOwnProperty.call(this._d, k) ? this._d[k] : null; },
   setItem(k, v) { this._d[k] = String(v); },
   removeItem(k) { delete this._d[k]; },
@@ -97,8 +120,41 @@ const sandbox = {
 sandbox.globalThis = sandbox;
 sandbox.self = sandbox;
 
+// Chay TRONG IIFE cua app.js - xem "BAY KHI CHEN PHEP DO" o dau file.
+// Ghi ket qua ra window (dung chung voi ben ngoai) chu khong ra bien cuc bo.
+// CHO cho toi khi napTuBackend() xong, KHONG chot mot con so giay.
+// Ban dau chot luc 3400ms va bang bao cao doc luc 4000ms - chi cach nhau
+// 600ms. Backend that co luc cham hon (bo test JS mat 9 giay), va khi do
+// harness bao "khong nap duoc" trong khi no chi CHUA XONG. Mot phep kiem hong
+// vi ly do sai con te hon la khong co phep kiem.
+const PROBE = `
+(function cho(conLai){
+  try {
+    var UA = USER_ACCOUNTS || [];
+    if ((REAL_ACCOUNTS || []).length) {
+      window.__do = {
+        real: REAL_ACCOUNTS.length,
+        user: UA.length,
+        svc:  UA.filter(function(u){ return String(u.user||"").indexOf("svc.") === 0; }).length,
+        hoatDong: UA.filter(function(u){ return u.active && !u.disabled; }).length,
+        goc:  (unitChildIndex[""] || []).length,
+        auto: (unitChildIndex[""] || []).filter(function(u){ return u && u.auto; }).length
+      };
+      return;
+    }
+  } catch (e) { window.__doErr = e.message; window.__doHet = true; return; }
+  if (conLai <= 0) { window.__doHet = true; return; }
+  setTimeout(function(){ cho(conLai - 1); }, 200);
+})(75);   // toi da 15 giay
+`;
+
 function run(file) {
-  const src = fs.readFileSync(path.join(ROOT, file), "utf8");
+  let src = fs.readFileSync(path.join(ROOT, file), "utf8");
+  if (file.endsWith("app.js")) {
+    const i = src.lastIndexOf("})();");
+    if (i < 0) throw new Error("khong tim thay dau dong IIFE cua app.js");
+    src = src.slice(0, i) + PROBE + src.slice(i);
+  }
   vm.runInNewContext(src, sandbox, { filename: file });
 }
 
@@ -123,7 +179,13 @@ if (!ok) process.exit(1);
 
 // init() da chay khi nap app.js (readyState = "complete"). Doi promise cua
 // napTuBackend roi doc DOM gia.
-setTimeout(() => {
+// Doi PROBE bao xong (hoac het gio) roi moi doc DOM gia. Xem ghi chu o PROBE.
+function khiXong(lam, conLai) {
+  if (sandbox.window.__do || sandbox.window.__doHet || conLai <= 0) return lam();
+  setTimeout(() => khiXong(lam, conLai - 1), 200);
+}
+
+khiXong(() => {
   console.log();
   console.log("=".repeat(72));
   console.log("TRANG THAI DOM GIA SAU KHI init() + napTuBackend() CHAY");
@@ -146,4 +208,31 @@ setTimeout(() => {
   console.log();
   console.log("  __probe    :", sandbox.window.__probe || "(khong co moc nao chay)");
   console.log("  __probeErr :", sandbox.window.__probeErr || "(khong loi)");
-}, 4000);
+
+  // ── So lieu, va THOAT KHAC 0 neu khong nap duoc ────────────────────────
+  // Truoc 22/08/2026 file nay thoat 0 ke ca khi khong goi duoc endpoint nao.
+  // Mot cong cu kiem ma bao "xong" trong luc khong kiem gi thi te hon la
+  // khong co cong cu.
+  const d = sandbox.window.__do;
+  console.log();
+  console.log("=".repeat(72));
+  if (d && d.real > 0) {
+    console.log(`  REAL_ACCOUNTS ${d.real}  ·  USER_ACCOUNTS ${d.user}`
+                + `  ·  dong svc.* ${d.svc}`);
+    console.log(`  User hoat dong ${d.hoatDong}/${d.user}`
+                + `  ·  don vi goc ${d.goc} (tu tao ${d.auto})`);
+    console.log("DASHBOARD NAP DUOC.");
+    return;
+  }
+  // Noi RO ba kha nang, va dung conn-text de chi ra kha nang nao.
+  const conn = (store["conn-text"] || {}).textContent || "";
+  console.log("  KHONG NAP DUOC DU LIEU.");
+  console.log(`  conn-text = ${JSON.stringify(conn)}`);
+  if (sandbox.window.__doErr) console.log(`  loi trong probe: ${sandbox.window.__doErr}`);
+  console.log("  Ba kha nang:");
+  console.log(`    (1) chua dat DASHBOARD_KEY  [tien trinh nay doc duoc:`
+              + ` ${KHOA ? "co khoa" : "KHONG CO"}]`);
+  console.log(`    (2) may chu chua chay o ${BASE}`);
+  console.log("    (3) khoa sai -> may chu tra 401");
+  process.exitCode = 1;
+}, 100);   // toi da 20 giay, dai hon han PROBE de PROBE luon chot truoc
