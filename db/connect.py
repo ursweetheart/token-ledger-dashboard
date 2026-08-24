@@ -60,6 +60,20 @@ DEFAULT_DSN = os.environ.get("TOKEN_LEDGER_DSN") or (
 # Đường quay về SQLite, để thông báo lỗi và tài liệu trỏ vào một chỗ.
 SQLITE_DSN = str(VAR_DIR / "token_ledger.sqlite")
 
+# DSN của lần chạy hiện tại, khi nó KHÁC mặc định.
+#
+# Vì sao cần thêm biến này (24/08/2026): `DEFAULT_DSN` là hằng số tính MỘT LẦN lúc
+# import, nên `rebuild(dsn_khac)` không đổi được nó, và `db/migrations/env.py` -
+# chạy trong một ngăn xếp gọi khác - sẽ vẫn thấy database mặc định. Tức là
+# `rebuild()` xoá database A rồi bảo Alembic dựng schema lên database B.
+#
+# `rebuild()` đặt biến này trước khi gọi Alembic và trả về `None` sau đó. env.py
+# đọc nó. Thứ tự ưu tiên trong env.py:  -x db=...  >  ACTIVE_DSN  >  DEFAULT_DSN
+#
+# Vẫn giữ đúng nguyên tắc "một nguồn sự thật": chuỗi kết nối vẫn chỉ được quyết
+# định trong file này, không nơi nào khác dựng chuỗi mặc định của riêng nó.
+ACTIVE_DSN: str | None = None
+
 
 def is_sqlite(dsn: str) -> bool:
     return dsn.endswith(".sqlite") or dsn.endswith(".db")
@@ -129,23 +143,64 @@ def run_sql_file(cn, placeholder: str, path: Path) -> None:
             cur.execute(sql)
 
 
+def apply_migrations(dsn: str) -> None:
+    """Dựng schema bằng chuỗi migration trong db/migrations/.
+
+    Thay cho `run_sql_file(01_schema.sql)` từ 24/08/2026. Từ đó schema chỉ được
+    mô tả ở MỘT chỗ - chuỗi migration - và `db/01_schema.sql` đã bị xoá.
+
+    Gọi Alembic qua API trong tiến trình, không qua `subprocess`: trên máy này
+    `python` trên PATH là một shim trỏ đi chỗ khác, nên gọi tiến trình con là mời
+    đúng loại lỗi "chạy nhầm trình thông dịch" vào một hàm vốn không có lỗi nào.
+    """
+    global ACTIVE_DSN
+    from alembic import command
+    from alembic.config import Config
+
+    ACTIVE_DSN = dsn
+    try:
+        command.upgrade(Config(str(ROOT / "alembic.ini")), "head")
+    finally:
+        ACTIVE_DSN = None
+
+
 def rebuild(dsn: str):
-    """Xoá sạch rồi dựng lại từ 01_schema.sql + 02_catalog.sql.
+    """Xoá sạch rồi dựng lại: migration + 02_catalog.sql.
 
     CHỈ dùng cho database do script này tạo ra. Không dùng lên database thật.
+
+    BƯỚC XOÁ SẠCH VẪN Ở ĐÂY, VÀ PHẢI Ở ĐÂY.
+    ----------------------------------------
+    Change `change-the-schema-without-dropping-it` mang cái tên dễ khiến người
+    đọc tưởng `DROP SCHEMA` phải biến mất. Không phải. Nó chỉ làm cho việc đổi
+    schema KHÔNG CÒN BẮT BUỘC phải xoá - `alembic upgrade head` gọi độc lập sẽ
+    sửa tại chỗ, không đi qua hàm này.
+
+    Còn hàm này là đường "dựng lại toàn bộ từ data/", và nó thật sự cần một schema
+    trắng: bước ngay sau là nạp `02_catalog.sql`, mà nạp danh mục vào bảng đã có
+    dòng là đụng khoá chính ngay.
+
+    Hai đường dùng chung một chuỗi migration:
+        rebuild()              xoá sạch  ->  migration  ->  danh mục
+        alembic upgrade head   (không xoá gì, database giữ nguyên dữ liệu)
     """
     if is_sqlite(dsn):
         p = Path(dsn)
         if p.exists():
             p.unlink()
-        cn, placeholder = open_db(dsn)
     else:
-        cn, placeholder = open_db(dsn)
+        cn, _ = open_db(dsn)
         with cn.cursor() as cur:
             cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
         cn.commit()
+        # ĐÓNG kết nối này trước khi Alembic mở kết nối của nó. Giữ mở thì lát
+        # nữa phải tin rằng một kết nối cũ nhìn thấy bảng do kết nối khác vừa
+        # tạo - đúng, nhưng là thứ phải nhớ mỗi lần đọc lại. Mở lại sau rẻ hơn.
+        cn.close()
 
-    run_sql_file(cn, placeholder, DB_DIR / "01_schema.sql")
+    apply_migrations(dsn)
+
+    cn, placeholder = open_db(dsn)
     catalog = DB_DIR / "02_catalog.sql"
     if not catalog.exists():
         raise SystemExit("Chưa có db/02_catalog.sql. Chạy: python db/gen_catalog.py")

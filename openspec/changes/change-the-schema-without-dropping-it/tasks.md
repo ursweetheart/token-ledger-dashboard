@@ -179,10 +179,47 @@ lại được, và một bước sai ở đó không có đường lùi.
       `db/connect.py:run_sql_file()` đã làm, và là lý do hàm đó tồn tại.
 - [x] 3.4 ✅ `downgrade()` ném `NotImplementedError` kèm lý do và chỉ đường thay thế. Kiểm
       thật: `alembic downgrade base` → **exit 1**, in đúng thông điệp
-- [x] 3.5 ✅ **Trung lập hai hệ, và vốn đã đạt sẵn.** Quét `SERIAL|BIGSERIAL|AUTOINCREMENT|
-      JSONB|GENERATED`: đúng **1** dòng khớp, và nó là *ghi chú* nói *"Không dùng SERIAL —
-      mọi khoá đều gán tường minh"*. `upgrade()` vẫn có nhánh `executescript` cho SQLite vì
-      `sqlite3.execute()` chỉ chạy một câu lệnh
+- [ ] 3.5 ❌ **ĐÍNH CHÍNH — lời khẳng định đầu tiên ở đây SAI, và nó che một lỗi có sẵn.**
+
+      Bản đầu ghi *"trung lập hai hệ, vốn đã đạt sẵn"*, dựa trên một phép quét
+      `SERIAL|BIGSERIAL|AUTOINCREMENT|JSONB|GENERATED` ra đúng 1 dòng khớp — và dòng đó
+      là *ghi chú* nói "Không dùng SERIAL". Phép quét đó **quá hẹp**: nó tìm kiểu dữ liệu
+      riêng của một hệ, mà lỗi thật lại nằm ở **cú pháp**.
+
+      **Đo 24/08 trên SQLite thật:**
+
+      ```
+         db/01_schema.sql  ->  sqlite3.OperationalError: syntax error
+         near "'nen van phai doi hoa don xac nhan - xem ghi chu cost_usd o usage_resolved.'"
+      ```
+
+      Chỗ gây lỗi là `01_schema.sql:348-349`, trong `INSERT INTO ref_source`:
+
+      ```sql
+      ('gateway', TRUE, FALSE, 'gateway',
+       'LiteLLM. Biết người dùng, có ngay trong ngày. Tiền của nó là SUY TỪ BẢNG GIÁ '
+       'nên vẫn phải đợi hoá đơn xác nhận - xem ghi chú cost_usd ở usage_resolved.');
+      ```
+
+      Hai chuỗi **liền kề**. PostgreSQL nối chúng lại theo chuẩn SQL; **SQLite không**.
+
+      ### ⚠️ Lỗi này CÓ SẴN, không do change này gây ra
+
+      Kiểm bằng đường **cũ** — gọi thẳng `sqlite3.executescript(01_schema.sql)`, đúng
+      code `connect.run_sql_file()` đang có, **không qua Alembic**: hỏng y hệt, cùng
+      thông báo.
+
+      Nó lọt được vì hai việc trùng nhau:
+
+      | | |
+      |---|---|
+      | `var/token_ledger.sqlite` **bị xoá** | 17/08, change `switch-default-dsn-to-postgres` |
+      | `ref_source` **được thêm** | 21/08, change `admit-gateway-as-a-fourth-source` |
+
+      Bảng gây lỗi ra đời **sau** ngày database SQLite biến mất, nên từ đó tới nay
+      **chưa ai dựng lại một bản SQLite** — lỗi nằm im 3 ngày, không phép kiểm nào chạm tới.
+
+      → **Chờ anh quyết** (xem báo cáo cuối phiên): sửa hay ghi nhận rồi để đó.
 
 ### ✅ Nghiệm thu nhóm 3 — schema dựng bằng migration giống hệt schema đang chạy
 

@@ -51,9 +51,19 @@ target_metadata = None
 
 
 def _dsn() -> str:
-    """DSN cho lan chay nay: `-x db=...` neu co, con lai theo connect.py."""
+    """DSN cho lan chay nay, theo thu tu uu tien:
+
+        1. -x db=...             ghi de tren dong lenh, manh nhat
+        2. connect.ACTIVE_DSN    khi Alembic duoc goi TU connect.rebuild()
+        3. connect.DEFAULT_DSN   mac dinh
+
+    Buoc 2 la bat buoc, khong phai cho tien: `DEFAULT_DSN` la hang so tinh mot lan
+    luc import, nen `rebuild(dsn_khac)` khong doi duoc no. Thieu buoc nay thi
+    rebuild() xoa database A roi bao Alembic dung schema len database B - va
+    KHONG LOI NAO BAO RA cho toi luc ai do doc so lieu.
+    """
     overrides = context.get_x_argument(as_dictionary=True)
-    return overrides.get("db") or connect.DEFAULT_DSN
+    return overrides.get("db") or connect.ACTIVE_DSN or connect.DEFAULT_DSN
 
 
 def _sqlalchemy_url(dsn: str) -> str:
