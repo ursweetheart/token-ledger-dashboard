@@ -20,7 +20,7 @@
 >
 > Muốn hiểu *vì sao* database có hình dạng này thì đọc `mo-ta-database.md`.
 > Muốn biết dữ liệu *đến đây bằng đường nào* thì đọc `toan-trinh-du-lieu.md`.
-> Bản khai báo gốc kèm ghi chú thiết kế nằm ở `db/01_schema.sql`.
+> Baseline bất biến kèm ghi chú thiết kế nằm ở `db/migrations/sql/001_baseline.sql`.
 
 ---
 
@@ -780,7 +780,7 @@ token khác nhau:
 | Anthropic | tách `cache_creation` và `cache_read` — **hai mức giá khác nhau** |
 | OpenAI | có `reasoning_tokens` nằm trong output, hai nhà kia không có |
 
-Ghi chú trong `db/01_schema.sql` — *"cached KHÔNG cùng nghĩa ở ba nguồn… Ép ba nguồn
+Ghi chú trong `db/migrations/sql/001_baseline.sql:523` — *"cached KHÔNG cùng nghĩa ở ba nguồn… Ép ba nguồn
 về một định nghĩa sẽ làm sai một trong hai đầu, mà không đầu nào kêu"* — **vẫn đúng
 nguyên xi**, chỉ đổi "ba nguồn" thành "ba provider".
 
@@ -1312,7 +1312,8 @@ claim đơn vị nào cả. Quyết định 20/08 *"agent không cần gửi ph�
 `account.unit_id`"* vì thế không chỉ tránh nguồn-sự-thật-thứ-hai — nó tránh một cái bẫy
 đang nằm sẵn trong token.
 
-**Nỗi lo "Ralli trả ObjectId" nhắm sai chỗ.** Cảnh báo ở `01_schema.sql:139` nói về **bản
+**Nỗi lo "Ralli trả ObjectId" nhắm sai chỗ.** Cảnh báo ở
+`db/migrations/sql/001_baseline.sql:163` nói về **bản
 ghi sử dụng**, không phải JWT. Đối chiếu 891 tài khoản Ralli đã kéo về:
 
 | | |

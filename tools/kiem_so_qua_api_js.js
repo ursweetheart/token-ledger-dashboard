@@ -25,7 +25,8 @@ const API = "http://127.0.0.1:8000";
  *                               dem hai lan
  *        billing   224.609.584  nam NGOAI input -> phai cong
  *        monitoring         0   khong co phep do
- *    224.609.584 khop dung con so ghi trong db/01_schema.sql:380.
+ *    224.609.584 khop dung con so ghi trong
+ *    db/migrations/sql/001_baseline.sql:525.
  *
  * 2. total = 851.897.150, KHONG phai SUM(total_tokens) = 851.897.312.
  *    Chenh 162 da khoanh vung: DUNG 23 dong, model gemini-2.5-flash-lite,

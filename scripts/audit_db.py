@@ -407,7 +407,7 @@ def group_d_silent_gaps(a: Audit) -> None:
     # Bản trước chỉ đo `kind='real'` rồi gọi toàn bộ phần còn lại là "không quy
     # được". Nó gộp 6 agent một-người-dùng - nơi ta BIẾT chính xác ai dùng - vào
     # cùng rổ với phần Google thật sự không biết, làm lỗ hổng trông lớn gấp ~70
-    # lần. Xem ghi chú `kind` ở db/01_schema.sql.
+    # lần. Xem ghi chú `kind` ở db/migrations/sql/001_baseline.sql:166.
     #
     # Con số phải theo dõi là (c), và nó chỉ được TỐT LÊN, không được xấu đi.
     #

@@ -500,16 +500,22 @@ SELECT SUM(so_luong) FROM fact_billing_daily WHERE loai IN ('input','cached');
 ## Dựng lại database
 
 ```bash
-docker compose up -d                                          # PHẢI lên trước
-python scripts/rebuild_db.py                                  # PostgreSQL, ~56 giây
-python scripts/rebuild_db.py --db var/token_ledger.sqlite      # SQLite,     ~14 giây
+docker compose up -d                         # PHẢI lên trước
+python scripts/rebuild_db.py                 # xoá sạch, migrations rồi nạp data/
 ```
 
-Cả 7 khâu nạp chạy được trên **cả hai** hệ mà không sửa dòng SQL nào — đã đo 17/08/2026:
-dựng thẳng từ `data/` vào PostgreSQL cho ra database khớp từng dòng với bản sao từ SQLite,
-và `audit_db.py` trên hai bên cho đầu ra giống nhau từng byte.
+`rebuild_db.py` tự chạy chuỗi Alembic rồi nạp catalog và dữ liệu; không cần chạy
+`alembic upgrade head` trước. Muốn giữ dữ liệu hiện có và chỉ cập nhật schema thì dùng
+`alembic upgrade head` thay cho rebuild. Xem hai đường vận hành ở `db/migrations/README.md`.
 
-### Hai chênh lệch KIỂU giữa hai hệ quản trị
+### Kết quả đối chiếu lịch sử giữa hai hệ — đo 17/08/2026
+
+Trước khi đường SQLite bị gỡ ngày 24/08/2026, cả 7 khâu nạp từng chạy trên hai hệ mà
+không sửa SQL: dựng từ `data/` vào PostgreSQL khớp từng dòng với bản sao SQLite, và
+`audit_db.py` cho đầu ra giống nhau từng byte. Đây là provenance của các quyết định kiểu
+dữ liệu bên dưới, không phải một workflow còn dùng được.
+
+#### Hai chênh lệch kiểu đã đo
 
 Cùng một cột trả về kiểu Python khác nhau. Đã đo, cả hai vô hại tới màn hình — nhưng ghi
 lại vì loại lỗi này không ném exception, nó chỉ trả số sai:
@@ -524,8 +530,8 @@ lại vì loại lỗi này không ném exception, nó chỉ trả số sai:
 ra **chuỗi** thì `ti + to + cached` trong `web/js/app.js` sẽ thành **nối chuỗi** thay vì
 phép cộng — số sai mà không lỗi nào báo.
 
-**`is_technical`:** SQLite không có BOOLEAN thật, nó lưu 0/1 (`scripts/copy_to_postgres.py`
-phải chuyển kiểu vì thế). Hiện không thành phần nào trong `web/` đọc cột này.
+**`is_technical`:** Trong đợt đối chiếu lịch sử, SQLite không có BOOLEAN thật và lưu 0/1,
+nên công cụ chuyển hệ khi đó phải đổi kiểu. Hiện không thành phần nào trong `web/` đọc cột này.
 ⚠ Nếu sau này có phần hiển thị đọc nó thì **đừng so bằng `=== true`** — dùng phép kiểm
 đúng/sai thông thường, không thì nó chạy trên hệ này và vỡ trên hệ kia.
 
@@ -544,5 +550,5 @@ python scripts/audit_db.py
 | File | Nội dung |
 |---|---|
 | `toan-trinh-du-lieu.md` | **Lấy → gộp → nạp → backend.** Đọc cái này nếu muốn tự chạy lại |
-| `db/01_schema.sql` | Schema — mỗi quyết định đều có ghi chú lý do |
+| `db/migrations/sql/001_baseline.sql` | Baseline schema bất biến — mỗi quyết định đều có ghi chú lý do |
 | `backend/store.py` | Mọi câu SQL của backend |

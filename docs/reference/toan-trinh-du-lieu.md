@@ -175,8 +175,7 @@ Ba cái bẫy script này đã xử:
 
 ```bash
 docker compose up -d                            # PHẢI lên trước
-python scripts/rebuild_db.py                    # PostgreSQL (mặc định từ 17/08/2026)
-python scripts/rebuild_db.py --db var/token_ledger.sqlite   # bản SQLite để đối chiếu
+python scripts/rebuild_db.py                    # xoá sạch, tự chạy migrations rồi nạp data/
 ```
 
 Đích mặc định lấy từ `connect.DEFAULT_DSN` — **một** chỗ duy nhất, dựng từ `PG*` khớp
@@ -184,11 +183,16 @@ python scripts/rebuild_db.py --db var/token_ledger.sqlite   # bản SQLite để
 `rebuild_db.py` có hằng số DSN riêng, mà `update_dashboard.py` gọi nó không truyền `--db`
 — nên đổi `connect.py` xong đường ống vẫn dựng lại database cũ, không lỗi nào báo.
 
+Đây là đường **dựng lại toàn bộ từ `data/`**: `rebuild_db.py` cố ý xoá schema, tự chạy
+chuỗi migration đến `head`, nạp `02_catalog.sql`, rồi mới chạy bảy khâu dữ liệu. Nếu
+database đang có dữ liệu cần giữ và chỉ cần nhận schema mới, không chạy rebuild; dùng
+`alembic upgrade head` để nâng tại chỗ.
+
 ## Bảy bước, và thứ tự là bắt buộc
 
 | # | Script | Dựng bảng | Vì sao ở vị trí này |
 |---|---|---|---|
-| 1 | `load_billing.py --rebuild` | schema + danh mục + `fact_billing_daily` | `--rebuild` **xoá sạch**, nên phải đầu tiên |
+| 1 | `load_billing.py --rebuild` | migrations + danh mục + `fact_billing_daily` | `--rebuild` **xoá sạch**, nên phải đầu tiên |
 | 2 | `load_org.py` | `dim_unit`, `dim_user`, `account`, `dim_function` | Xoá `fact_call`; đảo với bước 3 là mất cái vừa nạp |
 | 3 | `load_ralli.py` | `fact_call` | Cần `account` của bước 2 |
 | 4 | `load_hd.py` | `fact_app_daily` | Cần `account` và `dim_user` của bước 2 |
@@ -253,18 +257,15 @@ Ranh giới giữa `luu y` và `HONG`: **có sửa được bằng cách nạp l
 "Google không ghi ai gọi" thì nạp lại bao nhiêu lần cũng thế → `luu y`. "Một
 dòng trỏ vào `unit_id` không tồn tại" → `HONG`.
 
-## Chuyển sang PostgreSQL
+## Cập nhật schema tại chỗ
 
 ```bash
-docker compose up -d
-python scripts/copy_to_postgres.py
+alembic upgrade head
 ```
 
-Script này chép SQLite sang Postgres rồi **đối chiếu từng bảng**: số dòng, tổng
-mọi cột số, số giá trị khác nhau. Không khớp là dừng.
-
-Cùng một file `01_schema.sql` chạy được cả hai hệ vì không dùng `SERIAL` — mọi
-khoá đều gán tường minh.
+Lệnh này chạy các revision còn thiếu trên database hiện có và **không xoá dữ liệu**.
+Không chạy `rebuild_db.py` ngay sau đó: rebuild tự chạy migrations rồi cố ý xoá và nạp
+lại toàn bộ. Luật thêm revision và hai đường vận hành nằm ở `db/migrations/README.md`.
 
 ---
 
@@ -452,6 +453,6 @@ trong khi hoá đơn thì có. Ngày nào hoá đơn chưa kịp về, khoá đ�
 | File | Nội dung |
 |---|---|
 | `mo-ta-database.md` | Từng bảng, từng cột, và các bẫy khi truy vấn |
-| `db/01_schema.sql` | Schema — mỗi quyết định đều có ghi chú lý do |
+| `db/migrations/sql/001_baseline.sql` | Baseline schema bất biến — mỗi quyết định đều có ghi chú lý do |
 | `../decisions/mui-gio-2026-08-08.md` | Các quyết định về múi giờ |
 | `backend/store.py` | Mọi câu SQL của backend nằm gọn ở đây |

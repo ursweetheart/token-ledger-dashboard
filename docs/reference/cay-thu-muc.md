@@ -33,15 +33,18 @@ token-ledger-dashboard/
 │
 ├── scripts/                ① KÉO + ② GỘP + điều phối
 │   pull_*.py (6) · merge_*.py (3) · update_dashboard.py (9 bước)
-│   rebuild_db.py · audit_db.py (30 phép kiểm) · copy_to_postgres.py
+│   rebuild_db.py · audit_db.py (30 phép kiểm)
 │
 ├── db/                     ③ SCHEMA + NẠP — chỉ chứa MÃ
-│   01_schema.sql · 02_catalog.sql · load_*.py · build_*.py · connect.py · rules.py
+│   ├── migrations/         Chuỗi schema Alembic — nguồn schema đang sống duy nhất
+│   │   ├── README.md
+│   │   ├── sql/            001_baseline.sql
+│   │   └── versions/       001_baseline_baseline.py
+│   └── 02_catalog.sql · load_*.py · build_*.py · connect.py · rules.py
 │
 ├── data/                   Kho dữ liệu THÔ — mất là mất vĩnh viễn
-├── var/                    Dữ liệu CHẠY — dựng lại được từ data/
-│   (trống: database nằm trong volume Docker `pgdata` từ 17/08/2026.
-│    Đây vẫn là nơi DUY NHẤT được phép chứa .sqlite nếu dựng bản đối chiếu)
+├── var/                    Artifact cục bộ dựng lại được; database chạy nằm trong
+│                           volume Docker `pgdata`, không có đường SQLite sống
 │
 ├── tests/                  Phải LUÔN xanh
 ├── tools/                  Chẩn đoán một lần — ĐƯỢC PHÉP mục
@@ -52,7 +55,7 @@ token-ledger-dashboard/
 ├── planning/               .xlsx · .docx · ghi chú họp
 │
 ├── openspec/  .claude/  .agent/  .codex/       ← công cụ bắt buộc ở gốc
-└── docker-compose.yml  .env.example  .gitignore  README.md
+└── alembic.ini  docker-compose.yml  .env.example  .gitignore  README.md
 ```
 
 ## Hai ranh giới quan trọng

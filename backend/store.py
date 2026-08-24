@@ -380,7 +380,8 @@ def performance(cn, ph, start: str, end: str) -> dict:
     """Hai bộ số ở HAI ĐỘ MỊN khác nhau - trả riêng, không trộn.
 
     response_codes  (day, agent, method, response_code)
-    latency         (day, agent)     phân vị không cộng được, xem 01_schema.sql
+    latency         (day, agent)     phân vị không cộng được, xem
+                                     db/migrations/sql/001_baseline.sql:549
     """
     codes = _rows(cn, f"""
         SELECT day, agent_id, method, response_code, calls

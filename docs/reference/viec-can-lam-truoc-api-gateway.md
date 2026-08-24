@@ -1,6 +1,6 @@
 # Việc cần làm để sẵn sàng bước vào phát triển API Gateway
 
-*Soạn 20/08/2026. Nguồn: `Master Plan API Gateway.xlsx` (3 sheet), `Tài_liệu_triển_khai_API_Gateway.docx`, `db/01_schema.sql`, `backend/`, `web/js/`, `scripts/`.*
+*Soạn 20/08/2026. Nguồn: `Master Plan API Gateway.xlsx` (3 sheet), `Tài_liệu_triển_khai_API_Gateway.docx`, `db/migrations/sql/001_baseline.sql`, `backend/`, `web/js/`, `scripts/`.*
 
 ---
 
@@ -118,7 +118,7 @@ hàm `adoption()` dòng ~274 đã áp đúng: `kind='service'`, `provisioned=1`,
 
     backend/store.py:189   accounts()   WHERE a.kind = 'real'
     backend/store.py:405   health()     SUM(...) WHERE a.kind = 'real'   ← đẻ ra 87,4%
-    db/01_schema.sql:581   view usage_by_account
+    db/migrations/sql/001_baseline.sql:759   view usage_by_account
     scripts/audit_db.py:139, 290, 312, 367
 
 Đây cũng chính là lý do ô ma trận drilldown hiện `—` thay vì `1/1`.
@@ -251,7 +251,8 @@ Nếu agent A gửi `LongNT` còn agent B gửi `longnt@rangdong.com.vn`, ta có
 > ban, nhưng nó **rỗng** — và Ralli không có claim đơn vị nào. Quyết định "tra
 > `account.unit_id`" vì thế tránh đúng một cái bẫy đang nằm sẵn.
 >
-> **Nỗi lo "Ralli trả ObjectId" nhắm sai chỗ** — cảnh báo ở `01_schema.sql:139` nói về bản
+> **Nỗi lo "Ralli trả ObjectId" nhắm sai chỗ** — cảnh báo ở
+> `db/migrations/sql/001_baseline.sql:163` nói về bản
 > ghi sử dụng, không phải JWT. Trong 891 tài khoản Ralli: `username` là ObjectId **0/891**,
 > có dấu chấm 814/891.
 >
@@ -322,7 +323,7 @@ việc trái ngược — và chỉ một loại là việc phải làm:
 ```
    ĐẦU GHI (14 chỗ) — GIỮ NGUYÊN        ĐẦU ĐỌC (10 chỗ) — ĐÂY LÀ B1
    load_hd · load_ralli                 backend/store.py   :257 :263 :452
-   build_usage_daily · rebuild_db       db/01_schema.sql   :600 :648
+   build_usage_daily · rebuild_db       db/migrations/sql/001_baseline.sql :700 :751
    gen_catalog                          scripts/audit_db.py :163 :263 :290 :312 :413
         │                                    │
    "dòng này TỪ app" — đúng             "chỉ lấy dòng của app" — lọc mất Gateway
@@ -332,8 +333,8 @@ việc trái ngược — và chỉ một loại là việc phải làm:
 |---|---|---|
 | `backend/store.py` | 257, 263 | `AND f.source = 'app'` — chỉ tiêu **tỷ lệ áp dụng** |
 | `backend/store.py` | 452 | `v.token_source = 'app'` — chia token về người thật |
-| `db/01_schema.sql` | 600 | `WHERE source = 'app'` — view `usage_by_account` |
-| `db/01_schema.sql` | 648 | `WHERE f.source = 'app' AND a.kind = 'real'` |
+| `db/migrations/sql/001_baseline.sql` | 700 | `WHERE source = 'app'` — view đối chiếu nguồn |
+| `db/migrations/sql/001_baseline.sql` | 751 | `WHERE f.source = 'app'` — locator lịch sử trước khi view hỏi `ref_source.knows_user` |
 | `scripts/audit_db.py` | 163, 263, 290, 312, 413 | 5 phép kiểm |
 
 **Chuyện sẽ xảy ra nếu không sửa:** Gateway ghi dữ liệu vào `source='gateway'`, mang theo đầy đủ username và phòng ban. Nhưng:
@@ -409,7 +410,9 @@ Việc nhỏ và gọn — **nhưng nên làm hôm nay để chứng minh nó nh
 
 Schema hôm nay **gộp hai chuyện làm một**: `fact_billing_daily` có cả `agent_id` lẫn `project`, và `agent_id` được **suy ra TỪ** `project` qua `dim_agent.gcp_project_id`. Sau Gateway phép suy đó sai — hoá đơn ghi nợ project B cho lưu lượng của Agent A, dashboard báo B tiêu tiền của A, **không lỗi nào báo**.
 
-→ Hôm nay chưa cần tách bảng. Nhưng cần **ghi rõ** vào `db/01_schema.sql` ngay tại chỗ khai `gcp_project_id` rằng phép suy này có hạn sử dụng, kèm ngày. Ghi chú tại chỗ có giá trị hơn một tài liệu riêng.
+→ Hôm nay chưa cần tách bảng. Nhưng cần **ghi rõ** tại
+`db/migrations/sql/001_baseline.sql:73`, ngay chỗ khai `gcp_project_id`, rằng phép suy này
+có hạn sử dụng, kèm ngày. Ghi chú tại chỗ có giá trị hơn một tài liệu riêng.
 
 #### ✅ B5. Tách `account.kind` — nửa `health()` ĐÃ XONG 20/08/2026
 
@@ -445,7 +448,7 @@ Schema hôm nay **gộp hai chuyện làm một**: `fact_billing_daily` có cả
 > `kind='real'`, có ghi chú tại chỗ nói đây là tấm lưới duy nhất, và `check_api.py` có
 > phép kiểm khoá lại — change `pin-the-directory-to-real-people`, 22/08/2026.
 >
-> **Đã sửa:** `db/load_org.py` `db/01_schema.sql` `backend/store.py` `scripts/audit_db.py`
+> **Đã sửa:** `db/load_org.py` `db/migrations/sql/001_baseline.sql` `backend/store.py` `scripts/audit_db.py`
 > **Nghiệm thu:** rebuild 7/7 · `audit_db.py` 32 phép / 0 hỏng · `check_api.py` 16/16 · test JS 6 + 7
 > **Số đo lại (trên `usage_resolved`, đã khử trùng lặp):** (a) người thật 12,1% ·
 > (b) tài khoản dịch vụ 86,4% · (c) không quy được **1,5%** — cộng đúng 867.657.110

@@ -12,7 +12,7 @@ không nối được database** — không phải hiện số sai, mà là hi�
 
 ---
 
-## Làm gì — 5 bước, khoảng 3 phút (chưa tính bước nạp dữ liệu)
+## Làm gì — 5 bước chung, với đúng một đường database
 
 ```bash
 # 1. Lấy code
@@ -23,11 +23,23 @@ pip install -r backend/requirements.txt
 
 # 3. Dựng PostgreSQL cục bộ (Docker Desktop phải đang chạy)
 docker compose up -d
+```
 
-# 4. Dựng lại database — CHỈ chạy được nếu máy bạn đã có thư mục data/
-#    Chưa có data/ thì xem mục "Dữ liệu nguồn" ở dưới TRƯỚC khi chạy bước này.
+**4A — Database hiện có dữ liệu phải giữ:** nâng schema tại chỗ, **không rebuild**.
+
+```bash
+alembic upgrade head
+```
+
+**4B — Cố ý dựng lại toàn bộ từ `data/`:** chỉ dùng khi chấp nhận xoá sạch database.
+Lệnh này tự gọi migrations rồi nạp catalog và dữ liệu; không chạy Alembic riêng trước nó.
+Chưa có `data/` thì xem mục "Dữ liệu nguồn" ở dưới trước khi chạy.
+
+```bash
 python scripts/rebuild_db.py
+```
 
+```bash
 # 5. Mở backend, rồi mở dashboard
 #    TỪ 21/08: phải có DASHBOARD_KEY trong .env, xem mục bổ sung (2) ở cuối file.
 python -m uvicorn backend.main:app --port 8000
@@ -140,7 +152,8 @@ Nếu bạn có script hay ghi chú cá nhân gọi tới chúng thì bỏ đi �
 > **Nếu máy bạn chưa từng có `data/` thì bước 4 sẽ không chạy được.**
 
 Dữ liệu không đưa lên git là có chủ ý: nó chứa danh sách **953 tài khoản kèm họ tên, email
-và phòng ban**. `db/01_schema.sql` ghi rõ database này không được ra mạng.
+và phòng ban**. Baseline `db/migrations/sql/001_baseline.sql` ghi rõ database này không
+được ra mạng.
 
 Cách lấy dữ liệu là **tự kéo bằng tài khoản của chính bạn**:
 
@@ -163,7 +176,7 @@ bước 4 ở đầu file không phải tuỳ chọn.
 | File | Nội dung |
 |---|---|
 | `db/load_org.py` | Thêm `kind = 'service_account'` cho 6 agent một-người-dùng |
-| `db/01_schema.sql` | Ghi lại vì sao `kind` có giá trị thứ tư |
+| `db/migrations/sql/001_baseline.sql` | Ghi lại vì sao `kind` có giá trị thứ tư |
 | `backend/store.py` | `health()` đếm độ phủ trên `usage_resolved` thay vì `fact_usage_daily` |
 | `scripts/audit_db.py` | 2 phép kiểm mới (30 → 32 phép) |
 

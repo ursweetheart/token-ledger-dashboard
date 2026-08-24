@@ -121,7 +121,6 @@ không tìm thấy `usage-day-user-model.json`.
 
 | Script | Vai trò |
 |---|---|
-| `copy_to_postgres.py` | Sao database SQLite sang PostgreSQL, bản sao 1:1 |
 | `pull_sku_catalog.py` | Kéo danh mục SKU + bảng giá chính chủ của Google |
 | `pull_latency_distribution.py` | Kéo histogram độ trễ thô |
 | `check_monitoring.py` | Lọc một đợt kéo và in số liệu chứng minh nó lành |
@@ -288,13 +287,9 @@ Ngoại lệ **duy nhất** là `POST /auth/login` để lấy token — đượ
 13/08/2026 để chạy được một lệnh. Token không bao giờ được in ra màn hình hay ghi xuống
 đĩa.
 
-Backend cũng chỉ-đọc, và **do hệ điều hành / máy chủ database bảo đảm**, không phải lời
-hứa trong tài liệu (`backend/store.py`):
-
-| Hệ | Cách chặn ghi |
-|---|---|
-| PostgreSQL (mặc định) | `cn.set_session(readonly=True)` — máy chủ từ chối mọi lệnh ghi |
-| SQLite (bản đối chiếu) | mở bằng URI `?mode=ro`, và kiểm `p.exists()` trước nên đường dẫn sai **báo lỗi** thay vì lặng lẽ tạo database rỗng |
+Backend cũng chỉ-đọc, và **do máy chủ database bảo đảm**, không phải lời hứa trong tài
+liệu (`backend/store.py`): kết nối PostgreSQL gọi `cn.set_session(readonly=True)`, nên
+máy chủ từ chối mọi lệnh ghi.
 
 `backend/check_api.py` không tin vào việc "không có endpoint ghi nào" — nó **thử ghi qua
 chính kết nối của backend** và đợi bị từ chối. Trên PostgreSQL phép kiểm đó bắt được

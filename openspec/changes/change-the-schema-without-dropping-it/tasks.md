@@ -336,18 +336,19 @@ Chỉ làm nhóm này khi nhóm 5 khớp **hết**.
 
 ## 7. Dọn và ghi lại
 
-- [ ] 7.1 Xoá `db/01_schema.sql` — nội dung đã nằm trong `001_baseline.sql`. Còn hai file là còn
-      trôi khỏi nhau
+- [x] 7.1 ✅ Đã xoá `db/01_schema.sql`; baseline bất biến còn ở
+      `db/migrations/sql/001_baseline.sql`, hash SHA256 trước/sau không đổi.
 - [x] 7.2 ✅ ĐÃ XÓA trong commit `aa5f7d0`: `scripts/copy_to_postgres.py` đã bị xóa cùng
       việc bỏ SQLite escape hatch; task này không tuyên bố một lần xóa mới.
-- [ ] 7.3 `grep -rn "01_schema\|copy_to_postgres"` trong runtime code, configuration, và
-      live operating docs, rồi sửa mọi tham chiếu còn sống. Immutable migrations, archived
-      material, dated journals, và OpenSpec history có thể giữ tham chiếu lịch sử trung thực.
-- [ ] 7.4 Cập nhật `docs/reference/dong-bo-may-dong-nghiep-*.md`: lệnh dựng nay có thêm
-      bước `alembic upgrade head`
-- [ ] 7.5 Cập nhật `docs/reference/cay-thu-muc.md` cho khớp cây thư mục mới
-- [ ] 7.6 Ghi vào `db/migrations/README.md`: cách thêm migration mới, luật *"đã chạy thì
-      không sửa"*, và vì sao `02_catalog.sql` không nằm trong migration
+- [x] 7.3 ✅ Đã sửa mọi locator/workflow còn sống. `rg` chỉ còn provenance trong baseline
+      bất biến, ghi chú giải thích quá trình chuyển đổi, và các nhật ký dated được brief
+      cho phép giữ lịch sử trung thực.
+- [x] 7.4 ✅ `dong-bo-may-dong-nghiep-20-08.md` tách hai đường không trùng: database có dữ
+      liệu dùng `alembic upgrade head`; rebuild có chủ ý dùng `rebuild_db.py`, tự migrate.
+- [x] 7.5 ✅ `cay-thu-muc.md` đã có `alembic.ini`, `db/migrations/`, baseline SQL/Python;
+      không còn schema trùng, copy script hay đường SQLite sống dưới `var/`.
+- [x] 7.6 ✅ `db/migrations/README.md` ghi luật revision tiến bất biến, SQL-first/raw cursor,
+      seed catalog, hai đường upgrade/rebuild và DSN duy nhất từ `connect.DEFAULT_DSN`.
 
 ## 8. Nghiệm thu
 
