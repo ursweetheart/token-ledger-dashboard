@@ -19,6 +19,8 @@ class FakeCursor:
         return False
 
     def execute(self, sql):
+        if sql != "DROP SCHEMA public CASCADE; CREATE SCHEMA public;":
+            raise AssertionError(f"unexpected wipe SQL: {sql}")
         self.events.append("drop")
 
 
@@ -57,6 +59,7 @@ class RebuildTests(unittest.TestCase):
         events = []
         wipe_connection = FakeConnection("wipe", events)
         seed_connection = FakeConnection("seed", events)
+        catalog = connect.DB_DIR / "02_catalog.sql"
 
         def open_db(dsn):
             if not events:
@@ -69,7 +72,10 @@ class RebuildTests(unittest.TestCase):
             events.append(f"migrate:{dsn}")
 
         def run_sql_file(connection, placeholder, path):
-            events.append(f"seed:{path.name}")
+            self.assertIs(connection, seed_connection)
+            self.assertEqual(placeholder, "%s")
+            self.assertEqual(path, catalog)
+            events.append("seed:02_catalog.sql")
 
         with patch.object(connect, "open_db", side_effect=open_db), \
                 patch.object(connect, "apply_migrations", side_effect=apply_migrations), \
@@ -94,6 +100,7 @@ class ApplyMigrationsTests(unittest.TestCase):
         config_module = types.ModuleType("alembic.config")
 
         def upgrade(config, revision):
+            self.assertEqual(connect.ACTIVE_DSN, "postgresql://candidate")
             raise RuntimeError("upgrade failed")
 
         class Config:
