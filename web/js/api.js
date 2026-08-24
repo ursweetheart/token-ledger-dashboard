@@ -16,6 +16,11 @@
    Đổi địa chỉ backend: thêm ?api=http://may-khac:8000 vào URL, hoặc sửa
    DEFAULT_BASE bên dưới.
 
+   ─── PHẢI CÓ KHOÁ (từ 21/08/2026) ────────────────────────────────────
+   Backend trả 401 cho mọi endpoint không mang `Authorization: Bearer`.
+   Người xem nhập khoá một lần, trình duyệt nhớ trong localStorage.
+   KHOÁ KHÔNG BAO GIỜ ĐI QUA URL — xem khối `khoa()` bên dưới để biết vì sao.
+
    ─── VÌ SAO PHẢI CHUYỂN ĐỔI ───────────────────────────────────────────
    Database nói bằng từ vựng của nó (agent_id, total_tokens, token_source).
    app.js nói bằng từ vựng cũ từ thời nhập Excel (a, m, ti, to). Chỗ dịch giữa
@@ -47,6 +52,53 @@
     return DEFAULT_BASE;
   }
 
+  /* ─── KHOÁ ĐỌC API ────────────────────────────────────────────────────
+     Backend từ chối mọi endpoint không mang `Authorization: Bearer <khoá>`.
+
+     KHOÁ KHÔNG BAO GIỜ ĐI QUA URL. Ngay phía trên, `base()` đọc `?api=...`,
+     nên lối "cứ thêm `?key=...` cho nhanh" là lối tự nhiên nhất và nó SAI:
+     tham số truy vấn nằm trong nhật ký truy cập của máy chủ, trong lịch sử
+     trình duyệt, và trong header `Referer` gửi sang bên thứ ba. Ba chỗ đó
+     không xoá lại được. File này CỐ Ý không có dòng nào đọc `?key=`.
+
+     Dùng `Authorization: Bearer` chứ không đặt tên riêng kiểu
+     `X-Dashboard-Key`: ngày lên JWT theo người, header KHÔNG đổi tên - chỉ
+     đổi thứ nằm sau chữ `Bearer`. Frontend viết một lần.
+
+     localStorage gắn theo origin, nên mỗi máy nhập một lần. Không phải chỗ
+     cất bí mật an toàn - nhưng khoá này vốn là khoá DÙNG CHUNG, ai xem được
+     dashboard thì đã biết nó rồi. */
+  /* KHOÁ CẤT THEO TỪNG ĐỊA CHỈ BACKEND, không cất một khoá dùng cho mọi nơi.
+
+     Đây không phải chuyện tiện dụng, mà là bịt một lỗ do CHÍNH change này mở
+     ra. `base()` ngay phía trên cho phép đổi địa chỉ backend bằng `?api=...`.
+     Trước đây tham số đó chỉ quyết định ĐỌC DỮ LIỆU TỪ ĐÂU. Từ lúc trình duyệt
+     giữ một bí mật, nó quyết định luôn GỬI BÍ MẬT ĐI ĐÂU:
+
+         ai do gui link  dashboard?api=http://host-la:8000
+         -> trinh duyet dinh kem khoa cua nguoi bam vao request toi host do
+         -> khong canh bao nao, vi day van la mot tinh nang co that
+
+     Cất theo địa chỉ thì một địa chỉ lạ đơn giản là KHÔNG có khoá nào: người
+     dùng gặp ô nhập khoá và phải tự gõ vào — tức phải cố ý. Và nó cũng đúng
+     hơn về bản chất: hai máy chủ khác nhau vốn là hai khoá khác nhau. */
+  var KEY_PREFIX = "tokenledger.key:";
+
+  function tenKho() { return KEY_PREFIX + base(); }
+
+  function khoa() {
+    try { return global.localStorage.getItem(tenKho()) || ""; }
+    catch (e) { return ""; }   /* chế độ riêng tư / chặn cookie */
+  }
+
+  function datKhoa(v) {
+    try {
+      if (v) global.localStorage.setItem(tenKho(), v);
+      else global.localStorage.removeItem(tenKho());
+      return true;
+    } catch (e) { return false; }
+  }
+
   /* Lỗi mang theo ĐỦ THÔNG TIN để phân loại được, không chỉ một câu chữ.
      `loai` là thứ app.js dùng để chọn thông báo; `endpoint` và `maHttp` là thứ
      người đọc cần để biết phải sửa ở đâu. */
@@ -59,8 +111,18 @@
   }
 
   function fetchJson(path) {
-    return fetch(base() + path, { cache: "no-store" }).then(
+    var k = khoa(), headers = {};
+    if (k) headers["Authorization"] = "Bearer " + k;
+    return fetch(base() + path, { cache: "no-store", headers: headers }).then(
       function (r) {
+        /* 401 là một loại RIÊNG, không gộp vào "endpoint-error". Hai tình
+           huống này đòi hai hành động khác hẳn nhau: 401 là "nhập lại khoá",
+           còn 500 là "đi xem log uvicorn". Gộp chung thì người xem đọc được
+           một câu không giúp họ làm gì. */
+        if (r.status === 401) {
+          throw makeError("unauthorized", "khoa khong dung hoac da doi",
+                          { endpoint: path, httpStatus: 401 });
+        }
         /* Máy chủ trả lời nhưng trả mã lỗi - KHÁC HẲN không nối được. Giữ
            riêng hai trường hợp này: một cái là "bật backend lên", cái kia là
            "backend đang lỗi ở endpoint nào đó". */
@@ -327,6 +389,11 @@
   global.TokenLedgerAPI = {
     base: base,
 
+    /* Khoá đọc API. app.js gọi `datKhoa()` khi người dùng bấm nút, rồi gọi lại
+       `load()`. File này vẫn KHÔNG vẽ gì - đó là hợp đồng ghi ở đầu file. */
+    khoa: khoa,
+    datKhoa: datKhoa,
+
     /* Trả về Promise, LUÔN resolve - không bao giờ reject.
        Hình dạng kết quả:
            { ok: true,  data: <state> }
@@ -363,6 +430,20 @@
           error: {
             kind: "file-protocol",
             message: "dang mo bang file://, khong goi duoc API",
+            apiBase: base()
+          }
+        });
+      }
+      /* Chưa có khoá thì KHÔNG gọi endpoint dữ liệu nào, kể cả /api/health.
+         Cứ gọi rồi nhận 401 cũng ra cùng màn hình, nhưng nó ghi một dòng 401
+         vào log máy chủ mỗi lần ai đó mở trang - và tệ hơn: nó biến "chưa
+         nhập khoá bao giờ" thành "khoá sai", tức nói sai chuyện đang xảy ra. */
+      if (!khoa()) {
+        return Promise.resolve({
+          ok: false,
+          error: {
+            kind: "need-key",
+            message: "chua nhap khoa doc API",
             apiBase: base()
           }
         });

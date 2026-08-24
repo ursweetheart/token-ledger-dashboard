@@ -294,6 +294,10 @@ def main() -> None:
     cur = cn.cursor()
 
     agent_name = dict(connect.query(cn, "SELECT agent_id, name FROM dim_agent"))
+    # `code` để dựng username của tài khoản dịch vụ: svc.<code> (quyết định A3,
+    # chốt 20/08). SUY TỪ dim_agent chứ không gõ tay 6 lần - gõ tay thì ngày
+    # thêm agent thứ 9 sẽ quên một chỗ.
+    agent_code = dict(connect.query(cn, "SELECT agent_id, code FROM dim_agent"))
 
     # ================================================== (2) dim_unit
     unit_rows = collect_units()
@@ -565,16 +569,33 @@ def main() -> None:
             # 749 triệu token của 6 agent này vào phần "không quy được về người"
             # và báo độ phủ 12,4% trong khi lỗ hổng thật chỉ 1,2%.
             #
-            # `username` GIỮ NGUYÊN `__whole_agent_<id>__`: build_usage_daily.py
-            # tra tài khoản này bằng tên đăng nhập chứ không bằng kind. Đổi tên
-            # ở đây là gãy khâu nạp, mà gãy im lặng - nó chỉ tra dict.
             kind = ("service_account"
                     if slot == "whole_agent" and aid in SINGLE_USER_AGENTS
                     else slot)
+            # TÊN ĐĂNG NHẬP CỦA TÀI KHOẢN DỊCH VỤ = `svc.` + dim_agent.code
+            # (quyết định A3, chốt 20/08/2026).
+            #
+            # Đây KHÔNG phải đổi tên cho đẹp. Ngày Gateway chạy, 6 agent
+            # một-người-dùng gửi lên đúng chuỗi này làm username, và Gateway tra
+            # nó ra account_id. Để tên tạm `__whole_agent_<id>__` thì username
+            # Gateway gửi lên KHÔNG TRA RA TÀI KHOẢN NÀO.
+            #
+            # Hai loại còn lại GIỮ tên tạm, có lý do:
+            #   whole_agent   Ralli và Hợp Đồng - Gateway gửi username THẬT của
+            #                 người dùng, không ai gửi tên chỗ ngồi này lên
+            #   unattributed  không phải tài khoản, chỉ là chỗ dồn phần không
+            #                 quy được
+            #
+            # Trước 21/08 build_usage_daily.py tra tài khoản này BẰNG TÊN ĐĂNG
+            # NHẬP, nên đổi tên ở đây là gãy khâu nạp. Đã sửa cùng lúc: nó tra
+            # bằng (kind, unit_agent_id) - hỏi đúng câu nó cần hỏi, và không còn
+            # phụ thuộc vào một chuỗi ký tự nữa.
+            username = (f"svc.{agent_code[aid]}" if kind == "service_account"
+                        else f"__{slot}_{aid}__")
             # is_shared = 1: theo đúng định nghĩa, đây không phải tài khoản của
             # một người. Nhờ vậy chỉ tiêu tỷ lệ áp dụng chỉ cần lọc `is_shared`
             # là đủ, không phải liệt kê thêm điều kiện về `kind`.
-            accounts.append((i, f"__{slot}_{aid}__", label, None, kind,
+            accounts.append((i, username, label, None, kind,
                              technical_unit[aid], 1, None, None, None, aid, 0))
 
     cur.executemany(

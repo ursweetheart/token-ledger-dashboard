@@ -84,6 +84,10 @@ FOREIGN_KEYS = [
     ("fact_billing_daily", "model_id", "dim_model", "model_id"),
     ("fact_monitoring", "agent_id", "dim_agent", "agent_id"),
     ("fact_monitoring", "model_id", "dim_model", "model_id"),
+    # Nguon la ang la bi chan ngay luc GHI, khong doi phep kiem chay sau. Van
+    # liet ke o day vi ban SQLite khong bat khoa ngoai, va vi database dung tu
+    # schema truoc 21/08/2026 khong co rang buoc nay.
+    ("fact_usage_daily", "source", "ref_source", "source"),
     ("fact_usage_daily", "account_id", "account", "account_id"),
     ("fact_usage_daily", "model_id", "dim_model", "model_id"),
     ("fact_usage_daily", "agent_id", "dim_agent", "agent_id"),
@@ -260,7 +264,8 @@ def group_e_adoption(a: Audit) -> None:
         SELECT COUNT(*) FROM dim_agent g WHERE
           (SELECT COUNT(DISTINCT f.account_id) FROM fact_usage_daily f
              JOIN account c ON c.account_id = f.account_id
-            WHERE f.agent_id = g.agent_id AND f.source = 'app' AND c.is_shared = 0
+            WHERE f.agent_id = g.agent_id AND c.is_shared = 0
+              AND f.source IN (SELECT source FROM ref_source WHERE knows_user)
               AND f.account_id IN (SELECT d.account_id FROM dim_user d
                                     WHERE d.agent_id = g.agent_id
                                       AND d.found_in = 'directory'))
@@ -287,7 +292,8 @@ def group_e_adoption(a: Audit) -> None:
     outside = a.num("""
         SELECT COUNT(DISTINCT f.account_id) FROM fact_usage_daily f
         JOIN account c ON c.account_id = f.account_id
-        WHERE f.source = 'app' AND c.kind = 'real' AND c.is_shared = 0
+        WHERE f.source IN (SELECT source FROM ref_source WHERE knows_user)
+          AND c.kind = 'real' AND c.is_shared = 0
           AND NOT EXISTS (SELECT 1 FROM dim_user d
                            WHERE d.account_id = f.account_id
                              AND d.agent_id = f.agent_id
@@ -309,7 +315,8 @@ def group_e_adoption(a: Audit) -> None:
     idle = [r[0] for r in connect.query(a.cn, """
         SELECT DISTINCT c.username FROM fact_usage_daily f
         JOIN account c ON c.account_id = f.account_id
-        WHERE f.source = 'app' AND c.kind = 'real' AND c.is_shared = 0
+        WHERE f.source IN (SELECT source FROM ref_source WHERE knows_user)
+          AND c.kind = 'real' AND c.is_shared = 0
           AND (c.full_name IS NULL OR c.full_name = '')
           AND (c.email IS NULL OR c.email = '')
         ORDER BY c.username""")]
@@ -410,7 +417,8 @@ def group_d_silent_gaps(a: Audit) -> None:
     # view đã chọn billing thay cho app.
     cov = connect.query_one(a.cn, """
         SELECT
-          SUM(CASE WHEN s.agent_id IS NULL AND v.token_source = 'app'
+          SUM(CASE WHEN s.agent_id IS NULL AND v.token_source IN
+                    (SELECT source FROM ref_source WHERE knows_user)
                    THEN v.total_tokens ELSE 0 END),
           SUM(CASE WHEN s.agent_id IS NOT NULL
                    THEN v.total_tokens ELSE 0 END),
@@ -451,6 +459,57 @@ def group_d_silent_gaps(a: Audit) -> None:
             f"{int(n_svc)} tai khoan service_account / {int(n_no_dir)} agent"
             f" khong co danh ba - database co the dung tu truoc 20/08/2026,"
             f" chay lai scripts/rebuild_db.py")
+
+    # Ten dang nhap cua tai khoan dich vu phai la svc.<code> (quyet dinh A3,
+    # chot 20/08/2026). Day KHONG phai quy uoc dat ten cho dep: ngay Gateway
+    # chay, 6 agent mot-nguoi-dung gui len DUNG chuoi nay lam username. Lech mot
+    # ky tu la Gateway gui len mot ten khong tra ra tai khoan nao, va dong do roi
+    # vao "khong quy duoc" MA KHONG LOI NAO BAO.
+    sai_ten = [f"{u} (agent {c})" for u, c in connect.query(a.cn, """
+        SELECT c.username, g.code FROM account c
+          JOIN dim_agent g ON g.agent_id = c.unit_agent_id
+         WHERE c.kind = 'service_account' AND c.username <> 'svc.' || g.code
+         ORDER BY c.username""")]
+    a.check(not sai_ten, "Tai khoan dich vu dat ten svc.<code>",
+            f"lech quy uoc A3: {sai_ten}")
+
+    # LUOI AN TOAN THAY CHO VIEC CHO MOT TOKEN NHAN VIEN THUONG (quyet dinh
+    # 21/08/2026). Hinh dang claim JWT do duoc tren tai khoan QUAN TRI: Ralli
+    # dat username o claim `sub`, TLA HD dat o claim `username` (khong phai
+    # `sub`). Chua chung minh duoc nhan vien thuong cung vay.
+    #
+    # Thay vi cho, kiem dieu nay: dong ky nguyen GATEWAY khong duoc roi vao cho
+    # danh cho "khong biet ai". Roi vao do nghia la khau nap tra username khong
+    # ra tai khoan va da lui ve mac dinh. Luoi nay bat duoc ca thu chua nghi ra:
+    # agent trich nham claim, app doi claim sau mot lan nang cap, hoac ai do
+    # viet `sub` cho ca hai app.
+    #
+    # LOC THEO era='gateway', KHONG THEO knows_user. Ban dau loc knows_user va
+    # phep kiem keu ngay 21 dong - hoa ra dung: nguon 'app' BIET DUOC nguoi dung
+    # nhung khong phai luc nao cung biet (nhat ky Ralli co luot khong kem user,
+    # khau nap lui ve tai khoan __unattributed__ mot cach co chu y). "Nguon nay
+    # co the mang danh tinh" khac "moi dong deu co danh tinh". Chi ky nguyen
+    # gateway moi duoc doi ve sau, vi A3 bao dam moi request mang danh tinh.
+    lac = a.num("""
+        SELECT COUNT(*) FROM fact_usage_daily f
+          JOIN account c ON c.account_id = f.account_id
+          JOIN ref_source r ON r.source = f.source
+         WHERE r.era = 'gateway' AND c.kind IN ('unattributed', 'whole_agent')""")
+    a.check(lac == 0, "Dong tu nguon biet nguoi dung deu quy duoc ve tai khoan",
+            f"{int(lac)} dong roi vao cho 'khong biet ai' - username gui len"
+            f" khong tra ra account_id, xem tu-dien-database.md 8f")
+
+    # Tien cua Gateway KHONG vao cot cost_usd cua usage_resolved: no la so tu
+    # nhan tu bang gia, khong phai hoa don. Ai chen dong gateway kem cost_usd se
+    # thay so tien do BIEN MAT khoi dashboard ma khong loi nao bao - nen phai keu
+    # o day. Xem ghi chu cost_usd trong usage_resolved.
+    tien_bo = a.num("""
+        SELECT COUNT(*) FROM fact_usage_daily f
+          JOIN ref_source r ON r.source = f.source
+         WHERE NOT r.has_invoice_cost AND f.cost_usd IS NOT NULL""")
+    a.check(tien_bo == 0, "Khong nguon nao mang tien ma view bo qua",
+            f"{int(tien_bo)} dong co cost_usd tu nguon khong phai hoa don -"
+            f" so tien nay KHONG hien tren dashboard", WARN)
 
     # Model có lưu lượng mà không có giá thì mọi báo cáo chi phí đều thiếu nó.
     no_price = connect.query(a.cn, """

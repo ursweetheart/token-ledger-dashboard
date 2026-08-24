@@ -55,11 +55,30 @@ def anchor_accounts(cn) -> dict[int, int]:
     KHÔNG trả về unit_id: fact_usage_daily đã bỏ cột đó. Đơn vị là thuộc tính
     của tài khoản, JOIN account là ra - giữ thêm một bản sao trong bảng sự kiện
     chỉ tạo thêm một chỗ để lệch.
+
+    TRA BẰNG (kind, unit_agent_id), KHÔNG BẰNG TÊN ĐĂNG NHẬP. Trước 21/08/2026
+    hàm này tra `__whole_agent_<id>__`, tức một chuỗi ký tự do khâu nạp khác đặt
+    ra - hai file phải giữ khớp bằng tay, và load_org.py phải mang một ghi chú
+    "đừng đổi tên ở đây". Ngày quy ước A3 bắt tài khoản dịch vụ đổi sang
+    `svc.<code>`, đúng chỗ đó gãy.
+
+    `kind IN ('service_account','whole_agent')` là CHỖ NGỒI "cả agent" - hai giá
+    trị vì 20/08 đã tách "biết chính xác là ai" khỏi "không biết ai trong 892
+    người". Cả hai đều là dòng gộp mức agent, nên cùng vào đây.
     """
-    by_username = {u: a for u, a in connect.query(
-        cn, "SELECT username, account_id FROM account WHERE kind <> 'real'")}
-    return {aid: by_username[f"__whole_agent_{aid}__"]
-            for (aid,) in connect.query(cn, "SELECT agent_id FROM dim_agent")}
+    rows = connect.query(cn, """
+        SELECT unit_agent_id, account_id FROM account
+         WHERE kind IN ('service_account', 'whole_agent')""")
+    out = {int(a): int(acc) for a, acc in rows}
+    thieu = [aid for (aid,) in connect.query(cn, "SELECT agent_id FROM dim_agent")
+             if aid not in out]
+    if thieu:
+        raise SystemExit(f"agent khong co dong gop muc agent: {thieu}."
+                         f" Chay lai db/load_org.py.")
+    if len(out) != len(rows):
+        raise SystemExit(f"co agent >1 dong gop muc agent: {len(rows)} dong,"
+                         f" {len(out)} agent. Chay lai db/load_org.py.")
+    return out
 
 
 COLUMNS = ["day", "agent_id", "model_id", "account_id", "calls", "total_tokens",

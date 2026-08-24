@@ -1235,6 +1235,108 @@ của cả 8 cộng lại mới **$69,35** (06/26). Chưa cần trần chung, nh
 
 ---
 
+### 7b. ✅ `ref_source` — nguồn tự khai năng lực (thêm 21/08/2026)
+
+Bảng mới, 5 cột, 4 dòng. Nó tồn tại vì `source = 'app'` từng mang **nghĩa ngầm**.
+
+| cột | |
+|---|---|
+| `source` | khoá chính. `fact_usage_daily.source` có khoá ngoại trỏ vào đây |
+| `knows_user` | nguồn này **có thể** nói ai gọi không |
+| `has_invoice_cost` | nguồn này có mang tiền **hoá đơn** không |
+| `era` | `'scrape'` (đi cào số của người khác) hoặc `'gateway'` (ta tự đếm) |
+| `note` | |
+
+```
+   source      knows_user  has_invoice_cost  era
+   app            TRUE          FALSE       scrape
+   billing        FALSE         TRUE        scrape
+   monitoring     FALSE         FALSE       scrape
+   gateway        TRUE          FALSE       gateway
+```
+
+**Hai chỗ dễ đọc nhầm:**
+
+**① `gateway.has_invoice_cost = FALSE` không có nghĩa Gateway không biết tiền.** LiteLLM
+*có* trả về một con số tiền — nhưng nó tự nhân từ bảng giá, y như `ref_price`. Cột này hỏi
+*"đã có hoá đơn nào xác nhận chưa"*, và câu trả lời là chưa. Vì vậy `usage_resolved.cost_usd`
+vẫn **chỉ** lấy của `billing`: để NULL thì tiền Gateway tự động được tính lại từ `ref_price`
+**và** được gắn dấu `≈` — đúng bản chất của nó cho tới ngày hoá đơn về.
+
+**② `knows_user = TRUE` không có nghĩa mọi dòng đều quy được.** Nguồn `app` khai TRUE nhưng
+21 dòng của nó rơi vào tài khoản `__unattributed__` — nhật ký Ralli có lượt không kèm user,
+khâu nạp lùi về mặc định một cách có chủ ý. *"Nguồn này có thể mang danh tính"* khác *"mọi
+dòng đều có danh tính"*. Chỉ `era='gateway'` mới đòi được vế sau, vì A3 bảo đảm mọi request
+mang danh tính — và đó là điều kiện của phép kiểm trong `audit_db.py`.
+
+**Thứ tự ưu tiên trong `usage_resolved` giờ là `COALESCE(g, b, m, a)`** — Gateway đứng
+trước billing về TOKEN vì nó là bộ đếm của chính ta và có mặt ngay trong ngày, trong khi
+hoá đơn về trễ ~1 ngày. Đứng trước về token **không** kéo theo đứng trước về tiền.
+
+---
+
+### 8f. ✅ A3 — ĐO XONG 21/08/2026: claim nào mang username
+
+Hướng đã chốt 20/08 là *"agent tự giải mã JWT rồi gửi username lên Gateway"*. Câu đó còn
+một chữ chưa xác định: **trích claim nào**. Đã đăng nhập cả hai app và giải mã payload.
+
+**Kết quả — hai app KHÔNG dùng cùng claim:**
+
+| | Trợ lý ảo Ralli | Trợ Lý Ảo Hợp Đồng |
+|---|---|---|
+| Thuật toán ký | HS256 | HS256 |
+| Token sống | ~2 giờ | ~8 giờ |
+| Số claim | 3 | 6 |
+| `sub` | `"admin"` — **là username** | `"user-admin"` — **KHÔNG phải username** |
+| `username` | *(không có claim này)* | `"admin"` — **username ở đây** |
+| `role` | `"ADMIN"` | `"ADMIN"` |
+| `company_id` | — | `"cty-rangdong"` |
+| `unit_id` | — | `""` **rỗng** |
+| `exp` | có | có |
+
+**→ Quy ước phải nói rõ từng agent, không được rút gọn thành "lấy `sub`":**
+
+```
+   Trợ lý ảo Ralli        ->  claim  sub
+   Trợ Lý Ảo Hợp Đồng     ->  claim  username        (KHÔNG phải sub)
+   6 agent một-người-dùng ->  hằng số  svc.<code>
+```
+
+Viết *"agent trích `sub`"* — cách viết tự nhiên nhất — thì agent Hợp Đồng gửi lên
+`user-admin`, một chuỗi hợp lệ nhưng **không tồn tại trong bảng `account`**. Gateway nhận
+bình thường, JOIN ra rỗng, **không lỗi nào báo**.
+
+**Cái bẫy thứ hai: claim `unit_id` của Hợp Đồng là RỖNG.**
+Nó tồn tại, nên trông như một lối tắt cho phòng ban. Nhưng nó rỗng, và Ralli không có
+claim đơn vị nào cả. Quyết định 20/08 *"agent không cần gửi phòng ban, tra
+`account.unit_id`"* vì thế không chỉ tránh nguồn-sự-thật-thứ-hai — nó tránh một cái bẫy
+đang nằm sẵn trong token.
+
+**Nỗi lo "Ralli trả ObjectId" nhắm sai chỗ.** Cảnh báo ở `01_schema.sql:139` nói về **bản
+ghi sử dụng**, không phải JWT. Đối chiếu 891 tài khoản Ralli đã kéo về:
+
+| | |
+|---|---|
+| `id` là ObjectId 24 hex | 891/891 — khoá nội bộ, tách bạch |
+| `username` là ObjectId | **0/891** — không bao giờ |
+| `username` có dấu chấm (`c4led.lamln`) | 814/891 |
+
+Hai trường tách sạch, và `sub` của Ralli trả dạng username chứ không phải 24 ký tự hex.
+
+**Điều KHÔNG chứng minh được, và lưới an toàn thay cho nó.** Tài khoản trong `.env` là
+**ADMIN** ở cả hai app và không nằm trong 891 dòng danh bạ — tức đã đo hình dạng token của
+một tài khoản quản trị, không phải của nhân viên thường. Quyết định 21/08: **không đợi**.
+Thay vào đó, khi Gateway chạy, một phép kiểm trong `audit_db.py` phải kêu nếu có dòng
+`gateway` mang username **không tra ra `account_id`** — rẻ hơn việc chờ, và bắt được cả
+những sai lệch khác chưa nghĩ ra.
+
+**Hệ quả cho C1:** cả hai app ký **HS256** (khoá đối xứng). Muốn Gateway tự kiểm chữ ký thì
+phải chia sẻ khoá bí mật của app — một lý do kỹ thuật nữa cho việc *agent trích, Gateway
+không cầm token*. Và JWT của hai app **không dùng lại được** để đăng nhập dashboard:
+dashboard phải tự phát hành token của nó, đúng như Master Plan giai đoạn 3 nói.
+
+---
+
 ## 9. Một chi tiết nhỏ nhưng sẽ cắn
 
 Project ID trong tài liệu triển khai §1.2 **không khớp** database ở 2/8 dòng:

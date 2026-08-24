@@ -3508,6 +3508,7 @@ function init(){
      "không có gì xảy ra", số cũ ở lại và trông y hệt số mới. Đã đo: ba thẻ to
      nhất (request / token / tiền) trùng nhau giữa hai trạng thái, nên mắt không
      bắt được. Giờ chỉ vẽ khung, và renderAll() chỉ chạy khi đã có dữ liệu thật. */
+  wireKeyGate();
   renderShell();
   loadFromBackend();
 }
@@ -3545,9 +3546,90 @@ function renderShell(){
 
 /* Nạp hỏng. Bốn lý do, bốn câu trả lời khác nhau — trước đây cả bốn đều thành
    `null` nên trông y hệt nhau. MỌI nhánh đều KHÔNG hiện con số nào. */
+/* ─── Ô nhập khoá ─────────────────────────────────────────────────────────
+   HAI trạng thái, KHÔNG dùng chung lời:
+
+       chưa nhập khoá bao giờ   -> "dashboard cần một khoá"      (mức warn)
+       máy chủ trả 401          -> "khoá không đúng, nhập lại"   (mức error)
+
+   Gộp hai câu này lại là nói sai chuyện đang xảy ra với người mở lần đầu: họ
+   chưa làm gì sai cả. Và nó cũng khác hẳn "chưa bật backend" - ba tình huống,
+   ba hành động: nhập khoá / nhập lại khoá / chạy uvicorn.
+
+   Khoá sai thì XOÁ khỏi localStorage luôn. Giữ lại thì mỗi lần tải trang là
+   một dòng 401 nữa trong log máy chủ, và người dùng thấy "khoá không đúng"
+   cho một khoá họ không hề vừa nhập. */
+function showKeyGate(sai){
+  var box=document.getElementById("key-gate"),
+      msg=document.getElementById("key-gate-msg"),
+      inp=document.getElementById("key-input"),
+      btn=document.getElementById("key-submit");
+  if(!box || !msg || !inp || !btn){
+    /* Thiếu markup thì phải nói ra, không im lặng bỏ qua - im lặng ở đây nghĩa
+       là dashboard trắng trơn mà không có chữ nào giải thích. */
+    loadNote("error","⛔","<b>Thiếu ô nhập khoá trong <code>index.html</code>.</b> "
+           + "Dashboard cần <code>#key-gate</code>, <code>#key-input</code>, "
+           + "<code>#key-submit</code>.");
+    return;
+  }
+  box.className = "key-gate" + (sai ? " wrong" : "");
+  box.hidden = false;
+  msg.innerHTML = sai
+    ? "<b>Khoá không đúng.</b> Máy chủ trả <b>HTTP 401</b>. "
+      + "Khoá có thể đã bị đổi — hỏi lại người dựng dashboard rồi nhập lại."
+    : "<b>Dashboard cần một khoá để đọc dữ liệu.</b> "
+      + "Backend không trả số nào khi chưa có khoá — đây là chủ ý, không phải lỗi.";
+  hideLoadNote();
+  setConnIndicator("error", sai ? "Khoá không đúng" : "Chưa nhập khoá");
+  var p=document.getElementById("status-period"); if(p) p.textContent = "—";
+  var h=document.getElementById("header-data-date"); if(h) h.textContent = "—";
+  inp.value = "";
+  try{ inp.focus(); }catch(e){}
+}
+
+function hideKeyGate(){
+  var box=document.getElementById("key-gate");
+  if(box) box.hidden = true;
+}
+
+/* Gắn sự kiện ĐÚNG MỘT LẦN. Markup nằm tĩnh trong index.html chứ không bơm
+   bằng innerHTML, nên không phải gắn lại sau mỗi lần vẽ - và không có nút nào
+   bị nhân đôi handler. */
+function wireKeyGate(){
+  var inp=document.getElementById("key-input"),
+      btn=document.getElementById("key-submit");
+  if(!inp || !btn) return;
+  function gui(){
+    var v=(inp.value||"").trim();
+    if(!v){ try{ inp.focus(); }catch(e){} return; }
+    if(!window.TokenLedgerAPI || !window.TokenLedgerAPI.datKhoa(v)){
+      var m=document.getElementById("key-gate-msg");
+      if(m) m.innerHTML = "<b>Trình duyệt không cho lưu khoá.</b> "
+        + "Cửa sổ ẩn danh hoặc thiết lập chặn lưu trữ. Mở bằng cửa sổ thường.";
+      return;
+    }
+    hideKeyGate();
+    renderShell();
+    loadFromBackend();
+  }
+  btn.addEventListener("click", gui);
+  inp.addEventListener("keydown", function(e){ if(e.key==="Enter") gui(); });
+}
+
 function renderError(err){
   var addr = (err && err.apiBase) || "—";
   var html;
+  switch(err && err.kind){
+    /* Hai nhánh này TỰ VẼ rồi thoát - chúng cần một ô nhập, không phải một
+       đoạn chữ. Đặt trước mọi nhánh khác để không rơi vào `default`. */
+    case "need-key":
+      showKeyGate(false);
+      return;
+    case "unauthorized":
+      if(window.TokenLedgerAPI) window.TokenLedgerAPI.datKhoa("");
+      showKeyGate(true);
+      return;
+  }
   switch(err && err.kind){
     case "file-protocol":
       html = "<b>Đang mở bằng <code>file://</code> nên không gọi được API.</b><br>"
@@ -3611,6 +3693,7 @@ function loadFromBackend(){
   }
   window.TokenLedgerAPI.load().then(function(kt){
     if(!kt || !kt.ok){ renderError(kt && kt.error); return; }
+    hideKeyGate();
     var kq = kt.data;
     if(!kq.dayOrder || !kq.dayOrder.length){
       renderError({ kind: "empty-database",

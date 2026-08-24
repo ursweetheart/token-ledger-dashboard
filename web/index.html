@@ -43,6 +43,40 @@
     background:rgba(15,23,42,.6); padding:1px 5px; border-radius:4px;
   }
 
+  /* ─── Ô nhập khoá đọc API ───
+     Cùng cái bẫy `hidden` như .load-note ở trên: một class có display:flex sẽ
+     THẮNG display:none mức user-agent. Khối này là display:flex nên PHẢI có
+     dòng [hidden] riêng, nếu không nó hiện ra rỗng ở mọi trang. */
+  .key-gate[hidden]{ display:none; }
+  .key-gate{
+    display:flex; flex-direction:column; gap:10px;
+    background:rgba(56,189,248,.06); border:1px solid rgba(56,189,248,.30);
+    color:#bae6fd; font-size:13px; padding:14px 16px; border-radius:8px;
+    margin-bottom:16px; line-height:1.55; max-width:640px;
+  }
+  .key-gate.wrong{
+    background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.40); color:#fca5a5;
+  }
+  .key-gate-row{ display:flex; gap:8px; flex-wrap:wrap; }
+  .key-gate input{
+    flex:1 1 260px; min-width:0;
+    background:rgba(15,23,42,.75); border:1px solid rgba(148,163,184,.35);
+    color:#e2e8f0; font-family:'JetBrains Mono',monospace; font-size:13px;
+    padding:8px 11px; border-radius:6px;
+  }
+  .key-gate input:focus{ outline:none; border-color:rgba(56,189,248,.65); }
+  .key-gate button{
+    background:rgba(56,189,248,.16); border:1px solid rgba(56,189,248,.45);
+    color:#e0f2fe; font-size:13px; font-weight:600; padding:8px 16px;
+    border-radius:6px; cursor:pointer;
+  }
+  .key-gate button:hover{ background:rgba(56,189,248,.26); }
+  .key-gate-hint{ font-size:11.5px; color:#94a3b8; }
+  .key-gate code{
+    font-family:'JetBrains Mono',monospace; font-size:11px;
+    background:rgba(15,23,42,.6); padding:1px 5px; border-radius:4px;
+  }
+
   /* ─── Toolbar (global time range + hành động) ─── */
   .toolbar{ display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; margin-bottom:16px; }
   .period-stack{ display:flex; flex-direction:column; gap:8px; }
@@ -287,6 +321,28 @@
 <div class="load-note" id="load-note" hidden>
   <span id="load-note-icon">⏳</span>
   <span id="load-note-text"></span>
+</div>
+
+<!-- ═══════════════ KHOÁ ĐỌC API ═══════════════
+     Backend từ chối mọi endpoint không mang `Authorization: Bearer <khoá>`.
+     Khối này hiện khi CHƯA có khoá, hoặc khi máy chủ trả 401.
+
+     Ô nhập là type="password" nên khoá không nằm phơi trên màn hình lúc trình
+     chiếu hay chụp ảnh. autocomplete="off" để trình duyệt không gợi ý lại
+     khoá của một dashboard khác trên cùng máy.
+
+     KHOÁ KHÔNG ĐI QUA URL - app.js gửi nó trong header. Xem js/api.js. -->
+<div class="key-gate" id="key-gate" hidden>
+  <div id="key-gate-msg"></div>
+  <div class="key-gate-row">
+    <input id="key-input" type="password" autocomplete="off" spellcheck="false"
+           placeholder="Dán khoá đọc API vào đây">
+    <button id="key-submit" type="button">Mở dashboard</button>
+  </div>
+  <div class="key-gate-hint">
+    Khoá do người dựng dashboard cấp — chính là <code>DASHBOARD_KEY</code> đặt cho
+    backend. Trình duyệt này nhớ khoá cho lần sau; khoá không được gửi qua URL.
+  </div>
 </div>
 
 <!-- ═══════════════ NGUỒN DỮ LIỆU ═══════════════ -->
