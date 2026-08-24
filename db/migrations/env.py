@@ -66,24 +66,10 @@ def _dsn() -> str:
     return overrides.get("db") or connect.ACTIVE_DSN or connect.DEFAULT_DSN
 
 
-def _sqlalchemy_url(dsn: str) -> str:
-    """Doi quy uoc DSN cua du an sang URL ma SQLAlchemy hieu.
-
-    connect.py phan biet hai he bang DUOI FILE: `.sqlite`/`.db` thi la SQLite,
-    con lai la chuoi PostgreSQL. Chuoi Postgres da dung dang URL nen dung nguyen;
-    duong dan SQLite thi phai them tien to `sqlite:///`, khong thi SQLAlchemy doc
-    no thanh mot dialect khong ton tai.
-    """
-    if connect.is_sqlite(dsn):
-        return "sqlite:///" + Path(dsn).as_posix()
-    return dsn
-
-
 def run_migrations_offline() -> None:
     """Sinh SQL ra man hinh, khong noi vao database."""
-    dsn = _dsn()
     context.configure(
-        url=_sqlalchemy_url(dsn),
+        url=_dsn(),
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -97,7 +83,10 @@ def run_migrations_online() -> None:
     # In ra database dang bi tac dong. Da che mat khau bang connect.mask_dsn -
     # `alembic upgrade` la lenh SUA schema, nen nham database la chuyen dat gia.
     print(f"alembic -> {connect.mask_dsn(dsn)}")
-    engine = create_engine(_sqlalchemy_url(dsn), poolclass=pool.NullPool)
+    # DSN cua du an dung nguyen lam URL SQLAlchemy vi chi con PostgreSQL, va chuoi
+    # `postgresql://...` von da la URL hop le. Truoc 24/08 o day co mot ham doi
+    # duong dan SQLite tran thanh `sqlite:///...`; no di cung nhanh SQLite.
+    engine = create_engine(dsn, poolclass=pool.NullPool)
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():

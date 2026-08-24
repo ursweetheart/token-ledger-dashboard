@@ -22,10 +22,14 @@ Mở `http://127.0.0.1:8080`.
 container khác không đọc được, và không có schema riêng lẫn `GRANT` theo user nên không
 chia quyền theo service được. Cả hai chặn đường việc chạy nhiều bản sau một load balancer.
 
+Đường SQLite **đã bị gỡ hẳn** ngày 24/08/2026: nó không còn dữ liệu (file bị xoá 17/08),
+không dựng lại được (`01_schema.sql` hỏng cú pháp trên SQLite từ 21/08), và chưa từng có
+phép kiểm nào chạy trên nó. Đưa vào một DSN `.sqlite` nay dừng ngay với thông báo rõ.
+
 Đổi database bằng **một** biến, có hiệu lực cho cả backend và mọi script:
 
 ```bash
-export TOKEN_LEDGER_DSN=var/token_ledger.sqlite     # quay về SQLite để đối chiếu
+export TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger_v2
 ```
 
 Thông số kết nối lấy từ `PGHOST` / `PGPORT` / `PGUSER` / `PGPASSWORD` / `PGDATABASE` —
@@ -61,9 +65,9 @@ Chi tiết từng chặng: [`docs/reference/toan-trinh-du-lieu.md`](docs/referen
 | `web/` | Dashboard — **document root**, chỉ thư mục này được phục vụ ra mạng |
 | `backend/` | API chỉ-đọc, 8 endpoint |
 | `scripts/` | Đường ống: kéo → gộp → điều phối |
-| `db/` | Schema `.sql` và các module nạp |
+| `db/` | Migration, danh mục `.sql`, và các module nạp |
 | `data/` | Dữ liệu thô — mất là mất vĩnh viễn |
-| `var/` | Trống — database nằm trong volume Docker `pgdata`; chỗ duy nhất được chứa `.sqlite` đối chiếu |
+| `var/` | Database nằm trong volume Docker `pgdata`; `var/` chứa bản chụp bộ số bất biến |
 | `tests/` | Phải luôn xanh |
 | `tools/` | Chẩn đoán một lần — được phép mục |
 | `docs/` | `reference/` đang là gì · `decisions/` · `archive/` |

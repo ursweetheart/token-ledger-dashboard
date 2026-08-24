@@ -11,9 +11,15 @@
 -- bang (749 dong). File goc do da bi xoa o nhom 7: de hai file cung mo ta mot
 -- schema la de chung troi khoi nhau.
 --
--- GIU TRUNG LAP HAI HE. Khong SERIAL, moi khoa gan tuong minh - nho vay dung
--- duoc ca PostgreSQL lan SQLite. Duong SQLite chua bi go
--- (connect.is_sqlite, backend/store.py:44), va migration KHONG duoc pha no.
+-- RANG BUOC "TRUNG LAP HAI HE" DA DUOC GO 24/08/2026.
+-- File nay khong dung SERIAL va gan moi khoa tuong minh - do la di san tu thoi
+-- du an con hua do ca SQLite. Giu nguyen vi doi di khong duoc gi, NHUNG cac
+-- migration SAU day KHONG con bi rang buoc do: dung JSONB, GENERATED, partial
+-- index thoai mai. Xem change `drop-the-sqlite-escape-hatch`.
+--
+-- Ban than file nay VAN KHONG chay duoc tren SQLite: `INSERT INTO ref_source`
+-- noi hai chuoi lien ke, Postgres nhan, SQLite bao loi cu phap. Do la ly do
+-- SQLite bi go chu khong phai ly do de sua file nay.
 -- =====================================================================
 
 -- =====================================================================

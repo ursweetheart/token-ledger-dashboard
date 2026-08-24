@@ -49,18 +49,9 @@ SQL = Path(__file__).resolve().parents[1] / "sql" / "001_baseline.sql"
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    sql = SQL.read_text(encoding="utf-8")
-    raw = bind.connection          # ket noi DBAPI that: psycopg2 hoac sqlite3
-
-    if bind.dialect.name == "sqlite":
-        # sqlite3.execute() chi chay MOT cau lenh; nhieu cau phai dung
-        # executescript. Giu nhanh nay vi migration cua du an nay bat buoc
-        # trung lap hai he (task 3.5) - duong SQLite chua bi go.
-        raw.executescript(sql)
-    else:
-        with raw.cursor() as cur:
-            cur.execute(sql)       # KHONG doi so thu hai - xem ghi chu dau file
+    raw = op.get_bind().connection          # ket noi DBAPI that (psycopg2)
+    with raw.cursor() as cur:
+        cur.execute(SQL.read_text(encoding="utf-8"))   # KHONG doi so thu hai
 
 
 def downgrade() -> None:

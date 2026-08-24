@@ -65,7 +65,7 @@ vụ một đường không chạy được.
 
 ## What Changes
 
-**Bề mặt đo được 24/08 — 8 file, không phải một dòng nào trong 21 câu truy vấn:**
+**Bề mặt đo được 24/08 — 8 file, không phải một dòng nào trong 19 câu truy vấn:**
 
 | File | Gỡ gì |
 |---|---|
@@ -82,12 +82,12 @@ vụ một đường không chạy được.
 của change:
 
 ```
-   14 cho goi open_db()/rebuild()      -> khong doi mot chu
-   21 cho noi chuoi f"... = {ph}"      -> khong doi mot chu
+   15 cho goi open_db()/rebuild()      -> khong doi mot chu
+   19 cho noi chuoi f"... = {ph}"      -> khong doi mot chu
 ```
 
 Chỉ có **nhánh rẽ** biến mất; `placeholder` thành hằng `"%s"`. Gỡ luôn cả abstraction đó là
-sửa 35 chỗ để đổi `{ph}` thành `%s` — một diff lớn, rủi ro thật, và **không mua thêm gì**.
+sửa 34 chỗ để đổi `{ph}` thành `%s` — một diff lớn, rủi ro thật, và **không mua thêm gì**.
 Để lại kèm ghi chú tại chỗ nói vì sao nó còn sống thì rẻ hơn nhiều, và có thể dọn sau bằng
 một change riêng nếu thấy vướng.
 
@@ -95,7 +95,7 @@ một change riêng nếu thấy vướng.
 
 - Không sửa lỗi nối chuỗi ở `ref_source`. Sau change này không còn ai chạy nó trên SQLite,
   nên nó thôi là lỗi — PostgreSQL vẫn nối đúng, và đã nối đúng suốt từ 21/08
-- Không đụng 21 câu truy vấn dùng `{ph}`
+- Không đụng 19 câu truy vấn dùng `{ph}`
 - Không gỡ `psycopg2` khỏi bất kỳ đâu — nó là driver duy nhất còn lại, càng quan trọng hơn
 
 ## Impact
@@ -107,7 +107,7 @@ một change riêng nếu thấy vướng.
 | **Xoá** | `scripts/copy_to_postgres.py` |
 | **Rebuild** | **Không.** Change này không đụng schema, không đụng dữ liệu |
 | **Đồng nghiệp** | Ghi vào `dong-bo-may-dong-nghiep-*.md`: `--db <file>.sqlite` không còn nhận |
-| **Không đụng** | `web/` · 21 câu truy vấn dùng `{ph}` · 14 chỗ gọi `open_db()` |
+| **Không đụng** | `web/` · 19 câu truy vấn dùng `{ph}` · 15 chỗ gọi `open_db()` |
 | **Rủi ro** | **Thấp.** Gỡ nhánh chưa từng chạy được từ 21/08. Mọi phép kiểm hiện có đều chạy trên PostgreSQL nên chúng canh được đúng thứ còn lại |
 | **Quay lui** | Một commit. Và `git revert` lấy lại được nhánh SQLite — **nhưng lấy lại một nhánh hỏng**, nên đường lui thật là sửa lỗi nối chuỗi, không phải khôi phục code |
 

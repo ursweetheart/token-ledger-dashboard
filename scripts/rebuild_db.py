@@ -1,14 +1,14 @@
-"""Dung lai toan bo database tu DU LIEU DA THU THAP, cho PostgreSQL hoac SQLite.
+"""Dung lai toan bo database tu DU LIEU DA THU THAP.
 
     docker compose up -d                                  # PHAI len truoc
-    python scripts/rebuild_db.py                          # PostgreSQL mac dinh
-    python scripts/rebuild_db.py --db var/token_ledger.sqlite   # ban doi chieu
+    python scripts/rebuild_db.py                          # dung DEFAULT_DSN
+    python scripts/rebuild_db.py --db postgresql://.../token_ledger_v2
 
 DSN la gi
 ---------
-Chuoi ket noi. connect.py phan biet bang duoi file: `.sqlite`/`.db` thi mo
-SQLite, con lai coi la chuoi PostgreSQL. Nho vay cung mot bo script nap chay
-duoc ca hai he ma khong sua dong SQL nao.
+Chuoi ket noi PostgreSQL. SQLite da bi go 24/08/2026 (change
+`drop-the-sqlite-escape-hatch`) - dua vao mot duong dan .sqlite thi connect.py
+dung ngay voi thong bao noi ro, chu khong im lang tao file.
 
 Mac dinh lay tu connect.DEFAULT_DSN, KHONG khai rieng o day. Truoc 17/08/2026
 file nay co hang so DSN cua rieng no, va scripts/update_dashboard.py goi no
@@ -98,7 +98,7 @@ def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default=connect.DEFAULT_DSN,
-                   help="DSN. Duoi .sqlite/.db -> SQLite, con lai -> PostgreSQL")
+                   help="Chuoi ket noi PostgreSQL. Mac dinh: connect.DEFAULT_DSN")
     p.add_argument("--from-step", type=int, default=1,
                    help=f"Bat dau tu buoc N (1-{len(STEPS)}). Dung khi mot buoc hong va da sua xong.")
     args = p.parse_args()

@@ -2,9 +2,9 @@
 #
 #     pip install -r backend/requirements.txt
 #
-# psycopg2 BAT BUOC tu 17/08/2026: PostgreSQL la database mac dinh, khong con la
-# tuy chon. Chay tren SQLite van duoc (sqlite3 nam san trong Python) nhung phai
-# chi dinh tuong minh qua TOKEN_LEDGER_DSN hoac --db, va do chi la ban doi chieu.
+# psycopg2 BAT BUOC: PostgreSQL la he quan tri DUY NHAT tu 24/08/2026. Truoc do
+# van con mot duong SQLite de doi chieu; no da bi go vi ca ba dieu kien cua mot
+# duong quay ve deu hong - xem change `drop-the-sqlite-escape-hatch`.
 fastapi>=0.110
 uvicorn>=0.27
 psycopg2-binary>=2.9

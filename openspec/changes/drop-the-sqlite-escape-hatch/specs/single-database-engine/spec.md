@@ -42,10 +42,10 @@ phục vụ một thứ không còn.
 
 ### Requirement: Gỡ hệ quản trị KHÔNG được lan vào tầng truy vấn
 
-`open_db()` SHALL vẫn trả về `(connection, placeholder)`. MUST NOT sửa 21 chỗ nối chuỗi
-`{ph}` trong câu truy vấn, và MUST NOT sửa 14 chỗ gọi `open_db()` / `rebuild()`.
+`open_db()` SHALL vẫn trả về `(connection, placeholder)`. MUST NOT sửa 19 chỗ nối chuỗi
+`{ph}` trong câu truy vấn, và MUST NOT sửa 15 chỗ gọi `open_db()` / `rebuild()`.
 
-Lý do: `placeholder` nay là hằng `"%s"`, nhưng gỡ hẳn abstraction đó là sửa 35 chỗ nằm rải
+Lý do: `placeholder` nay là hằng `"%s"`, nhưng gỡ hẳn abstraction đó là sửa 34 chỗ nằm rải
 khắp `db/`, `scripts/`, `backend/` — một diff lớn, rủi ro thật, và không mua thêm năng lực
 nào. Ranh giới này giữ cho change chỉ gỡ **nhánh rẽ**, không chạm tầng truy vấn, nên nghiệm
 thu được bằng cách đếm lại hai con số.
@@ -53,7 +53,7 @@ thu được bằng cách đếm lại hai con số.
 #### Scenario: Đếm lại sau khi gỡ
 
 - **WHEN** change hoàn tất
-- **THEN** vẫn SHALL còn đúng 14 chỗ gọi `open_db()`/`rebuild()` và 21 chuỗi `{ph}`
+- **THEN** vẫn SHALL còn đúng 15 chỗ gọi `open_db()`/`rebuild()` và 19 chuỗi `{ph}`
 - **AND** hai con số đó SHALL được kiểm bằng lệnh, không bằng mắt
 
 ### Requirement: Backend giữ nguyên kỷ luật chỉ-đọc

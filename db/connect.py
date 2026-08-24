@@ -1,22 +1,28 @@
 """Mở kết nối và dựng lại database - dùng chung cho mọi script nạp.
 
-HAI HỆ QUẢN TRỊ, MỘT BẢN SCHEMA
--------------------------------
-01_schema.sql chạy được cả PostgreSQL lẫn SQLite vì không dùng SERIAL: mọi khoá
-đều gán tường minh. Nhờ vậy dựng được một bản SQLite để đối chiếu độc lập, rồi
-đổi sang Postgres mà không sửa dòng SQL nào.
+CHỈ POSTGRESQL. SQLITE ĐÃ BỊ GỠ 24/08/2026.
+-------------------------------------------
+File này TỪNG hứa "hai hệ quản trị, một bản schema". Đừng khôi phục lời hứa đó -
+nó đã sai từ 21/08 và không ai biết. Ba điều kiện của một đường quay về, đo ngày
+24/08, không điều nào còn đúng:
 
-Cách chọn: đuôi .sqlite / .db -> SQLite. Còn lại -> chuỗi kết nối PostgreSQL.
+    có dữ liệu để quay về   var/token_ledger.sqlite bị xoá 17/08, var/ rỗng
+    dựng lại được           01_schema.sql HỎNG CÚ PHÁP trên SQLite từ 21/08
+    có phép kiểm canh       chưa từng có phép nào chạy trên SQLite
 
-MẶC ĐỊNH LÀ POSTGRESQL
-----------------------
-Trước 17/08/2026 mặc định là một file SQLite trong var/. Đổi vì SQLite là MỘT
-FILE: nó không đi qua mạng nên tiến trình trong container khác không đọc được,
-và nó không có schema riêng lẫn GRANT theo user nên không chia quyền theo service
-được. Cả hai là chặn đường cứng cho việc chạy nhiều bản sau một load balancer.
+Chỗ hỏng nằm ở `INSERT INTO ref_source`: hai chuỗi viết LIỀN KỀ nhau. PostgreSQL
+nối lại theo chuẩn SQL, SQLite báo lỗi cú pháp. Bảng `ref_source` ra đời 21/08,
+tức SAU ngày database SQLite biến mất - nên lỗi nằm im ba ngày, không ai chạm tới.
 
-SQLite vẫn mở được, nhưng phải chỉ định tường minh - nó là đường đối chiếu bằng
-tay, không còn là database của dự án.
+Một đường quay về không dựng được, không có dữ liệu, và không ai kiểm thì không
+phải đường quay về. Nó tệ hơn không có gì: nó làm người đọc file này tin rằng có.
+
+VÌ SAO KHÔNG PHẢI SQLITE, GHI LẠI ĐỂ KHÔNG AI QUAY LẠI
+------------------------------------------------------
+SQLite là MỘT FILE: không đi qua mạng nên tiến trình trong container khác không
+đọc được, và không có schema riêng lẫn GRANT theo user nên không chia quyền theo
+service được. Cả hai là chặn đường cứng cho việc chạy nhiều bản sau một load
+balancer - tức chặn đúng kiến trúc mà Master Plan giai đoạn 5 đang nhắm tới.
 
 MỘT NGUỒN SỰ THẬT
 -----------------
@@ -40,8 +46,10 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DB_DIR = ROOT / "db"                # ma: schema .sql + cac module nap
-VAR_DIR = ROOT / "var"              # noi DUY NHAT duoc chua SQLite doi chieu
+DB_DIR = ROOT / "db"                # ma: migration + danh muc .sql
+# VAR_DIR bo 24/08/2026 cung voi SQLite - no chi ton tai de tro toi file .sqlite,
+# va sau khi go thi khong file .py nao con dung toi. Thu muc var/ van con, nay
+# chua ban chup bo so bat bien cua tools/baseline_db.py.
 
 # Tên biến VÀ giá trị mặc định KHỚP docker-compose.yml, nên `docker compose up -d`
 # rồi chạy script là nối được ngay, không phải đặt gì. Đặt tên khác sẽ thành hai
@@ -56,9 +64,6 @@ PG_DATABASE = os.environ.get("PGDATABASE", "token_ledger")
 # cũng phải rơi về mặc định, không được thành DSN rỗng.
 DEFAULT_DSN = os.environ.get("TOKEN_LEDGER_DSN") or (
     f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}")
-
-# Đường quay về SQLite, để thông báo lỗi và tài liệu trỏ vào một chỗ.
-SQLITE_DSN = str(VAR_DIR / "token_ledger.sqlite")
 
 # DSN của lần chạy hiện tại, khi nó KHÁC mặc định.
 #
@@ -75,8 +80,24 @@ SQLITE_DSN = str(VAR_DIR / "token_ledger.sqlite")
 ACTIVE_DSN: str | None = None
 
 
-def is_sqlite(dsn: str) -> bool:
-    return dsn.endswith(".sqlite") or dsn.endswith(".db")
+def _chan_sqlite(dsn: str) -> None:
+    """Dừng ngay nếu DSN trỏ vào một file SQLite.
+
+    HỎNG TO TIẾNG, KHÔNG HỎNG IM LẶNG. Không có hàm này thì `--db du_lieu.sqlite`
+    đi thẳng vào psycopg2, và thông báo lỗi sẽ nói về chuỗi kết nối chứ không nói
+    về điều người dùng thật sự làm sai. Tệ hơn: nếu mai kia có ai thêm lại một
+    nhánh sqlite3 thì nó sẽ lặng lẽ TẠO một file rỗng rồi chạy nửa vời.
+
+    Đây là thứ duy nhất còn sót lại của `is_sqlite()` cũ, và nó tồn tại để nói
+    KHÔNG cho rõ ràng.
+    """
+    if dsn.endswith((".sqlite", ".db")):
+        raise SystemExit(
+            f"DSN trỏ vào một file SQLite: {dsn}\n"
+            "SQLite đã bị gỡ khỏi dự án ngày 24/08/2026 - xem ghi chú đầu file này.\n"
+            "Dùng một chuỗi kết nối PostgreSQL, ví dụ:\n"
+            f"    {mask_dsn(DEFAULT_DSN)}"
+        )
 
 
 def mask_dsn(dsn: str) -> str:
@@ -112,14 +133,24 @@ def mask_dsn(dsn: str) -> str:
 
 
 def open_db(dsn: str):
-    """Trả về (connection, placeholder) với placeholder là '?' hoặc '%s'."""
-    if is_sqlite(dsn):
-        import sqlite3
-        cn = sqlite3.connect(dsn)
-        # SQLite MẶC ĐỊNH KHÔNG kiểm khoá ngoại. Không bật thì một model_id sai
-        # vẫn nạp được, và chỉ lộ ra khi đổi sang Postgres.
-        cn.execute("PRAGMA foreign_keys = ON")
-        return cn, "?"
+    """Trả về (connection, placeholder).
+
+    VÌ SAO VẪN TRẢ VỀ `placeholder` KHI CHỈ CÒN MỘT HỆ
+    ---------------------------------------------------
+    Nó nay là hằng `"%s"`, nên nhìn qua thì thừa. Giữ lại là CÓ CHỦ Ý: gỡ nó đi
+    là sửa 34 chỗ - 15 điểm gọi hàm này, cộng 19 chuỗi truy vấn nội suy biến
+    placeholder, nằm rải khắp db/, scripts/, backend/. Một diff lớn như vậy mang
+    rủi ro thật mà không mua thêm năng lực nào.
+
+    (Cố ý KHÔNG viết literal của biến đó ra đây: phép kiểm 6.2 của change đếm số
+    lần nó xuất hiện để chứng minh change không lan vào tầng truy vấn, và một
+    dòng ghi chú cũng bị đếm. Bẫy này đã cắn một lần ngày 24/08.)
+
+    Change `drop-the-sqlite-escape-hatch` (24/08/2026) vì thế chỉ gỡ NHÁNH RẼ,
+    không chạm tầng truy vấn - và nghiệm thu bằng cách đếm lại đúng hai con số
+    15 và 19. Muốn dọn nốt thì làm một change riêng.
+    """
+    _chan_sqlite(dsn)
     try:
         import psycopg2 as pg
     except ImportError:
@@ -128,19 +159,17 @@ def open_db(dsn: str):
         except ImportError:
             raise SystemExit(
                 "Cần psycopg2 để nối PostgreSQL:  pip install psycopg2-binary\n"
-                "  (từ 17/08/2026 PostgreSQL là mặc định, nên gói này BẮT BUỘC)\n"
-                f"Hoặc dựng một bản SQLite để đối chiếu:  --db {SQLITE_DSN}"
+                "  hoặc:  pip install -r backend/requirements.txt\n"
+                "PostgreSQL là hệ quản trị DUY NHẤT từ 24/08/2026, nên gói này\n"
+                "bắt buộc - không còn đường quay về SQLite để đỡ."
             )
     return pg.connect(dsn), "%s"
 
 
 def run_sql_file(cn, placeholder: str, path: Path) -> None:
-    sql = path.read_text(encoding="utf-8")
-    if placeholder == "?":
-        cn.executescript(sql)
-    else:
-        with cn.cursor() as cur:
-            cur.execute(sql)
+    # `placeholder` giữ trong chữ ký để 15 chỗ gọi không phải đổi - xem open_db().
+    with cn.cursor() as cur:
+        cur.execute(path.read_text(encoding="utf-8"))
 
 
 def apply_migrations(dsn: str) -> None:
@@ -184,19 +213,14 @@ def rebuild(dsn: str):
         rebuild()              xoá sạch  ->  migration  ->  danh mục
         alembic upgrade head   (không xoá gì, database giữ nguyên dữ liệu)
     """
-    if is_sqlite(dsn):
-        p = Path(dsn)
-        if p.exists():
-            p.unlink()
-    else:
-        cn, _ = open_db(dsn)
-        with cn.cursor() as cur:
-            cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-        cn.commit()
-        # ĐÓNG kết nối này trước khi Alembic mở kết nối của nó. Giữ mở thì lát
-        # nữa phải tin rằng một kết nối cũ nhìn thấy bảng do kết nối khác vừa
-        # tạo - đúng, nhưng là thứ phải nhớ mỗi lần đọc lại. Mở lại sau rẻ hơn.
-        cn.close()
+    cn, _ = open_db(dsn)
+    with cn.cursor() as cur:
+        cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+    cn.commit()
+    # ĐÓNG kết nối này trước khi Alembic mở kết nối của nó. Giữ mở thì lát nữa
+    # phải tin rằng một kết nối cũ nhìn thấy bảng do kết nối khác vừa tạo -
+    # đúng, nhưng là thứ phải nhớ mỗi lần đọc lại. Mở lại sau rẻ hơn.
+    cn.close()
 
     apply_migrations(dsn)
 
@@ -210,21 +234,25 @@ def rebuild(dsn: str):
 
 
 def query(cn, sql: str, params=()) -> list:
-    """Chạy một câu SELECT, trả về toàn bộ kết quả. Dùng được cả hai hệ.
+    """Chạy một câu SELECT, trả về toàn bộ kết quả.
 
-    SQLite cho `cur.execute(...)` trả về CHÍNH cursor, nên viết
-    `cur.execute(...).fetchall()` hoặc lặp thẳng `for r in cur.execute(...)`
-    đều chạy. psycopg2 thì `execute()` trả về None.
+    psycopg2 cho `execute()` trả về None, nên `cur.execute(...).fetchall()` hay
+    `for r in cur.execute(...)` đều ném AttributeError. Hàm này bịt hẳn lối viết
+    tiện tay đó lại.
 
-    Hai lối viết tiện tay đó là cái bẫy kinh điển: chạy trên SQLite thì ngon,
-    đổi sang Postgres mới ném AttributeError - tức lộ ra ở đúng lúc chuyển hệ,
-    là lúc ít muốn gặp bất ngờ nhất. Hàm này bịt hẳn nó lại.
+    (Trước 24/08/2026 ghi chú ở đây nói đó là "bẫy khi đổi hệ": SQLite cho
+    execute() trả về chính cursor nên hai lối viết trên chạy được, và chỉ vỡ khi
+    sang Postgres. SQLite đã bị gỡ, nhưng cái bẫy vẫn còn - chỉ là nay nó vỡ
+    ngay lần chạy đầu thay vì vỡ muộn.)
     """
     cur = cn.cursor()
     # KHÔNG truyền tuple rỗng xuống. psycopg2 chỉ diễn giải '%' khi đối số tham
     # số KHÁC None - đưa () xuống thì câu `LIKE '%token_count'` bị hiểu là dấu
-    # định dạng và ném IndexError. SQLite không có vấn đề này, nên lỗi chỉ lộ ra
-    # trên Postgres.
+    # định dạng và ném IndexError.
+    #
+    # BẪY NÀY VẪN CÒN SỐNG, và nó vừa cắn lần nữa ngày 24/08: migration 001 gọi
+    # `exec_driver_sql(sql, ())` và 11 dấu '%' trong ghi chú tiếng Việt của
+    # 01_schema.sql vỡ hết. Xem db/migrations/versions/001_baseline_baseline.py.
     if params:
         cur.execute(sql, params)
     else:
@@ -239,14 +267,15 @@ def query_one(cn, sql: str, params=()):
 
 
 def insert_many(cn, placeholder: str, table: str, columns: list[str], rows: list) -> int:
-    """Chèn nhiều dòng, dùng đường nhanh của từng hệ.
+    """Chèn nhiều dòng, ưu tiên đường nhanh của psycopg2.
 
     executemany của psycopg2 gửi MỘT vòng mạng cho MỖI dòng. Với 562.307 dòng
     của fact_monitoring thì đó là hàng chục phút - và nó không hỏng, chỉ chậm,
     nên rất dễ tưởng là bình thường. execute_values gom nhiều dòng vào một câu
     INSERT, nhanh hơn vài chục lần.
 
-    SQLite thì executemany vốn đã nhanh vì không qua mạng.
+    Nhánh `executemany` cuối hàm KHÔNG phải nhánh cho hệ quản trị khác - nó là
+    đường lui khi `psycopg2.extras.execute_values` không import được.
     """
     if not rows:
         return 0
