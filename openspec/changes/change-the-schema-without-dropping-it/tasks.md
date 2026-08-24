@@ -31,29 +31,15 @@ lịch sử một change đã hoàn thiện, nhưng vẫn giữ điểm quay lui
 Nhóm này không sửa gì cả. Nó tồn tại vì phần còn lại đụng vào chỗ chứa dữ liệu không dựng
 lại được, và một bước sai ở đó không có đường lùi.
 
-- [ ] 1.1 ⚪ **Chép `data/` (2,3 GB) sang ổ khác — nên làm, nhưng KHÔNG chặn change này.**
+- [x] 1.1 ⚪ **ĐÃ MIỄN cho change này — không thực hiện và không tuyên bố đã sao lưu `data/`.**
 
-      Bản đầu của task này đánh 🔴 và nói phải làm trước mọi thứ. **Đo lại 24/08 thì đó là
-      lo quá mức**: change này không bao giờ ghi vào `data/`.
+      Người dùng đã miễn rõ ràng task này ngày 24/08/2026. Checkout hiện tại chỉ chứa đầu
+      vào danh mục được theo dõi trong git, **không chứa** cây nguồn lịch sử 2,3 GB; vì vậy
+      task này không thể là bằng chứng cho một bản sao lưu, và **không có bản sao lưu nào
+      được tuyên bố đã thực hiện**.
 
-      Kiểm cả 8 script trên đường nạp (`load_billing` · `load_hd` · `load_monitoring` ·
-      `load_org` · `load_ralli` · `build_performance` · `build_usage_daily` ·
-      `rebuild_db`) — tìm `open(...,'w')`, `write_text`, `shutil.move/copy/rmtree`,
-      `os.remove/unlink`, `to_csv`, `json.dump`:
-
-      ```
-         ket qua:  8/8 script CHI DOC doi voi o dia
-                   chung chi ghi vao DATABASE
-      ```
-
-      Thứ ghi vào `data/` là các script `pull_*` và `merge_*`, và change này **không gọi
-      cái nào**. Dữ liệu gốc trong thư mục dự án là đủ để viết và chạy migration.
-
-      Vẫn nên chép, nhưng vì lý do khác và không gấp: `data/` chỉ có **1 file trong git**
-      trên tổng 2,3 GB, và `raw_google_console/` (1.023 MB) + `da_xu_ly/` (829 MB) **không
-      kéo lại được** — cửa sổ lưu giữ của Google trượt 196 → 112 ngày trong một tuần. Đó
-      là rủi ro **thường trực** của dự án (ổ hỏng, gõ nhầm `rm`), không phải rủi ro do
-      change này tạo ra.
+      Miễn task 1.1 không miễn các điều kiện bảo toàn database trước cutover: backup,
+      live snapshot, và independent preflight review vẫn là điều kiện bắt buộc của 6.3.
 - [x] 1.2 ✅ **Làm thành công cụ, không phải file tĩnh** — `tools/baseline_db.py`.
 
       Task này ban đầu chỉ nói *"ghi vào một file tạm"*. Nhưng task 5.4 phải **so lại** đúng
@@ -321,28 +307,34 @@ Chỉ làm nhóm này khi nhóm 5 khớp **hết**.
       *(`/api/usage` trả 159 dòng / 97,1 triệu token — đó là cửa sổ 30 ngày mặc định của
       endpoint, không phải lệch. Toàn kỳ đã so ở task 5.4: 1.189 dòng / 867.657.110.)*
 
-- [ ] 6.3 ⏸ **CHỜ VÀI NGÀY — dừng ở đây, và đây là quyết định của anh Tuấn.**
+- [ ] 6.3 ⚠️ **Gate trước cutover — không còn gate “chờ vài ngày”.** Người dùng đã miễn rõ
+      ràng riêng khoảng chờ theo thời gian ngày 24/08/2026; miễn này **không** miễn backup,
+      live snapshot, hay independent preflight review.
 
-      Ba task dưới không hoàn tác được. Một database rỗng chỉ tốn dung lượng đĩa; xoá sớm
-      để tiết kiệm vài trăm MB là đổi một thứ không mua lại được lấy một thứ rẻ tiền.
-
-      Trong lúc chờ: `token_ledger` cũ **còn nguyên**, chưa qua migration lần nào, và quay
-      lui chỉ là sửa `PG_DATABASE` về `"token_ledger"`.
+      Trước 6.4, phải hoàn thành **toàn bộ 8.1–8.6**, bao gồm candidate acceptance/rehearsal
+      runs. Đặc biệt, 8.6 phải áp dụng `002` rồi `003` tuần tự trên `token_ledger_v2` đang có
+      dữ liệu thật, và sau mỗi lần phải so lại các số mốc. Chỉ sau khi các bằng chứng đó cùng
+      backup, live snapshot, và independent preflight review được chấp nhận thì mới được làm
+      6.4. `token_ledger` cũ vẫn còn nguyên; quay lui vẫn là sửa `PG_DATABASE` về
+      `"token_ledger"`.
 - [ ] 6.4 `DROP DATABASE token_ledger`
 - [ ] 6.5 ⚠️ Đóng backend, pgAdmin và mọi script, rồi `ALTER DATABASE token_ledger_v2
       RENAME TO token_ledger`. Còn kết nối thì lệnh **treo** chứ không báo lỗi rõ
-- [ ] 6.6 Trả `connect.PG_DATABASE` về `token_ledger`. Sau bước này không còn chữ `_v2` ở
-      đâu — kiểm bằng `grep -rn "_v2"` trên toàn repo
+- [ ] 6.6 Trả `connect.PG_DATABASE` về `token_ledger`. Sau cutover, `grep -rn "_v2"` phải
+      không còn match trong runtime code, configuration, và live operating docs. Immutable
+      migrations, archived material, dated journals, và OpenSpec history được giữ các tên
+      lịch sử trung thực, nên có thể còn `_v2`.
 - [ ] 6.7 Chạy lại `audit_db.py` + `check_api.py` lần cuối
 
 ## 7. Dọn và ghi lại
 
 - [ ] 7.1 Xoá `db/01_schema.sql` — nội dung đã nằm trong `001_baseline.sql`. Còn hai file là còn
       trôi khỏi nhau
-- [ ] 7.2 Xoá `scripts/copy_to_postgres.py` — đã chết sẵn: đòi một file SQLite làm nguồn mà
-      `var/token_ledger.sqlite` bị xoá từ 17/08, `var/` hiện rỗng
-- [ ] 7.3 `grep -rn "01_schema\|copy_to_postgres"` toàn repo, sửa mọi chỗ còn trỏ tới. Biết
-      trước có `db/connect.py`, `scripts/rebuild_db.py`, và vài file `.md` trong `docs/`
+- [x] 7.2 ✅ ĐÃ XÓA trong commit `aa5f7d0`: `scripts/copy_to_postgres.py` đã bị xóa cùng
+      việc bỏ SQLite escape hatch; task này không tuyên bố một lần xóa mới.
+- [ ] 7.3 `grep -rn "01_schema\|copy_to_postgres"` trong runtime code, configuration, và
+      live operating docs, rồi sửa mọi tham chiếu còn sống. Immutable migrations, archived
+      material, dated journals, và OpenSpec history có thể giữ tham chiếu lịch sử trung thực.
 - [ ] 7.4 Cập nhật `docs/reference/dong-bo-may-dong-nghiep-*.md`: lệnh dựng nay có thêm
       bước `alembic upgrade head`
 - [ ] 7.5 Cập nhật `docs/reference/cay-thu-muc.md` cho khớp cây thư mục mới
