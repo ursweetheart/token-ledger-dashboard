@@ -336,9 +336,10 @@ Hai vế của lệnh này giải hai vấn đề khác nhau, thiếu vế nào 
 ```bash
 ```
 
-`api.js` (nạp trước `app.js`) tự gọi backend và thay dữ liệu vào. **Không chạy
-backend thì nó im lặng rút lui** và dashboard chạy bằng dữ liệu nhúng như cũ —
-bấm đúp `index.html` vẫn xem được.
+`api.js` (nạp trước `app.js`) tự gọi backend rồi chuyển dữ liệu cho dashboard.
+Dữ liệu metric nhúng đã bị xoá: nếu backend không chạy hoặc trả lỗi, giao diện
+hiện đúng trạng thái lỗi và **không hiển thị bất kỳ con số nào**. Trước 17/08/2026
+dashboard từng im lặng rơi về số nhúng cũ; behavior lịch sử đó không còn tồn tại.
 
 Backend ở máy khác: `index.html?api=http://may-khac:8000`
 
