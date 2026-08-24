@@ -280,10 +280,10 @@ python -m uvicorn backend.main:app --port 8000
 
 Mở **http://127.0.0.1:8000/docs** — tài liệu tự sinh, bấm thử được từng endpoint.
 
-Đọc PostgreSQL thay vì SQLite:
+Trỏ backend vào database candidate hiện tại:
 
 ```bash
-set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger
+set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger_v2
 python -m uvicorn backend.main:app --port 8000
 ```
 
@@ -299,9 +299,8 @@ python -m uvicorn backend.main:app --port 8000
 | `GET /api/performance?start=&end=` | Mã trả về + độ trễ |
 | `GET /api/thinking?start=&end=` | Token có bật chế độ thinking |
 
-Không có endpoint ghi nào. Kết nối mở ở chế độ **chỉ đọc thật sự** — SQLite mở
-bằng `mode=ro`, PostgreSQL đặt session `readonly`. Là hệ điều hành và máy chủ
-database bảo đảm, không phải lời hứa trong tài liệu.
+Không có endpoint ghi nào. Kết nối PostgreSQL mở session `readonly`, nên máy chủ
+database thực thi chế độ **chỉ đọc thật sự**; đây không phải lời hứa trong tài liệu.
 
 ## Mọi con số đều kèm "số này từ đâu ra"
 
@@ -326,10 +325,11 @@ cd web && python -m http.server 8080 --bind 127.0.0.1   # phục vụ dashboard
 
 Hai vế của lệnh này giải hai vấn đề khác nhau, thiếu vế nào cũng hở:
 
-- **`cd web`** chặn *cái gì* phục vụ được. Trước đây lệnh chạy tại gốc repo, mà gốc
-  repo là document root thì `.env`, `var/token_ledger.sqlite` (937 nhân viên kèm email),
-  `data/` và `.git/` đều tải được — đã đo, cả sáu đường dẫn trả 200 và `.env` về nguyên
-  nội dung. Chạy trong `web/` thì không có đường đi ngược lên, kể cả `..%2f` hay `%2e%2e/`.
+- **`cd web`** chặn *cái gì* phục vụ được. Trước 24/08/2026, khi file SQLite còn tồn
+  tại, chạy tại gốc repo từng phơi `.env`, đường `var/token_ledger.sqlite`, `data/` và
+  `.git/` — đã đo, các đường dẫn trả 200. File và đường SQLite đó không còn tồn tại;
+  bài học còn hiệu lực là chạy trong `web/` để không có đường đi ngược lên, kể cả
+  `..%2f` hay `%2e%2e/`.
 - **`--bind 127.0.0.1`** chặn *ai* truy cập được. Mặc định của `http.server` là
   *all interfaces*, tức cả mạng LAN công ty.
 
@@ -356,7 +356,7 @@ ra bằng hệ số — số suy ra trông y hệt số đo.
 
 ```bash
 python backend/check_api.py                                   # 16 phép kiểm
-python backend/check_api.py --compare http://127.0.0.1:8001   # 24, so hai hệ
+python backend/check_api.py --compare http://127.0.0.1:8001   # 24, so hai PostgreSQL
 ```
 
 **16 phép kiểm**: số khớp database, tham số rác bị từ chối bằng 400 (**không** âm
@@ -364,8 +364,8 @@ thầm trả bảng rỗng), và **thử ghi thật** qua chính kết nối c�
 là nó bị từ chối.
 
 Thêm `--compare` thì thành **24**: 8 phép so nữa, đối chiếu **từng byte JSON** giữa
-máy chủ chạy SQLite và máy chủ chạy PostgreSQL trên cả 8 endpoint. Cờ là
-`--compare`, không phải `--doi-chieu`.
+hai backend PostgreSQL trên cả 8 endpoint — ví dụ database đang chạy với candidate
+`token_ledger_v2` vừa dựng. Cờ là `--compare`, không phải `--doi-chieu`.
 
 ---
 

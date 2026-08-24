@@ -71,7 +71,7 @@ kéo theo:
 DSN mặc định dựng từ biến môi trường, và **giá trị mặc định chạy được ngay không cần `.env`**:
 
 ```
-PGHOST=127.0.0.1  PGPORT=5432  PGUSER=token  PGPASSWORD=token_local  PGDATABASE=token_ledger
+PGHOST=127.0.0.1  PGPORT=5432  PGUSER=token  PGPASSWORD=token_local  PGDATABASE=token_ledger_v2
 ```
 
 Muốn đổi thì `cp .env.example .env` rồi sửa. Đổi mật khẩu thì phải `docker compose down -v`
@@ -149,7 +149,8 @@ Nếu bạn có script hay ghi chú cá nhân gọi tới chúng thì bỏ đi �
 `rebuild_db.py` đọc **chỉ** từ thư mục `data/`, mà `data/` **không nằm trong git**
 (`.gitignore` loại `data/*`, chỉ giữ đúng 1 file danh mục SKU của Google). Nên:
 
-> **Nếu máy bạn chưa từng có `data/` thì bước 4 sẽ không chạy được.**
+> **Nếu máy bạn chưa từng có `data/` thì chỉ đường 4B (rebuild) không chạy được.**
+> Đường 4A (`alembic upgrade head`) nâng database hiện có tại chỗ và không cần `data/`.
 
 Dữ liệu không đưa lên git là có chủ ý: nó chứa danh sách **953 tài khoản kèm họ tên, email
 và phòng ban**. Baseline `db/migrations/sql/001_baseline.sql` ghi rõ database này không

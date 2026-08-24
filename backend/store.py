@@ -2,13 +2,12 @@
 
 BA NGUYÊN TẮC
 -------------
-1. CHỈ ĐỌC. SQLite mở bằng mode=ro, PostgreSQL đặt session readonly. Đây là hệ
-   điều hành và máy chủ database bảo đảm, không phải lời hứa trong tài liệu.
-   Backend này không có endpoint ghi nào, và nếu ai thêm nhầm thì database tự
-   từ chối.
+1. CHỈ ĐỌC. Kết nối PostgreSQL đặt session `readonly`; máy chủ database bảo đảm
+   điều đó, không phải lời hứa trong tài liệu. Backend này không có endpoint ghi
+   nào, và nếu ai thêm nhầm thì database tự từ chối.
 
 2. KHÔNG NỐI CHUỖI với giá trị người dùng gửi lên. Mọi tham số đi qua đặt chỗ
-   ('?' hoặc '%s'). Tên bảng/cột thì cố định trong mã nguồn, không bao giờ lấy
+   `%s`. Tên bảng/cột thì cố định trong mã nguồn, không bao giờ lấy
    từ tham số URL.
 
 3. KHÔNG TÍNH LẠI CÁI DATABASE ĐÃ TÍNH. Tiền lấy từ hoá đơn, không nhân lại
@@ -17,10 +16,9 @@ BA NGUYÊN TẮC
 
 MỖI KẾT NỐI MỘT YÊU CẦU
 -----------------------
-Đối tượng kết nối SQLite không dùng chung được giữa các luồng. FastAPI chạy đa
-luồng, nên dùng chung sẽ ném "SQLite objects created in a thread can only be
-used in that same thread" - và chỉ ném khi có hai người vào cùng lúc, tức lúc
-khó tái hiện nhất.
+Mỗi request FastAPI mở một kết nối PostgreSQL riêng để transaction và trạng thái
+session `readonly` không bị chia sẻ giữa các request. Context manager luôn đóng
+kết nối ở cuối request, kể cả khi truy vấn ném lỗi.
 """
 
 from __future__ import annotations
@@ -40,12 +38,10 @@ DSN = os.environ.get("TOKEN_LEDGER_DSN", connect.DEFAULT_DSN)
 
 @contextmanager
 def open_db():
-    """Kết nối CHỈ ĐỌC, tự động đóng lại.
+    """Kết nối PostgreSQL CHỈ ĐỌC, tự động đóng lại.
 
-    Nhánh SQLite (mở bằng `?mode=ro`) gỡ ngày 24/08/2026 - xem change
-    `drop-the-sqlite-escape-hatch`. `set_session(readonly=True)` bên dưới là thứ
-    duy nhất còn giữ kỷ luật chỉ-đọc của backend, và `check_api.py` có một phép
-    kiểm khẳng định nó (`ReadOnlySqlTransaction`). Đừng gỡ dòng đó.
+    `set_session(readonly=True)` bên dưới là chỗ máy chủ thực thi kỷ luật chỉ-đọc;
+    `check_api.py` có phép kiểm khẳng định nó (`ReadOnlySqlTransaction`).
     """
     cn, ph = connect.open_db(DSN)
     # Postgres tự chặn mọi lệnh ghi ở mức máy chủ, không phụ thuộc mã nguồn.
@@ -77,11 +73,9 @@ def _f(x):
 def _money(x):
     """Tiền -> float làm tròn 6 chữ số, đúng thang schema khai NUMERIC(14,6).
 
-    PHẢI làm tròn, không được trả thẳng. SQLite bỏ qua khai báo NUMERIC và cộng
-    dồn bằng số thực, nên SUM ra 0.017360999999999998; PostgreSQL cộng bằng
-    NUMERIC thật và ra 0.017361. Cùng một database, cùng một câu hỏi, hai chuỗi
-    JSON khác nhau - và cái lệch đó lan ra mọi thứ so sánh phía sau (bộ nhớ đệm,
-    chữ ký số, đối chiếu hai hệ).
+    PHẢI làm tròn, không được trả thẳng. Trong đợt đối chiếu lịch sử trước khi
+    SQLite bị gỡ, bản SQLite cộng số thực thành 0.017360999999999998 còn
+    PostgreSQL dùng NUMERIC và ra 0.017361. Ghi lại để khoá định dạng JSON ổn định.
 
     Làm tròn về 6 chữ số KHÔNG giấu đi chênh lệch thật: một cent là 0,01, còn
     đây là sai số ở chữ số thứ 15.
@@ -90,7 +84,7 @@ def _money(x):
 
 
 def _day(x) -> str:
-    """date của Postgres hoặc chuỗi của SQLite -> 'YYYY-MM-DD'."""
+    """`date` của PostgreSQL -> chuỗi `YYYY-MM-DD`; giữ chuỗi nếu đã chuẩn hoá."""
     return x if isinstance(x, str) else x.isoformat()
 
 
@@ -161,9 +155,9 @@ def units(cn) -> list[dict]:
     # ORDER BY phải là MỘT THỨ TỰ TOÀN PHẦN, không được để hai dòng hoà nhau.
     # `ORDER BY level, name` đã từng đủ: hai dòng 'Chưa quy được' (của Trợ Lý Ảo
     # Hợp Đồng và Trợ lý ảo Ralli)
-    # level bằng nhau tên bằng nhau, và SQLite với PostgreSQL trả về ngược thứ tự
-    # nhau. Kết quả: cùng một API cho hai kết quả khác nhau tuỳ database, mà
-    # không ai báo gì. Thêm khoá chính vào cuối là hết.
+    # level bằng nhau tên bằng nhau. Trong đợt đối chiếu lịch sử, SQLite và
+    # PostgreSQL từng trả ngược thứ tự; thêm khoá chính vào cuối để thứ tự luôn
+    # tất định trên PostgreSQL hiện tại.
     # `canonical_unit_id` NULL = dòng này LÀ bản chuẩn; có giá trị = bản trùng ở
     # cây tổ chức của app kia. Frontend cần cột này để gộp hai cây thành một cái
     # nhìn công ty - trước 20/08/2026 phép gộp đó nằm trong UNIT_ALIASES gõ tay

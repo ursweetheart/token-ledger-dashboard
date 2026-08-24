@@ -1,8 +1,8 @@
 # Đọc hiểu database (số liệu ngày 14/08/2026)
 
 > Dành cho người mở pgAdmin lên và không biết mình đang nhìn gì.
-> 18 bảng + 3 view, 577.819 dòng. **PostgreSQL là mặc định** từ 17/08/2026; SQLite vẫn
-> dựng được để đối chiếu.
+> 18 bảng + 3 view, 577.819 dòng. **PostgreSQL là hệ quản trị duy nhất** từ
+> 24/08/2026; các số đo SQLite còn lại trong tài liệu chỉ là provenance lịch sử.
 >
 > Muốn biết dữ liệu **đến đây bằng đường nào**: `toan-trinh-du-lieu.md`.
 >
@@ -197,7 +197,7 @@ gemini-2.5-flash  2.337 lượt      gemini-2.5-pro  493 lượt
 
 - `raw_model` giữ tên gốc app trả về; `model_id` là tên đã dịch qua `dim_model_alias`
 - `model_id IS NULL` ở 2 dòng (4 lượt): một dòng app trả tên `'none'`, một dòng của tài khoản đã bị xoá nên không lọc riêng được. **Hai dòng này không vào `fact_usage_daily`** vì `model_id` nằm trong khoá chính — `load_hd.py` in ra con số đó mỗi lần chạy chứ không nuốt lặng
-- khoá chính là `row_id` gán tường minh, không phải bộ khoá tự nhiên: PostgreSQL cấm NULL trong khoá chính còn SQLite thì cho, đúng kiểu khác biệt chỉ lộ ra lúc đổi hệ
+- khoá chính là `row_id` gán tường minh, không phải bộ khoá tự nhiên: trong lần chuyển hệ lịch sử, PostgreSQL cấm NULL trong khoá chính còn bản SQLite khi đó cho phép — khác biệt chỉ lộ ra lúc đổi hệ
 
 ⚠ **Đừng cộng `fact_call` với `fact_app_daily` để lấy "tổng lượt gọi".** Chúng đo hai agent khác nhau ở hai độ mịn khác nhau. Muốn một con số thì đọc `fact_usage_daily` lọc `source='app'`, hoặc view `usage_resolved`.
 
@@ -332,7 +332,7 @@ Quy tắc chọn, **tất định**:
 
 Cột `don_vi_xung_dot = 1` **giữ lại dấu vết**: các nguồn đã không đồng ý và ta vừa chọn hộ. 4 tài khoản (không tính `quy.tv` — một nguồn im lặng thì là thiếu tin, không phải mâu thuẫn).
 
-> ⚠️ **Đừng bao giờ JOIN bằng `LOWER(username)`.** Hàm `LOWER()` của SQLite **chỉ xử lý ASCII**: `'TMĐT_KTLoan'` qua `LOWER()` ra `'tmĐt_ktloan'`, không khớp `'tmđt_ktloan'` mà Python đã sinh ra. Mất đúng 3 dòng, không lỗi nào báo. Đã có `account_id` thì dùng nó.
+> ⚠️ **Đừng bao giờ JOIN bằng `LOWER(username)`.** Phép đo lịch sử trên bản SQLite đã gỡ cho thấy `LOWER()` khi đó **chỉ xử lý ASCII**: `'TMĐT_KTLoan'` thành `'tmĐt_ktloan'`, không khớp `'tmđt_ktloan'` do Python sinh. Mất đúng 3 dòng, không lỗi nào báo. PostgreSQL hiện tại đã có `account_id`; hãy dùng khoá đó.
 
 ### `ref_fx` — 1 dòng
 Tỷ giá USD → VND.

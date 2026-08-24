@@ -330,5 +330,8 @@ sinh ra. Nó cũng khẳng định frontend không còn khai báo dữ liệu s�
 
 ```bash
 python backend/check_api.py                                   # 16 phep kiem
-python backend/check_api.py --compare http://127.0.0.1:8001   # 24, so SQLite voi PostgreSQL
+python backend/check_api.py --compare http://127.0.0.1:8001   # 24, so hai backend PostgreSQL
 ```
+
+`--compare` đối chiếu backend PostgreSQL đang chạy với một backend PostgreSQL thứ hai,
+ví dụ database hiện tại với candidate vừa dựng; nó không còn hỗ trợ SQLite.

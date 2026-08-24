@@ -1,10 +1,10 @@
 """Soi toàn bộ database một lượt: cấu trúc, số khớp, phân loại, lỗ im lặng.
 
     python scripts/audit_db.py
-    python scripts/audit_db.py --db "postgresql://token:token_local@localhost:5432/token_ledger"
+    python scripts/audit_db.py --db "postgresql://token:token_local@localhost:5432/token_ledger_v2"
 
-CHỈ ĐỌC. Không ghi, không sửa, không xoá - mở SQLite bằng mode=ro để điều đó
-được hệ điều hành bảo đảm chứ không phải bằng lời hứa trong tài liệu.
+CHỈ ĐỌC. Không ghi, không sửa, không xoá: kết nối PostgreSQL đặt session
+`readonly`, nên máy chủ database thực thi giới hạn này.
 
 VÌ SAO CẦN FILE NÀY
 -------------------
@@ -39,13 +39,10 @@ OK, WARN, FAIL = "DAT", "CANH BAO", "HONG"
 
 
 def open_read_only(dsn: str):
-    """Mở kết nối để soát. Nhánh SQLite gỡ 24/08/2026.
-
-    Hàm giữ tên và chữ ký cũ vì chỗ gọi không cần biết bên trong đã đổi. Nó nay
-    chỉ còn là một lớp mỏng quanh `connect.open_db` - giữ lại thay vì gọi thẳng
-    để chỗ đặt kỷ luật chỉ-đọc của script này vẫn có một cái tên.
-    """
-    return connect.open_db(dsn)
+    """Mở kết nối PostgreSQL và đặt session chỉ-đọc ở mức máy chủ."""
+    cn, placeholder = connect.open_db(dsn)
+    cn.set_session(readonly=True)
+    return cn, placeholder
 
 
 class Audit:
@@ -86,8 +83,8 @@ FOREIGN_KEYS = [
     ("fact_monitoring", "agent_id", "dim_agent", "agent_id"),
     ("fact_monitoring", "model_id", "dim_model", "model_id"),
     # Nguon la ang la bi chan ngay luc GHI, khong doi phep kiem chay sau. Van
-    # liet ke o day vi ban SQLite khong bat khoa ngoai, va vi database dung tu
-    # schema truoc 21/08/2026 khong co rang buoc nay.
+    # liet ke o day de audit database dung tu schema truoc 21/08/2026, khi rang
+    # buoc nay chua ton tai.
     ("fact_usage_daily", "source", "ref_source", "source"),
     ("fact_usage_daily", "account_id", "account", "account_id"),
     ("fact_usage_daily", "model_id", "dim_model", "model_id"),
@@ -99,8 +96,8 @@ FOREIGN_KEYS = [
 
 def group_a_structure(a: Audit) -> None:
     """Khoá ngoại, cây đơn vị, khoá trống."""
-    # PRAGMA foreign_key_check chỉ có ở SQLite. LEFT JOIN chạy cả hai hệ và còn
-    # nói rõ bảng nào cột nào, thay vì một danh sách rowid.
+    # LEFT JOIN nói rõ bảng/cột nào bị treo thay vì trả một danh sách rowid mơ hồ,
+    # và chạy trực tiếp trên PostgreSQL hiện tại.
     dangling = []
     for child, col, parent, key in FOREIGN_KEYS:
         n = a.num(f"""SELECT COUNT(*) FROM {child} c
