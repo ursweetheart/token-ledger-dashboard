@@ -262,15 +262,43 @@ so lại **23/23 khớp**, không đụng một token.
 
 ## 5. Dựng `token_ledger_v2` song song — database cũ KHÔNG bị đụng
 
-- [ ] 5.1 `CREATE DATABASE token_ledger_v2`
-- [ ] 5.2 `alembic upgrade head` lên v2 → schema rỗng. Kiểm bảng/view đủ số so với database
-      cũ (đọc `information_schema`, không đếm bằng mắt)
-- [ ] 5.3 `TOKEN_LEDGER_DSN=...token_ledger_v2 python scripts/rebuild_db.py` → nạp lại đủ
-      7 bước từ `data/`
-- [ ] 5.4 **So 9 con số của task 1.2.** Khớp hết → đi tiếp. Lệch bất kỳ con số nào → **dừng
-      lại, điều tra**, không sửa phép so cho vừa ý. Database cũ vẫn nguyên nên không vội
-- [ ] 5.5 Chạy `audit_db.py` trên v2, so với mốc task 1.3
-- [ ] 5.6 Trỏ backend vào v2 rồi chạy `check_api.py`, so với mốc task 1.3
+- [x] 5.1 ✅ `CREATE DATABASE token_ledger_v2`
+- [x] 5.2 ✅ `alembic upgrade head` → schema rỗng. So `information_schema` với database
+      đang chạy (bỏ `alembic_version` là bảng của chính Alembic):
+
+      | | `token_ledger` | `v2` | |
+      |---|---:|---:|---|
+      | bảng | 19 | 19 | **khớp** |
+      | view | 3 | 3 | **khớp** |
+      | cột | 199 | 199 | **khớp** |
+      | ràng buộc khoá | 66 | 66 | **khớp** |
+
+- [x] 5.3 ✅ `TOKEN_LEDGER_DSN=…v2 python scripts/rebuild_db.py` — **cả 7 bước đạt nghiệm
+      thu, 74 giây.** `fact_monitoring` 583.917 dòng · `fact_perf_daily` 600 · tiền billing
+      `$291,985601`
+- [x] 5.4 ✅ **PHÉP NGHIỆM THU QUYẾT ĐỊNH — 23/23 khớp, `exit 0`.**
+
+      Database dựng **hoàn toàn từ chuỗi migration** rồi nạp lại từ `data/` cho ra số y hệt
+      bản đang chạy — kể cả `$291,985601` tới sáu chữ số thập phân và `867.657.110` token
+      không lệch một đơn vị.
+
+      Đây là thứ chứng minh đường migration **đúng**, không chỉ **chạy được**.
+- [x] 5.5 ✅ `audit_db.py` trên v2: **36 phép · 31 đạt · 5 lưu ý · 0 hỏng** — trùng khít mốc
+      task 1.3. Không phép nào hỏng thêm, cũng không phép nào bỗng đạt
+- [x] 5.6 ✅ `check_api.py` trỏ backend vào v2: **19 · 19 đạt · 0 hỏng**
+
+### ✅ Nghiệm thu nhóm 5 — và `token_ledger` gốc KHÔNG bị đụng
+
+Kiểm sau khi xong cả nhóm:
+
+```
+   token_ledger  ->  23/23 khop, khong lech mot token
+                 ->  KHONG co bang alembic_* nao
+                     (dung: no chua qua migration lan nao)
+```
+
+Suốt nhóm 5, đường lui vẫn là **đổi một biến** `DEFAULT_DSN`. Database cũ chưa bị sửa một
+chữ.
 
 ## 6. Đổi sang v2, rồi trả tên về
 
