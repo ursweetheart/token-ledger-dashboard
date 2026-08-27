@@ -1,0 +1,121 @@
+# Cau hinh LiteLLM CHAY THAT cho Gateway.  (Ban CHI-DE-DO nam o
+# tools/probe-gateway/config.probe.yaml -- dung nham hai file nay.)
+#
+# Bon khoa duoi day quyet dinh cot nao cua LiteLLM_SpendLogs co du lieu. Do duoc
+# 26/08/2026, chi tiet o docs/reference/do-ban-ghi-litellm-24-08.md muc 3.
+# Ba khoa BAT, mot khoa TAT. Sua bat ky khoa nao thi phai do lai.
+
+model_list:
+  # -------------------------------------------------------------------------
+  # Tuyen dang co khoa. Ke hoach yeu cau 8 tuyen / 8 project; hom nay moi co
+  # khoa Google AI Studio, nen chi khai nhung tuyen GOI DUOC THAT.
+  #
+  # KHONG khai gemini-2.5-flash: 26/08 Google tra 404 "no longer available to
+  # new users. Please update your code to use models/gemini-3.6-flash" -- du no
+  # dang la model nang nhat he thong (401.227.817 token = 46,2%).
+  # KHONG khai gemini-2.0-flash: da rut khoi API (9,5% luu luong cu).
+  # -------------------------------------------------------------------------
+  - model_name: gemini-flash
+    litellm_params:
+      model: gemini/gemini-3.6-flash
+      api_key: os.environ/KEY_GOOGLE_AI_STU
+      # Han muc GD5 dong 14. Dat theo tung tuyen, Router tru dan tren Redis nen
+      # hai instance dung CHUNG mot bo dem -- khong phai moi may mot bo.
+      rpm: 60
+      tpm: 1000000
+
+  - model_name: gemini-flash-preview
+    litellm_params:
+      model: gemini/gemini-3-flash-preview
+      api_key: os.environ/KEY_GOOGLE_AI_STU
+      rpm: 60
+      tpm: 1000000
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+
+  # Cau hinh la nguon su that, khong phai bang trong DB. Doi model = sua file nay
+  # roi trien khai lai -- co vet trong git, khong phai mot cu bam tren giao dien.
+  store_model_in_db: false
+
+  # [BAT 1/3] Header nay -> cot end_user. Chi DUNG MOT ten header duoc phep.
+  # Luu y da chot: cho vao day claim `sub` cua JWT, KHONG phai ca chuoi JWT --
+  # token doi moi lan dang nhap thi mot nguoi se dem thanh nhieu end_user.
+  user_header_name: "X-User"
+
+  # [BAT 2/3] Mo cot proxy_server_request. Do la cho DUY NHAT giu duoc header tu
+  # dat ten (x-ralli-trace, x-openwebui-user-email...). Tat khoa nay thi cot do
+  # luon la "{}" -- va phep do se ket luan nham la "Gateway vut het header",
+  # dung nhu ket luan sai sang 26/08.
+  store_prompts_in_spend_logs: true
+
+  # [TAT 1/1] Do duoc 26/08 luot 5c: bat khoa nay thi MOI request gui kem email
+  # nhan vien va token dang nhap sang Google. Ba khoa tren da du de ghi so;
+  # khoa nay khong mua them gi cho viec ghi.
+  forward_client_headers_to_llm_api: false
+
+litellm_settings:
+  drop_params: true
+
+  # [BAT 3/3] Doi trong bat buoc cua khoa 2. Xoa noi dung prompt/response truoc
+  # khi ghi, GIU nguyen header. Do bang chuoi moi: chuoi moi 0 lan trong dong
+  # 19.031 byte, 8/8 header con nguyen.
+  #
+  # Thieu khoa nay = ghi thang cau hoi nguoi dung vao database dang chua 927
+  # email nhan vien that.
+  turn_off_message_logging: true
+
+  # --- Cache tra loi: CHUA BAT, co chu y ---------------------------------
+  # Ke hoach GD2 dong 8 co muc "cache" tren Redis. Nhung cache lam doi y nghia
+  # con so: mot lan trung cache ghi cache_hit=true va spend=0, nen tong token
+  # qua Gateway se KHONG con bang tong token nha cung cap tinh tien. Giai doan 7
+  # phai doi chieu duoc chuyen do truoc, roi moi bo dau # duoi day.
+  #
+  # cache: true
+  # cache_params:
+  #   type: redis
+  #   host: redis
+  #   port: 6379
+  #   password: os.environ/REDIS_PASSWORD
+  #   ttl: 600
+
+router_settings:
+  # Trang thai dung chung dat tren Redis: bo dem rpm/tpm va danh sach instance
+  # dang bi phat nguoi. Nho no ma hai instance LiteLLM chay STATELESS -- them hay
+  # bot mot instance khong lam mat bo dem.
+  #
+  # host/port viet cung: day la ten service va cong BEN TRONG mang compose,
+  # khong doi theo may. Chi mat khau lay tu bien moi truong.
+  redis_host: redis
+  redis_port: 6379
+  redis_password: os.environ/REDIS_PASSWORD
+
+  # Chia request theo han muc CON LAI cua tung tuyen. Mien phi, khong can bang
+  # dieu khien tra tien.
+  routing_strategy: usage-based-routing-v2
+
+  num_retries: 3
+  allowed_fails: 3
+  cooldown_time: 30
+
+  # GD5 dong 15: provider tra 5xx thi tu chuyen tuyen.
+  #
+  # DINH CHINH 27/08/2026 -- ban dau o day ghi "429 KHONG nam trong so loi duoc
+  # chuyen tuyen". SAI. Doc ma nguon fork f005afa146, litellm/router.py:6489:
+  #
+  #     if isinstance(e, ContextWindowExceededError):  ... fallback rieng
+  #     elif isinstance(e, ContentPolicyViolationError): ... fallback rieng
+  #     if fallbacks is not None and model_group is not None:   <-- KHONG phai elif
+  #
+  # Khoi cuoi khong nam trong chuoi elif, nen `fallbacks` chung chay voi MOI loai
+  # loi, ke ca RateLimitError (429). Chi context_window va content_policy moi co
+  # fallback loc theo loai loi.
+  #
+  # He qua PHAI biet truoc khi co du 8 khoa: hom nay hai tuyen dung CHUNG mot
+  # khoa `KEY_GOOGLE_AI_STU`. Google dat han muc theo tung model nen chuyen tuyen
+  # khi 429 van co the thanh cong -- do la cai ta muon. Nhung neu sau nay hai
+  # tuyen dung chung mot han muc thi chuyen tuyen luc 429 khong mua duoc gi ma
+  # van ton mot vong goi. Xem lai khoi nay khi khai du 8 tuyen / 8 project.
+  fallbacks:
+    - gemini-flash: ["gemini-flash-preview"]

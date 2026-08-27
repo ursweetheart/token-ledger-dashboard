@@ -1,0 +1,6 @@
+# Script duoi day chay BEN TRONG container Linux. May nay dat core.autocrlf=true,
+# nen khong ghim thi git tra ve CRLF luc checkout va /bin/sh trong container bao
+# "no such file or directory" - loi tro ve dong shebang, khong phai duong dan,
+# nen rat de doc nham thanh "thieu file".
+*.sh        text eol=lf
+docker/**   text eol=lf
