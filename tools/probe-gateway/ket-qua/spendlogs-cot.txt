@@ -1,0 +1,34 @@
+1. request_id : text
+2. call_type : text
+3. api_key : text
+4. spend : double precision
+5. total_tokens : integer
+6. prompt_tokens : integer
+7. completion_tokens : integer
+8. startTime : timestamp without time zone
+9. endTime : timestamp without time zone
+10. completionStartTime : timestamp without time zone
+11. model : text
+12. model_id : text
+13. model_group : text
+14. custom_llm_provider : text
+15. api_base : text
+16. user : text
+17. metadata : jsonb
+18. cache_hit : text
+19. cache_key : text
+20. request_tags : jsonb
+21. team_id : text
+22. end_user : text
+23. requester_ip_address : text
+24. messages : jsonb
+25. response : jsonb
+26. proxy_server_request : jsonb
+27. session_id : text
+28. status : text
+29. mcp_namespaced_tool_name : text
+30. organization_id : text
+31. agent_id : text
+32. request_duration_ms : integer
+33. created_at : timestamp without time zone
+34. updated_at : timestamp without time zone

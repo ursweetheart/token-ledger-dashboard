@@ -1,0 +1,47 @@
+# Cau hinh CHI DE DO hinh dang ban ghi. Khong phai cau hinh chay that.
+# Khoa la THAM CHIEU bien moi truong, khong bao gio la chuoi.
+
+model_list:
+  # Model dong nhat he thong that: 401.227.817 token = 46,2%
+  - model_name: probe-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/KEY_GOOGLE_AI_STU
+
+  # Ten API that cua thu ma dim_model goi la 'gemini-3-flash': 281.672.600 token = 32,5%
+  - model_name: probe-flash3
+    litellm_params:
+      model: gemini/gemini-3-flash-preview
+      api_key: os.environ/KEY_GOOGLE_AI_STU
+
+  # Lượt 3a: mock khai o TANG CAU HINH. Trong body khong an -- da do 26/08.
+  # Muc dich: doc hinh dang ban ghi ma khong can credit va khong goi Google.
+  - model_name: probe-mock
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/KEY_GOOGLE_AI_STU
+      mock_response: "pong-mock-tu-config"
+
+  # Model Google dang ep chuyen sang. Cung la model guess_model() tra None.
+  - model_name: probe-36
+    litellm_params:
+      model: gemini/gemini-3.6-flash
+      api_key: os.environ/KEY_GOOGLE_AI_STU
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+  # Luot 5 (26/08 chieu). Ba khoa duoi day KHONG bat o luot 1-4 -- do chinh la
+  # ly do A3 bi ket luan "bac bo". Do lai voi cau hinh DAY DU.
+  user_header_name: "X-User"                # day header nay vao cot end_user
+  forward_client_headers_to_llm_api: true   # chuyen tiep moi header x-* sang provider
+  store_prompts_in_spend_logs: true         # do day proxy_server_request
+  # CANH BAO: store_prompts luu NOI DUNG cau hoi vao DB. Chi bat o moi truong do.
+
+litellm_settings:
+  drop_params: true
+
+  # Luot 5b (26/08 chieu): thu giu HEADER ma bo NOI DUNG cau hoi.
+  # Gia thuyet doc tu ma nguon, CHUA do: perform_redaction() xoa messages/input/prompt
+  # nhung metadata.headers nam ngoai tam redaction nen con lai.
+  turn_off_message_logging: true
