@@ -31,29 +31,34 @@ lịch sử một change đã hoàn thiện, nhưng vẫn giữ điểm quay lui
 Nhóm này không sửa gì cả. Nó tồn tại vì phần còn lại đụng vào chỗ chứa dữ liệu không dựng
 lại được, và một bước sai ở đó không có đường lùi.
 
-- [ ] 1.1 ⚪ **Chép `data/` (2,3 GB) sang ổ khác — nên làm, nhưng KHÔNG chặn change này.**
-
-      Bản đầu của task này đánh 🔴 và nói phải làm trước mọi thứ. **Đo lại 24/08 thì đó là
-      lo quá mức**: change này không bao giờ ghi vào `data/`.
-
-      Kiểm cả 8 script trên đường nạp (`load_billing` · `load_hd` · `load_monitoring` ·
-      `load_org` · `load_ralli` · `build_performance` · `build_usage_daily` ·
-      `rebuild_db`) — tìm `open(...,'w')`, `write_text`, `shutil.move/copy/rmtree`,
-      `os.remove/unlink`, `to_csv`, `json.dump`:
+- [x] 1.1 ✅ **ĐÃ SAO LƯU THẬT — kiểm chứng 26/08/2026, không phải lời miễn trừ.**
 
       ```
-         ket qua:  8/8 script CHI DOC doi voi o dia
-                   chung chi ghi vao DATABASE
+         D:\RangDonk\token-ledger-backup\2026-26-08\data
+           2,3 GB · 192 file
+           so voi data/:  0 thieu · 0 thua · 0 file lech byte
+           raw_google_console (688 MB, phan KHONG lay lai duoc):
+             data/   sha256 857550e577817423
+             backup  sha256 857550e577817423    KHOP TUNG BYTE
       ```
 
-      Thứ ghi vào `data/` là các script `pull_*` và `merge_*`, và change này **không gọi
-      cái nào**. Dữ liệu gốc trong thư mục dự án là đủ để viết và chạy migration.
+      **Bản đầu của task này ghi sai.** Nó nói *"không có bản sao lưu nào được tuyên bố đã
+      thực hiện"*, suy từ việc checkout không chứa `data/`. Điều đó đúng với một bản clone
+      sạch — `data/*` nằm trong `.gitignore` — nhưng **sai với máy đang vận hành**, nơi
+      `data/` có thật và đủ 2,3 GB.
 
-      Vẫn nên chép, nhưng vì lý do khác và không gấp: `data/` chỉ có **1 file trong git**
-      trên tổng 2,3 GB, và `raw_google_console/` (1.023 MB) + `da_xu_ly/` (829 MB) **không
-      kéo lại được** — cửa sổ lưu giữ của Google trượt 196 → 112 ngày trong một tuần. Đó
-      là rủi ro **thường trực** của dự án (ổ hỏng, gõ nhầm `rm`), không phải rủi ro do
-      change này tạo ra.
+      Bản sao lưu cũ `2026-08-08` (443 MB · 73 file) chỉ phủ tới 08/08; 120 file kéo về
+      ngày 13/08 và 17/08 nằm ngoài nó. Giữ lại làm mốc cũ, không dùng làm bằng chứng.
+
+      Vì sao task này không phải thủ tục: `raw_google_console/du_lieu_giam_sat/` **không
+      kéo lại được** — cửa sổ lưu giữ của Cloud Monitoring trượt nhanh. `da_xu_ly/`
+      (728 MB) thì dựng lại được từ `raw_*`, nên nặng nhất lại ít quan trọng nhất.
+
+      Việc người dùng miễn ngày 24/08 là miễn **khoảng chờ theo thời gian** của 6.3 — đã
+      xác nhận lại 26/08. Nó chưa bao giờ miễn bản sao lưu, và nay bản sao lưu **đã có**.
+
+      ⚠️ Tên thư mục `2026-26-08` theo `YYYY-DD-MM`, lệch với `2026-08-08` theo `YYYY-MM-DD`.
+      Nên đổi thành `2026-08-26` để các bản tự xếp đúng thứ tự thời gian.
 - [x] 1.2 ✅ **Làm thành công cụ, không phải file tĩnh** — `tools/baseline_db.py`.
 
       Task này ban đầu chỉ nói *"ghi vào một file tạm"*. Nhưng task 5.4 phải **so lại** đúng
@@ -212,13 +217,15 @@ so lại **23/23 khớp**, không đụng một token.
 
 ## 4. Đổi nguồn schema trong `connect.rebuild()` — giữ nguyên bước xoá sạch
 
-- [ ] 4.1 ⚠️ **`DROP SCHEMA` KHÔNG biến mất — nó ở lại đúng chỗ của nó.**
+- [x] 4.1 ⚠️ **`DROP SCHEMA` KHÔNG biến mất — nó ở lại đúng chỗ của nó.**
 
       Bẫy dễ mắc: change này tên là *"đổi schema không phải xoá database"*, nên phản xạ đầu
       tiên là gỡ bỏ `DROP SCHEMA`. **Làm thế sẽ vỡ `rebuild_db.py`**: bước 1 gọi
       `load_billing.py --rebuild`, và `--rebuild` có nghĩa *"xoá sạch, dựng schema + danh
       mục, nạp hoá đơn"*. Không xoá sạch thì nạp lại danh mục vào bảng đã có dòng → đụng
       khoá chính ngay.
+
+      Evidence: guard-ordering test proves a missing catalog exits before `open_db`; full-flow test preserves the wipe step.
 
       Việc đúng là **tách hai thao tác đang bị gộp làm một**:
 
@@ -253,12 +260,18 @@ so lại **23/23 khớp**, không đụng một token.
 
       Database rác đã xoá; `token_ledger` không bị đụng (kiểm lại: 1.189 dòng ·
       867.657.110 token).
-- [ ] 4.3 Nửa danh mục là **dữ liệu gieo**, sinh bởi `gen_catalog.py`, Alembic không thay.
+- [x] 4.3 Nửa danh mục là **dữ liệu gieo**, sinh bởi `gen_catalog.py`, Alembic không thay.
       Giữ cả nhánh `raise SystemExit` khi thiếu file — nó đang chỉ đúng cách sửa
-- [ ] 4.4 Giữ nguyên chữ ký hàm và giá trị trả về `(cn, placeholder)` — `load_billing.py`
+
+      Evidence: full-flow test observes `migrate` before separate `seed:02_catalog.sql`.
+- [x] 4.4 Giữ nguyên chữ ký hàm và giá trị trả về `(cn, placeholder)` — `load_billing.py`
       gọi nó và không được biết bên trong đã đổi
-- [ ] 4.5 Đọc lại toàn bộ hàm sau khi sửa. Bước này bắt buộc: `rebuild()` là chỗ duy nhất
+
+      Evidence: full-flow test asserts the seed connection object and `%s` return contract.
+- [x] 4.5 Đọc lại toàn bộ hàm sau khi sửa. Bước này bắt buộc: `rebuild()` là chỗ duy nhất
       biết cách dựng database, sửa sai là mọi thứ sau đó sai theo
+
+      Evidence: rebuild full-flow and `ACTIVE_DSN` failure-reset tests pass.
 
 ## 5. Dựng `token_ledger_v2` song song — database cũ KHÔNG bị đụng
 
@@ -321,56 +334,183 @@ Chỉ làm nhóm này khi nhóm 5 khớp **hết**.
       *(`/api/usage` trả 159 dòng / 97,1 triệu token — đó là cửa sổ 30 ngày mặc định của
       endpoint, không phải lệch. Toàn kỳ đã so ở task 5.4: 1.189 dòng / 867.657.110.)*
 
-- [ ] 6.3 ⏸ **CHỜ VÀI NGÀY — dừng ở đây, và đây là quyết định của anh Tuấn.**
+- [ ] 6.3 ⚠️ **Gate trước cutover — 3/4 điều kiện đã thoả (cập nhật 26/08).**
 
-      Ba task dưới không hoàn tác được. Một database rỗng chỉ tốn dung lượng đĩa; xoá sớm
-      để tiết kiệm vài trăm MB là đổi một thứ không mua lại được lấy một thứ rẻ tiền.
+      ```
+         [x] 8.1-8.6 hoan tat        26/08 -- xem tung task
+         [x] backup data/            192/192 file, 0 lech byte, sha256 khop
+         [x] live snapshot           26/08 11:30 -- xem duoi
+         [ ] independent preflight   VAN CHUA co -- xem ghi chu duoi
+      ```
 
-      Trong lúc chờ: `token_ledger` cũ **còn nguyên**, chưa qua migration lần nào, và quay
-      lui chỉ là sửa `PG_DATABASE` về `"token_ledger"`.
+      **Tự rà soát 26/08 (KHÔNG thay thế được điều kiện độc lập).** Anh Tuấn yêu cầu tôi
+      tự rà bằng kỹ năng *vòng lặp review + sửa*. Đã làm, và nó **thêm bằng chứng** chứ
+      không **thoả điều kiện** — người viết không tự rà chính mình được. Ô trên vẫn để trống.
+
+      Bằng chứng mới thu được:
+
+      ```
+         1. Ban du phong KHOI PHUC DUOC that
+              pg_restore vao database moi -> 20 bang · 3 view · alembic 003 · 11 cot
+              23/23 con so khop.  Truoc do chi moi chung minh no DOC duoc.
+
+         2. Dien tap dung hai lenh cua 6.4 va 6.5 tren database nhap
+              DROP DATABASE            -> OK
+              ALTER DATABASE ... RENAME -> OK, ban doi ten van du 23/23 con so
+
+         3. token_ledger_v2 KHONG co ket noi nao dang giu
+              -> lenh RENAME o 6.5 se khong treo
+
+         4. downgrade() cua CA BA revision deu nem NotImplementedError
+              kiem bang cach GOI THAT, khong phai bang cach doc
+
+         5. insert_many() nhan `columns` do NGUOI GOI truyen, khong noi suy tu bang
+              -> them cot nullable khong lam vo loader nao.  0 dong INSERT thieu
+                 danh sach cot, 0 dong SELECT * lay theo vi tri (co doi chung duong)
+      ```
+
+      Lỗi tự tìm thấy và đã sửa: task 8.6 bị đẩy xuống **sau** 8.7 do phép thay thế regex
+      của chính tôi. Nay đúng thứ tự 8.1 → 8.7.
+
+      **Live snapshot (26/08/2026):**
+
+      ```
+         D:\RangDonk\token-ledger-backup\2026-08-26-truoc-cutover\
+           sha256.txt                        be9488260c4ff36d...
+
+         Kiem 3 lop:
+           sha256 trong container == sha256 tren dia   -> chep ra khong hong
+           pg_restore --list doc duoc: 97 muc, du TABLE DATA
+           ma bam ghi canh file de doi chieu ve sau
+      ```
+
+      Nội dung: 19 bảng + `alembic_version`, 3 view, 18 PK / 29 FK / 21 chỉ mục, và
+      **946 họ tên · 927 email · 937 tài khoản người thật · 130 đơn vị**. File chỉ 4,3 MB
+      nên rất dễ vô tình phát tán — để ngoài repo, không đẩy lên dịch vụ đám mây nào chưa
+      cân nhắc.
+
+      Vì sao vẫn cần snapshot dù đã có `data/`: `001_baseline_baseline.py` ghi rõ *"từ ngày
+      Gateway ghi dòng đầu tiên, dòng gateway KHÔNG có bản sao ở `data/`"*. Đường lui bằng
+      `data/` đang còn dùng được nhưng **sắp hết hạn**.
+
+      Điều kiện còn thiếu **không phải việc gõ phím**: cần một người thứ hai. Không được
+      tự mình bỏ qua.
+
+      *(Nguyên văn điều kiện, giữ lại:)* **Gate trước cutover — không còn gate “chờ vài ngày”.** Người dùng đã miễn rõ
+      ràng riêng khoảng chờ theo thời gian ngày 24/08/2026; miễn này **không** miễn backup,
+      live snapshot, hay independent preflight review.
+
+      Trước 6.4, phải hoàn thành **toàn bộ 8.1–8.6**, bao gồm candidate acceptance/rehearsal
+      runs. Đặc biệt, 8.6 phải áp dụng `002` rồi `003` tuần tự trên `token_ledger_v2` đang có
+      dữ liệu thật, và sau mỗi lần phải so lại các số mốc. Chỉ sau khi các bằng chứng đó cùng
+      backup, live snapshot, và independent preflight review được chấp nhận thì mới được làm
+      6.4. `token_ledger` cũ vẫn còn nguyên; quay lui vẫn là sửa `PG_DATABASE` về
+      `"token_ledger"`.
 - [ ] 6.4 `DROP DATABASE token_ledger`
 - [ ] 6.5 ⚠️ Đóng backend, pgAdmin và mọi script, rồi `ALTER DATABASE token_ledger_v2
       RENAME TO token_ledger`. Còn kết nối thì lệnh **treo** chứ không báo lỗi rõ
-- [ ] 6.6 Trả `connect.PG_DATABASE` về `token_ledger`. Sau bước này không còn chữ `_v2` ở
-      đâu — kiểm bằng `grep -rn "_v2"` trên toàn repo
+- [ ] 6.6 Trả `connect.PG_DATABASE` về `token_ledger`.
+
+      **Danh sách 9 chỗ phải sửa (đếm 26/08, đã loại migration bất biến):**
+
+      ```
+         db/connect.py:61,73,75      <-- CHO DUY NHAT co hieu luc chay
+         backend/check_api.py:38         (vi du trong docstring)
+         db/migrations/env.py:15         (vi du)
+         scripts/audit_db.py:4           (vi du)
+         scripts/rebuild_db.py:5         (vi du)
+         tools/baseline_db.py:4          (vi du)
+         alembic.ini:99                  (vi du)
+
+         docs/reference/dong-bo-may-dong-nghiep-20-08.md
+         docs/reference/toan-trinh-du-lieu.md
+      ```
+
+      Chỉ `db/connect.py:75` đổi hành vi; 8 chỗ còn lại là ví dụ trong tài liệu — nhưng để
+      lại thì lần sau có người chép nguyên câu lệnh và trỏ vào một database không tồn tại.
+
+      Được phép giữ `_v2`: `db/migrations/versions/002,003`, `docs/reference/nhat-ky-*`,
+      `openspec/changes/*` — lịch sử phải trung thực với tên tại thời điểm đó. Sau cutover, `grep -rn "_v2"` phải
+      không còn match trong runtime code, configuration, và live operating docs. Immutable
+      migrations, archived material, dated journals, và OpenSpec history được giữ các tên
+      lịch sử trung thực, nên có thể còn `_v2`.
 - [ ] 6.7 Chạy lại `audit_db.py` + `check_api.py` lần cuối
 
 ## 7. Dọn và ghi lại
 
-- [ ] 7.1 Xoá `db/01_schema.sql` — nội dung đã nằm trong `001_baseline.sql`. Còn hai file là còn
-      trôi khỏi nhau
-- [ ] 7.2 Xoá `scripts/copy_to_postgres.py` — đã chết sẵn: đòi một file SQLite làm nguồn mà
-      `var/token_ledger.sqlite` bị xoá từ 17/08, `var/` hiện rỗng
-- [ ] 7.3 `grep -rn "01_schema\|copy_to_postgres"` toàn repo, sửa mọi chỗ còn trỏ tới. Biết
-      trước có `db/connect.py`, `scripts/rebuild_db.py`, và vài file `.md` trong `docs/`
-- [ ] 7.4 Cập nhật `docs/reference/dong-bo-may-dong-nghiep-*.md`: lệnh dựng nay có thêm
-      bước `alembic upgrade head`
-- [ ] 7.5 Cập nhật `docs/reference/cay-thu-muc.md` cho khớp cây thư mục mới
-- [ ] 7.6 Ghi vào `db/migrations/README.md`: cách thêm migration mới, luật *"đã chạy thì
-      không sửa"*, và vì sao `02_catalog.sql` không nằm trong migration
+- [x] 7.1 ✅ Đã xoá `db/01_schema.sql`; baseline bất biến còn ở
+      `db/migrations/sql/001_baseline.sql`, hash SHA256 trước/sau không đổi.
+- [x] 7.2 ✅ ĐÃ XÓA trong commit `aa5f7d0`: `scripts/copy_to_postgres.py` đã bị xóa cùng
+      việc bỏ SQLite escape hatch; task này không tuyên bố một lần xóa mới.
+- [x] 7.3 ✅ Đã sửa mọi locator/workflow còn sống. `rg` chỉ còn provenance trong baseline
+      bất biến, ghi chú giải thích quá trình chuyển đổi, và các nhật ký dated được brief
+      cho phép giữ lịch sử trung thực.
+- [x] 7.4 ✅ `dong-bo-may-dong-nghiep-20-08.md` tách hai đường không trùng: database có dữ
+      liệu dùng `alembic upgrade head`; rebuild có chủ ý dùng `rebuild_db.py`, tự migrate.
+- [x] 7.5 ✅ `cay-thu-muc.md` đã có `alembic.ini`, `db/migrations/`, baseline SQL/Python;
+      không còn schema trùng, copy script hay đường SQLite sống dưới `var/`.
+- [x] 7.6 ✅ `db/migrations/README.md` ghi luật revision tiến bất biến, SQL-first/raw cursor,
+      seed catalog, hai đường upgrade/rebuild và DSN duy nhất từ `connect.DEFAULT_DSN`.
 
 ## 8. Nghiệm thu
 
-- [ ] 8.1 Trên một database trắng: `alembic upgrade head` + `rebuild_db.py` ra đúng 9 con số
-- [ ] 8.2 `audit_db.py` không có phép hỏng mới so với mốc 1.3
-- [ ] 8.3 `check_api.py` không có phép hỏng mới so với mốc 1.3
-- [ ] 8.4 `node --test tests/*.test.js` vẫn xanh
-- [ ] 8.5 `python tools/chay_dashboard_trong_node.js` exit 0
-- [ ] 8.6 Chứng minh năng lực mới thật sự có — **diễn tập trên database THẬT đang có dữ
-      liệu**, vì đó mới là điều hôm nay không làm được:
+- [x] 8.1 ✅ **26/08.** Database trắng `token_ledger_acc81` → `alembic upgrade head`
+      (20 bảng, 3 view, 0 dòng) → `rebuild_db.py` (43 giây, 7/7 bước đạt) →
+      `baseline_db.py --compare var/baseline-2026-08-24.json`:
+      **23 khoá, 23 khớp, 0 lệch.** `usage_resolved` = 1.189 dòng · **867.657.110 token**
+      · $291,985601. Dựng lại từ số không ra đúng từng con số
+- [x] 8.2 ✅ `audit_db.py` trên `token_ledger_v2`: **36 phép · 31 đạt · 5 lưu ý · 0 hỏng**.
+      *"Cấu trúc SẠCH."* Năm lưu ý đều là dữ liệu thiếu đã biết và đã chấp nhận
+- [x] 8.3 ✅ `check_api.py` trên `token_ledger_v2`: **19 phép · 19 đạt · 0 hỏng**.
+      Gồm cả phép khẳng định kết nối backend là `ReadOnlySqlTransaction`.
+      Khoá dùng cho lần chạy là khoá tạm sinh tại chỗ, KHÔNG ghi vào `.env`
+- [x] 8.4 ✅ `node --test tests/*.test.js` → **18/18 xanh**, 0 hỏng (26/08).
+      Đồng thời chạy `python -m unittest discover -s tests` → **11/11 OK** — 11 phép này
+      KHÔNG có task nào gọi tới; xem 8.7
+- [x] 8.5 ✅ `node tools/chay_dashboard_trong_node.js` → **exit 0**, *"DASHBOARD NẠP ĐƯỢC"*.
+      937 tài khoản người · 0 dòng `svc.*` lọt ra giao diện
+- [x] 8.6 ✅ **DIỄN TẬP ĐẠT — 26/08/2026, trên `token_ledger_v2` đang có 867.657.110 token.**
 
-      1. Viết migration `002_dien_tap.sql`: thêm một cột nullable vô hại
-      2. `alembic upgrade head` lên database thật
-      3. **So lại 9 con số của task 1.2** — phải không suy suyển một token
-      4. Viết migration `003_go_dien_tap.sql` gỡ cột đó ra
-      5. `alembic upgrade head` lần nữa, so số lần nữa
+      ```
+         truoc 002    23/23 khop    fact_usage_daily  11 cot
+         sau  002     23/23 khop    11 -> 12 cot,  3 view nguyen ven
+         sau  003     23/23 khop    12 -> 11 cot,  cot dien tap: 0
+      ```
 
-      ⚠️ **Không dùng `alembic downgrade`** — task 3.4 đã chốt forward-only, `downgrade()`
-      ném `NotImplementedError`. Gỡ ra bằng một migration TIẾN, không phải migration LÙI.
+      Chuỗi revision: `001_baseline` → `002_rehearsal_add` → `003_rehearsal_drop`.
+      Gỡ bằng bước **TIẾN**, không dùng `downgrade` — đúng luật forward-only của task 3.4.
 
-      Giá phải trả: lịch sử migration có thêm hai bản ghi không mang giá trị nghiệp vụ. Đó
-      là giá đúng — lịch sử migration vốn chỉ được thêm, không được sửa, và hai dòng đó là
-      bằng chứng ngày năng lực này được chứng minh.
+      File đã thêm (đặt tên tiếng Anh theo quy ước dự án, khác tên tiếng Việt ghi ở bản
+      task cũ):
 
-      Nếu bước này không chạy được thì change **chưa đạt mục đích**, dù mọi task trên đều
-      xanh.
+      ```
+         db/migrations/sql/002_rehearsal_add_column.sql
+         db/migrations/versions/002_rehearsal_add_column.py
+         db/migrations/sql/003_rehearsal_drop_column.sql
+         db/migrations/versions/003_rehearsal_drop_column.py
+      ```
+
+      Chọn `fact_usage_daily` chứ không phải một bảng nhỏ bên lề: đó là bảng sự kiện
+      trung tâm và là nguồn của view `usage_resolved`. Cột nullable không default nên
+      PostgreSQL chỉ ghi siêu dữ liệu, không viết lại bảng.
+
+      **Kiểm thêm sau diễn tập:**
+      - Chuỗi 3 migration chạy sạch từ một database **trắng**, dừng đúng ở 11 cột
+      - `audit_db.py` → 36 phép · 31 đạt · 5 lưu ý · **0 hỏng**
+      - `unittest` **11/11** · `node --test` **18/18**
+
+      Giá phải trả: lịch sử migration có thêm hai bản ghi không mang giá trị nghiệp vụ.
+      Đó là giá đúng — lịch sử migration chỉ được thêm, và hai dòng đó là bằng chứng
+      ngày năng lực này được chứng minh.
+- [x] 8.7 ✅ **Khe hở nghiệm thu đã bịt ở mức task.** `tests/test_acceptance_safety.py`
+      (8 phép) và `tests/test_connect_migrations.py` (3 phép) trước đây không nằm trong
+      task nào — 8.4 chỉ gọi `node --test`. Nay 8.4 gọi cả hai lệnh:
+
+      ```
+         node --test tests/*.test.js                      18/18
+         python -m unittest discover -s tests -p 'test_*.py'   11/11
+      ```
+
+      ⚠️ **Còn treo, ngoài phạm vi change này:** repo không có CI (`.github/workflows`,
+      `pytest.ini`, `conftest.py` đều không có). Chừng nào chưa có, hai bộ test chỉ chạy
+      khi có người nhớ gõ lệnh

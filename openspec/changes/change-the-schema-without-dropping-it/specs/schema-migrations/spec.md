@@ -135,4 +135,6 @@ cộng thẳng `fact_usage_daily` là đếm ba lần):
 
 - **WHEN** database mới đã qua hết nghiệm thu và database cũ đã bị xoá
 - **THEN** database còn lại SHALL mang đúng tên `token_ledger`
-- **AND** MUST NOT còn hậu tố tạm thời (`_v2`) ở bất kỳ đâu trong repo
+- **AND** runtime code, configuration, và live operating docs MUST NOT còn hậu tố tạm thời
+  (`_v2`); immutable migrations, archived material, dated journals, và OpenSpec history MAY
+  giữ các tên lịch sử trung thực

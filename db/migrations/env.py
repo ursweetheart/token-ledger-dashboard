@@ -24,8 +24,8 @@ backend/store.py la SQL tho. Va quan trong hon: Alembic KHONG QUAN LY VIEW, ma
 `usage_resolved` moi la thu 01_schema.sql goi la "CUA CHINH de hoi so lieu".
 Autogenerate se im lang bo qua ca ba view roi bao "khong co gi thay doi".
 
-Migration o day viet bang SQL thuan, doc tu db/migrations/sql/*.sql qua
-op.execute(). Xem db/migrations/README.
+Baseline SQL executes through the raw DBAPI cursor, not `op.execute()`.
+Xem db/migrations/README.md.
 """
 
 from __future__ import annotations

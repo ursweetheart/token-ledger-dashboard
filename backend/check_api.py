@@ -258,14 +258,44 @@ def directory_is_people_only(c: Check, base: str) -> None:
 
 def read_only(c: Check) -> None:
     """Thử GHI thật sự qua chính kết nối của backend. Phải bị từ chối."""
+    label = "Ket noi cua backend la chi doc"
+    ok = False
+    result_label = label
+    detail = ""
     try:
         with store.open_db() as (cn, _):
-            cn.cursor().execute("CREATE TABLE _write_probe_delete_me (x INT)")
-            cn.commit()
-        c.expect(False, "Ket noi cua backend la chi doc",
-                 "GHI DUOC - database khong o che do chi doc")
+            try:
+                cur = cn.cursor()
+            except Exception as e:
+                detail = f"KHONG TAO DUOC CURSOR ({type(e).__name__}): {e}"
+            else:
+                rejection = None
+                try:
+                    cur.execute("CREATE TEMP TABLE _write_probe (x INT)")
+                except Exception as e:
+                    rejection = e
+
+                try:
+                    cn.rollback()
+                except Exception as e:
+                    detail = f"ROLLBACK HONG ({type(e).__name__}): {e}"
+                else:
+                    if rejection is None:
+                        detail = "GHI DUOC - database khong o che do chi doc"
+                    else:
+                        sqlstate = (getattr(rejection, "pgcode", None)
+                                    or getattr(rejection, "sqlstate", None))
+                        if sqlstate == "25006":
+                            ok = True
+                            result_label = f"{label} ({type(rejection).__name__})"
+                        else:
+                            detail = ("LENH GHI HONG NHUNG KHONG PHAI LOI CHI DOC "
+                                      f"({type(rejection).__name__}, "
+                                      f"SQLSTATE={sqlstate or 'khong co'}): {rejection}")
     except Exception as e:
-        c.expect(True, f"Ket noi cua backend la chi doc ({type(e).__name__})")
+        detail = f"KHONG MO DUOC KET NOI ({type(e).__name__}): {e}"
+
+    c.expect(ok, result_label, detail)
 
 
 def compare_engines(c: Check, a: str, b: str) -> None:

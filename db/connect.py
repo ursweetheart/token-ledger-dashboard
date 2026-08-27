@@ -7,7 +7,7 @@ nó đã sai từ 21/08 và không ai biết. Ba điều kiện của một đư
 24/08, không điều nào còn đúng:
 
     có dữ liệu để quay về   var/token_ledger.sqlite bị xoá 17/08, var/ rỗng
-    dựng lại được           01_schema.sql HỎNG CÚ PHÁP trên SQLite từ 21/08
+    dựng lại được           tệp schema đơn khối cũ HỎNG CÚ PHÁP trên SQLite từ 21/08
     có phép kiểm canh       chưa từng có phép nào chạy trên SQLite
 
 Chỗ hỏng nằm ở `INSERT INTO ref_source`: hai chuỗi viết LIỀN KỀ nhau. PostgreSQL
@@ -189,8 +189,9 @@ def run_sql_file(cn, placeholder: str, path: Path) -> None:
 def apply_migrations(dsn: str) -> None:
     """Dựng schema bằng chuỗi migration trong db/migrations/.
 
-    Thay cho `run_sql_file(01_schema.sql)` từ 24/08/2026. Từ đó schema chỉ được
-    mô tả ở MỘT chỗ - chuỗi migration - và `db/01_schema.sql` đã bị xoá.
+    Thay cho đường nạp tệp schema đơn khối từ 24/08/2026. Từ đó schema chỉ được
+    mô tả ở MỘT chỗ - chuỗi migration; baseline nằm ở
+    `db/migrations/sql/001_baseline.sql`.
 
     Gọi Alembic qua API trong tiến trình, không qua `subprocess`: trên máy này
     `python` trên PATH là một shim trỏ đi chỗ khác, nên gọi tiến trình con là mời
@@ -227,6 +228,10 @@ def rebuild(dsn: str):
         rebuild()              xoá sạch  ->  migration  ->  danh mục
         alembic upgrade head   (không xoá gì, database giữ nguyên dữ liệu)
     """
+    catalog = DB_DIR / "02_catalog.sql"
+    if not catalog.exists():
+        raise SystemExit("Chưa có db/02_catalog.sql. Chạy: python db/gen_catalog.py")
+
     cn, _ = open_db(dsn)
     with cn.cursor() as cur:
         cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
@@ -239,9 +244,6 @@ def rebuild(dsn: str):
     apply_migrations(dsn)
 
     cn, placeholder = open_db(dsn)
-    catalog = DB_DIR / "02_catalog.sql"
-    if not catalog.exists():
-        raise SystemExit("Chưa có db/02_catalog.sql. Chạy: python db/gen_catalog.py")
     run_sql_file(cn, placeholder, catalog)
     cn.commit()
     return cn, placeholder
@@ -266,7 +268,7 @@ def query(cn, sql: str, params=()) -> list:
     #
     # BẪY NÀY VẪN CÒN SỐNG, và nó vừa cắn lần nữa ngày 24/08: migration 001 gọi
     # `exec_driver_sql(sql, ())` và 11 dấu '%' trong ghi chú tiếng Việt của
-    # 01_schema.sql vỡ hết. Xem db/migrations/versions/001_baseline_baseline.py.
+    # baseline vỡ hết. Xem db/migrations/versions/001_baseline_baseline.py.
     if params:
         cur.execute(sql, params)
     else:

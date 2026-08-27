@@ -192,7 +192,8 @@ CANONICAL_UNIT_PAIRS = [
 # phải bung hai lần mới thấy được thứ đầu tiên phân biệt được với nhau.
 #
 # Đây là QUY ƯỚC TRÌNH BÀY, không phải thuộc tính của tổ chức - xem ghi chú ở
-# db/01_schema.sql. Trước 20/08/2026 nó sống trong web/js/app.js dưới dạng hai mã
+# db/migrations/sql/001_baseline.sql:141. Trước 20/08/2026 nó sống trong
+# web/js/app.js dưới dạng hai mã
 # gõ cứng `unitChildren("company")` và `unitChildren("rd-corp")`.
 #
 # `Công ty CPBĐ PN Rạng Đông` (cây Hợp Đồng) KHÔNG nằm trong danh sách này dù tên
@@ -455,15 +456,16 @@ def main() -> None:
     # app của nó.
     #
     # ID GÁN THEO THỨ TỰ CHỮ CÁI, không theo thứ tự gặp. Như vậy dựng lại
-    # database hai lần từ cùng dữ liệu sẽ ra cùng bộ mã - cần cho việc đối chiếu
-    # SQLite <-> PostgreSQL trong scripts/copy_to_postgres.py.
+    # database hai lần từ cùng dữ liệu sẽ ra cùng bộ mã - cần để audit hai lần
+    # rebuild từ cùng `data/` cho kết quả ổn định.
     #
     # ĐƠN VỊ CŨNG NẰM Ở ĐÂY (thêm 14/08, đợt rà soát thứ hai)
     # Trước đây đơn vị chỉ nằm ở dim_user. Mà một tài khoản có NHIỀU dòng
     # dim_user, mỗi dòng một đơn vị, nên "người này thuộc đơn vị nào" có hai đáp
     # án - 5/932 tài khoản vấp phải. Nguyên nhân: cùng một tổ chức được mô hình
     # hoá hai lần, TLA HĐ gọi 'Phòng BH1' còn Ralli gọi 'PBH1'.
-    # Quy tắc chọn ở hàm `unit_priority` dưới đây, ghi đầy đủ trong 01_schema.sql.
+    # Quy tắc chọn ở hàm `unit_priority` dưới đây; schema gốc và lý do thiết kế
+    # nằm trong db/migrations/sql/001_baseline.sql.
     def norm(u: str) -> str:
         return (u or "").strip().lower()
 

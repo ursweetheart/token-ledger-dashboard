@@ -175,8 +175,7 @@ Ba cái bẫy script này đã xử:
 
 ```bash
 docker compose up -d                            # PHẢI lên trước
-python scripts/rebuild_db.py                    # PostgreSQL (mặc định từ 17/08/2026)
-python scripts/rebuild_db.py --db var/token_ledger.sqlite   # bản SQLite để đối chiếu
+python scripts/rebuild_db.py                    # xoá sạch, tự chạy migrations rồi nạp data/
 ```
 
 Đích mặc định lấy từ `connect.DEFAULT_DSN` — **một** chỗ duy nhất, dựng từ `PG*` khớp
@@ -184,11 +183,16 @@ python scripts/rebuild_db.py --db var/token_ledger.sqlite   # bản SQLite để
 `rebuild_db.py` có hằng số DSN riêng, mà `update_dashboard.py` gọi nó không truyền `--db`
 — nên đổi `connect.py` xong đường ống vẫn dựng lại database cũ, không lỗi nào báo.
 
+Đây là đường **dựng lại toàn bộ từ `data/`**: `rebuild_db.py` cố ý xoá schema, tự chạy
+chuỗi migration đến `head`, nạp `02_catalog.sql`, rồi mới chạy bảy khâu dữ liệu. Nếu
+database đang có dữ liệu cần giữ và chỉ cần nhận schema mới, không chạy rebuild; dùng
+`alembic upgrade head` để nâng tại chỗ.
+
 ## Bảy bước, và thứ tự là bắt buộc
 
 | # | Script | Dựng bảng | Vì sao ở vị trí này |
 |---|---|---|---|
-| 1 | `load_billing.py --rebuild` | schema + danh mục + `fact_billing_daily` | `--rebuild` **xoá sạch**, nên phải đầu tiên |
+| 1 | `load_billing.py --rebuild` | migrations + danh mục + `fact_billing_daily` | `--rebuild` **xoá sạch**, nên phải đầu tiên |
 | 2 | `load_org.py` | `dim_unit`, `dim_user`, `account`, `dim_function` | Xoá `fact_call`; đảo với bước 3 là mất cái vừa nạp |
 | 3 | `load_ralli.py` | `fact_call` | Cần `account` của bước 2 |
 | 4 | `load_hd.py` | `fact_app_daily` | Cần `account` và `dim_user` của bước 2 |
@@ -253,18 +257,15 @@ Ranh giới giữa `luu y` và `HONG`: **có sửa được bằng cách nạp l
 "Google không ghi ai gọi" thì nạp lại bao nhiêu lần cũng thế → `luu y`. "Một
 dòng trỏ vào `unit_id` không tồn tại" → `HONG`.
 
-## Chuyển sang PostgreSQL
+## Cập nhật schema tại chỗ
 
 ```bash
-docker compose up -d
-python scripts/copy_to_postgres.py
+alembic upgrade head
 ```
 
-Script này chép SQLite sang Postgres rồi **đối chiếu từng bảng**: số dòng, tổng
-mọi cột số, số giá trị khác nhau. Không khớp là dừng.
-
-Cùng một file `01_schema.sql` chạy được cả hai hệ vì không dùng `SERIAL` — mọi
-khoá đều gán tường minh.
+Lệnh này chạy các revision còn thiếu trên database hiện có và **không xoá dữ liệu**.
+Không chạy `rebuild_db.py` ngay sau đó: rebuild tự chạy migrations rồi cố ý xoá và nạp
+lại toàn bộ. Luật thêm revision và hai đường vận hành nằm ở `db/migrations/README.md`.
 
 ---
 
@@ -279,10 +280,10 @@ python -m uvicorn backend.main:app --port 8000
 
 Mở **http://127.0.0.1:8000/docs** — tài liệu tự sinh, bấm thử được từng endpoint.
 
-Đọc PostgreSQL thay vì SQLite:
+Trỏ backend vào database candidate hiện tại:
 
 ```bash
-set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger
+set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger_v2
 python -m uvicorn backend.main:app --port 8000
 ```
 
@@ -298,9 +299,8 @@ python -m uvicorn backend.main:app --port 8000
 | `GET /api/performance?start=&end=` | Mã trả về + độ trễ |
 | `GET /api/thinking?start=&end=` | Token có bật chế độ thinking |
 
-Không có endpoint ghi nào. Kết nối mở ở chế độ **chỉ đọc thật sự** — SQLite mở
-bằng `mode=ro`, PostgreSQL đặt session `readonly`. Là hệ điều hành và máy chủ
-database bảo đảm, không phải lời hứa trong tài liệu.
+Không có endpoint ghi nào. Kết nối PostgreSQL mở session `readonly`, nên máy chủ
+database thực thi chế độ **chỉ đọc thật sự**; đây không phải lời hứa trong tài liệu.
 
 ## Mọi con số đều kèm "số này từ đâu ra"
 
@@ -325,19 +325,21 @@ cd web && python -m http.server 8080 --bind 127.0.0.1   # phục vụ dashboard
 
 Hai vế của lệnh này giải hai vấn đề khác nhau, thiếu vế nào cũng hở:
 
-- **`cd web`** chặn *cái gì* phục vụ được. Trước đây lệnh chạy tại gốc repo, mà gốc
-  repo là document root thì `.env`, `var/token_ledger.sqlite` (937 nhân viên kèm email),
-  `data/` và `.git/` đều tải được — đã đo, cả sáu đường dẫn trả 200 và `.env` về nguyên
-  nội dung. Chạy trong `web/` thì không có đường đi ngược lên, kể cả `..%2f` hay `%2e%2e/`.
+- **`cd web`** chặn *cái gì* phục vụ được. Trước 24/08/2026, khi file SQLite còn tồn
+  tại, chạy tại gốc repo từng phơi `.env`, đường `var/token_ledger.sqlite`, `data/` và
+  `.git/` — đã đo, các đường dẫn trả 200. File và đường SQLite đó không còn tồn tại;
+  bài học còn hiệu lực là chạy trong `web/` để không có đường đi ngược lên, kể cả
+  `..%2f` hay `%2e%2e/`.
 - **`--bind 127.0.0.1`** chặn *ai* truy cập được. Mặc định của `http.server` là
   *all interfaces*, tức cả mạng LAN công ty.
 
 ```bash
 ```
 
-`api.js` (nạp trước `app.js`) tự gọi backend và thay dữ liệu vào. **Không chạy
-backend thì nó im lặng rút lui** và dashboard chạy bằng dữ liệu nhúng như cũ —
-bấm đúp `index.html` vẫn xem được.
+`api.js` (nạp trước `app.js`) tự gọi backend rồi chuyển dữ liệu cho dashboard.
+Dữ liệu metric nhúng đã bị xoá: nếu backend không chạy hoặc trả lỗi, giao diện
+hiện đúng trạng thái lỗi và **không hiển thị bất kỳ con số nào**. Trước 17/08/2026
+dashboard từng im lặng rơi về số nhúng cũ; behavior lịch sử đó không còn tồn tại.
 
 Backend ở máy khác: `index.html?api=http://may-khac:8000`
 
@@ -355,7 +357,7 @@ ra bằng hệ số — số suy ra trông y hệt số đo.
 
 ```bash
 python backend/check_api.py                                   # 16 phép kiểm
-python backend/check_api.py --compare http://127.0.0.1:8001   # 24, so hai hệ
+python backend/check_api.py --compare http://127.0.0.1:8001   # 24, so hai PostgreSQL
 ```
 
 **16 phép kiểm**: số khớp database, tham số rác bị từ chối bằng 400 (**không** âm
@@ -363,8 +365,8 @@ thầm trả bảng rỗng), và **thử ghi thật** qua chính kết nối c�
 là nó bị từ chối.
 
 Thêm `--compare` thì thành **24**: 8 phép so nữa, đối chiếu **từng byte JSON** giữa
-máy chủ chạy SQLite và máy chủ chạy PostgreSQL trên cả 8 endpoint. Cờ là
-`--compare`, không phải `--doi-chieu`.
+hai backend PostgreSQL trên cả 8 endpoint — ví dụ database đang chạy với candidate
+`token_ledger_v2` vừa dựng. Cờ là `--compare`, không phải `--doi-chieu`.
 
 ---
 
@@ -452,6 +454,6 @@ trong khi hoá đơn thì có. Ngày nào hoá đơn chưa kịp về, khoá đ�
 | File | Nội dung |
 |---|---|
 | `mo-ta-database.md` | Từng bảng, từng cột, và các bẫy khi truy vấn |
-| `db/01_schema.sql` | Schema — mỗi quyết định đều có ghi chú lý do |
+| `db/migrations/sql/001_baseline.sql` | Baseline schema bất biến — mỗi quyết định đều có ghi chú lý do |
 | `../decisions/mui-gio-2026-08-08.md` | Các quyết định về múi giờ |
 | `backend/store.py` | Mọi câu SQL của backend nằm gọn ở đây |

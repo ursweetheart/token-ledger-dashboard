@@ -1,0 +1,1 @@
+{"id":"chatcmpl-cb685dbc-3a2d-47dd-b3fc-2f230b2257a5","created":1787736968,"model":"probe-mock","object":"chat.completion","choices":[{"finish_reason":"stop","index":0,"message":{"content":"pong-mock-tu-config","role":"assistant"}}],"usage":{"completion_tokens":20,"prompt_tokens":10,"total_tokens":30}}

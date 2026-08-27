@@ -23,7 +23,7 @@ container khác không đọc được, và không có schema riêng lẫn `GRAN
 chia quyền theo service được. Cả hai chặn đường việc chạy nhiều bản sau một load balancer.
 
 Đường SQLite **đã bị gỡ hẳn** ngày 24/08/2026: nó không còn dữ liệu (file bị xoá 17/08),
-không dựng lại được (`01_schema.sql` hỏng cú pháp trên SQLite từ 21/08), và chưa từng có
+không dựng lại được (tệp schema đơn khối cũ hỏng cú pháp trên SQLite từ 21/08), và chưa từng có
 phép kiểm nào chạy trên nó. Đưa vào một DSN `.sqlite` nay dừng ngay với thông báo rõ.
 
 Đổi database bằng **một** biến, có hiệu lực cho cả backend và mọi script:

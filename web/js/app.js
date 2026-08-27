@@ -241,7 +241,8 @@ function applyRealAccountUsage(){
     if(r&&(x.day<r.start||x.day>r.end)) return;
     /* GHÉP BẰNG `account_id` TRƯỚC. Nó là khoá số, cùng khoá mà database dùng -
        không phụ thuộc hoa/thường, khoảng trắng, hay việc app ghi tên kiểu nào.
-       Đúng nguyên tắc db/01_schema.sql: "KHÔNG dùng tên đăng nhập làm khoá ngoại
+       Đúng nguyên tắc db/migrations/sql/001_baseline.sql:161:
+       "KHÔNG dùng tên đăng nhập làm khoá ngoại
        ... đã thấy ba dạng khác nhau cho cùng một tài khoản".
        Nhánh ghép theo tên giữ lại làm đường lui và có biến đếm, để nó không âm
        thầm gánh việc nếu một ngày `account_id` vắng mặt. */

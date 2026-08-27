@@ -1,8 +1,8 @@
 # Đọc hiểu database (số liệu ngày 14/08/2026)
 
 > Dành cho người mở pgAdmin lên và không biết mình đang nhìn gì.
-> 18 bảng + 3 view, 577.819 dòng. **PostgreSQL là mặc định** từ 17/08/2026; SQLite vẫn
-> dựng được để đối chiếu.
+> 18 bảng + 3 view, 577.819 dòng. **PostgreSQL là hệ quản trị duy nhất** từ
+> 24/08/2026; các số đo SQLite còn lại trong tài liệu chỉ là provenance lịch sử.
 >
 > Muốn biết dữ liệu **đến đây bằng đường nào**: `toan-trinh-du-lieu.md`.
 >
@@ -197,7 +197,7 @@ gemini-2.5-flash  2.337 lượt      gemini-2.5-pro  493 lượt
 
 - `raw_model` giữ tên gốc app trả về; `model_id` là tên đã dịch qua `dim_model_alias`
 - `model_id IS NULL` ở 2 dòng (4 lượt): một dòng app trả tên `'none'`, một dòng của tài khoản đã bị xoá nên không lọc riêng được. **Hai dòng này không vào `fact_usage_daily`** vì `model_id` nằm trong khoá chính — `load_hd.py` in ra con số đó mỗi lần chạy chứ không nuốt lặng
-- khoá chính là `row_id` gán tường minh, không phải bộ khoá tự nhiên: PostgreSQL cấm NULL trong khoá chính còn SQLite thì cho, đúng kiểu khác biệt chỉ lộ ra lúc đổi hệ
+- khoá chính là `row_id` gán tường minh, không phải bộ khoá tự nhiên: trong lần chuyển hệ lịch sử, PostgreSQL cấm NULL trong khoá chính còn bản SQLite khi đó cho phép — khác biệt chỉ lộ ra lúc đổi hệ
 
 ⚠ **Đừng cộng `fact_call` với `fact_app_daily` để lấy "tổng lượt gọi".** Chúng đo hai agent khác nhau ở hai độ mịn khác nhau. Muốn một con số thì đọc `fact_usage_daily` lọc `source='app'`, hoặc view `usage_resolved`.
 
@@ -332,7 +332,7 @@ Quy tắc chọn, **tất định**:
 
 Cột `don_vi_xung_dot = 1` **giữ lại dấu vết**: các nguồn đã không đồng ý và ta vừa chọn hộ. 4 tài khoản (không tính `quy.tv` — một nguồn im lặng thì là thiếu tin, không phải mâu thuẫn).
 
-> ⚠️ **Đừng bao giờ JOIN bằng `LOWER(username)`.** Hàm `LOWER()` của SQLite **chỉ xử lý ASCII**: `'TMĐT_KTLoan'` qua `LOWER()` ra `'tmĐt_ktloan'`, không khớp `'tmđt_ktloan'` mà Python đã sinh ra. Mất đúng 3 dòng, không lỗi nào báo. Đã có `account_id` thì dùng nó.
+> ⚠️ **Đừng bao giờ JOIN bằng `LOWER(username)`.** Phép đo lịch sử trên bản SQLite đã gỡ cho thấy `LOWER()` khi đó **chỉ xử lý ASCII**: `'TMĐT_KTLoan'` thành `'tmĐt_ktloan'`, không khớp `'tmđt_ktloan'` do Python sinh. Mất đúng 3 dòng, không lỗi nào báo. PostgreSQL hiện tại đã có `account_id`; hãy dùng khoá đó.
 
 ### `ref_fx` — 1 dòng
 Tỷ giá USD → VND.
@@ -500,16 +500,22 @@ SELECT SUM(so_luong) FROM fact_billing_daily WHERE loai IN ('input','cached');
 ## Dựng lại database
 
 ```bash
-docker compose up -d                                          # PHẢI lên trước
-python scripts/rebuild_db.py                                  # PostgreSQL, ~56 giây
-python scripts/rebuild_db.py --db var/token_ledger.sqlite      # SQLite,     ~14 giây
+docker compose up -d                         # PHẢI lên trước
+python scripts/rebuild_db.py                 # xoá sạch, migrations rồi nạp data/
 ```
 
-Cả 7 khâu nạp chạy được trên **cả hai** hệ mà không sửa dòng SQL nào — đã đo 17/08/2026:
-dựng thẳng từ `data/` vào PostgreSQL cho ra database khớp từng dòng với bản sao từ SQLite,
-và `audit_db.py` trên hai bên cho đầu ra giống nhau từng byte.
+`rebuild_db.py` tự chạy chuỗi Alembic rồi nạp catalog và dữ liệu; không cần chạy
+`alembic upgrade head` trước. Muốn giữ dữ liệu hiện có và chỉ cập nhật schema thì dùng
+`alembic upgrade head` thay cho rebuild. Xem hai đường vận hành ở `db/migrations/README.md`.
 
-### Hai chênh lệch KIỂU giữa hai hệ quản trị
+### Kết quả đối chiếu lịch sử giữa hai hệ — đo 17/08/2026
+
+Trước khi đường SQLite bị gỡ ngày 24/08/2026, cả 7 khâu nạp từng chạy trên hai hệ mà
+không sửa SQL: dựng từ `data/` vào PostgreSQL khớp từng dòng với bản sao SQLite, và
+`audit_db.py` cho đầu ra giống nhau từng byte. Đây là provenance của các quyết định kiểu
+dữ liệu bên dưới, không phải một workflow còn dùng được.
+
+#### Hai chênh lệch kiểu đã đo
 
 Cùng một cột trả về kiểu Python khác nhau. Đã đo, cả hai vô hại tới màn hình — nhưng ghi
 lại vì loại lỗi này không ném exception, nó chỉ trả số sai:
@@ -524,8 +530,8 @@ lại vì loại lỗi này không ném exception, nó chỉ trả số sai:
 ra **chuỗi** thì `ti + to + cached` trong `web/js/app.js` sẽ thành **nối chuỗi** thay vì
 phép cộng — số sai mà không lỗi nào báo.
 
-**`is_technical`:** SQLite không có BOOLEAN thật, nó lưu 0/1 (`scripts/copy_to_postgres.py`
-phải chuyển kiểu vì thế). Hiện không thành phần nào trong `web/` đọc cột này.
+**`is_technical`:** Trong đợt đối chiếu lịch sử, SQLite không có BOOLEAN thật và lưu 0/1,
+nên công cụ chuyển hệ khi đó phải đổi kiểu. Hiện không thành phần nào trong `web/` đọc cột này.
 ⚠ Nếu sau này có phần hiển thị đọc nó thì **đừng so bằng `=== true`** — dùng phép kiểm
 đúng/sai thông thường, không thì nó chạy trên hệ này và vỡ trên hệ kia.
 
@@ -544,5 +550,5 @@ python scripts/audit_db.py
 | File | Nội dung |
 |---|---|
 | `toan-trinh-du-lieu.md` | **Lấy → gộp → nạp → backend.** Đọc cái này nếu muốn tự chạy lại |
-| `db/01_schema.sql` | Schema — mỗi quyết định đều có ghi chú lý do |
+| `db/migrations/sql/001_baseline.sql` | Baseline schema bất biến — mỗi quyết định đều có ghi chú lý do |
 | `backend/store.py` | Mọi câu SQL của backend |

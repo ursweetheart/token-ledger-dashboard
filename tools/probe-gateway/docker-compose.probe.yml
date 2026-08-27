@@ -1,0 +1,51 @@
+# Moi truong DO, tach hoan toan khoi du an va khoi compose goc cua fork.
+# Ba khac biet bat buoc so voi docker-compose.yml cua fork:
+#   1. db  5432 -> 5433   khong tranh cong voi token-ledger-postgres
+#   2. moi cong deu gan 127.0.0.1, khong mo ra LAN
+#   3. khong env_file  -> khoa khong bi chep sang thu muc nay
+name: litellm-probe
+
+services:
+  litellm:
+    build:
+      # Fork nam NGANG HANG voi du an, khong long ben trong. Duong dan nay chinh la
+      # tai lieu cho quy uoc do -- doi fork di cho khac thi compose bao loi ngay.
+      context: ../../../litellm_rang_dong
+    image: litellm_rang_dong:probe
+    command: ["--config=/app/config.yaml", "--port", "4000"]
+    volumes:
+      - ./config.probe.yaml:/app/config.yaml:ro
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      DATABASE_URL: "postgresql://llmproxy:probe_local@db:5432/litellm"
+      STORE_MODEL_IN_DB: "False"
+      LITELLM_MASTER_KEY: "sk-probe-local"
+      KEY_GOOGLE_AI_STU: "${KEY_GOOGLE_AI_STU:?can KEY_GOOGLE_AI_STU tu --env-file}"
+      # Luot 5: in "POST Request Sent from LiteLLM" (curl day du gui sang provider)
+      # va "RAW RESPONSE" ra stdout -> hut bang `docker compose logs`.
+      LITELLM_LOG: "DEBUG"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: llmproxy
+      POSTGRES_PASSWORD: probe_local
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - litellm_probe_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d litellm -U llmproxy"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: "no"
+
+volumes:
+  litellm_probe_pg:
