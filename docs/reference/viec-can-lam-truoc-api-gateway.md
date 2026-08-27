@@ -277,9 +277,11 @@ Nếu agent A gửi `LongNT` còn agent B gửi `longnt@rangdong.com.vn`, ta có
   có, không phải gõ tay 6 lần, và tiền tố khiến mọi truy vấn lọc ra được dễ dàng.
 - ~~Phòng ban gửi `unit_id` hay gửi tên~~ → **BỎ**, tra từ `account.unit_id`
 
-#### 🟡 A4. Sửa 3 kiểu dữ liệu sai trong sheet `Data Out`
+#### ✅ A4. Sửa 3 kiểu dữ liệu sai trong sheet `Data Out` — **sheet đã sửa**
 
-Sheet này là **hợp đồng** giữa Gateway và dashboard. Ai code theo nó sẽ code sai ở 3 trường:
+Kiểm lại sheet ngày 27/08/2026: **cả bốn dòng dưới đây đã được sửa**, mục này treo 🟡 quá hạn. Giá trị trong sheet hôm nay: #6 `text` · #12 `int` · #22 `text` · #23 `int` ms với nguồn `Gateway` kèm ghi chú về độ mịn. Giữ bảng lại làm vết, không phải việc còn phải làm.
+
+Sheet này là **hợp đồng** giữa Gateway và dashboard. Ai code theo bản cũ sẽ code sai ở 3 trường:
 
 | # | Trường | `Data Out` ghi | Database thật | Hậu quả |
 |---|---|---|---|---|
@@ -288,18 +290,22 @@ Sheet này là **hợp đồng** giữa Gateway và dashboard. Ai code theo nó 
 | 22 | `response_code` | `int` | `TEXT` | So sánh sai |
 | 23 | `latency_ms` | `int` ms, nguồn "Hiện có" | DB có `p50_seconds`/`p95_seconds` **theo giây**, ở mức `(ngày, agent)` — không phải mức request | "Hiện có" là sai: cả đơn vị lẫn độ mịn đều khác |
 
-#### 🟡 A5. Hai cột dashboard sắp mất nguồn mà sheet không nói
+#### ✅ A5. Hai cột dashboard sắp mất nguồn — **đã đo, đã sửa sheet** (27/08/2026)
 
-`Data Out` đánh dấu hai trường này là nguồn **"Hiện có"**:
+Lo ngại ban đầu: kiến trúc đích **bỏ hẳn `fact_monitoring`** (Phần II §7), mà đó là nguồn duy nhất hôm nay của `thinking_enabled` (#14) và `output_modality` (#15). Gateway không bắn ra thì cột **"think"** trên dashboard trắng — **không lỗi nào báo**.
 
-| # | Trường | Nguồn DUY NHẤT hôm nay |
+**Đo 26/08/2026, có đối chứng — cùng model, cùng câu hỏi, khác đúng một tham số:**
+
+| Trường | LiteLLM có cột riêng? | Dẫn xuất được? |
 |---|---|---|
-| 14 | `thinking_enabled` | `fact_monitoring.thinking_enabled` |
-| 15 | `output_modality` | `fact_monitoring.output_modality` |
+| `thinking_enabled` | ❌ không | ✅ `…completion_tokens_details.reasoning_tokens` **có khoá** ⇒ `true` |
+| `output_modality` | ❌ không | ✅ `…completion_tokens_details.{text,audio,image}_tokens` — khoá nào có giá trị thì đó là dạng đầu ra |
 
-Nhưng kiến trúc đích **bỏ hẳn `fact_monitoring`** (Phần II §7: "❌ bỏ — Gateway thay thế hoàn toàn"). Nếu Gateway không tự bắn hai trường này ra, cột **"think"** trên dashboard sẽ trắng — **không lỗi nào báo**.
+🔴 **Chỗ dễ đọc nhầm nhất:** khi tắt suy luận, khoá `reasoning_tokens` **vắng mặt hoàn toàn** — *không* phải bằng `0`. Code đọc `usage.get("reasoning_tokens", 0) > 0` thì đúng; code đọc `usage["reasoning_tokens"] is not None` thì vỡ; code chỉ kiểm `!= 0` mà không kiểm sự tồn tại thì **mọi request đều thành "có suy luận"**.
 
-→ Chuyển hai trường này sang nhóm "Nguồn: Gateway" trong sheet, và xác nhận LiteLLM có phơi chúng không.
+**Sheet đã sửa 27/08/2026:** cột `Nguồn` của cả hai trường đổi từ `Gateway` sang **`Dẫn xuất từ Gateway`**, kèm quy tắc tính trong `Ghi chú`. Ghi "Nguồn: Gateway" là sai — ai code theo sẽ đi tìm một cột không tồn tại.
+
+Chi tiết: [`doi-chieu-data-out-litellm.md`](doi-chieu-data-out-litellm.md) và [`do-ban-ghi-litellm-24-08.md`](do-ban-ghi-litellm-24-08.md) §6 ④.
 
 #### 🟡 A6. Chốt độ mịn thời gian
 
@@ -631,7 +637,7 @@ Thiếu LiteLLM, Redis, Nginx. Chưa cần hôm nay, nhưng khi thêm thì `dock
 | 1 | **A1** chốt 3 câu treo | 1h họp | Mọi thứ khác phụ thuộc |
 | 2 | **A2** chốt project ID | 15 phút | Rẻ nhất, hỏng im lặng nhất |
 | 3 | ~~**A3** ban hành quy ước username~~ | ✅ chốt 20/08, đo claim xong 21/08 | Ralli dùng `sub`, Hợp Đồng dùng `username` — xem §8f |
-| 4 | **A4 + A5** sửa sheet `Data Out` | 30 phút | Nó là hợp đồng; sai hợp đồng thì code sai theo |
+| 4 | ~~**A4 + A5** sửa sheet `Data Out`~~ | ✅ xong 27/08 | A4: 4 kiểu dữ liệu đã đúng. A5: đổi sang "Dẫn xuất từ Gateway" kèm quy tắc tính |
 | 5 | ~~**B5** tách `account.kind`~~ | ✅ xong 20/08 | Nửa `health()` đã chữa con số sai; nửa `accounts()` gộp vào B1 |
 | 6 | ~~**B1** gỡ `'app'` khỏi 8 chỗ đầu đọc~~ | ✅ xong 21/08 | Diễn tập 0/8 → 7/7 |
 | 7 | ~~**B2** nguồn thứ tư vào `usage_resolved`~~ | ✅ xong 21/08 | Gộp cùng B1, đúng như khuyến nghị |
