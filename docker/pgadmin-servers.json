@@ -5,7 +5,7 @@
       "Group": "Servers",
       "Host": "postgres",
       "Port": 5432,
-      "MaintenanceDB": "token_ledger",
+      "MaintenanceDB": "token_ledger_v2",
       "Username": "token",
       "SSLMode": "prefer",
       "Comment": "Khai bao san boi docker-compose. Host la 'postgres' - ten service trong cung mang docker, KHONG phai localhost."

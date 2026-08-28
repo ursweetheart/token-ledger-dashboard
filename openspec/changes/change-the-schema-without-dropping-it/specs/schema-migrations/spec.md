@@ -125,16 +125,16 @@ cộng thẳng `fact_usage_daily` là đếm ba lần):
 - **THEN** quá trình SHALL dừng lại và điều tra nguyên nhân
 - **AND** MUST NOT nới phép so cho vừa ý, MUST NOT xoá database cũ
 
-#### Scenario: Database cũ trong lúc chuyển đổi
+#### Scenario: Hai database được giữ song song
 
-- **WHEN** database mới đang được dựng và kiểm
-- **THEN** database cũ SHALL không bị đụng tới
-- **AND** quay lui SHALL chỉ là đổi `DEFAULT_DSN` về giá trị cũ
+- **WHEN** `token_ledger_v2` đã qua nghiệm thu và trở thành runtime ledger
+- **THEN** `token_ledger` SHALL được giữ nguyên làm bản legacy để đối chiếu và rollback
+- **AND** hệ thống MUST NOT yêu cầu xoá database cũ hoặc rename database mới
+- **AND** ingestion Gateway mới SHALL chỉ ghi vào `token_ledger_v2`, MUST NOT ghi cùng một
+  dòng nghiệp vụ vào cả hai ledger
 
-#### Scenario: Sau khi chuyển xong
+#### Scenario: Database vận hành của LiteLLM
 
-- **WHEN** database mới đã qua hết nghiệm thu và database cũ đã bị xoá
-- **THEN** database còn lại SHALL mang đúng tên `token_ledger`
-- **AND** runtime code, configuration, và live operating docs MUST NOT còn hậu tố tạm thời
-  (`_v2`); immutable migrations, archived material, dated journals, và OpenSpec history MAY
-  giữ các tên lịch sử trung thực
+- **WHEN** Gateway LiteLLM khởi động và ghi SpendLogs
+- **THEN** LiteLLM SHALL dùng database riêng tên `litellm`
+- **AND** `token_ledger` và `token_ledger_v2` MUST NOT chứa bảng vận hành `LiteLLM_*`

@@ -11,20 +11,21 @@ nguyên lịch 20 tuần. File này là phương án nén, để so sánh và đ
 
 ## 1. Trả lời trước: được, nhưng biên độ bằng không
 
-Được — với **ba điều kiện**, và nếu thiếu một trong ba thì trượt, không phải "cố thì kịp".
+Được — với **hai điều kiện bên ngoài**, và nếu thiếu một trong hai thì trượt, không phải
+"cố thì kịp". Gate xóa/rename database đã bị rút ngày 27/08; giữ song song hai ledger không
+chặn phát triển Gateway.
 
 | | Điều kiện | Ai quyết | Hạn chót |
 |---|---|---|---|
 | ① | 8 khoá API của 8 project nộp đủ về một chỗ | TTDL&ĐHS (An Thanh) | **28/08** |
-| ② | Có một người **khác** soát độc lập cổng 6.3 (chuyển schema) | TTDL&ĐHS (Chí Thanh) | **31/08** |
-| ③ | Được quyền đổi `base_url` của Ralli và 7 agent còn lại | TTDL&ĐHS (An Thanh) | **04/09** |
+| ② | Được quyền đổi `base_url` của Ralli và 7 agent còn lại | TTDL&ĐHS (An Thanh) | **04/09** |
 
-Điều kiện ② là thứ **không nén được bằng cách làm chăm hơn**. Nó cần thời gian của một
-người khác. Xin muộn một ngày là mất một ngày, không bù lại được.
+Điều kiện ② **không thay thế được bằng việc viết thêm code**. Chưa có quyền đổi `base_url`
+thì chưa agent thật nào đi qua Gateway; xin muộn một ngày là mất một ngày rollout.
 
 ---
 
-## 2. Ba thứ không nén được
+## 2. Hai thứ không nén được và một invariant phải giữ
 
 **① Hai tuần chạy song song.** Chính Master Plan đặt sàn này (GĐ7 dòng 19), và nó là thứ
 duy nhất chứng minh được Gateway không làm lệch số. Nén xuống 1 tuần thì báo cáo đối chiếu
@@ -33,9 +34,9 @@ mất một nửa cơ sở. **Giữ nguyên 2 tuần: 14/09 → 25/09.**
 **② Nghỉ lễ 02/09.** Thứ Tư, nghỉ 2 ngày theo luật. Tuần 31/08–04/09 chỉ còn **3 ngày**.
 Đây là tuần dựng Gateway thật — tuần nặng nhất lại là tuần ngắn nhất.
 
-**③ Soát độc lập cổng 6.3.** Change `change-the-schema-without-dropping-it` đang 40/45.
-Ba trên bốn điều kiện đã thoả; điều kiện thứ tư ghi rõ: *"independent preflight — cần MỘT
-NGƯỜI KHÁC"*. Không ai tự soát bản của mình được.
+**③ Cửa sổ đối chiếu hai tuần.** `token_ledger` legacy, `token_ledger_v2` runtime và database
+`litellm` được giữ tách biệt. Việc không xóa/rename database loại bỏ một destructive gate,
+nhưng không được dùng để rút ngắn cửa sổ đối chiếu Gateway với các nguồn cũ.
 
 ---
 
@@ -70,8 +71,7 @@ Tuần này không dựng gì. Nó chỉ để gỡ ba thứ chặn đường, v
 
 ```
    [ ] Gui yeu cau thu 8 khoa API cua 8 project           -> dieu kien ①
-   [ ] Dat lich soat doc lap cong 6.3 voi Chi Thanh       -> dieu kien ②
-   [ ] Xin quyen doi base_url cua Ralli + 7 agent         -> dieu kien ③
+   [ ] Xin quyen doi base_url cua Ralli + 7 agent         -> dieu kien ②
    [ ] Sinh LITELLM_MASTER_KEY / LITELLM_SALT_KEY, dien .env
    [ ] `docker compose --profile gateway up -d` -- dung thu tren may cuc bo
    [x] Go JWT_test_for_header khoi goc repo            -- XONG 27/08
@@ -89,7 +89,7 @@ balancer, và ba yêu cầu ① ② ③ đã gửi đi — *đã gửi*, chưa c
    [ ] Them gemini-3.6-flash vao db/rules.py + dim_model  (muc 6 ②, viec nho)
    [ ] Cap 8 Virtual Key, moi agent mot khoa, thu hoi doc lap tung khoa
    [ ] Chot dinh dang danh tinh: end_user = claim `sub`, KHONG phai ca chuoi JWT
-   [ ] Chay cong 6.3 sau khi co ket qua soat doc lap -> chuyen schema v2
+   [ ] Xac nhan ingestion chi ghi token_ledger_v2; token_ledger legacy chi doc
 ```
 
 **Chốt tuần 1:** một request thật của **một** agent đi qua Gateway tới Google và về, có

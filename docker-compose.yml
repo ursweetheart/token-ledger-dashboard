@@ -84,7 +84,9 @@ services:
     container_name: token-ledger-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${PGDATABASE:-token_ledger}
+      # Khop db/connect.py: runtime ledger mac dinh la v2. Tren volume cu,
+      # token_ledger legacy van con nguyen ben canh; bien nay khong xoa database.
+      POSTGRES_DB: ${PGDATABASE:-token_ledger_v2}
       POSTGRES_USER: ${PGUSER:-token}
       POSTGRES_PASSWORD: ${PGPASSWORD:-token_local}
       # Sap xep theo C cho ket qua ORDER BY on dinh, khong phu thuoc locale may.
@@ -96,7 +98,7 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       # pgAdmin cho khoe roi moi len, va script chuyen du lieu cung doi cai nay.
-      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-token} -d ${PGDATABASE:-token_ledger}"]
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-token} -d ${PGDATABASE:-token_ledger_v2}"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -140,11 +142,10 @@ services:
     environment:
       PGHOST: postgres
       # `postgres` la database quan tri, LUON ton tai. KHONG dung ${PGDATABASE}
-      # o day: docker-compose mac dinh tao `token_ledger` con db/connect.py mac
-      # dinh tro vao `token_ledger_v2`, va cutover (task 6.4-6.6) se DROP roi
-      # doi ten. Buoc tao role/database khong duoc phu thuoc vao ten dang trong
-      # qua trinh doi. Script tu di tim moi database khop '^token_ledger' de do
-      # ranh gioi.
+      # o day: docker-compose va db/connect.py deu mac dinh `token_ledger_v2`.
+      # `token_ledger` legacy van nam ben canh tren volume da migrate; quyet dinh
+      # 27/08 khong DROP/rename no. Script tu di tim moi database khop
+      # '^token_ledger' de do ranh gioi tren ca legacy lan runtime ledger.
       ADMIN_DB: postgres
       ADMIN_USER: ${PGUSER:-token}
       ADMIN_PASSWORD: ${PGPASSWORD:-token_local}
