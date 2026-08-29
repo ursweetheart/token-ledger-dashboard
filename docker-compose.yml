@@ -38,8 +38,8 @@ x-litellm: &litellm
     # Fork nam NGANG HANG du an, khong long ben trong (repo long repo thi
     # `git clean -xfd` xoa ca fork). Doi cho fork di la compose bao loi ngay.
     # Ban da do: commit f005afa146, litellm 1.99.0.
-    context: ../litellm_rang_dong
-  image: litellm_rang_dong:gateway
+    context: ../litellm_tuan_test
+  image: litellm_tuan_test:gateway
   profiles: ["gateway"]
   restart: unless-stopped
   # entrypoint rieng: chan khoi dong khi thieu khoa, roi moi giao lai cho
