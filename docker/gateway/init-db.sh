@@ -83,6 +83,16 @@ for db in $LEDGER_DBS; do
     continue
   fi
 
+  # Schema public o day da bi thu hoi HET quyen khoi PUBLIC, ke ca USAGE (chat
+  # hon mac dinh PG15, chi con REVOKE CREATE). Khong co USAGE thi $GW_USER
+  # khong PHAN GIAI duoc ten bang, va loi tra ve la "relation khong ton tai"
+  # -- giong het trieu chung "bang doi ten", nen phep do o duoi khong ket luan
+  # duoc gi. Cap USAGE (KHONG cap SELECT) de loi tra ve dung nghia: "permission
+  # denied" that vi thieu quyen doc, khong phai vi khong thay ten bang.
+  printf '%s\n' 'GRANT USAGE ON SCHEMA public TO :"gw_user";' | \
+    PGPASSWORD="$ADMIN_PASSWORD" psql -h "$PGHOST" -U "$ADMIN_USER" -d "$db" \
+      -v ON_ERROR_STOP=1 -v gw_user="$GW_USER" -q
+
   probe_out=$(PGPASSWORD="$GW_PASSWORD" psql -h "$PGHOST" -U "$GW_USER" -d "$db" \
     -tAc "SELECT count(*) FROM \"$probe_table\"" 2>&1) && probe_rc=0 || probe_rc=$?
   probe_msg=$(echo "$probe_out" | tr -d '\r' | head -1)
