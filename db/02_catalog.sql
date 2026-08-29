@@ -16,7 +16,7 @@ INSERT INTO dim_agent (agent_id, code, name, gcp_project_id, has_org_tree,
   (7, 'crm-feedback', 'Phân Loại Dữ Liệu CRM', 'crm-500509', FALSE, '2026-06-25', '2026-07-06', NULL, TRUE, TRUE),
   (8, 'ralli', 'Trợ lý ảo Ralli', 'tla-ralli', TRUE, NULL, '2026-03-14', NULL, TRUE, FALSE);
 
--- 10 model, ten chuan dang gach ngang.
+-- 11 model, ten chuan dang gach ngang.
 INSERT INTO dim_model (model_id, name, family, provider) VALUES
   (1, 'gemini-2.0-flash', 'gemini-2.0', 'Google'),
   (2, 'gemini-2.5-flash', 'gemini-2.5', 'Google'),
@@ -27,7 +27,8 @@ INSERT INTO dim_model (model_id, name, family, provider) VALUES
   (7, 'gemini-3.1-flash-lite', 'gemini-3', 'Google'),
   (8, 'gemini-3.5-flash', 'gemini-3', 'Google'),
   (9, 'gemini-embedding-1.0', 'embedding', 'Google'),
-  (10, 'gemini-embedding-2', 'embedding', 'Google');
+  (10, 'gemini-embedding-2', 'embedding', 'Google'),
+  (11, 'gemini-3.6-flash', 'gemini-3', 'Google');
 
 -- 44 anh xa. Ba nguon goi ten model theo ba kieu khac nhau:
 --   billing 'gemini-embedding-001'  <->  monitoring 'gemini-embedding-1.0'

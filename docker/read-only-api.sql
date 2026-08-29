@@ -1,0 +1,63 @@
+-- Read-only role for the backend. From branch feature/docker-packaging (18/08).
+-- Idempotent. Needs four psql variables:
+--   psql -v api_role=api_readonly -v api_password='...' \
+--        -v db_name=... -v admin_role=... -f docker/read-only-api.sql
+
+\set ON_ERROR_STOP on
+
+BEGIN;
+
+SELECT format('CREATE ROLE %I', :'api_role')
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_roles
+    WHERE rolname = :'api_role'
+)
+\gexec
+
+ALTER ROLE :"api_role" WITH
+    LOGIN
+    NOSUPERUSER
+    NOCREATEDB
+    NOCREATEROLE
+    NOREPLICATION
+    NOBYPASSRLS
+    PASSWORD :'api_password';
+ALTER ROLE :"api_role" SET default_transaction_read_only TO on;
+
+REVOKE ALL PRIVILEGES ON DATABASE :"db_name" FROM :"api_role";
+REVOKE CREATE, TEMPORARY ON DATABASE :"db_name" FROM PUBLIC;
+GRANT CONNECT ON DATABASE :"db_name" TO :"api_role";
+
+REVOKE ALL PRIVILEGES ON SCHEMA public FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON SCHEMA public FROM :"api_role";
+GRANT USAGE ON SCHEMA public TO :"api_role";
+
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM :"api_role";
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO :"api_role";
+
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM PUBLIC;
+REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public FROM :"api_role";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role"
+    REVOKE ALL PRIVILEGES ON TABLES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role"
+    REVOKE ALL PRIVILEGES ON TABLES FROM :"api_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role"
+    REVOKE ALL PRIVILEGES ON SEQUENCES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role"
+    REVOKE ALL PRIVILEGES ON SEQUENCES FROM :"api_role";
+
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role" IN SCHEMA public
+    REVOKE ALL PRIVILEGES ON TABLES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role" IN SCHEMA public
+    REVOKE ALL PRIVILEGES ON TABLES FROM :"api_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role" IN SCHEMA public
+    GRANT SELECT ON TABLES TO :"api_role";
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role" IN SCHEMA public
+    REVOKE ALL PRIVILEGES ON SEQUENCES FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE :"admin_role" IN SCHEMA public
+    REVOKE ALL PRIVILEGES ON SEQUENCES FROM :"api_role";
+
+COMMIT;

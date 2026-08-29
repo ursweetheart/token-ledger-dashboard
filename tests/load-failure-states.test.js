@@ -21,7 +21,10 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const ROOT = path.resolve(__dirname, "..");
-const KHO_MAC_DINH = "tokenledger.key:http://127.0.0.1:8000";
+/* Key store name is `KEY_PREFIX + base()` (api.js), and since 29/08 `base()`
+   depends on the protocol. This must follow the same rule. */
+const khoTen = (protocol) =>
+  "tokenledger.key:" + (protocol === "file:" ? "http://127.0.0.1:8000" : "");
 const html = fs.readFileSync(path.join(ROOT, "web", "index.html"), "utf8");
 
 /* Danh sách id lấy từ CHÍNH index.html: thiếu id nào là lỗi thật của mã nguồn,
@@ -77,7 +80,7 @@ function runDashboard(protocol, fakeFetch, khoa = "khoa-gia-cho-phep-kiem", sear
   };
   /* Tên kho khoá GẮN VỚI ĐỊA CHỈ backend — xem khối KEY_PREFIX trong api.js.
      Harness chạy với location.search rỗng nên base() = DEFAULT_BASE. */
-  if (khoa) localStorage.setItem(KHO_MAC_DINH, khoa);
+  if (khoa) localStorage.setItem(khoTen(protocol), khoa);
   store.__ls = localStorage;
   function Chart() { this.destroy = () => {}; this.update = () => {}; }
   Chart.defaults = { color: "", borderColor: "", font: {}, plugins: { legend: { labels: {} } }, maintainAspectRatio: true };
@@ -211,7 +214,7 @@ test("khoá sai: nói RIÊNG là khoá sai, và xoá khoá hỏng đi", async ()
 
   /* Khoá hỏng phải bị xoá. Giữ lại thì mỗi lần tải trang là một 401 nữa, và
      người dùng thấy "khoá không đúng" cho thứ họ không vừa nhập. */
-  assert.equal(store.__ls.getItem(KHO_MAC_DINH), null,
+  assert.equal(store.__ls.getItem(khoTen("http:")), null,
     "khoá sai vẫn còn trong localStorage");
 
   assert.equal(textOf(store["status-period"]), "—");
@@ -235,7 +238,7 @@ test("khoá của backend này KHÔNG gửi sang backend khác", async () => {
     `khoá đã bị gửi sang địa chỉ lạ: ${goi}`);
   assert.equal(store["key-gate"].hidden, false,
     "địa chỉ lạ phải hỏi khoá mới, không dùng lại khoá của máy nhà");
-  assert.equal(store.__ls.getItem(KHO_MAC_DINH), "khoa-cua-may-nha",
+  assert.equal(store.__ls.getItem(khoTen("http:")), "khoa-cua-may-nha",
     "khoá của máy nhà không được đụng tới");
 });
 
