@@ -116,7 +116,10 @@ Chart.defaults = { color: "", borderColor: "", font: {}, plugins: { legend: { la
 
 const loi = [];
 const window = {
-  location: { search: "", protocol: "http:", href: "http://127.0.0.1:8080/" },
+  // `?api=` because since 29/08 api.js returns an empty base over http, and
+  // Node's fetch cannot resolve relative paths. Switching to protocol "file:"
+  // instead hits api.js's own file:// guard.
+  location: { search: "?api=" + BASE, protocol: "http:", href: "http://127.0.0.1:8080/" },
   localStorage, document, Chart,
   addEventListener() {}, removeEventListener() {},
   matchMedia() { return { matches: false, addEventListener() {} }; },
