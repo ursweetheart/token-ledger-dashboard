@@ -344,8 +344,12 @@
            pricingById  khoá theo model_id  - dòng /api/usage-by-account trả
                         `model_id` chứ không trả tên (xem backend/store.py)
        Dựng cả hai ở đây, trong lớp dịch, thay vì bắt app.js tự tra chéo. */
-    var pricing = {}, pricingById = {};
+    var pricing = {}, pricingById = {}, modelNameById = {};
     (catalog.models || []).forEach(function (m) {
+      /* TEN model theo model_id - dung cho MOI model, ke ca model chua co gia.
+         /api/usage-by-account tra `model_id`, con o loc Model tren man hinh
+         liet ke TEN. Khong co bang tra nay thi hai ben khong bao gio gap nhau. */
+      modelNameById[m.model_id] = m.name;
       if (m.price_input != null || m.price_output != null) {
         // `c` chỉ dùng cho những ngày hoá đơn chưa về. Model nào chưa có giá
         // cache thì để 0 - thà thiếu một khoản nhỏ còn hơn bịa một đơn giá.
@@ -382,7 +386,7 @@
     });
 
     return { days: days, dayOrder: dayOrder, pricing: pricing,
-             pricingById: pricingById,
+             pricingById: pricingById, modelNameById: modelNameById,
              units: tree.units, canonicalUnitOf: tree.canonicalOf,
              noBillingAgents: noBilling,
              budgets: budgets, fxRate: catalog.fx_rate || null };

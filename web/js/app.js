@@ -245,11 +245,10 @@ function buildAccountCatalogueFromDb(){
   var list = REAL_ACCOUNTS.map(function(a){
     if(!a) return null;
     var kind = String(a.kind || "").trim();
-    var isServicePlaceholder = ["service_account","whole_agent","unattributed"].indexOf(kind) >= 0;
-    if(isServicePlaceholder) return null;
-    // Chỉ hai agent này mới có user cụ thể. Các agent khác dùng agent-level là
-    // một khái niệm "người dùng/gộp" chứ không phải danh tính cá nhân.
-    if(!isSpecificUserAgent(a.agent)) return null;
+    // Giữ mọi tài khoản real trong danh mục để cây đơn vị / bảng chi tiết phản
+    // ánh thực tế của database. Điều kiện giới hạn user dropdown chỉ đặt ở UI
+    // hiển thị, không cắt mất nguồn dữ liệu cho cây phòng ban.
+    if(kind !== "real") return null;
     // Ưu tiên MÃ đơn vị (api.js đã quy về bản chuẩn); tên chỉ là đường lui.
     var unit=unitById(a.unit_id)||unitOf(a.unit_name)||null;
     var displayUser = String(a.full_name || a.username || a.agent || "").trim();
@@ -309,6 +308,10 @@ function applyRealAccountUsage(){
   var byKey={}, byId={};
   USER_ACCOUNTS.forEach(function(u){
     u.req=0; u.ti=0; u.to=0; u.active=false; u.last=""; u.quotaPct=0; u.byAgent={};
+    /* Sổ tách theo MODEL, song song với byAgent. Bản ghi tài khoản KHÔNG có
+       trường model — một người dùng nhiều model, nên `u.m` luôn rỗng. Bộ lọc
+       Model/Provider phải hỏi sổ này chứ không hỏi `u.m`. */
+    u.byModel={};
     u.costDerived=0; u.costRows=0; u.costRowsPriced=0;
     if(u.id!=null) byId[u.id]=u;
     if(u.login) byKey[String(u.login).trim().toLowerCase()]=u;
@@ -346,15 +349,21 @@ function applyRealAccountUsage(){
     u.req+=req; u.ti+=ti; u.to+=to;
     var ag=x.agent||u.a, b=u.byAgent[ag]||(u.byAgent[ag]={req:0,ti:0,to:0});
     b.req+=req; b.ti+=ti; b.to+=to;
+    var mn=state.modelNameById&&state.modelNameById[x.model_id];
+    if(mn){ var bm=u.byModel[mn]||(u.byModel[mn]={req:0,ti:0,to:0});
+            bm.req+=req; bm.ti+=ti; bm.to+=to; }
     if(!u.last||x.day>u.last) u.last=x.day;
   });
   USER_ACCOUNTS.forEach(function(u){ u.active=num(u.req)>0; });
   // quotaPct để 0: trước đây nó là 12+(hash%80), tức thẻ trạng thái "Cảnh báo"
   // bật lên theo hàm băm. Không nguồn nào có khái niệm hạn mức theo người, nên
   // để 0 và không ai bị gắn cảnh báo sai.
+  /* Danh ba khong con la ralli-users.js (xoa 17/08/2026) - no den tu
+     /api/accounts. Cau cu noi "danh ba hien thi van la ban Excel 622 dong", nen
+     ai doc log nay se di sua mot tep khong con ton tai. */
   if(bo) console.warn("[TokenLedgerAPI] "+bo+" dong su dung ("+boLuot
-    +" luot) khong khop tai khoan nao trong ralli-users.js - danh ba hien thi"
-    +" van la ban Excel 622 dong, database co 937 tai khoan.");
+    +" luot) khong ghep duoc vao tai khoan nao trong "+USER_ACCOUNTS.length
+    +" tai khoan lay tu /api/accounts.");
 }
 
 /* Phân bổ số liệu THẬT xuống tài khoản, khoá theo CẶP (đơn vị, agent).
@@ -1713,6 +1722,35 @@ function deptTreeNode(unit, byUnit, usageIds){
   if(!keep) return null;
   return {unit:unit, kids:kids, direct:sortAccounts(direct), accounts:accounts};
 }
+/* Tài khoản gắn THẲNG vào một cấp gom ("Toàn công ty", "Tổng công ty Rạng Đông").
+
+   reportingRoots() đi XUYÊN QUA hai cấp đó để cấp 1 của bảng là phòng ban thật —
+   đúng ý, nhưng nó cũng làm những tài khoản treo ngay trên chính hai cấp ấy không
+   còn nhánh nào để đứng vào. Đo 30/08/2026 trên database thật: 74 tài khoản thuộc
+   "Tổng công ty Rạng Đông" và 10 thuộc "Toàn công ty" — 84/937 — KHÔNG hiện ở bất
+   kỳ hàng nào của cây, trong khi thẻ đếm phía trên vẫn nói 937. Cây ra đúng 853
+   hàng tài khoản, và 853 + 84 = 937.
+
+   Nên cho chúng một nhánh riêng ở cấp 1 mang đúng tên cấp gom, thay vì gán bừa vào
+   một phòng ban nào đó — database nói chúng thuộc cấp gom thì bảng phải nói thế.
+
+   HÀNG NÀY KHÔNG ĐƯỢC TRA usageIndex HAY provisionedOf. Cả hai đều cộng dồn lên
+   cấp cha, nên với "Tổng công ty Rạng Đông" chúng trả về số của TOÀN BỘ công ty;
+   đặt cạnh các phòng ban là cộng đôi cả bảng — đúng thứ mà reportingRoots() sinh
+   ra để tránh. Cờ ownAccountsOnly bắt deptRowHtml tính từ chính tài khoản trực
+   thuộc. */
+function aggregateDirectNodes(byUnit){
+  var out=[];
+  (function xet(list){
+    list.forEach(function(u){
+      if(!isReportAggregate(u)) return;
+      var direct=(byUnit[u.id]||[]).slice();
+      if(direct.length) out.push({unit:u, kids:[], direct:sortAccounts(direct), accounts:direct});
+      xet(unitChildren(u.id));
+    });
+  })(unitRoots());
+  return out;
+}
 /* Đơn vị nào có usage thật trong kỳ (cộng dồn lên mọi cấp cha). */
 function deptUsageUnitIds(rows){
   var ids={};
@@ -1759,7 +1797,9 @@ function buildDeptUsageIndex(rows){
 /* Chỉ số của MỘT hàng đơn vị. Ưu tiên usage thật; đơn vị không có dòng usage riêng
    (vùng/đội) thì lấy phần đã phân bổ xuống tài khoản, để tổng cấp con khớp cấp cha. */
 function deptUnitMetrics(unit, usageIndex, accounts){
-  var hit=usageIndex&&usageIndex[unit.id];
+  // unit === null: người gọi CỐ Ý không tra chỉ mục cộng dồn, phải tính từ chính
+  // danh sách tài khoản. Xem ghi chú ở aggregateDirectNodes().
+  var hit=unit&&usageIndex&&usageIndex[unit.id];
   // Nhánh này có dòng usage thật. Tiền tính được, NHƯNG có thể trộn hoá đơn với
   // phần suy ra của những ngày hoá đơn chưa về - `costEst` nói phần đó bao nhiêu.
   if(hit&&hit.rowCount>0)
@@ -1861,7 +1901,7 @@ function deptRowHtml(row, usageIndex, light){
       naCell()+deptQuotaCell(u)+"</tr>";
     return html;
   }
-  var m=deptUnitMetrics(row.unit,usageIndex,row.accounts), g=m.agg;
+  var m=deptUnitMetrics(row.ownAccountsOnly?null:row.unit,usageIndex,row.accounts), g=m.agg;
   /* TỬ SỐ VÀ MẪU SỐ PHẢI ĐẾM CÙNG MỘT TẬP.
      Mẫu số `DEPT_PROVISIONED` (rebuildRalliProvisioned) chỉ tính tài khoản
      `in_directory && !is_shared` - đúng định nghĩa "được cấp quyền". Tử số
@@ -1879,7 +1919,7 @@ function deptRowHtml(row, usageIndex, light){
   }).length;
   // Cấp "Trực thuộc" chỉ gom tài khoản gắn thẳng vào đơn vị nên mẫu số là chính nó,
   // không phải số cấp phát của cả đơn vị cha.
-  var prov=row.tier==="direct"?eligible.length:provisionedOf(row.unit.id);
+  var prov=(row.tier==="direct"||row.ownAccountsOnly)?eligible.length:provisionedOf(row.unit.id);
   html+="<td class='num'>"+fmt(m.agents)+"</td>"+
     adoptionCell(activeCount,prov,outsideCount)+
     "<td class='num'>"+fmt(g.r)+"</td>"+
@@ -1893,9 +1933,17 @@ function buildDeptRows(rows){
   // Dùng CHUNG gốc với ma trận tab Agents: bỏ qua hai hàng tổng hợp "Toàn công ty" và
   // "Tổng công ty Rạng Đông" để cấp 1 là phòng ban thật, không tốn hai cấp bung vô ích.
   var byUnit=accountsByUnitIndex(deptPool()), usageIds=deptUsageUnitIds(rows), out=[];
-  reportingRoots().forEach(function(root,i){
+  var roots=reportingRoots();
+  roots.forEach(function(root,i){
     var node=deptTreeNode(root,byUnit,usageIds);
     if(node) flattenMatrixTree(node,1,[],true,i,null,out,deptIsOpen);
+  });
+  aggregateDirectNodes(byUnit).forEach(function(node,j){
+    var at=out.length;
+    flattenMatrixTree(node,1,[],true,roots.length+j,null,out,deptIsOpen);
+    // flattenMatrixTree đẩy hàng đơn vị TRƯỚC rồi mới tới các hàng tài khoản,
+    // nên out[at] chính là hàng cấp gom vừa dựng.
+    if(out[at]) out[at].ownAccountsOnly=true;
   });
   return out;
 }
@@ -2389,7 +2437,17 @@ function buildMatrixRows(pool, usage, agents){
   var out=[];
   var hasAccounts=unitsHavingAccounts(filterAccounts());
   var q=String(state.matrixSearch||"").trim().toLowerCase();
-  reportingRoots().forEach(function(root,i){
+  var roots=reportingRoots();
+  /* Cùng lỗ hổng với cây chi tiết phòng ban: tài khoản treo THẲNG trên cấp gom
+     không có nhánh nào để đứng, vì reportingRoots() đi xuyên qua cấp gom. Xem
+     ghi chú đầy đủ ở aggregateDirectNodes().
+     Ở bảng này không có chuyện cộng đôi: renderMatrixTree() lấy số của mỗi hàng
+     từ matrixValues(row.accounts, ...), tức từ chính tài khoản của hàng, chứ
+     không tra một chỉ mục cộng dồn nào. */
+  aggregateDirectNodes(accountsByUnitIndex(pool)).forEach(function(node,j){
+    flattenMatrixTree(node, 1, [], true, roots.length+j, null, out);
+  });
+  roots.forEach(function(root,i){
     if(isExcludedUnit(root)) return;
     var node=matrixTree(root,pool);
     if(node){ flattenMatrixTree(node, 1, [], true, i, null, out); return; }
@@ -2858,10 +2916,31 @@ function filterAccounts(){
     var userKey = u.ug || u.user || u.login || u.n || u.a || "";
     if(f.user && userKey!==f.user) return false;
     if(f.agent && u.a!==f.agent) return false;
-    if(f.provider && modelProvider(u.m)!==f.provider) return false;
-    if(f.model && u.m!==f.model) return false;
+    /* HỎI SỔ ĐO THEO MODEL, KHÔNG HỎI `u.m`.
+
+        buildAccountCatalogueFromDb() đặt `m:""` cho MỌI tài khoản, và đúng như
+        thế: /api/accounts không có trường model, vì một người dùng nhiều model.
+        Nhưng hai dòng cũ ở đây so `u.m` với tên model đang chọn, nên chọn bất
+        kỳ Model hay Provider nào cũng loại sạch 937/937 tài khoản — cây phòng
+        ban hiện "chưa có user" ở mọi hàng và thẻ đếm về "Tổng: 0", trong khi
+        USER_ACCOUNTS vẫn đủ 937. Không có lỗi nào báo ra; nó trông y hệt
+        "database chưa có ai".
+
+        Nay hỏi `byModel`, dựng từ /api/usage-by-account ở applyRealAccountUsage().
+        Nghĩa của bộ lọc cũng thành thứ đọc được: "những tài khoản CÓ DÙNG model
+        này trong kỳ" — tài khoản không phát sinh request nào thì không thuộc về
+        model nào cả, và bị loại là đúng. */
+    if(f.provider && !accountUsesProvider(u, f.provider)) return false;
+    if(f.model && !(u.byModel && u.byModel[f.model])) return false;
     return true;
   });
+}
+/* Tài khoản có dùng model nào của provider này trong kỳ không. */
+function accountUsesProvider(u, provider){
+  var bm=u&&u.byModel;
+  if(!bm) return false;
+  for(var m in bm){ if(modelProvider(m)===provider) return true; }
+  return false;
 }
 function accountCost(u){ return cost(u); }
 function quotaColor(q){ return q>=85?"#ef4444":q>=65?"#f97316":q>=45?"#f59e0b":"#10b981"; }
@@ -3794,6 +3873,11 @@ function loadFromBackend(){
        /api/usage-by-account chỉ trả `model_id`. Quên dòng này thì tiền theo
        phòng ban im lặng rơi hết về '—' - đã dính đúng vậy lúc apply 20/08. */
     if(Object.keys(kq.pricingById||{}).length) state.pricingById=kq.pricingById;
+    /* Bảng tra model_id -> TÊN model. Cùng cái bẫy vừa nói ở trên, khác chỗ dùng:
+       applyRealAccountUsage() cần nó để dựng `u.byModel`, và bộ lọc Model/Provider
+       hỏi `u.byModel`. Quên dòng này thì mọi tài khoản có byModel rỗng, và chọn
+       một model bất kỳ sẽ loại sạch bảng — đúng triệu chứng cũ, chỉ khác nguyên do. */
+    if(Object.keys(kq.modelNameById||{}).length) state.modelNameById=kq.modelNameById;
     if(kq.fxRate && kq.fxRate.vnd_per_usd) VND_RATE=kq.fxRate.vnd_per_usd;
     state.activeDay=kq.dayOrder[kq.dayOrder.length-1];
     // Kỳ đang chọn có thể nằm ngoài khoảng dữ liệu vừa nạp — kéo về cuối kỳ.

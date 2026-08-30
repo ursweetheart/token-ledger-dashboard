@@ -38,6 +38,46 @@ test("department filter options are built from all reporting roots instead of on
   assert.equal(sandbox.result.join(","), "CN HCM,Công ty,PBH,Đội 1");
 });
 
+test("database account catalog keeps all real users for the org tree while user selector stays restricted to the two specific agents", () => {
+  const source = fs.readFileSync(path.join(__dirname, "..", "web", "js", "app.js"), "utf8");
+  const match = source.match(/function buildAccountCatalogueFromDb\([\s\S]*?\n\}/);
+  assert.ok(match, "database account catalog should exist");
+
+  const sandbox = {
+    console,
+    Object,
+    Array,
+    String,
+    Math,
+    REAL_ACCOUNTS: [
+      { account_id: 1, username: "tuan.nv", full_name: "Tuấn NV", kind: "real", agent: "Sale Agent", unit_id: "u1", unit_name: "Đơn vị sử dụng Sale Agent", is_shared: false, role: "employee", is_enabled: true, created_at: "2026-08-01", in_directory: true },
+      { account_id: 2, username: "lan.nv", full_name: "Lan NV", kind: "real", agent: "Chatbot Contact Center", unit_id: "u2", unit_name: "Đơn vị sử dụng Chatbot Contact Center", is_shared: false, role: "employee", is_enabled: true, created_at: "2026-08-01", in_directory: true },
+      { account_id: 3, username: "hai.nv", full_name: "Hai NV", kind: "real", agent: "Trợ Lý Ảo Hợp Đồng", unit_id: "u3", unit_name: "Phòng BH1", is_shared: false, role: "employee", is_enabled: true, created_at: "2026-08-01", in_directory: true },
+      { account_id: 4, username: "svc.sale", full_name: "Sale service", kind: "service_account", agent: "Sale Agent", unit_id: "u1", unit_name: "Đơn vị sử dụng Sale Agent", is_shared: true, role: "AI Agent", is_enabled: true, created_at: "2026-08-01", in_directory: false }
+    ],
+    SPECIFIC_USER_AGENTS: { "Sale Agent": true, "Chatbot Contact Center": true },
+    isSpecificUserAgent: (agentName) => !!({ "Sale Agent": true, "Chatbot Contact Center": true })[String(agentName || "").trim()],
+    unitById: (id) => ({ id: id, name: id === "u1" ? "Đơn vị sử dụng Sale Agent" : id === "u2" ? "Đơn vị sử dụng Chatbot Contact Center" : "Phòng BH1" }),
+    unitOf: (name) => ({ id: "u3", name: name || "Phòng BH1" }),
+    isExcludedUnit: (u) => !u || (u.name && u.name === "Đang trong quá trình thử nghiệm"),
+    userFilterLabel: (u) => {
+      var agent = String((u && u.a) || "").trim();
+      var label = String((u && (u.ug || u.user || u.login || u.n)) || "").trim();
+      if(!label || label === agent) return "";
+      if((({ "Sale Agent": true, "Chatbot Contact Center": true })[agent] || ({ "Sale Agent": true, "Chatbot Contact Center": true })[label])) return label;
+      return "";
+    }
+  };
+
+  vm.runInNewContext(match[0] + "\n; this.catalog = buildAccountCatalogueFromDb();", sandbox);
+  const names = sandbox.catalog.map((u) => u.n || u.user || u.login || "");
+  assert.deepEqual(names.sort(), ["Hai NV", "Lan NV", "Tuấn NV"].sort());
+
+  const userList = sandbox.catalog.map((u) => sandbox.userFilterLabel({ a: u.a, ug: u.n || u.user || u.login || "" })).filter(Boolean);
+  assert.deepEqual(userList.sort(), ["Lan NV", "Tuấn NV"].sort());
+  assert.ok(!userList.includes("Hai NV"));
+});
+
 test("specific-user selector excludes agent labels and keeps only real user names from the two specific agents", () => {
   const source = fs.readFileSync(path.join(__dirname, "..", "web", "js", "app.js"), "utf8");
   const match = source.match(/function isSpecificUserAgent\(agentName\)[\s\S]*?function userFilterLabel\(u\)\{[\s\S]*?\n\}/);
