@@ -112,6 +112,23 @@
     return e;
   }
 
+  /* ─── TÊN AGENT HIỆN TRÊN MÀN HÌNH ───────────────────────────────────
+     Database giữ tên gốc `Tools Quizzer`; trong công ty người ta gọi nó là
+     "Tool dịch". Đổi Ở ĐÂY, trong lớp dịch, chứ không đổi trong database: tên
+     gốc còn phải khớp với nguồn thu thập.
+
+     ĐỔI CHO MỌI ĐƯỜNG mà tên agent đi vào app.js - dòng usage, danh bạ tài
+     khoản, sổ theo tài khoản, tỷ lệ áp dụng, hạn mức, danh sách chưa nối
+     billing. Sót một đường là hai tên cùng sống: ô lọc hiện "Tool dịch" còn cột
+     ma trận hiện "Tools Quizzer", và mọi phép tra THEO TÊN (budget, no-billing)
+     lặng lẽ trượt - không lỗi nào báo ra, chỉ là hạn mức biến mất. */
+  var TEN_AGENT_HIEN = { "Tools Quizzer": "Tool dịch" };
+
+  function tenAgent(name) {
+    var s = String(name == null ? "" : name);
+    return TEN_AGENT_HIEN[s] || s;
+  }
+
   function fetchJson(path) {
     var k = khoa(), headers = {};
     if (k) headers["Authorization"] = "Bearer " + k;
@@ -231,13 +248,50 @@
     return { units: out, canonicalOf: canonicalOf };
   }
 
+  var TIEN_TO_DON_VI_KY_THUAT = "Đơn vị sử dụng ";
+
   function primaryUnit(catalog) {
-    /* Mỗi agent hiện ở cột "Đơn vị". Lấy đơn vị gốc của cây tổ chức agent đó;
-       agent không có cây thì lấy chính dòng kỹ thuật. */
-    var out = {};
+    /* Đơn vị hiện ở cột "Phòng ban / Đơn vị" của mỗi dòng usage.
+
+       SỬA THỨ NHẤT — ƯU TIÊN ĐƠN VỊ THẬT.
+       Bản cũ chỉ so `level` nhỏ nhất. Hai hàng kỹ thuật "Chưa quy được"
+       (`__unattributed_5__`, `__unattributed_8__`) có level 0, nhỏ hơn cả gốc
+       cây thật (level 1) - nên chúng THẮNG. Hệ quả đo 30/08/2026: toàn bộ usage
+       của Trợ lý ảo Ralli và Trợ Lý Ảo Hợp Đồng mang nhãn "Chưa quy được", dù
+       hai agent này có cây tổ chức đầy đủ. Bảng "Chi tiết theo AI Agent & phòng
+       ban" vì thế nói sai về đúng hai agent có phòng ban thật.
+
+       SỬA THỨ HAI — AGENT KHÔNG CÓ CÂY THÌ PHÒNG BAN LÀ CHÍNH TÊN AGENT.
+       Sáu project Google Cloud Console không có phòng ban lẫn người dùng.
+       Database dựng cho mỗi cái một hàng kỹ thuật "Đơn vị sử dụng <agent>"
+       (db/load_org.py:309) để phép JOIN không rơi mất chúng. Trên màn hình thì
+       quy ước là gọi thẳng tên agent - "Sale Agent", không phải "Đơn vị sử dụng
+       Sale Agent". Đổi NHÃN ở đây, giữ nguyên `unit_id` để mọi phép tra theo mã
+       vẫn trúng hàng cũ trong database. */
+    var ten = {};
+    (catalog.agents || []).forEach(function (a) { ten[a.agent_id] = tenAgent(a.name); });
+
+    var that = {}, ky = {};
     (catalog.units || []).forEach(function (u) {
-      var cur = out[u.agent_id];
-      if (!cur || (u.level || 0) < (cur.level || 0)) out[u.agent_id] = u;
+      var bang = u.is_technical ? ky : that;
+      var cur = bang[u.agent_id];
+      if (!cur || (u.level || 0) < (cur.level || 0)) bang[u.agent_id] = u;
+    });
+
+    var out = {};
+    Object.keys(ky).forEach(function (id) { out[id] = ky[id]; });
+    Object.keys(that).forEach(function (id) { out[id] = that[id]; });   // đơn vị thật đè lên
+
+    Object.keys(out).forEach(function (id) {
+      var u = out[id];
+      /* CHỈ đổi nhãn hàng "Đơn vị sử dụng <agent>". "Chưa quy được" cũng là hàng
+         kỹ thuật nhưng nó nói một chuyện KHÁC - "không lần ra được đơn vị" - và
+         đổi tên nó thành tên agent là biến một lời thú nhận thành một khẳng định. */
+      if (!u.is_technical) return;
+      if (String(u.name || "").indexOf(TIEN_TO_DON_VI_KY_THUAT) !== 0) return;
+      if (!ten[id]) return;
+      out[id] = { unit_id: u.unit_id, name: ten[id], level: u.level,
+                  agent_id: u.agent_id, is_technical: true };
     });
     return out;
   }
@@ -248,7 +302,7 @@
         unit = primaryUnit(catalog),
         tree = orgTree(catalog);
     var agentName = {};
-    (catalog.agents || []).forEach(function (a) { agentName[a.agent_id] = a.name; });
+    (catalog.agents || []).forEach(function (a) { agentName[a.agent_id] = tenAgent(a.name); });
 
     /* PHẢI CHIA số lượt lỗi cho các dòng model, KHÔNG lặp lại nguyên con số.
 
@@ -296,7 +350,7 @@
       var cachedOutsideInput = x.token_source === "billing" ? (x.cached_tokens || 0) : 0;
 
       days[x.day].push({
-        a: x.agent || agentName[x.agent_id] || ("agent " + x.agent_id),
+        a: tenAgent(x.agent) || agentName[x.agent_id] || ("agent " + x.agent_id),
         d: u ? u.name : "—",
         /* Mã đơn vị, đã quy về bản chuẩn. app.js ghép usage vào đơn vị bằng mã
            này; `d` (TÊN) giữ lại để hiện ra và để đối chiếu khi lần lỗi.
@@ -367,7 +421,7 @@
        bỏ qua, không suy ra 0 - 0 nghĩa là "hết hạn mức", khác hẳn "chưa đặt". */
     var budgets = [];
     (catalog.agents || []).forEach(function (a) {
-      if (a.budget_usd != null) budgets.push({ agent: a.name, usd: a.budget_usd });
+      if (a.budget_usd != null) budgets.push({ agent: tenAgent(a.name), usd: a.budget_usd });
     });
 
     /* Cây đơn vị từ database, đã gộp hai cây thành một. app.js CHƯA dùng - nó
@@ -382,7 +436,7 @@
        `gcp_project_id` từ 14/08/2026 - `tla-ralli` CÓ project nhưng chưa nối. */
     var noBilling = {};
     (catalog.agents || []).forEach(function (a) {
-      if (!a.has_google_source) noBilling[a.name] = true;
+      if (!a.has_google_source) noBilling[tenAgent(a.name)] = true;
     });
 
     return { days: days, dayOrder: dayOrder, pricing: pricing,
@@ -475,17 +529,23 @@
         .then(function (r) {
           var state = buildState(r[0], r[1], r[2], r[3]);
           state.health = health;
-          state.adoption = (r[4] && r[4].rows) || [];
+          state.adoption = ((r[4] && r[4].rows) || []).map(function (x) {
+            return x && x.agent ? Object.assign({}, x, { agent: tenAgent(x.agent) }) : x;
+          });
           /* Tài khoản mang `unit_id` GỐC, mà cây đã bỏ các bản trùng. Quy về bản
              chuẩn ngay tại đây - để app.js tự nhớ thì sớm muộn một chỗ quên, và
              tài khoản trỏ vào đơn vị không còn tồn tại sẽ lặng lẽ rơi khỏi bảng. */
           state.accounts = ((r[5] && r[5].rows) || []).map(function (a) {
             var cid = state.canonicalUnitOf[a.unit_id];
-            return cid && cid !== a.unit_id
+            var b = cid && cid !== a.unit_id
               ? Object.assign({}, a, { unit_id: cid, unit_id_raw: a.unit_id })
               : a;
+            return b.agent === tenAgent(b.agent) ? b
+                 : Object.assign({}, b, { agent: tenAgent(b.agent) });
           });
-          state.byAccount = (r[6] && r[6].rows) || [];
+          state.byAccount = ((r[6] && r[6].rows) || []).map(function (x) {
+            return x && x.agent ? Object.assign({}, x, { agent: tenAgent(x.agent) }) : x;
+          });
           /* Cảnh báo độ phủ đi KÈM bảng theo người dùng, không để app.js phải
              nhớ sang hỏi /api/health - xem ghi chú ở backend/main.py. */
           state.accountWarnings = (r[6] && r[6].warnings) || [];
