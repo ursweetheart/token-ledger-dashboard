@@ -3312,7 +3312,7 @@ function prevQuarterRange(){
   };
 }
 function renderStatus(){
-  set("status-period", esc(fmtDateUS(state.range.start)+" → "+fmtDateUS(state.range.end)));
+  set("status-period", esc(fmtRangeDateVI(state.range.start)+" → "+fmtRangeDateVI(state.range.end)));
   set("header-data-date", esc(fmtDateUS(toISO(maxDataDate()))));
 }
 

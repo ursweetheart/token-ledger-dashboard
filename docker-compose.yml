@@ -196,7 +196,7 @@ services:
     ports:
       # Switch to 0.0.0.0 for a real deployment -- but answer this first:
       # who can reach this machine.
-      - "127.0.0.1:${WEB_PORT:-8080}:80"
+      - "192.168.20.111:${WEB_PORT:-8080}:80"
     depends_on:
       - api
 
