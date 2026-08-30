@@ -51,7 +51,29 @@ var INSIGHT_THRESHOLDS = {
   adoptionCritical:30,
   inactivityDays:30
 };
-var EXCLUDED_DEPARTMENTS = {"Đang trong quá trình thử nghiệm":true};
+var EXCLUDED_DEPARTMENTS = {
+  "Đang trong quá trình thử nghiệm":true,
+  "Đơn vị sử dụng Chatbot Contact Center":true,
+  "Đơn vị sử dụng Multi modal AI Invoice":true,
+  "Đơn vị sử dụng Phân Loại Dữ Liệu CRM":true,
+  "Đơn vị sử dụng Phân Loại Phản Hồi Tiếp Thị":true,
+  "Đơn vị sử dụng Sale Agent":true,
+  "Đơn vị sử dụng Tools Quizzer":true
+};
+var SPECIFIC_USER_AGENTS = {
+  "Sale Agent": true,
+  "Chatbot Contact Center": true
+};
+function isSpecificUserAgent(agentName){
+  return !!SPECIFIC_USER_AGENTS[String(agentName||"").trim()];
+}
+function userFilterLabel(u){
+  var agent = String((u && u.a) || "").trim();
+  var label = String((u && (u.ug || u.user || u.login || u.n)) || "").trim();
+  if(!label || label === agent) return "";
+  if(isSpecificUserAgent(agent) || isSpecificUserAgent(label)) return label;
+  return "";
+}
 
 /* ═══════════════ CÂY ĐƠN VỊ ═══════════════
    Nguồn dữ liệu usage đặt tên phòng ban tự do: mỗi agent trong file Excel là một khối
@@ -174,33 +196,31 @@ function unitAgentProfiles(){
 function normalizeAgentName(name){
   return String(name||"").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
-function isProtectedAgentUser(name){
-  var key = normalizeAgentName(name);
-  return key === "sale agent" || key === "chatbot contact center" || key === "chatbotcontact center" || key.indexOf("sale agent") >= 0 || key.indexOf("contact center") >= 0;
-}
-function addSyntheticAgentUsers(list){
-  if(!list || !REAL_BY_ACCOUNT || !REAL_BY_ACCOUNT.length) return list;
-  var seen={};
-  list.forEach(function(u){
-    var key = normalizeAgentName(u.a || u.user || u.login || "");
-    if(key) seen[key]=true;
+function addSyntheticAgentUsers(list, rows){
+  var out = (list || []).slice();
+  var seen = {};
+  out.forEach(function(u){
+    var key = normalizeAgentName(u.a || u.user || u.login || u.n || "");
+    if(key) seen[key] = true;
   });
-  var out = list.slice();
-  REAL_BY_ACCOUNT.forEach(function(row){
-    if(!row.agent) return;
-    var key = normalizeAgentName(row.agent);
-    if(!key || seen[key] || isProtectedAgentUser(row.agent)) return;
-    var unit = row.unit_id ? unitById(row.unit_id) || unitOf(row.unit_name) : null;
-    var synthetic = {
-      id: "synthetic:" + key.replace(/\s+/g, "-") + ":" + String((row.agent||"")).trim().slice(0, 12),
-      user: row.agent,
+  if(!Array.isArray(rows)) rows = [];
+  rows.forEach(function(r){
+    if(!r || !r.a) return;
+    var agent = String(r.a).trim();
+    if(!agent) return;
+    var key = normalizeAgentName(agent);
+    if(!key || seen[key]) return;
+    var unit = unitOfRow ? unitOfRow(r) : null;
+    out.push({
+      id: "synthetic-agent:" + key.replace(/\s+/g, "-"),
+      user: agent,
       login: "synthetic-" + key.replace(/\s+/g, "-"),
-      n: row.agent,
+      n: agent,
       unitId: unit ? unit.id : "",
-      d: unit ? unit.name : (row.unit_name || "—"),
-      a: row.agent,
+      d: unit ? unit.name : "—",
+      a: agent,
       m: "",
-      ug: "",
+      ug: agent,
       weight: 0,
       role: "AI Agent",
       accountType: "service",
@@ -212,29 +232,34 @@ function addSyntheticAgentUsers(list){
       req: 1,
       ti: 0,
       to: 0,
-      last: row.day || state.range.end,
+      last: r.day || (state && state.range ? state.range.end : ""),
       active: true,
       quotaPct: 100,
-      byAgent: { [row.agent]: { req: 1, ti: 0, to: 0 } }
-    };
-    out.push(synthetic);
+      byAgent: { [agent]: { req: 1, ti: 0, to: 0 } }
+    });
     seen[key] = true;
   });
   return out;
 }
 function buildAccountCatalogueFromDb(){
   var list = REAL_ACCOUNTS.map(function(a){
+    if(!a) return null;
+    var kind = String(a.kind || "").trim();
+    var isServicePlaceholder = ["service_account","whole_agent","unattributed"].indexOf(kind) >= 0;
+    if(isServicePlaceholder) return null;
+    // Chỉ hai agent này mới có user cụ thể. Các agent khác dùng agent-level là
+    // một khái niệm "người dùng/gộp" chứ không phải danh tính cá nhân.
+    if(!isSpecificUserAgent(a.agent)) return null;
     // Ưu tiên MÃ đơn vị (api.js đã quy về bản chuẩn); tên chỉ là đường lui.
     var unit=unitById(a.unit_id)||unitOf(a.unit_name)||null;
+    var displayUser = String(a.full_name || a.username || a.agent || "").trim();
     return {
-      /* `id` là khoá GHÉP; `user` chỉ để hiển thị và làm khoá hàng trong bảng.
-         Trước 20/08/2026 `user` là `a.email||a.username` và email cũng được dùng
-         làm khoá ghép - xem applyRealAccountUsage(). Ghép bằng chuỗi thì phụ
-         thuộc hoa/thường và khoảng trắng, mà `account_id` thì không. */
-      id:a.account_id, user:a.username, login:a.username,
-      n:a.full_name||a.username,
+      id:a.account_id || displayUser || a.username || a.agent,
+      user:a.username || displayUser,
+      login:a.username || displayUser,
+      n:a.full_name || displayUser || a.username || a.agent || "",
       unitId:unit?unit.id:"", d:a.unit_name||"—",
-      a:a.agent||"", m:"", ug:"",
+      a:a.agent||"", m:"", ug:displayUser || a.username || a.agent || "",
       weight:0,
       role:a.role||"", accountType:a.is_shared?"service":"person",
       sourceStatus:a.is_enabled===false?"Đã khoá":"Hoạt động",
@@ -243,8 +268,8 @@ function buildAccountCatalogueFromDb(){
       shared:!!a.is_shared, inDirectory:!!a.in_directory,
       req:0, ti:0, to:0, last:"", active:false, quotaPct:0
     };
-  }).filter(function(u){ return u.unitId && !isExcludedUnit(unitById(u.unitId)); });
-  return addSyntheticAgentUsers(list);
+  }).filter(Boolean).filter(function(u){ return u.unitId && !isExcludedUnit(unitById(u.unitId)); });
+  return list;
 }
 
 /* Danh mục tài khoản — CHỈ từ database.
@@ -2830,7 +2855,8 @@ function filterAccounts(){
   return USER_ACCOUNTS.filter(function(u){
     if(isExcludedDepartment(u.d)) return false;
     if(wantIds && !wantIds[u.unitId]) return false;
-    if(f.user && u.ug!==f.user) return false;
+    var userKey = u.ug || u.user || u.login || u.n || u.a || "";
+    if(f.user && userKey!==f.user) return false;
     if(f.agent && u.a!==f.agent) return false;
     if(f.provider && modelProvider(u.m)!==f.provider) return false;
     if(f.model && u.m!==f.model) return false;
@@ -3359,6 +3385,27 @@ function renderStatus(){
 
 
 /* ═══════════════ BỘ LỌC ═══════════════ */
+function buildDepartmentFilterOptions(rows){
+  var names=[], seen={};
+  var allUnits = Array.isArray(ORG_UNITS) ? ORG_UNITS.slice() : [];
+
+  if(!allUnits.length && rows && rows.length){
+    rows.forEach(function(r){
+      var u=unitOfRow(r);
+      if(!u || isExcludedUnit(u)) return;
+      var root=reportingRootOf(u.id)||u;
+      if(!seen[root.name]){ seen[root.name]=true; names.push(root.name); }
+    });
+    return names.sort();
+  }
+
+  allUnits.forEach(function(u){
+    if(!u || isExcludedUnit(u)) return;
+    if(!seen[u.name]){ seen[u.name]=true; names.push(u.name); }
+  });
+
+  return names.sort();
+}
 function fillSelect(id, opts, val, allLabel){
   var el=document.getElementById(id); if(!el) return;
   el.innerHTML = "<option value=''>"+allLabel+"</option>" + opts.map(function(o){ return "<option"+(o===val?" selected":"")+">"+esc(o)+"</option>"; }).join("");
@@ -3373,16 +3420,12 @@ function fillSelect(id, opts, val, allLabel){
 }
 function renderFilters(){
   var rows=allDayRows();
-  // Dropdown hiển thị TÊN ĐƠN VỊ chuẩn hoá, mỗi phòng chỉ một lựa chọn.
-  var deptNames=[], seenDept={};
-  rows.forEach(function(r){
-    var u=unitOfRow(r);
-    if(!u||isExcludedUnit(u)) return;
-    var root=reportingRootOf(u.id)||u;
-    if(!seenDept[root.name]){ seenDept[root.name]=true; deptNames.push(root.name); }
-  });
-  fillSelect("f-dept", deptNames.sort(), state.filters.dept, "Tất cả phòng ban");
-  fillSelect("f-user", distinct(rows.map(function(r){return r.ug;}).filter(Boolean)), state.filters.user, "Tất cả user");
+  var deptNames = buildDepartmentFilterOptions(rows);
+  if(state.filters.dept && deptNames.indexOf(state.filters.dept)<0){ state.filters.dept=""; }
+  fillSelect("f-dept", deptNames, state.filters.dept, "Tất cả phòng ban");
+  var userList = distinct((USER_ACCOUNTS || []).map(userFilterLabel).filter(Boolean));
+  if(state.filters.user && userList.indexOf(state.filters.user)<0){ state.filters.user=""; }
+  fillSelect("f-user", userList, state.filters.user, "Tất cả user");
   fillSelect("f-provider", distinct(rows.map(function(r){return modelProvider(r.m);})), state.filters.provider, "Tất cả provider");
   // Model phụ thuộc Provider đang chọn: chọn provider ⇒ chỉ hiện model của provider đó.
   var modelOpts = Object.keys(state.pricing);
