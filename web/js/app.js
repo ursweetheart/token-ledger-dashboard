@@ -51,28 +51,40 @@ var INSIGHT_THRESHOLDS = {
   adoptionCritical:30,
   inactivityDays:30
 };
+/* SÁU DÒNG "Đơn vị sử dụng <agent>" ĐÃ RỜI DANH SÁCH NÀY (30/08/2026).
+
+   Chúng là hàng kỹ thuật của sáu project Google Cloud Console - loại agent
+   không có cây tổ chức, nên không có phòng ban lẫn người dùng. Giấu chúng đi là
+   giấu luôn lưu lượng của chúng: đo trên kỳ 31/07-30/08, sáu agent này chiếm
+   21.327/23.626 request, tức 90% toàn dashboard KHÔNG hiện ở tab Phòng ban và
+   không có mặt trong biểu đồ chi phí theo phòng ban.
+
+   Quy ước thay thế: phòng ban của chúng là CHÍNH TÊN AGENT, người dùng là
+   "Người dùng Agent <tên agent>". api.js đổi nhãn ngay ở primaryUnit(), nên
+   chuỗi "Đơn vị sử dụng ..." không còn tới được chỗ này nữa.
+
+   "Đang trong quá trình thử nghiệm" thì vẫn ở lại: đó là một đơn vị THẬT đang
+   được dùng làm chỗ chứa tạm, không phải hàng kỹ thuật. */
 var EXCLUDED_DEPARTMENTS = {
-  "Đang trong quá trình thử nghiệm":true,
-  "Đơn vị sử dụng Chatbot Contact Center":true,
-  "Đơn vị sử dụng Multi modal AI Invoice":true,
-  "Đơn vị sử dụng Phân Loại Dữ Liệu CRM":true,
-  "Đơn vị sử dụng Phân Loại Phản Hồi Tiếp Thị":true,
-  "Đơn vị sử dụng Sale Agent":true,
-  "Đơn vị sử dụng Tools Quizzer":true
+  "Đang trong quá trình thử nghiệm":true
 };
-var SPECIFIC_USER_AGENTS = {
-  "Sale Agent": true,
-  "Chatbot Contact Center": true
-};
-function isSpecificUserAgent(agentName){
-  return !!SPECIFIC_USER_AGENTS[String(agentName||"").trim()];
-}
+/* Ô lọc "User" liệt kê NGƯỜI, không liệt kê tên agent.
+
+   Bản trước 30/08/2026 chỉ nhận user của hai agent gõ cứng ("Sale Agent",
+   "Chatbot Contact Center"). Database hiện tại KHÔNG có tài khoản nào thuộc hai
+   agent đó — 892 tài khoản thuộc Trợ lý ảo Ralli và 45 thuộc Trợ Lý Ảo Hợp Đồng
+   — nên ô lọc rỗng hoàn toàn: mở ra không có gì để chọn.
+
+   Nay nhận mọi tài khoản, và renderFilters() cắt danh sách theo phòng ban đang
+   chọn. Agent chạy bằng tài khoản dịch vụ thì "người dùng" là nhãn quy ước
+   "Người dùng Agent <tên agent>" do addSyntheticAgentUsers() dựng — nhãn đó khác
+   tên agent nên không rơi vào luật ngay dưới. */
 function userFilterLabel(u){
   var agent = String((u && u.a) || "").trim();
   var label = String((u && (u.ug || u.user || u.login || u.n)) || "").trim();
+  // Nhãn trùng y hệt tên agent nghĩa là chỗ này không có danh tính người nào.
   if(!label || label === agent) return "";
-  if(isSpecificUserAgent(agent) || isSpecificUserAgent(label)) return label;
-  return "";
+  return label;
 }
 
 /* ═══════════════ CÂY ĐƠN VỊ ═══════════════
@@ -196,6 +208,32 @@ function unitAgentProfiles(){
 function normalizeAgentName(name){
   return String(name||"").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
+/* Agent chạy bằng MỘT tài khoản dịch vụ, không cấp quyền cho ai — sáu project
+   Google Cloud Console. KHÔNG đoán bằng tên agent: database đã trả lời sẵn.
+   store.adoption() đặt kind:"service" cho agent không có dòng danh bạ nào, kèm
+   ghi chú "agent loại này vốn không cấp quyền cho ai". Đó là câu trả lời của
+   nguồn, không phải suy đoán của tầng hiển thị. */
+function isServiceAgent(agent){
+  var ten=String(agent||"").trim();
+  if(!ten) return false;
+  for(var i=0;i<(ADOPTION_BY_AGENT||[]).length;i++){
+    var x=ADOPTION_BY_AGENT[i];
+    if(x && String(x.agent||"").trim()===ten) return x.kind==="service";
+  }
+  return false;
+}
+/* Nhãn người dùng quy ước. Phải KHÁC tên agent, nếu không userFilterLabel() coi
+   đây là "không có danh tính" và loại nó khỏi ô lọc. */
+function serviceAgentUserLabel(agent){
+  return "Người dùng Agent " + String(agent||"").trim();
+}
+/* Sáu agent Google Cloud Console không có phòng ban lẫn người dùng. Quy ước đã
+   chốt: phòng ban là chính tên agent (api.js primaryUnit() đặt nhãn), người dùng
+   là "Người dùng Agent <tên agent>" — dựng ở đây, đúng MỘT tài khoản cho mỗi
+   agent, khớp với điều database nói: mẫu số 1, tử số 1.
+
+   rows chỉ dùng để biết agent nào có mặt trong dữ liệu. Số liệu KHÔNG lấy từ
+   đây — applyRealAccountUsage() điền từ tổng đo được của agent. */
 function addSyntheticAgentUsers(list, rows){
   var out = (list || []).slice();
   var seen = {};
@@ -208,19 +246,20 @@ function addSyntheticAgentUsers(list, rows){
     if(!r || !r.a) return;
     var agent = String(r.a).trim();
     if(!agent) return;
+    if(!isServiceAgent(agent)) return;   // agent có người thật thì không chế ai cả
     var key = normalizeAgentName(agent);
     if(!key || seen[key]) return;
     var unit = unitOfRow ? unitOfRow(r) : null;
     out.push({
       id: "synthetic-agent:" + key.replace(/\s+/g, "-"),
-      user: agent,
+      user: serviceAgentUserLabel(agent),
       login: "synthetic-" + key.replace(/\s+/g, "-"),
-      n: agent,
+      n: serviceAgentUserLabel(agent),
       unitId: unit ? unit.id : "",
       d: unit ? unit.name : "—",
       a: agent,
       m: "",
-      ug: agent,
+      ug: serviceAgentUserLabel(agent),
       weight: 0,
       role: "AI Agent",
       accountType: "service",
@@ -284,7 +323,12 @@ function buildAccountCatalogueFromDb(){
    backend hỏng, và lúc đó renderError() đã chiếm màn hình nên renderAll() không
    chạy. Trả về mảng rỗng là đúng — không có dữ liệu thì không có danh mục. */
 function buildAccountCatalogue(){
-  return REAL_ACCOUNTS.length ? buildAccountCatalogueFromDb() : [];
+  if(!REAL_ACCOUNTS.length) return [];
+  /* Thêm người dùng quy ước cho sáu agent Google Cloud Console. Hàm
+     addSyntheticAgentUsers() đã có sẵn trong tệp này từ trước nhưng CHƯA TỪNG
+     ĐƯỢC GỌI — grep ra đúng một lần xuất hiện là dòng khai báo. Vì thế sáu agent
+     đó không có lấy một dòng tài khoản nào, dù chúng chiếm 90% lưu lượng. */
+  return addSyntheticAgentUsers(buildAccountCatalogueFromDb(), allDayRows());
 }
 /* Số liệu ĐO ĐƯỢC của từng tài khoản, từ /api/usage-by-account.
 
@@ -304,7 +348,7 @@ function buildAccountCatalogue(){
    phần lớn không có dòng trong danh bạ đó nên số của họ không hiện lên được ở
    tab này — con số bị bỏ lại được đếm và ghi vào console. */
 var accountFallbackByName = 0;
-function applyRealAccountUsage(){
+function applyRealAccountUsage(rows){
   var byKey={}, byId={};
   USER_ACCOUNTS.forEach(function(u){
     u.req=0; u.ti=0; u.to=0; u.active=false; u.last=""; u.quotaPct=0; u.byAgent={};
@@ -354,6 +398,27 @@ function applyRealAccountUsage(){
             bm.req+=req; bm.ti+=ti; bm.to+=to; }
     if(!u.last||x.day>u.last) u.last=x.day;
   });
+  /* NGƯỜI DÙNG QUY ƯỚC CỦA AGENT DỊCH VỤ LẤY SỐ TỪ TỔNG CỦA AGENT.
+
+     /api/usage-by-account chỉ phủ nguồn BIẾT NGƯỜI DÙNG (ref_source.knows_user),
+     nên tài khoản dịch vụ không có dòng nào ở đó — vòng lặp trên để chúng bằng 0.
+     Nhưng với sáu agent này, database nói rõ toàn bộ lưu lượng thuộc về đúng một
+     tài khoản dịch vụ (store.adoption: mẫu số 1). Nên gán tổng của agent cho
+     người dùng quy ước là ĐÚNG chứ không phải rải: không có ai khác để chia. */
+  var tongAgent={};
+  (rows||[]).forEach(function(x){
+    if(!x||!x.a) return;
+    var t=tongAgent[x.a]||(tongAgent[x.a]={r:0,ti:0,to:0,day:""});
+    t.r+=num(x.r); t.ti+=num(x.ti); t.to+=num(x.to);
+    if(x.day&&x.day>t.day) t.day=x.day;
+  });
+  USER_ACCOUNTS.forEach(function(u){
+    if(!u.shared||u.role!=="AI Agent") return;   // chỉ người dùng quy ước
+    var t=tongAgent[u.a];
+    if(!t) return;
+    u.req=t.r; u.ti=t.ti; u.to=t.to; u.last=t.day||u.last;
+    u.byAgent[u.a]={req:t.r, ti:t.ti, to:t.to};
+  });
   USER_ACCOUNTS.forEach(function(u){ u.active=num(u.req)>0; });
   // quotaPct để 0: trước đây nó là 12+(hash%80), tức thẻ trạng thái "Cảnh báo"
   // bật lên theo hàm băm. Không nguồn nào có khái niệm hạn mức theo người, nên
@@ -374,7 +439,7 @@ function applyRealAccountUsage(){
 function applyAccountAllocation(rows){
   // Có số đo thật thì dùng số đo. Cách rải bên dưới chỉ còn cho trường hợp mở
   // dashboard không có backend, khi dữ liệu nhúng vốn không có chiều người dùng.
-  if(REAL_BY_ACCOUNT.length){ applyRealAccountUsage(); return; }
+  if(REAL_BY_ACCOUNT.length){ applyRealAccountUsage(rows); return; }
   var totals={};
   (rows||[]).forEach(function(r){
     var unit=unitOfRow(r);
@@ -610,6 +675,25 @@ function costOrNull(r){
    Chỗ nào cần phân biệt "không đo được" thì gọi costOrNull(). */
 function cost(r){ var v = costOrNull(r); return v == null ? 0 : v; }
 function isExcludedDepartment(name){ return !!EXCLUDED_DEPARTMENTS[String(name||"").trim()]; }
+
+/* "Chưa quy được" là SỌT ĐỰNG những dòng usage không lần ra được đơn vị, không
+   phải một phòng ban. Nó có thật trong database (`__unattributed_<agent_id>`,
+   is_technical) và PHẢI tiếp tục hiện trong bảng — 2.544 request của nó là số
+   thật, giấu đi là giấu mất một phần lưu lượng.
+
+   Nhưng nó KHÔNG được dự thi "Phòng năng suất nhất": đứng đầu bảng xếp hạng
+   phòng ban bằng một cái sọt thì con số đúng mà câu trả lời sai.
+
+   Vì sao không nhét vào EXCLUDED_DEPARTMENTS: khoá đó đi qua isExcludedUnit(),
+   thứ mà groupRowsByUnit / deptTreeNode / matrixTree / buildDeptUsageIndex đều
+   gọi — thêm vào đó là xoá nó khỏi TOÀN BỘ dashboard, tức đúng cái việc vừa nói
+   là không được làm. Đây là phép lọc riêng cho bảng xếp hạng. */
+var UNATTRIBUTED_UNIT_NAME = "Chưa quy được";
+function isUnattributedUnit(u){
+  if(!u) return false;
+  return String(u.name||"").trim()===UNATTRIBUTED_UNIT_NAME ||
+         String(u.id||"").indexOf("__unattributed")===0;
+}
 
 /* ═══════════════ TRUY VẤN CÂY ĐƠN VỊ ═══════════════ */
 var unitIndex = {}, unitChildIndex = {}, autoUnitSeq = 0;
@@ -1483,13 +1567,89 @@ function deptDisplayName(dept){
   var unit=unitOf(dept), name=unit?unit.name:String(dept==null?"":dept).trim();
   return (name && name!=="—") ? name : "Chưa gán phòng ban";
 }
+/* Chia lưu lượng của MỘT agent xuống các phòng ban của nó.
+
+   Agent chạy bằng tài khoản dịch vụ (sáu project Google Cloud Console): không có
+   gì để chia. Cả agent là một "phòng ban" mang chính tên nó, và các dòng usage đã
+   mang đúng nhãn đó rồi — api.js primaryUnit() đặt.
+
+   Hai agent có người thật (Trợ lý ảo Ralli, Trợ Lý Ảo Hợp Đồng): /api/usage KHÔNG
+   có chiều đơn vị, mọi dòng của một agent mang CÙNG một nhãn. Đó là gốc của lỗi
+   được báo — primaryUnit() cũ chọn hàng kỹ thuật level 0 nên nhãn ấy là "Chưa quy
+   được", dù hai agent này có cây tổ chức đầy đủ. Sửa nhãn xong thì nó thành "Toàn
+   công ty": đúng hơn, nhưng vẫn chưa phải phòng ban.
+
+   Chiều phòng ban THẬT nằm ở /api/usage-by-account, mỗi dòng có unit_id. Nó không
+   phủ hết — chỉ những nguồn biết người dùng (ref_source.knows_user) — nên chia
+   theo phần đo được, còn phần chưa quy được đứng RIÊNG thành một hàng mang đúng
+   tên đó, thay vì gán bừa cho một phòng ban nào.
+
+   Request, Token và User của mỗi hàng đều là SỐ ĐO. Riêng TIỀN thì chia theo tỷ
+   lệ request và có dấu xấp xỉ: hoá đơn Google ghi theo project chứ không ghi
+   phòng ban, nên mọi cách chia tiền xuống phòng ban đều là suy luận. */
+function overviewDeptRows(agentKey, agentRows){
+  var theoNhan=groupAgg(agentRows,function(r){ return deptDisplayName(r.d); });
+  if(isServiceAgent(agentKey) || !REAL_BY_ACCOUNT.length) return theoNhan;
+
+  var g=aggregate(agentRows);
+  var theoPhong={}, order=[], doDuoc={r:0,ti:0,to:0};
+  filterAccounts().forEach(function(u){
+    var b=u.byAgent&&u.byAgent[agentKey];
+    if(!b||!num(b.req)) return;
+    var goc=reportingRootOf(u.unitId);
+    var ten=goc?goc.name:UNATTRIBUTED_UNIT_NAME;
+    var o=theoPhong[ten];
+    if(!o){ o=theoPhong[ten]={r:0,ti:0,to:0,u:0}; order.push(ten); }
+    o.r+=num(b.req); o.ti+=num(b.ti); o.to+=num(b.to); o.u++;
+    doDuoc.r+=num(b.req); doDuoc.ti+=num(b.ti); doDuoc.to+=num(b.to);
+  });
+  // Không quy được dòng nào về phòng ban thì giữ nguyên cách cũ — đừng dựng một
+  // bảng chỉ có mỗi hàng "Chưa quy được" rồi gọi đó là cải tiến.
+  if(!order.length) return theoNhan;
+
+  // Phần agent có mà số đo theo người chưa với tới. Kẹp ở 0: hai nguồn đếm hai
+  // tập khác nhau nên về nguyên tắc có thể lệch, và một hàng ÂM thì vô nghĩa.
+  var conLai={r:Math.max(0,num(g.r)-doDuoc.r),
+              tokens:Math.max(0,num(g.tokens)-(doDuoc.ti+doDuoc.to))};
+
+  function hang(ten, r, tokens, soUser, laConLai){
+    var phan=num(g.r)>0 ? r/num(g.r) : 0;
+    return {key:ten, u:soUser, r:r, ti:0, to:0, tokens:tokens,
+            cost:num(g.cost)*phan, costEst:num(g.costEst)*phan,
+            costEstNoBilling:num(g.costEstNoBilling)*phan,
+            costEstLate:num(g.costEstLate)*phan,
+            costRowsInv:num(g.costRowsInv),
+            // Tỷ lệ lỗi đo ở mức (ngày, agent), KHÔNG có chiều phòng ban. Dùng
+            // chung con số của agent và nói rõ trong tooltip, thay vì bịa ra một
+            // tỷ lệ riêng cho từng phòng.
+            er:num(g.er), erKeAgent:true,
+            tienChiaTheoRequest:true, laChuaQuyDuoc:!!laConLai};
+  }
+
+  var out=order.sort(function(a,b){ return theoPhong[b].r-theoPhong[a].r; })
+    .map(function(ten){
+      var o=theoPhong[ten];
+      return hang(ten, o.r, o.ti+o.to, o.u, ten===UNATTRIBUTED_UNIT_NAME);
+    });
+  if(conLai.r>0 || conLai.tokens>0){
+    var da=out.filter(function(x){ return x.key===UNATTRIBUTED_UNIT_NAME; })[0];
+    if(da){ da.r+=conLai.r; da.tokens+=conLai.tokens; }
+    else out.push(hang(UNATTRIBUTED_UNIT_NAME, conLai.r, conLai.tokens, 0, true));
+  }
+  return out;
+}
 function renderOverviewDetail(rows,active){
   var agents=active.slice().sort(function(a,b){return b.cost-a.cost;});
   var html="", totals={u:0,r:0,tokens:0,cost:0,erW:0,costEst:0,costRowsInv:0,costEstNoBilling:0,costEstLate:0};
   agents.forEach(function(g){
     var agentRows=rows.filter(function(r){return r.a===g.key;});
-    var byDept=groupAgg(agentRows,function(r){return deptDisplayName(r.d);})
-      .sort(function(a,b){return (b.cost-a.cost)||(b.r-a.r)||a.key.localeCompare(b.key,"vi");});
+    var byDept=overviewDeptRows(g.key,agentRows)
+      .sort(function(a,b){
+        // "Chưa quy được" luôn xuống cuối: nó không phải phòng ban, để nó đứng
+        // đầu bảng thì đọc như thể nó là phòng dùng nhiều nhất.
+        if(!!a.laChuaQuyDuoc!==!!b.laChuaQuyDuoc) return a.laChuaQuyDuoc?1:-1;
+        return (b.cost-a.cost)||(b.r-a.r)||a.key.localeCompare(b.key,"vi");
+      });
     if(!byDept.length) return;
     totals.u+=g.u; totals.r+=g.r; totals.tokens+=g.tokens; totals.cost+=g.cost; totals.erW+=g.er*g.r;
     // Cộng cả phần suy ra: quên hai dòng này thì hàng Tổng cộng KHÔNG BAO GIỜ
@@ -1514,8 +1674,16 @@ function renderOverviewDetail(rows,active){
         "<td class='num'>"+fmt(d.u)+"</td>"+
         "<td class='num' title='"+esc(fmt(d.r)+" request")+"'>"+fmtCompactNum(d.r)+"</td>"+
         "<td class='num' title='"+esc(fmtTokFull(d.tokens))+"'>"+fmtCompactNum(d.tokens)+"</td>"+
-        "<td class='num cost' title='"+esc(costProvenanceTitle(d.cost,d))+"'>"+(costIsMarked(d.cost,d.costEst)?"≈ ":"")+moneyCompact(d.cost)+"</td>"+
-        "<td class='num"+(d.er>=2?" text-red":"")+"'>"+d.er.toFixed(1)+"%</td>"+
+        "<td class='num cost' title='"+esc(
+            (d.tienChiaTheoRequest
+              ? "Chia theo tỷ lệ request của phòng ban. Hoá đơn Google ghi theo"
+                +" project chứ không ghi phòng ban, nên con số này là SUY RA. "
+              : "")+costProvenanceTitle(d.cost,d))+"'>"+
+          (d.tienChiaTheoRequest||costIsMarked(d.cost,d.costEst)?"≈ ":"")+moneyCompact(d.cost)+"</td>"+
+        "<td class='num"+(d.er>=2?" text-red":"")+"'"+
+          (d.erKeAgent?" title='"+esc("Tỷ lệ lỗi đo ở mức (ngày, agent), không có"
+            +" chiều phòng ban — đây là tỷ lệ của cả agent.")+"'":"")+">"+
+          d.er.toFixed(1)+"%</td>"+
         // Không có request thì không có cơ sở đo độ ổn định — để trống thay vì 100%.
         "<td>"+(d.r>0
           ?"<div class='overview-success-cell'><span><i style='width:"+stable.toFixed(1)+"%'></i></span><b>"+stable.toFixed(1)+"%</b></div>"
@@ -1750,6 +1918,44 @@ function aggregateDirectNodes(byUnit){
     });
   })(unitRoots());
   return out;
+}
+/* Gốc báo cáo của một đơn vị: tổ tiên đầu tiên KHÔNG phải cấp gom — đúng cấp mà
+   reportingRoots() coi là cấp 1 của bảng. Trả null khi không có phòng ban thật
+   nào trên đường đi: đơn vị nằm THẲNG trên cấp gom, hoặc là sọt "Chưa quy được". */
+function reportingRootOf(unitId){
+  var duong=unitPath(unitId);
+  for(var i=0;i<duong.length;i++){
+    if(isUnattributedUnit(duong[i])) return null;
+    if(!isReportAggregate(duong[i])) return duong[i];
+  }
+  return null;
+}
+
+/* XẾP HẠNG PHÒNG BAN THEO SỐ ĐO CÓ CHIỀU ĐƠN VỊ.
+
+   Không dùng `rows` (/api/usage) được: bảng đó KHÔNG có cột đơn vị. api.js gán
+   mỗi dòng cho "đơn vị chính" của agent, mà primaryUnit() chọn đơn vị có level
+   nhỏ nhất — với mọi agent đó đều là một hàng KỸ THUẬT. Sáu agent rơi vào
+   "Đơn vị sử dụng ..." (đã nằm trong EXCLUDED_DEPARTMENTS), còn Ralli và TLA Hợp
+   Đồng rơi vào "Chưa quy được" (level 0). Kết quả đo 30/08/2026: groupRowsByUnit()
+   trả về ĐÚNG MỘT nhóm, tên "Chưa quy được", 2.299 request. Nói cách khác thẻ
+   "Phòng năng suất nhất" chưa bao giờ nêu tên một phòng ban thật.
+
+   Chiều đơn vị thật nằm ở /api/usage-by-account: mỗi dòng mang unit_id, và
+   applyRealAccountUsage() đã gộp sẵn vào từng tài khoản. Cộng theo gốc báo cáo là
+   ra bảng xếp hạng đúng — cùng nguồn với cây bên dưới nên hai chỗ không nói ngược
+   nhau. Tài khoản không quy được về phòng ban nào (sọt "Chưa quy được", hoặc gắn
+   thẳng vào cấp gom) bị bỏ ra: chúng không phải phòng ban, đúng như tên gọi. */
+function deptRankByAccounts(pool){
+  var theoGoc={};
+  (pool||[]).forEach(function(u){
+    var goc=reportingRootOf(u.unitId);
+    if(!goc) return;
+    var o=theoGoc[goc.id]||(theoGoc[goc.id]={unit:goc, r:0});
+    o.r+=num(u.req);
+  });
+  return Object.keys(theoGoc).map(function(k){ return theoGoc[k]; })
+    .sort(function(a,b){ return b.r-a.r; });
 }
 /* Đơn vị nào có usage thật trong kỳ (cộng dồn lên mọi cấp cha). */
 function deptUsageUnitIds(rows){
@@ -2022,21 +2228,21 @@ function bindDeptToolbar(){
 }
 function renderDepartments(rows){
   deptLastRows=rows;
-  var byUnitId=groupRowsByUnit(rows);
   var pool=filterAccounts();
-  var groups=Object.keys(byUnitId).map(function(id){
-    var g=byUnitId[id];
-    return {unit:g.unit, agents:Object.keys(g.agents), agg:aggregate(g.rows)};
-  });
-  var totalReq=aggregate(rows).r;
-  // "Năng suất nhất" = phòng tạo ra nhiều lượt dùng nhất, không xếp theo tiền.
-  var byReq=groups.slice().sort(function(a,b){ return b.agg.r-a.agg.r; });
+  /* "Năng suất nhất" = phòng tạo ra nhiều lượt dùng nhất, không xếp theo tiền.
+     Xếp từ số đo theo tài khoản, KHÔNG từ `rows` — xem deptRankByAccounts(). */
+  var xepHang=deptRankByAccounts(pool);
+  var coHoatDong=xepHang.filter(function(x){ return x.r>0; });
+  // Mẫu số là tổng của CHÍNH nguồn này. Lấy tổng của `rows` thì tử số và mẫu số
+  // đếm hai tập khác nhau, và tỷ lệ hiện ra không nói về cái gì cả.
+  var tongQuyDuoc=xepHang.reduce(function(t,x){ return t+x.r; },0);
 
-  set("m-dep-count", groups.filter(function(g){return g.agg.r>0;}).length);
-  if(byReq.length&&byReq[0].agg.r>0){
-    set("m-dep-top", esc(byReq[0].unit.name));
-    set("m-dep-top-def", "<b>"+fmt(byReq[0].agg.r)+" request · "+pct(byReq[0].agg.r,totalReq).toFixed(0)+
-      "%</b> tổng lượt dùng kỳ này.");
+  set("m-dep-count", coHoatDong.length);
+  if(coHoatDong.length){
+    set("m-dep-top", esc(coHoatDong[0].unit.name));
+    set("m-dep-top-def", "<b>"+fmt(coHoatDong[0].r)+" request · "+
+      pct(coHoatDong[0].r,tongQuyDuoc).toFixed(0)+
+      "%</b> lượt dùng quy được về phòng ban trong kỳ.");
   } else { set("m-dep-top","—"); set("m-dep-top-def","Chưa phòng ban nào phát sinh lượt dùng."); }
   set("m-dep-users",fmtCompactNum(pool.length));
 
@@ -3483,26 +3689,77 @@ function buildDepartmentFilterOptions(rows){
     if(!seen[u.name]){ seen[u.name]=true; names.push(u.name); }
   });
 
+  /* ORG_UNITS chỉ có đơn vị đến từ cây tổ chức trong database. Sáu project Google
+     Cloud Console không có cây, nên phòng ban của chúng — theo quy ước, chính là
+     tên agent — sống dưới dạng đơn vị "auto:" do unitOf() dựng khi gặp dòng usage
+     đầu tiên. Thiếu vòng lặp này thì bảng bên dưới CÓ hàng cho chúng mà ô lọc
+     phòng ban lại KHÔNG có tên để chọn.
+
+     "Chưa quy được" ở lại ngoài: nó là sọt đựng, không phải phòng ban. */
+  (typeof unitRoots === "function" ? unitRoots() : []).forEach(function(u){
+    if(!u || !u.auto || isExcludedUnit(u) || isUnattributedUnit(u)) return;
+    if(!seen[u.name]){ seen[u.name]=true; names.push(u.name); }
+  });
+
   return names.sort();
 }
+/* CHỈ DỰNG LẠI <option> KHI DANH SÁCH THẬT SỰ ĐỔI.
+
+   renderFilters() chạy trong MỌI renderAll(), mà renderAll() lại được gọi từ
+   chính onchange của select này. Bản cũ gán `el.innerHTML` vô điều kiện: nó đập
+   bỏ và dựng lại toàn bộ <option> NGAY TRONG lúc trình duyệt còn đang xử lý sự
+   kiện change của đúng phần tử đó. Cây <option> mới mang thuộc tính `selected`
+   dựng từ `val`, nên trình duyệt đồng bộ `el.value` về theo nó và lựa chọn
+   người dùng vừa bấm bị ghi đè. Lần bấm kế tiếp rơi đúng vào giá trị mà select
+   đang giữ ⇒ KHÔNG sinh sự kiện change ⇒ dashboard đứng im. Triệu chứng đúng
+   như báo: chọn lần đầu ăn, chọn lần sau không làm mới.
+
+   Danh sách lựa chọn hầu như không đổi giữa hai lần vẽ, nên so chữ ký trước;
+   giống thì không đụng vào DOM, chỉ đặt lại `value`. Và gắn onchange MỘT lần
+   thay vì gắn lại sau mỗi lần vẽ.
+
+   Mỗi <option> mang `value` tường minh: không có nó thì trình duyệt lấy phần
+   chữ làm giá trị, mà phần chữ bị cắt và gộp khoảng trắng — tên đơn vị có hai
+   dấu cách liền nhau sẽ không bao giờ khớp lại được với `state.filters`. */
+function escAttr(s){ return esc(s).replace(/"/g,"&quot;"); }
 function fillSelect(id, opts, val, allLabel){
   var el=document.getElementById(id); if(!el) return;
-  el.innerHTML = "<option value=''>"+allLabel+"</option>" + opts.map(function(o){ return "<option"+(o===val?" selected":"")+">"+esc(o)+"</option>"; }).join("");
-  el.onchange = function(){
-    var key=id.split("-")[1];
-    state.filters[key] = this.value;
-    // Đổi phòng ban ⇒ đường đi drilldown của ma trận không còn hợp lệ, đưa về cấp gốc.
-    // Đổi phòng ban lọc thì cây ma trận đang bung không còn nghĩa gì, thu về gốc.
-    if(key==="dept") state.matrixExpanded={};
-    renderAll();
-  };
+  var sig=JSON.stringify([allLabel].concat(opts));
+  if(el.getAttribute("data-opt-sig")!==sig){
+    el.innerHTML = "<option value=\"\">"+esc(allLabel)+"</option>" +
+      opts.map(function(o){ return "<option value=\""+escAttr(o)+"\">"+esc(o)+"</option>"; }).join("");
+    el.setAttribute("data-opt-sig", sig);
+  }
+  var muon = val==null ? "" : String(val);
+  if(el.value!==muon) el.value=muon;
+  if(!el.getAttribute("data-filter-bound")){
+    el.setAttribute("data-filter-bound","1");
+    el.onchange = function(){
+      var key=id.split("-")[1];
+      state.filters[key] = this.value;
+      // Đổi phòng ban ⇒ đường đi drilldown của ma trận không còn hợp lệ, đưa về cấp gốc.
+      // Đổi phòng ban lọc thì cây ma trận đang bung không còn nghĩa gì, thu về gốc.
+      if(key==="dept") state.matrixExpanded={};
+      renderAll();
+    };
+  }
 }
 function renderFilters(){
   var rows=allDayRows();
   var deptNames = buildDepartmentFilterOptions(rows);
   if(state.filters.dept && deptNames.indexOf(state.filters.dept)<0){ state.filters.dept=""; }
   fillSelect("f-dept", deptNames, state.filters.dept, "Tất cả phòng ban");
-  var userList = distinct((USER_ACCOUNTS || []).map(userFilterLabel).filter(Boolean));
+  /* Ô lọc User CẮT THEO PHÒNG BAN ĐANG CHỌN. Chọn một phòng ban rồi mở ô User
+     mà vẫn thấy cả 937 người là bắt người dùng tự lọc bằng mắt. filterAccounts()
+     đã áp đúng luật phòng ban (so theo unitId nên đơn vị con cũng khớp phòng ban
+     cha), nên dùng lại nó — nhưng KHÔNG áp chính bộ lọc User, nếu không danh sách
+     tự thu về đúng một tên và không đổi sang ai được nữa. */
+  var userPool=(function(){
+    var giu=state.filters.user;
+    state.filters.user="";
+    try{ return filterAccounts(); } finally { state.filters.user=giu; }
+  })();
+  var userList = distinct(userPool.map(userFilterLabel).filter(Boolean));
   if(state.filters.user && userList.indexOf(state.filters.user)<0){ state.filters.user=""; }
   fillSelect("f-user", userList, state.filters.user, "Tất cả user");
   fillSelect("f-provider", distinct(rows.map(function(r){return modelProvider(r.m);})), state.filters.provider, "Tất cả provider");
