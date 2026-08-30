@@ -239,11 +239,10 @@ services:
     environment:
       PGHOST: postgres
       # `postgres` la database quan tri, LUON ton tai. KHONG dung ${PGDATABASE}
-      # o day: docker-compose mac dinh tao `token_ledger` con db/connect.py mac
-      # dinh tro vao `token_ledger_v2`, va cutover (task 6.4-6.6) se DROP roi
-      # doi ten. Buoc tao role/database khong duoc phu thuoc vao ten dang trong
-      # qua trinh doi. Script tu di tim moi database khop '^token_ledger' de do
-      # ranh gioi.
+      # o day: docker-compose va db/connect.py deu mac dinh `token_ledger_v2`.
+      # `token_ledger` legacy van nam ben canh tren volume da migrate; quyet dinh
+      # 27/08 khong DROP/rename no. Script tu di tim moi database khop
+      # '^token_ledger' de do ranh gioi tren ca legacy lan runtime ledger.
       ADMIN_DB: postgres
       ADMIN_USER: ${PGUSER:-token}
       ADMIN_PASSWORD: ${PGPASSWORD:-token_local}

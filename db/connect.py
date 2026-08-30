@@ -58,20 +58,16 @@ PG_HOST = os.environ.get("PGHOST", "127.0.0.1")
 PG_PORT = os.environ.get("PGPORT", "5432")
 PG_USER = os.environ.get("PGUSER", "token")
 PG_PASSWORD = os.environ.get("PGPASSWORD", "token_local")
-# TẠM TRỎ SANG token_ledger_v2 — 24/08/2026, kỳ chạy thử của change
-# `change-the-schema-without-dropping-it`.
+# Runtime ledger hiện hành: token_ledger_v2. Quyết định giữ song song 27/08/2026:
+# không DROP/rename để trả tên; token_ledger cũ là bản legacy đối chiếu/rollback.
 #
 # v2 là bản dựng HOÀN TOÀN từ chuỗi migration rồi nạp lại từ data/, và đã khớp
 # 23/23 khoá với bản cũ (867.657.110 token · $291,985601 · audit 36/31/5/0 ·
-# check_api 19/19). Kỳ chạy thử để bắt những gì một phép so không bắt được.
+# check_api 19/19).
 #
-# `token_ledger` cũ VẪN CÒN NGUYÊN, chưa bị đụng một chữ. Quay lui = sửa đúng
-# dòng này về "token_ledger".
-#
-# HAI VIỆC CÒN LẠI, không được quên:
-#   1. DROP DATABASE token_ledger        (task 6.4 — KHÔNG hoàn tác được)
-#   2. ALTER DATABASE token_ledger_v2 RENAME TO token_ledger, rồi trả dòng này
-#      về "token_ledger"                 (task 6.5, 6.6)
+# `token_ledger` cũ VẪN CÒN NGUYÊN. Quay lui runtime = đặt PGDATABASE hoặc
+# TOKEN_LEDGER_DSN về database đó. Gateway ingestion tương lai chỉ ghi vào v2;
+# không ghi cùng một dòng vào cả hai database.
 PG_DATABASE = os.environ.get("PGDATABASE", "token_ledger_v2")
 
 # Dùng `or` chứ không `os.environ.get(k, mac_dinh)`: biến đặt thành chuỗi rỗng

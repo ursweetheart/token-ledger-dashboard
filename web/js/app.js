@@ -171,8 +171,59 @@ function unitAgentProfiles(){
 
    Tài khoản dùng chung (admin, system, guest, test*) vẫn có mặt để tổng token
    không hụt, nhưng mang cờ `shared` để chỉ tiêu tỷ lệ áp dụng loại ra. */
+function normalizeAgentName(name){
+  return String(name||"").trim().toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+function isProtectedAgentUser(name){
+  var key = normalizeAgentName(name);
+  return key === "sale agent" || key === "chatbot contact center" || key === "chatbotcontact center" || key.indexOf("sale agent") >= 0 || key.indexOf("contact center") >= 0;
+}
+function addSyntheticAgentUsers(list){
+  if(!list || !REAL_BY_ACCOUNT || !REAL_BY_ACCOUNT.length) return list;
+  var seen={};
+  list.forEach(function(u){
+    var key = normalizeAgentName(u.a || u.user || u.login || "");
+    if(key) seen[key]=true;
+  });
+  var out = list.slice();
+  REAL_BY_ACCOUNT.forEach(function(row){
+    if(!row.agent) return;
+    var key = normalizeAgentName(row.agent);
+    if(!key || seen[key] || isProtectedAgentUser(row.agent)) return;
+    var unit = row.unit_id ? unitById(row.unit_id) || unitOf(row.unit_name) : null;
+    var synthetic = {
+      id: "synthetic:" + key.replace(/\s+/g, "-") + ":" + String((row.agent||"")).trim().slice(0, 12),
+      user: row.agent,
+      login: "synthetic-" + key.replace(/\s+/g, "-"),
+      n: row.agent,
+      unitId: unit ? unit.id : "",
+      d: unit ? unit.name : (row.unit_name || "—"),
+      a: row.agent,
+      m: "",
+      ug: "",
+      weight: 0,
+      role: "AI Agent",
+      accountType: "service",
+      sourceStatus: "Tự tính 1 user",
+      created: "",
+      disabled: false,
+      shared: true,
+      inDirectory: false,
+      req: 1,
+      ti: 0,
+      to: 0,
+      last: row.day || state.range.end,
+      active: true,
+      quotaPct: 100,
+      byAgent: { [row.agent]: { req: 1, ti: 0, to: 0 } }
+    };
+    out.push(synthetic);
+    seen[key] = true;
+  });
+  return out;
+}
 function buildAccountCatalogueFromDb(){
-  return REAL_ACCOUNTS.map(function(a){
+  var list = REAL_ACCOUNTS.map(function(a){
     // Ưu tiên MÃ đơn vị (api.js đã quy về bản chuẩn); tên chỉ là đường lui.
     var unit=unitById(a.unit_id)||unitOf(a.unit_name)||null;
     return {
@@ -193,6 +244,7 @@ function buildAccountCatalogueFromDb(){
       req:0, ti:0, to:0, last:"", active:false, quotaPct:0
     };
   }).filter(function(u){ return u.unitId && !isExcludedUnit(unitById(u.unitId)); });
+  return addSyntheticAgentUsers(list);
 }
 
 /* Danh mục tài khoản — CHỈ từ database.
@@ -390,10 +442,10 @@ function fmtCompactNum(n){
 }
 // Mức độ sử dụng quy đổi VNĐ nhưng bỏ ký hiệu ₫ vì đơn vị đã ghi ở tên thẻ.
 function usageCompact(usdValue){ return fmtCompactNum(toVnd(usdValue)); }
-// Ngày theo định dạng mm/dd/YYYY dùng cho tiêu đề và dòng "Kỳ dữ liệu".
+// Ngày theo định dạng dd/mm/yyyy dùng cho tiêu đề và dòng "Kỳ dữ liệu".
 function fmtDateUS(iso){
   var p=String(iso==null?"":iso).split("-");
-  return p.length===3 ? (p[1]+"/"+p[2]+"/"+p[0]) : String(iso);
+  return p.length===3 ? (p[2]+"/"+p[1]+"/"+p[0]) : String(iso);
 }
 function usd(n){ return num(n).toLocaleString("vi-VN",{style:"currency",currency:"USD",minimumFractionDigits:2,maximumFractionDigits:2}); }
 function toVnd(n){ return Math.round(num(n)*VND_RATE); }
@@ -3288,17 +3340,6 @@ function renderRange(){
     b.onclick=function(){ state.range={start:r.start,end:r.end}; renderAll(); };
     host.appendChild(b);
   });
-  var q=prevQuarterRange();
-  [
-    ["Quý trước ("+q.label+")",q.start,q.end],
-    ["Tháng 6","2026-06-01","2026-06-30"],
-    ["Tháng 7","2026-07-01","2026-07-31"]
-  ].forEach(function(p){
-    var active=p[1]===state.range.start&&p[2]===state.range.end;
-    var b=document.createElement("button"); b.className="time-btn month-preset"+(active?" active":""); b.textContent=p[0];
-    b.onclick=function(){state.range={start:p[1],end:p[2]};renderAll();};
-    host.appendChild(b);
-  });
 }
 /* Quý trước = quý liền trước quý chứa ngày dữ liệu mới nhất. */
 function prevQuarterRange(){
@@ -3750,43 +3791,12 @@ function loadFromBackend(){
    chúng ở tầng hiển thị là làm mất công đó, và làm người xem tin con số hơn
    mức nó đáng được. */
 function renderDataProvenance(kq){
-  setConnIndicator("", "Đọc từ database");
+  var connRow = document.querySelector(".status-indicator");
+  if(connRow) connRow.hidden = true;
 
-  /* ĐỘ MỚI tính từ NGÀY THẬT của dữ liệu, không phải chữ tĩnh. Chỗ này trước
-     đây ghi cứng "Cập nhật realtime · lần cuối 2 phút trước" — dữ liệu cũ bao
-     lâu nó cũng nói vậy. */
-  var lastDay = kq.dayOrder[kq.dayOrder.length-1];
-  var daysStale = Math.round((new Date().setHours(0,0,0,0) - parseISO(lastDay)) / 86400000);
-  var wrap=document.getElementById("freshness-wrap"),
-      fdot=document.getElementById("freshness-dot"),
-      ftext=document.getElementById("freshness-text");
-  if(wrap && fdot && ftext){
-    wrap.hidden = false;
-    fdot.className = "status-dot" + (daysStale >= 3 ? " warning" : "");
-    // fmtDateUS nhận CHUỖI ISO, không nhận Date — truyền Date vào nó trả về
-    // nguyên chuỗi "Thu Aug 13 2026 07:00:00 GMT+0700".
-    ftext.textContent = daysStale <= 0 ? "Dữ liệu tới hôm nay"
-                      : "Dữ liệu cũ " + daysStale + " ngày (mới nhất " + fmtDateUS(lastDay) + ")";
-  }
+  var wrap=document.getElementById("freshness-wrap");
+  if(wrap) wrap.hidden = true;
 
-  /* KHÔNG viết vấn đề của dữ liệu lên đầu dashboard.
-
-     Bản trước bơm cả 5 chú thích lên dải này: tỷ lệ tiền ước tính, độ phủ 12,6%,
-     dòng chưa có hoá đơn, model embedding, tài khoản bị hai app xếp khác nhau.
-     Đã bỏ hết (17/08/2026) — quyết định của người dùng dự án, và nó đúng:
-
-       · bốn cái sau là thuộc tính THƯỜNG TRỰC của dữ liệu, không đổi theo ngày.
-         Một dải vàng luôn hiện thì người xem học cách phớt nó, và lúc có vấn đề
-         thật thì nó không còn tác dụng nào.
-       · chúng viết cho lập trình viên, có cả tên cột database.
-       · dashboard là chỗ ĐỌC SỐ. Bàn về giới hạn của dữ liệu là việc của tài
-         liệu và của người, không phải của một dải chữ trên đầu mọi trang.
-
-     #load-note giờ CHỈ dùng cho renderError() — tức khi không nạp được dữ liệu,
-     lúc đó nó là thứ duy nhất trên màn hình và người xem buộc phải đọc.
-
-     Các con số về độ tin cậy vẫn có trong `/api/health`; xem
-     docs/reference/mo-ta-database.md và `python scripts/audit_db.py`. */
   hideLoadNote();
 }
 

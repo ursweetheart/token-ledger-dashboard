@@ -108,8 +108,10 @@ và database cũ vẫn còn nguyên.
   sinh tự động bởi `db/gen_catalog.py`
 - **Dựng `token_ledger_v2` song song**, nạp lại, so bộ số ở trên. Chỉ khi khớp mới đổi
   `DEFAULT_DSN`
-- **Sau khi yên tâm:** `DROP DATABASE token_ledger`, rồi `ALTER DATABASE token_ledger_v2
-  RENAME TO token_ledger` — trả tên về đúng, không để lại chữ `_v2` vĩnh viễn
+- **Giữ song song hai database** theo quyết định 27/08/2026: `token_ledger` là bản legacy
+  để đối chiếu/rollback; `token_ledger_v2` là runtime ledger hiện tại và là đích duy nhất
+  cho ingestion Gateway về sau. Không `DROP` database cũ, không rename v2. Database vận
+  hành riêng của LiteLLM vẫn là `litellm`, không phải một trong hai ledger
 - **Xoá `db/01_schema.sql`** — nội dung đã nằm trong `001`. Còn hai file là còn trôi khỏi
   nhau; xoá đi thì bài toán đó **không tồn tại**, không cần phép kiểm chống trôi nào
 - **Xoá `scripts/copy_to_postgres.py`** — đã chết sẵn. Docstring của chính nó ghi *"CONG CU
@@ -144,8 +146,8 @@ và database cũ vẫn còn nguyên.
 | **Rebuild** | **Có — và đó chính là phép nghiệm thu.** Nạp lại toàn bộ vào `token_ledger_v2` |
 | **Đồng nghiệp** | Phải bổ sung `dong-bo-may-dong-nghiep-*.md`: lệnh dựng đổi từ `rebuild_db.py` thuần sang có bước `alembic upgrade head` |
 | **Không đụng** | `web/` · `backend/store.py` · `backend/main.py` · toàn bộ `db/load_*.py` |
-| **Rủi ro** | **Trung bình — và thấp hơn bản đầu đánh giá.** Đo 24/08 cho thấy đường nạp **chỉ đọc** `data/`, nên dữ liệu gốc không nằm trong tầm với của change. Lưới: (1) dựng v2 **song song**, database cũ không bị đụng một chữ, (2) so 9 con số trước khi đổi DSN, (3) giữ database cũ vài ngày sau khi đổi |
-| **Quay lui** | Cho tới bước cuối cùng, quay lui = đổi `DEFAULT_DSN` về `token_ledger`. Database cũ không bị đụng một chữ nào trong suốt quá trình |
+| **Rủi ro** | **Trung bình — và thấp hơn bản đầu đánh giá.** Đo 24/08 cho thấy đường nạp **chỉ đọc** `data/`, nên dữ liệu gốc không nằm trong tầm với của change. Lưới: (1) dựng v2 **song song**, database cũ không bị đụng một chữ, (2) so 9 con số trước khi đổi DSN, (3) giữ database cũ lâu dài để đối chiếu/rollback |
+| **Quay lui** | Quay lui runtime = đổi `DEFAULT_DSN` về `token_ledger`. Database cũ được giữ nguyên; không có bước phá huỷ hoặc rename trong kế hoạch hiện hành |
 
 ### Bốn cái bẫy đã biết trước
 
@@ -163,5 +165,6 @@ và database cũ vẫn còn nguyên.
    `rebuild_db.py` từng khai DSN riêng, đổi `connect.py` xong mà đường ống vẫn dựng
    database cũ, **không lỗi nào báo ra**. `env.py` của Alembic phải lấy DSN **từ
    `connect.DEFAULT_DSN`**, không tự đọc.
-4. **`ALTER DATABASE ... RENAME` đòi không còn kết nối nào.** Backend, pgAdmin và mọi script
-   phải đóng trước. Nếu quên, lệnh treo chứ không báo lỗi rõ ràng.
+4. **Hai ledger không được cùng nhận một dòng Gateway.** `token_ledger` là legacy đóng băng;
+   ingestion mới chỉ ghi vào `token_ledger_v2`. Ghi vào cả hai rồi cộng/đối chiếu không có
+   provenance rõ ràng sẽ tạo hai bản gốc và mở đường double-count.

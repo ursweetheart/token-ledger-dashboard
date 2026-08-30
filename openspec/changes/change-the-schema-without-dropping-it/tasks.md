@@ -313,12 +313,13 @@ Kiểm sau khi xong cả nhóm:
 Suốt nhóm 5, đường lui vẫn là **đổi một biến** `DEFAULT_DSN`. Database cũ chưa bị sửa một
 chữ.
 
-## 6. Đổi sang v2, rồi trả tên về
+## 6. Dùng v2 và giữ song song database legacy
 
 Chỉ làm nhóm này khi nhóm 5 khớp **hết**.
 
-- [x] 6.1 ✅ `connect.PG_DATABASE` mặc định đổi sang `token_ledger_v2`, kèm ghi chú tại chỗ
-      nói đây là **tạm** và liệt kê hai việc còn lại. Quay lui = sửa đúng một dòng
+- [x] 6.1 ✅ `connect.PG_DATABASE` mặc định đổi sang `token_ledger_v2`. Quyết định
+      27/08/2026 chốt đây là runtime ledger hiện hành, không còn là tên tạm. Quay lui runtime
+      vẫn là đổi DSN về `token_ledger`; không cần xoá hoặc rename database nào
 - [x] 6.2 ✅ Dashboard thật nạp được từ v2 — `tools/chay_dashboard_trong_node.js`, exit 0:
 
       ```
@@ -334,18 +335,28 @@ Chỉ làm nhóm này khi nhóm 5 khớp **hết**.
       *(`/api/usage` trả 159 dòng / 97,1 triệu token — đó là cửa sổ 30 ngày mặc định của
       endpoint, không phải lệch. Toàn kỳ đã so ở task 5.4: 1.189 dòng / 867.657.110.)*
 
-- [ ] 6.3 ⚠️ **Gate trước cutover — 3/4 điều kiện đã thoả (cập nhật 26/08).**
+- [x] 6.3 ✅ **RÚT CUTOVER PHÁ HUỶ — quyết định 27/08/2026.**
+
+      Giữ cả `token_ledger` và `token_ledger_v2` trong khi tiếp tục phát triển Gateway:
+
+      - `token_ledger`: legacy đóng băng để đối chiếu và rollback;
+      - `token_ledger_v2`: runtime ledger hiện tại, đích duy nhất của ingestion Gateway;
+      - `litellm`: database vận hành riêng của LiteLLM/SpendLogs.
+
+      Không `DROP token_ledger`, không rename v2. Independent preflight dưới đây từng là
+      gate cho thao tác phá huỷ; khi thao tác đó bị rút, nó không còn chặn đường Gateway.
+      Bằng chứng backup/rehearsal vẫn được giữ làm lịch sử an toàn migration.
 
       ```
          [x] 8.1-8.6 hoan tat        26/08 -- xem tung task
          [x] backup data/            192/192 file, 0 lech byte, sha256 khop
          [x] live snapshot           26/08 11:30 -- xem duoi
-         [ ] independent preflight   VAN CHUA co -- xem ghi chu duoi
+         [x] destructive cutover     DA RUT -- khong con doi tuong de preflight
       ```
 
-      **Tự rà soát 26/08 (KHÔNG thay thế được điều kiện độc lập).** Anh Tuấn yêu cầu tôi
-      tự rà bằng kỹ năng *vòng lặp review + sửa*. Đã làm, và nó **thêm bằng chứng** chứ
-      không **thoả điều kiện** — người viết không tự rà chính mình được. Ô trên vẫn để trống.
+      **Bằng chứng lịch sử 26/08 (không còn là gate cho Gateway).** Anh Tuấn yêu cầu tôi
+      tự rà bằng kỹ năng *vòng lặp review + sửa*. Kết quả thêm bằng chứng cho migration,
+      nhưng không còn phải thoả một destructive gate đã bị rút.
 
       Bằng chứng mới thu được:
 
@@ -393,48 +404,15 @@ Chỉ làm nhóm này khi nhóm 5 khớp **hết**.
       Gateway ghi dòng đầu tiên, dòng gateway KHÔNG có bản sao ở `data/`"*. Đường lui bằng
       `data/` đang còn dùng được nhưng **sắp hết hạn**.
 
-      Điều kiện còn thiếu **không phải việc gõ phím**: cần một người thứ hai. Không được
-      tự mình bỏ qua.
+      Không dùng kết quả diễn tập làm lý do xóa database cũ: diễn tập chứng minh thao tác có
+      thể chạy, không chứng minh thao tác còn cần thiết sau khi quyết định sản phẩm đổi.
 
-      *(Nguyên văn điều kiện, giữ lại:)* **Gate trước cutover — không còn gate “chờ vài ngày”.** Người dùng đã miễn rõ
-      ràng riêng khoảng chờ theo thời gian ngày 24/08/2026; miễn này **không** miễn backup,
-      live snapshot, hay independent preflight review.
-
-      Trước 6.4, phải hoàn thành **toàn bộ 8.1–8.6**, bao gồm candidate acceptance/rehearsal
-      runs. Đặc biệt, 8.6 phải áp dụng `002` rồi `003` tuần tự trên `token_ledger_v2` đang có
-      dữ liệu thật, và sau mỗi lần phải so lại các số mốc. Chỉ sau khi các bằng chứng đó cùng
-      backup, live snapshot, và independent preflight review được chấp nhận thì mới được làm
-      6.4. `token_ledger` cũ vẫn còn nguyên; quay lui vẫn là sửa `PG_DATABASE` về
-      `"token_ledger"`.
-- [ ] 6.4 `DROP DATABASE token_ledger`
-- [ ] 6.5 ⚠️ Đóng backend, pgAdmin và mọi script, rồi `ALTER DATABASE token_ledger_v2
-      RENAME TO token_ledger`. Còn kết nối thì lệnh **treo** chứ không báo lỗi rõ
-- [ ] 6.6 Trả `connect.PG_DATABASE` về `token_ledger`.
-
-      **Danh sách 9 chỗ phải sửa (đếm 26/08, đã loại migration bất biến):**
-
-      ```
-         db/connect.py:61,73,75      <-- CHO DUY NHAT co hieu luc chay
-         backend/check_api.py:38         (vi du trong docstring)
-         db/migrations/env.py:15         (vi du)
-         scripts/audit_db.py:4           (vi du)
-         scripts/rebuild_db.py:5         (vi du)
-         tools/baseline_db.py:4          (vi du)
-         alembic.ini:99                  (vi du)
-
-         docs/reference/dong-bo-may-dong-nghiep-20-08.md
-         docs/reference/toan-trinh-du-lieu.md
-      ```
-
-      Chỉ `db/connect.py:75` đổi hành vi; 8 chỗ còn lại là ví dụ trong tài liệu — nhưng để
-      lại thì lần sau có người chép nguyên câu lệnh và trỏ vào một database không tồn tại.
-
-      Được phép giữ `_v2`: `db/migrations/versions/002,003`, `docs/reference/nhat-ky-*`,
-      `openspec/changes/*` — lịch sử phải trung thực với tên tại thời điểm đó. Sau cutover, `grep -rn "_v2"` phải
-      không còn match trong runtime code, configuration, và live operating docs. Immutable
-      migrations, archived material, dated journals, và OpenSpec history được giữ các tên
-      lịch sử trung thực, nên có thể còn `_v2`.
-- [ ] 6.7 Chạy lại `audit_db.py` + `check_api.py` lần cuối
+- [x] 6.4 ⚪ **RÚT:** không chạy `DROP DATABASE token_ledger`; giữ legacy để đối chiếu
+- [x] 6.5 ⚪ **RÚT:** không rename `token_ledger_v2`; tên này là runtime contract hiện hành
+- [x] 6.6 ✅ `connect.PG_DATABASE` tiếp tục mặc định `token_ledger_v2`; tài liệu vận hành
+      được phép và cần gọi đúng tên này
+- [x] 6.7 ⚪ **RÚT:** không có cutover cuối để chạy hậu kiểm. Audit/API vẫn là acceptance
+      bắt buộc cho mọi migration hoặc ingestion Gateway về sau
 
 ## 7. Dọn và ghi lại
 
