@@ -71,9 +71,13 @@ Tuần này không dựng gì. Nó chỉ để gỡ ba thứ chặn đường, v
 
 ```
    [ ] Gui yeu cau thu 8 khoa API cua 8 project           -> dieu kien ①
-   [ ] Xin quyen doi base_url cua Ralli + 7 agent         -> dieu kien ②
-   [ ] Sinh LITELLM_MASTER_KEY / LITELLM_SALT_KEY, dien .env
-   [ ] `docker compose --profile gateway up -d` -- dung thu tren may cuc bo
+   [ ] Dat lich soat doc lap cong 6.3 voi Chi Thanh       -> dieu kien ②
+   [ ] Xin quyen doi base_url cua Ralli + 7 agent         -> dieu kien ③
+   [x] Sinh LITELLM_MASTER_KEY / LITELLM_SALT_KEY, dien .env            -- XONG 29/08
+       (sua lai 1 lan: khoa dau tien thieu tien to 'sk-', entrypoint.sh
+       tu choi, da sinh lai bang secrets.token_urlsafe(32))
+   [x] `docker compose --profile gateway up -d` -- dung thu tren may cuc bo  -- XONG 29/08
+       6/6 container gateway Healthy, /health/liveliness qua load balancer -> HTTP 200
    [x] Go JWT_test_for_header khoi goc repo            -- XONG 27/08
    [x] Che JWT trong 2 file bang chung o ket-qua/      -- XONG 27/08
    [x] tools/scan_secrets.py: quet bi mat theo HINH DANG, rc=0

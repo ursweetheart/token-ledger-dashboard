@@ -38,8 +38,8 @@ x-litellm: &litellm
     # Fork nam NGANG HANG du an, khong long ben trong (repo long repo thi
     # `git clean -xfd` xoa ca fork). Doi cho fork di la compose bao loi ngay.
     # Ban da do: commit f005afa146, litellm 1.99.0.
-    context: ../litellm_rang_dong
-  image: litellm_rang_dong:gateway
+    context: ../litellm_tuan_test
+  image: litellm_tuan_test:gateway
   profiles: ["gateway"]
   restart: unless-stopped
   # entrypoint rieng: chan khoi dong khi thieu khoa, roi moi giao lai cho
@@ -84,8 +84,9 @@ services:
     container_name: token-ledger-postgres
     restart: unless-stopped
     environment:
-      # Khop db/connect.py: runtime ledger mac dinh la v2. Tren volume cu,
-      # token_ledger legacy van con nguyen ben canh; bien nay khong xoa database.
+      # Must match db/connect.py:75. Before 29/08 this defaulted to
+      # `token_ledger` while the code read `token_ledger_v2` -- harmless here
+      # since both exist, fatal on a fresh server. Set PGDATABASE in .env.
       POSTGRES_DB: ${PGDATABASE:-token_ledger_v2}
       POSTGRES_USER: ${PGUSER:-token}
       POSTGRES_PASSWORD: ${PGPASSWORD:-token_local}
@@ -123,6 +124,102 @@ services:
       - pgadmin:/var/lib/pgadmin
       # Khai bao san may chu, khoi phai go tay thong tin ket noi moi lan.
       - ./docker/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ==========================================================================
+  # DASHBOARD -- no profile, `docker compose up -d` starts it.
+  # http://127.0.0.1:8080
+  # ==========================================================================
+
+  # Creates the read-only role. Not /docker-entrypoint-initdb.d, which only
+  # runs while the volume is still empty.
+  api-db-init:
+    image: postgres:17-alpine
+    container_name: token-ledger-api-db-init
+    environment:
+      PGHOST: postgres
+      PGUSER: ${PGUSER:-token}
+      PGPASSWORD: ${PGPASSWORD:-token_local}
+      PGDATABASE: ${PGDATABASE:-token_ledger_v2}
+      API_PASSWORD: ${API_READONLY_PASSWORD:-api_readonly_local}
+    volumes:
+      - ./docker/read-only-api.sql:/read-only-api.sql:ro
+    entrypoint:
+      - sh
+      - -c
+      - >
+        psql -v ON_ERROR_STOP=1
+        -v api_role=api_readonly
+        -v api_password="$$API_PASSWORD"
+        -v db_name="$$PGDATABASE"
+        -v admin_role="$$PGUSER"
+        -f /read-only-api.sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: token-ledger-api:local
+    container_name: token-ledger-api
+    restart: unless-stopped
+    environment:
+      # Read-only role, not the admin one -- see docker/read-only-api.sql.
+      TOKEN_LEDGER_DSN: "postgresql://api_readonly:${API_READONLY_PASSWORD:-api_readonly_local}@postgres:5432/${PGDATABASE:-token_ledger_v2}"
+      # No default on purpose, but NOT `${VAR:?}`: compose interpolates the whole
+      # file before filtering profiles, so `:?` would take postgres down with it
+      # on a machine without .env. backend/main.py:129 refuses to start instead,
+      # with a message that says what to do.
+      DASHBOARD_KEY: ${DASHBOARD_KEY:-}
+    ports:
+      # Side door, keeps the old habit working: opening web/index.html over
+      # file:// still loads. The main door is nginx on 8080.
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api-db-init:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    image: token-ledger-web:local
+    container_name: token-ledger-web
+    restart: unless-stopped
+    ports:
+      # Switch to 0.0.0.0 for a real deployment -- but answer this first:
+      # who can reach this machine.
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+
+  # Collection pipeline. Runs once and exits, not a long-lived service:
+  #     docker compose run --rm tools python3 scripts/update_dashboard.py
+  tools:
+    build:
+      context: .
+      dockerfile: docker/tools.Dockerfile
+    image: token-ledger-tools:local
+    profiles: ["tools"]
+    environment:
+      # Admin role, unlike api: rebuild_db.py runs DROP SCHEMA.
+      TOKEN_LEDGER_DSN: "postgresql://${PGUSER:-token}:${PGPASSWORD:-token_local}@postgres:5432/${PGDATABASE:-token_ledger_v2}"
+      RALLI_USER: ${RALLI_USER:-}
+      RALLI_PASS: ${RALLI_PASS:-}
+      HD_USER: ${HD_USER:-}
+      HD_PASS: ${HD_PASS:-}
+    volumes:
+      # data/ MUST persist: the Cloud Monitoring retention window slides fast,
+      # and losing an old pull directory is permanent.
+      - ${DATA_DIR:-./data}:/app/data
+      - ${GCLOUD_CONFIG:-~/.config/gcloud}:/root/.config/gcloud
     depends_on:
       postgres:
         condition: service_healthy

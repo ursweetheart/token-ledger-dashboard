@@ -146,7 +146,7 @@ def git_is_clean(repo: Path) -> tuple[bool, int, str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--goc", default=".", help="thu muc repo du an")
-    parser.add_argument("--fork", default="../litellm_rang_dong", help="repo fork LiteLLM")
+    parser.add_argument("--fork", default="../litellm_tuan_test", help="repo fork LiteLLM")
     args = parser.parse_args()
 
     root = Path(args.goc).resolve()

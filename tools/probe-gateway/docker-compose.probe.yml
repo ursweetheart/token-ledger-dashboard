@@ -10,8 +10,8 @@ services:
     build:
       # Fork nam NGANG HANG voi du an, khong long ben trong. Duong dan nay chinh la
       # tai lieu cho quy uoc do -- doi fork di cho khac thi compose bao loi ngay.
-      context: ../../../litellm_rang_dong
-    image: litellm_rang_dong:probe
+      context: ../../../litellm_tuan_test
+    image: litellm_tuan_test:probe
     command: ["--config=/app/config.yaml", "--port", "4000"]
     volumes:
       - ./config.probe.yaml:/app/config.yaml:ro

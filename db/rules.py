@@ -23,6 +23,7 @@ MODELS = [
     (8, "gemini-3.5-flash", "gemini-3"),
     (9, "gemini-embedding-1.0", "embedding"),
     (10, "gemini-embedding-2", "embedding"),
+    (11, "gemini-3.6-flash", "gemini-3"),
 ]
 MODEL_ID = {name: i for i, name, _ in MODELS}
 
@@ -34,6 +35,7 @@ MODEL_PATTERNS = [
     ("embedding 2", "gemini-embedding-2"),
     ("3.1 flash lite", "gemini-3.1-flash-lite"),
     ("3.5 flash", "gemini-3.5-flash"),
+    ("3.6 flash", "gemini-3.6-flash"),
     ("3 pro", "gemini-3-pro"),
     ("3 flash", "gemini-3-flash"),
     ("2.5 flash lite", "gemini-2.5-flash-lite"),
