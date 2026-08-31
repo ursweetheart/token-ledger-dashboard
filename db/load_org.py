@@ -313,6 +313,15 @@ def main() -> None:
                           None, 0, "Chưa quy được", True))
 
     # Thứ tự xoá ngược với thứ tự khoá ngoại: con trước, cha sau.
+    #
+    # CHÚ Ý (31/08/2026): `fact_call` nay chứa HAI nguồn - `app` và `gateway`.
+    # Câu DELETE dưới đây KHÔNG lọc được theo nguồn: khoá ngoại account_id bắt
+    # phải dọn sạch bảng con trước khi dựng lại `account`. Nên chạy file này MỘT
+    # MÌNH sẽ xoá cả dữ liệu Gateway, và `load_ralli.py` không nạp lại phần đó.
+    #
+    # `scripts/rebuild_db.py` đã xếp đúng thứ tự (org ở bước 2, gateway ở bước 6)
+    # nên đường chính an toàn. Chạy lẻ thì phải chạy lại `db/load_gateway.py`,
+    # hoặc gọn hơn là `scripts/refresh_gateway.py`.
     cur.execute("DELETE FROM fact_usage_daily")
     cur.execute("DELETE FROM fact_call")
     cur.execute("DELETE FROM dim_function")

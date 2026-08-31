@@ -9,14 +9,14 @@ INSERT INTO dim_agent (agent_id, code, name, gcp_project_id, has_org_tree,
                        is_running, has_google_source) VALUES
   (1, 'contact-center', 'Chatbot Contact Center', 'pro-tuner-454203-v3', FALSE, '2025-03-19', '2026-01-13', NULL, TRUE, TRUE),
   (2, 'sale-agent', 'Sale Agent', 'tranquil-post-471401-c1', FALSE, '2025-09-07', '2026-01-01', NULL, TRUE, TRUE),
-  (3, 'invoice', 'Multi modal AI Invoice', 'multimodal-invoice', FALSE, '2025-09-15', '2026-01-22', '2026-08-17', FALSE, TRUE),
-  (4, 'tools-quizzer', 'Tools Quizzer', 'tools-quizz', FALSE, '2026-04-10', '2026-06-17', '2026-07-01', FALSE, TRUE),
+  (3, 'invoice', 'Multi modal AI Invoice', 'multimodal-invoice', FALSE, '2025-09-15', '2026-01-22', '2026-08-26', FALSE, TRUE),
+  (4, 'tools-quizzer', 'Tools Quizzer', 'tools-quizz', FALSE, '2026-04-10', '2026-06-17', '2026-08-21', FALSE, TRUE),
   (5, 'tla-hd', 'Trợ Lý Ảo Hợp Đồng', 'ai-chatbot-contract', TRUE, '2026-06-20', '2026-07-02', NULL, TRUE, TRUE),
   (6, 'dms-feedback', 'Phân Loại Phản Hồi Tiếp Thị', 'feedback-dms-tiep-thi', FALSE, '2026-06-25', '2026-07-06', NULL, TRUE, TRUE),
   (7, 'crm-feedback', 'Phân Loại Dữ Liệu CRM', 'crm-500509', FALSE, '2026-06-25', '2026-07-06', NULL, TRUE, TRUE),
   (8, 'ralli', 'Trợ lý ảo Ralli', 'tla-ralli', TRUE, NULL, '2026-03-14', NULL, TRUE, FALSE);
 
--- 11 model, ten chuan dang gach ngang.
+-- 12 model, ten chuan dang gach ngang.
 INSERT INTO dim_model (model_id, name, family, provider) VALUES
   (1, 'gemini-2.0-flash', 'gemini-2.0', 'Google'),
   (2, 'gemini-2.5-flash', 'gemini-2.5', 'Google'),
@@ -28,9 +28,10 @@ INSERT INTO dim_model (model_id, name, family, provider) VALUES
   (8, 'gemini-3.5-flash', 'gemini-3', 'Google'),
   (9, 'gemini-embedding-1.0', 'embedding', 'Google'),
   (10, 'gemini-embedding-2', 'embedding', 'Google'),
-  (11, 'gemini-3.6-flash', 'gemini-3', 'Google');
+  (11, 'gemini-3.6-flash', 'gemini-3', 'Google'),
+  (12, 'gemini-3.5-flash-lite', 'gemini-3', 'Google');
 
--- 44 anh xa. Ba nguon goi ten model theo ba kieu khac nhau:
+-- 46 anh xa. Ba nguon goi ten model theo ba kieu khac nhau:
 --   billing 'gemini-embedding-001'  <->  monitoring 'gemini-embedding-1.0'
 INSERT INTO dim_model_alias (source, raw_name, model_id) VALUES
   ('billing_sku', '07D6-73CA-C859', 5),
@@ -76,7 +77,9 @@ INSERT INTO dim_model_alias (source, raw_name, model_id) VALUES
   ('monitoring', 'gemini-3.1-flash-lite', 7),
   ('monitoring', 'gemini-3.5-flash', 8),
   ('monitoring', 'gemini-embedding-1.0', 9),
-  ('monitoring', 'gemini-embedding-2', 10);
+  ('monitoring', 'gemini-embedding-2', 10),
+  ('gateway', 'gemini/gemini-3.6-flash', 11),
+  ('gateway', 'gemini/gemini-3.5-flash-lite', 12);
 
 -- 44 bi danh do dac: 13 phep do
 -- monitoring + 31 SKU hoa don. Thay cho viec doan ten bang
@@ -127,9 +130,11 @@ INSERT INTO dim_metric_alias (source, raw_name, label, measures, kind, metric_ki
   ('billing_sku', 'F9BE-D8E8-69E9', 'Generate content output token count gemini 3.5 flash text', 'token', 'output', NULL, NULL),
   ('billing_sku', 'FB70-0CFB-9533', 'Generate_content text input token count for gemini 3 pro short', 'token', 'input', NULL, NULL);
 
--- 10 bang gia CHINH CHU tu Cloud Billing Catalog (USD / 1 trieu token).
+-- 12 bang gia CHINH CHU tu Cloud Billing Catalog (USD / 1 trieu token).
 -- Truoc day bang nay RONG. Moi model lay gia cua SKU co khoi luong lon nhat
 -- trong hoa don. Catalog chi co gia HIEN HANH, khong co lich su.
+-- Model CHUA CO HOA DON thi khong co khoi luong de chon -> lay SKU TEXT
+-- TIEU CHUAN (khong flex/priority/batch/caching). Xem price_table().
 INSERT INTO ref_price (model_id, effective_from, price_input, price_output, price_cached, source) VALUES
   (1, '2026-08-13', 0.10000000, 0.40000000, NULL, 'google'),
   (2, '2026-08-13', 0.30000000, 2.50000000, 0.03000000, 'google'),
@@ -140,7 +145,9 @@ INSERT INTO ref_price (model_id, effective_from, price_input, price_output, pric
   (7, '2026-08-13', 0.25000000, 1.50000000, NULL, 'google'),
   (8, '2026-08-13', 1.50000000, 9.00000000, NULL, 'google'),
   (9, '2026-08-13', 0.15000000, NULL, NULL, 'google'),
-  (10, '2026-08-13', 0.20000000, NULL, NULL, 'google');
+  (10, '2026-08-13', 0.20000000, NULL, NULL, 'google'),
+  (11, '2026-08-13', 0.75000000, 3.75000000, 0.07500000, 'google'),
+  (12, '2026-08-13', 0.30000000, 2.50000000, 0.03000000, 'google');
 
 -- Ty gia go cung (quyet dinh M-F). Keo API sau, cau truc khong phai doi.
 INSERT INTO ref_fx (day, vnd_per_usd, source) VALUES ('2026-08-08', 25200, 'hardcoded (app.js)');

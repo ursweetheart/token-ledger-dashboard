@@ -205,9 +205,14 @@ def load_app(cn, ph) -> int:
                account_id, COUNT(*), SUM(total_tokens),
                SUM(prompt_tokens), SUM(completion_tokens), SUM(cached_tokens)
         FROM fact_call
-        WHERE model_id IS NOT NULL
+        WHERE model_id IS NOT NULL AND source = 'app'
         GROUP BY 1, 2, 3, 4
     """)
+    # `source = 'app'` THÊM 31/08/2026. Trước đó fact_call chỉ có một nguồn nên
+    # điều kiện này thừa; từ khi Gateway đổ vào cùng bảng thì thiếu nó là lưu
+    # lượng Gateway bị đếm thành của app - và tổng vẫn khớp nên không phép kiểm
+    # nào bắt được.
+    #
     # cost_usd để NULL vì app của Ralli không có tiền đối chứng (quyết định M-D).
     out = [(*r, None, "app") for r in rows]
 
@@ -232,6 +237,34 @@ def load_app(cn, ph) -> int:
     return connect.insert_many(cn, ph, "fact_usage_daily", COLUMNS, out)
 
 
+def load_gateway(cn, ph) -> int:
+    """Lưu lượng qua API Gateway, từ `fact_call` nguồn `gateway`.
+
+    KHÁC nguồn `app` ở đúng một chỗ: nguồn này CÓ TIỀN. Nhưng tiền đó do LiteLLM
+    nhân từ bảng giá nội bộ của nó, KHÔNG phải số Google xuất hoá đơn - nên
+    `ref_source.has_invoice_cost` của `gateway` là FALSE, và mọi chỗ hiển thị phải
+    mang nhãn ước tính.
+
+    `model_id IS NOT NULL` cùng lý do với hai nguồn trên: model_id nằm trong khoá
+    chính của fact_usage_daily nên dòng không biết model không vào được. Bộ nạp
+    db/load_gateway.py in ra số dòng đó mỗi lần chạy chứ không nuốt lặng.
+
+    MỘT LƯỢT PHÂN LOẠI ĐẺ HAI DÒNG. Nên `calls` ở đây là số lượt gọi LLM, không
+    phải số việc nghiệp vụ.
+    """
+    rows = connect.query(cn, """
+        SELECT substr(CAST(ts_local AS TEXT), 1, 10), agent_id, model_id,
+               account_id, COUNT(*), SUM(total_tokens),
+               SUM(prompt_tokens), SUM(completion_tokens), SUM(cached_tokens),
+               SUM(cost_usd)
+        FROM fact_call
+        WHERE model_id IS NOT NULL AND source = 'gateway'
+        GROUP BY 1, 2, 3, 4
+    """)
+    out = [(*r, "gateway") for r in rows]
+    return connect.insert_many(cn, ph, "fact_usage_daily", COLUMNS, out)
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
@@ -246,7 +279,8 @@ def main() -> None:
     n_b = load_billing(cn, ph, anchor)
     n_m = load_monitoring(cn, ph, anchor)
     n_a = load_app(cn, ph)
-    print(f"  billing {n_b} | monitoring {n_m} | app {n_a}")
+    n_g = load_gateway(cn, ph)
+    print(f"  billing {n_b} | monitoring {n_m} | app {n_a} | gateway {n_g}")
 
     cost = connect.query_one(cn, "SELECT SUM(cost_usd) FROM fact_usage_daily"
                                  " WHERE source='billing'")[0]
@@ -273,7 +307,8 @@ def main() -> None:
     # thiếu token trong khi thật ra chúng bị loại có chủ đích.
     src_tokens = (
         int(connect.query_one(cn, "SELECT SUM(total_tokens) FROM fact_call"
-                                  " WHERE model_id IS NOT NULL")[0] or 0)
+                                  " WHERE model_id IS NOT NULL"
+                                  " AND source = 'app'")[0] or 0)
         + int(connect.query_one(cn, "SELECT SUM(total_tokens) FROM fact_app_daily"
                                     " WHERE model_id IS NOT NULL")[0] or 0))
 
@@ -283,8 +318,24 @@ def main() -> None:
                       f" trong fact_billing_daily")
     if app_tokens != src_tokens:
         errors.append(f"token app {app_tokens} != {src_tokens} trong fact_call")
-    if len(by_source) != 3:
-        errors.append(f"chi co {len(by_source)} nguon, phai co 3")
+    # Trước 31/08/2026 chỗ này ghim cứng `!= 3`. Ghim SỐ là sai hướng: thêm nguồn
+    # thứ tư là phép kiểm báo lỗi trong khi hệ thống đang đúng. Nay nêu ĐÍCH DANH
+    # ba nguồn bắt buộc, còn `gateway` là tuỳ - sổ Gateway có thể rỗng khi chưa
+    # agent nào chạy qua, và đó không phải lỗi.
+    BAT_BUOC = {"billing", "monitoring", "app"}
+    thieu = BAT_BUOC - set(by_source)
+    if thieu:
+        errors.append(f"thieu nguon {sorted(thieu)}")
+
+    # Nguồn gateway: nếu có dòng thì token phải khớp bảng gốc.
+    gw_tokens = connect.query_one(cn, "SELECT SUM(total_tokens) FROM fact_usage_daily"
+                                      " WHERE source='gateway'")[0]
+    if gw_tokens is not None:
+        gw_src = connect.query_one(cn, "SELECT SUM(total_tokens) FROM fact_call"
+                                       " WHERE model_id IS NOT NULL"
+                                       " AND source='gateway'")[0]
+        if int(gw_tokens) != int(gw_src or 0):
+            errors.append(f"token gateway {gw_tokens} != {gw_src} trong fact_call")
 
     # Ba cột tách phải cộng lại ra total_tokens - theo đúng QUY ƯỚC CỦA TỪNG
     # NGUỒN, không phải một công thức chung:
@@ -306,7 +357,7 @@ def main() -> None:
         SELECT SUM(t) - SUM(COALESCE(p, 0)) - SUM(COALESCE(c, 0)) FROM (
             SELECT SUM(total_tokens) AS t, SUM(prompt_tokens) AS p,
                    SUM(completion_tokens) AS c
-            FROM fact_call WHERE model_id IS NOT NULL
+            FROM fact_call WHERE model_id IS NOT NULL AND source = 'app'
             GROUP BY substr(CAST(ts_local AS TEXT), 1, 10), agent_id, model_id,
                      account_id) x""")[0] or 0)
     source_conflict += int(connect.query_one(cn, """

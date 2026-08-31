@@ -49,8 +49,9 @@ THU TU BAT BUOC
     3  load_ralli               fact_call
     4  load_hd                  fact_app_daily
     5  load_monitoring          fact_monitoring
-    6  build_usage_daily        fact_usage_daily (bang dan xuat)
-    7  build_performance        fact_perf_daily + fact_latency_daily
+    6  load_gateway             fact_call (nguon 'gateway')
+    7  build_usage_daily        fact_usage_daily (bang dan xuat)
+    8  build_performance        fact_perf_daily + fact_latency_daily
 
 Buoc 1 phai dau vi --rebuild xoa sach. Buoc 2 truoc buoc 3-4 vi load_org xoa
 fact_call, va vi ca hai buoc do deu tra account_id trong bang `account` do
@@ -88,6 +89,12 @@ STEPS = [
     ("Nhat ky Ralli",    "load_ralli.py",        []),
     ("Su dung TLA HD",   "load_hd.py",           []),
     ("Monitoring",       "load_monitoring.py",   []),
+    # PHAI dung TRUOC build_usage_daily: buoc do la bang DAN XUAT, no doc
+    # fact_call. Va PHAI co mat o day - buoc 1 (`--rebuild`) xoa sach fact_call,
+    # nen thieu dong nay thi moi lan cap nhat dashboard la du lieu Gateway bien
+    # mat, khong loi nao bao. Bo nap tu do lai tu dau vi moc nap doc chinh
+    # fact_call: bang rong -> doc toan bo so.
+    ("So Gateway",       "load_gateway.py",      []),
     ("Tong hop su dung", "build_usage_daily.py", []),
     ("Hieu nang",        "build_performance.py", []),
 ]

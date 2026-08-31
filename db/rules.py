@@ -24,8 +24,23 @@ MODELS = [
     (9, "gemini-embedding-1.0", "embedding"),
     (10, "gemini-embedding-2", "embedding"),
     (11, "gemini-3.6-flash", "gemini-3"),
+    # Them 31/08/2026: tuyen `gemini-flash-lite` cua Gateway dinh tuyen toi day.
+    (12, "gemini-3.5-flash-lite", "gemini-3"),
 ]
 MODEL_ID = {name: i for i, name, _ in MODELS}
+
+# Tên model mà API Gateway (LiteLLM) ghi vào cột `model` của LiteLLM_SpendLogs.
+# KHÁC bí danh: agent xin `gemini-flash-lite`, Gateway ghi lại tên upstream có
+# tiền tố nhà cung cấp. Đo 31/08: 34/34 dòng thành công đều mang dạng có tiền tố.
+#
+# CỐ Ý KHÔNG khai `gemini/gemini-3-flash-preview`. `guess_model` sẽ suy nó thành
+# `gemini-3-flash` - gộp bản preview vào bản chính thức, mà đơn giá hai bản thì
+# chưa ai kiểm. Thà để lưu lượng của nó rơi vào mục "không nối được model" của bộ
+# nạp - ở đó nó được ĐẾM và IN RA - còn hơn khớp nhầm trong im lặng.
+GATEWAY_MODELS = [
+    "gemini/gemini-3.6-flash",
+    "gemini/gemini-3.5-flash-lite",
+]
 
 # Thứ tự QUAN TRỌNG: mẫu dài hơn phải đứng trước. '2.5 flash lite' phải được thử
 # trước '2.5 flash', nếu không Flash Lite bị gán nhầm thành Flash.
@@ -34,6 +49,10 @@ MODEL_PATTERNS = [
     ("embedding 1.0", "gemini-embedding-1.0"),
     ("embedding 2", "gemini-embedding-2"),
     ("3.1 flash lite", "gemini-3.1-flash-lite"),
+    # PHAI dung TRUOC "3.5 flash": chuoi ngan nam tron trong chuoi dai.
+    # Do 31/08: thieu dong nay thi guess_model("gemini/gemini-3.5-flash-lite")
+    # tra ve "gemini-3.5-flash" -- khop nham sang model khac gia, IM LANG.
+    ("3.5 flash lite", "gemini-3.5-flash-lite"),
     ("3.5 flash", "gemini-3.5-flash"),
     ("3.6 flash", "gemini-3.6-flash"),
     ("3 pro", "gemini-3-pro"),

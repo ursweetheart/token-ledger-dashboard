@@ -75,6 +75,24 @@ PG_DATABASE = os.environ.get("PGDATABASE", "token_ledger_v2")
 DEFAULT_DSN = os.environ.get("TOKEN_LEDGER_DSN") or (
     f"postgresql://{PG_USER}:{PG_PASSWORD}@{PG_HOST}:{PG_PORT}/{PG_DATABASE}")
 
+# Sổ của API Gateway. Database RIÊNG (`litellm`), cùng một instance PostgreSQL.
+#
+# VÌ SAO KHÔNG GỘP VÀO `token_ledger_v2` (chốt 31/08/2026): LiteLLM tự chạy
+# migration bằng Prisma. Gộp nghĩa là mỗi lần nâng phiên bản nó có quyền ALTER
+# ngay trong database chứa dữ liệu dashboard. Cái giá phải trả là PostgreSQL
+# không cho JOIN xuyên database - `postgres_fdw` và `dblink` đều CHƯA cài - nên
+# db/load_gateway.py mở HAI kết nối và ánh xạ ở tầng Python.
+#
+# Vai `gateway_readonly` chỉ SELECT được đúng một bảng `LiteLLM_SpendLogs`, và
+# mang `default_transaction_read_only = on`. Xem docker/read-only-gateway.sql.
+# Vai chủ sở hữu `llmproxy` CỐ Ý không dùng ở đây: nó ghi được.
+GW_USER = os.environ.get("GATEWAY_READONLY_USER", "gateway_readonly")
+GW_PASSWORD = os.environ.get("GATEWAY_READONLY_PASSWORD", "gateway_readonly_local")
+GW_DATABASE = os.environ.get("GATEWAY_PGDATABASE", "litellm")
+
+GATEWAY_DSN = os.environ.get("GATEWAY_DSN") or (
+    f"postgresql://{GW_USER}:{GW_PASSWORD}@{PG_HOST}:{PG_PORT}/{GW_DATABASE}")
+
 # DSN của lần chạy hiện tại, khi nó KHÁC mặc định.
 #
 # Vì sao cần thêm biến này (24/08/2026): `DEFAULT_DSN` là hằng số tính MỘT LẦN lúc
@@ -278,7 +296,8 @@ def query_one(cn, sql: str, params=()):
     return rows[0] if rows else None
 
 
-def insert_many(cn, placeholder: str, table: str, columns: list[str], rows: list) -> int:
+def insert_many(cn, placeholder: str, table: str, columns: list[str], rows: list,
+                on_conflict: str = "") -> int:
     """Chèn nhiều dòng, ưu tiên đường nhanh của psycopg2.
 
     executemany của psycopg2 gửi MỘT vòng mạng cho MỖI dòng. Với 562.307 dòng
@@ -288,23 +307,33 @@ def insert_many(cn, placeholder: str, table: str, columns: list[str], rows: list
 
     Nhánh `executemany` cuối hàm KHÔNG phải nhánh cho hệ quản trị khác - nó là
     đường lui khi `psycopg2.extras.execute_values` không import được.
+
+    `on_conflict` nối nguyên văn vào cuối câu, ví dụ "ON CONFLICT DO NOTHING".
+    Mặc định rỗng nên 15 chỗ gọi sẵn có KHÔNG đổi hành vi. Thêm vào đây thay vì
+    viết INSERT riêng trong load_gateway.py để đường chèn theo lô vẫn chỉ có MỘT
+    chỗ - execute_values gộp lô, executemany thì một vòng mạng mỗi dòng.
+
+    CẢNH BÁO: `len(rows)` là số dòng ĐÃ GỬI, không phải số dòng đã chèn. Với
+    ON CONFLICT DO NOTHING hai con số đó khác nhau - bên gọi phải tự đếm bằng
+    cách so số dòng của bảng trước và sau nếu cần con số thật.
     """
     if not rows:
         return 0
     cur = cn.cursor()
     col_list = ",".join(columns)
+    tail = f" {on_conflict}" if on_conflict else ""
     if placeholder == "%s":
         try:
             from psycopg2.extras import execute_values
         except ImportError:
             execute_values = None
         if execute_values is not None:
-            execute_values(cur, f"INSERT INTO {table} ({col_list}) VALUES %s",
+            execute_values(cur, f"INSERT INTO {table} ({col_list}) VALUES %s{tail}",
                            rows, page_size=1000)
             return len(rows)
     cur.executemany(
         f"INSERT INTO {table} ({col_list})"
-        f" VALUES ({','.join([placeholder] * len(columns))})", rows)
+        f" VALUES ({','.join([placeholder] * len(columns))}){tail}", rows)
     return len(rows)
 
 
@@ -333,6 +362,63 @@ def agent_lookup(cn) -> dict[str, int]:
     cur.execute("SELECT gcp_project_id, agent_id FROM dim_agent"
                 " WHERE gcp_project_id IS NOT NULL")
     return {p: a for p, a in cur.fetchall()}
+
+
+def agent_code_lookup(cn) -> dict[str, int]:
+    """code -> agent_id.
+
+    KHÁC agent_lookup(): nguồn Gateway không mang `gcp_project_id`. Thứ nó mang
+    là tag của virtual key, và tag đó được đặt TRÙNG với `dim_agent.code`
+    (`dms-feedback`). Đây là chỗ duy nhất làm phép tra cứu đó.
+
+    Dùng để lọc tag định danh khỏi tag rác: LiteLLM tự chèn thêm
+    `"User-Agent: python-httpx"` vào cùng mảng `request_tags`, nên tag nào KHÔNG
+    khớp một dòng của bảng này thì không phải tag agent. Lọc bằng cách bỏ tiền tố
+    `User-Agent:` là vá triệu chứng - sẽ hỏng khi LiteLLM thêm loại tag khác.
+    """
+    cur = cn.cursor()
+    cur.execute("SELECT code, agent_id FROM dim_agent")
+    return {c: a for c, a in cur.fetchall()}
+
+
+def account_lookup(cn) -> dict[str, int]:
+    """username -> account_id.
+
+    Nguồn Gateway gửi định danh người dùng qua header `X-User`, và LiteLLM ghi
+    nguyên nó vào cột `end_user`. Quy ước A3 (20/08) đặt tài khoản dịch vụ theo
+    dạng `svc.<code>`, nên `svc.dms-feedback` của Gateway khớp THẲNG một dòng
+    `account` - không phải suy đoán, đã đo: account_id 949, kind
+    `service_account`, unit_agent_id 6.
+
+    `username` duy nhất trên toàn bảng (đo 31/08: 0 trùng lặp), nên dùng làm khoá
+    tra cứu được.
+
+    Dòng nào không tra được thì bên gọi phải rơi về tài khoản kỹ thuật mức agent
+    (`svc.<code>` của chính agent đó) - KHÔNG để NULL, vì `account_id` nằm trong
+    khoá chính của fact_usage_daily.
+    """
+    cur = cn.cursor()
+    cur.execute("SELECT username, account_id FROM account")
+    return {u: a for u, a in cur.fetchall()}
+
+
+def anchor_account_lookup(cn) -> dict[int, int]:
+    """agent_id -> account_id kỹ thuật mức agent, thay cho NULL ở khoá.
+
+    TRA BẰNG (kind, unit_agent_id), KHÔNG BẰNG TÊN ĐĂNG NHẬP. Đây là cùng một
+    phép tra mà `build_usage_daily.anchor_accounts()` đang làm, và docstring ở đó
+    ghi lại một sự cố có thật: trước 21/08/2026 nó tra theo một chuỗi tên do khâu
+    nạp khác đặt ra, rồi quy ước A3 đổi tài khoản dịch vụ sang `svc.<code>` và
+    đúng chỗ đó gãy.
+
+    Không phải agent nào cũng có `service_account`: hai agent mang
+    `kind = 'whole_agent'`, tên của chúng KHÔNG có dạng `svc.<code>`. Đoán tên
+    là lặp lại đúng sự cố cũ.
+    """
+    cur = cn.cursor()
+    cur.execute("SELECT unit_agent_id, account_id FROM account"
+                " WHERE kind IN ('service_account', 'whole_agent')")
+    return {int(a): int(acc) for a, acc in cur.fetchall()}
 
 
 def metric_lookup(cn) -> dict[tuple[str, str], tuple]:

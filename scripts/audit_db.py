@@ -148,17 +148,37 @@ def group_a_structure(a: Audit) -> None:
 
 def group_b_totals(a: Audit) -> None:
     """Tiền và token phải bằng nhau qua mọi tầng tổng hợp."""
+    # Migration 005 (31/08/2026) cho `usage_resolved.cost_usd` nhan them tien cua
+    # Gateway khi dong do CHUA co hoa don. Nen ve trai khong con la mot minh
+    # fact_billing_daily nua.
+    #
+    # BAY: KHONG duoc cong thang `hoa don + toan bo gateway`. View uu tien hoa
+    # don, nen dong nao co CA HAI thi tien gateway bi BO. Ngay hoa don cho ngay
+    # 31/08 ve la hai nguon trung khoa, va phep cong thang se tinh doi.
+    # Dieu kien NOT EXISTS duoi day lay dung phan gateway ma view thuc su dung.
     src_cost = a.num("SELECT SUM(cost_usd) FROM fact_billing_daily")
+    gw_cost = a.num("""
+        SELECT COALESCE(SUM(g.cost_usd), 0) FROM fact_usage_daily g
+         WHERE g.source = 'gateway'
+           AND NOT EXISTS (SELECT 1 FROM fact_usage_daily b
+                            WHERE b.source = 'billing' AND b.day = g.day
+                              AND b.agent_id = g.agent_id
+                              AND b.model_id = g.model_id)""")
     view_cost = a.num("SELECT SUM(cost_usd) FROM usage_resolved")
-    a.check(abs(src_cost - view_cost) < 1e-4, "Tien: hoa don == usage_resolved",
-            f"${src_cost:.6f} != ${view_cost:.6f}")
+    a.check(abs(src_cost + gw_cost - view_cost) < 1e-4,
+            "Tien: hoa don + gateway == usage_resolved",
+            f"${src_cost:.6f} + ${gw_cost:.6f} != ${view_cost:.6f}")
 
     # Nguồn 'app' có HAI bảng gốc: Ralli qua fact_call (từng lượt gọi), TLA HĐ
     # qua fact_app_daily (app chỉ phơi số đã gộp). Cả hai đều lọc
     # model_id IS NOT NULL cho khớp điều kiện mà build_usage_daily dùng - dòng
     # không biết model không vào được fact_usage_daily vì model_id nằm trong khoá.
+    # `source='app'` THEM 31/08/2026, cung ly do voi build_usage_daily.load_app():
+    # tu khi Gateway do vao cung bang fact_call, khong loc thi ve trai cong ca
+    # token cua Gateway trong khi ve phai chi dem nguon 'app'. Do luc do: lech
+    # dung 45.187 token - bang het luu luong Gateway.
     call_tokens = a.num("SELECT SUM(total_tokens) FROM fact_call"
-                        " WHERE model_id IS NOT NULL")
+                        " WHERE model_id IS NOT NULL AND source = 'app'")
     hd_tokens = a.num("SELECT SUM(total_tokens) FROM fact_app_daily"
                       " WHERE model_id IS NOT NULL")
     app_tokens = a.num("SELECT SUM(total_tokens) FROM fact_usage_daily"
@@ -498,16 +518,42 @@ def group_d_silent_gaps(a: Audit) -> None:
             f" khong tra ra account_id, xem tu-dien-database.md 8f")
 
     # Tien cua Gateway KHONG vao cot cost_usd cua usage_resolved: no la so tu
-    # nhan tu bang gia, khong phai hoa don. Ai chen dong gateway kem cost_usd se
-    # thay so tien do BIEN MAT khoi dashboard ma khong loi nao bao - nen phai keu
-    # o day. Xem ghi chu cost_usd trong usage_resolved.
-    tien_bo = a.num("""
-        SELECT COUNT(*) FROM fact_usage_daily f
+    # nhan tu bang gia, khong phai hoa don. Xem ghi chu cost_usd trong
+    # usage_resolved.
+    #
+    # PHEP KIEM NAY DA DOI NGHIA (31/08/2026). Ban dau no keu bat cu khi nao mot
+    # nguon khong-hoa-don mang cost_usd, vi khi do so tien BIEN MAT khoi dashboard.
+    # Tu khi Gateway chay that, dieu kien do dung MOI LAN CHAY - mot canh bao keu
+    # mai mai la mot canh bao khong ai doc nua.
+    #
+    # Nhung tien khong con bien mat: dashboard tu nhan lai tu ref_price. Do
+    # 31/08 tren luu luong Gateway that: dashboard suy ra $0,0213045, LiteLLM tu
+    # tinh $0,0213050 - lech 5 phan trieu do, thuan lam tron.
+    #
+    # Nen doi thanh phep kiem MANH HON: hai bang gia doc lap co con khop khong.
+    # No bat duoc hai hong that ma ban cu khong bat duoc:
+    #   - model co tien luu ma KHONG co gia  -> tien that su bien mat
+    #   - ref_price cu di so voi bang gia cua LiteLLM, hoac nguoc lai
+    lech_gia = connect.query(a.cn, """
+        SELECT f.source, m.name,
+               SUM(f.cost_usd)                                              AS luu,
+               SUM(f.input_tokens/1e6*p.price_input
+                 + f.output_tokens/1e6*p.price_output)                      AS suy_ra
+          FROM fact_usage_daily f
           JOIN ref_source r ON r.source = f.source
-         WHERE NOT r.has_invoice_cost AND f.cost_usd IS NOT NULL""")
-    a.check(tien_bo == 0, "Khong nguon nao mang tien ma view bo qua",
-            f"{int(tien_bo)} dong co cost_usd tu nguon khong phai hoa don -"
-            f" so tien nay KHONG hien tren dashboard", WARN)
+          JOIN dim_model  m ON m.model_id = f.model_id
+          LEFT JOIN ref_price p ON p.model_id = f.model_id
+         WHERE NOT r.has_invoice_cost AND f.cost_usd IS NOT NULL
+         GROUP BY 1, 2
+        HAVING SUM(f.input_tokens/1e6*p.price_input
+                 + f.output_tokens/1e6*p.price_output) IS NULL
+            OR ABS(SUM(f.cost_usd)
+                 - SUM(f.input_tokens/1e6*p.price_input
+                     + f.output_tokens/1e6*p.price_output))
+               > GREATEST(SUM(f.cost_usd) * 0.01, 0.000001)""")
+    a.check(not lech_gia, "Tien nguon khong-hoa-don suy lai duoc tu ref_price",
+            f"{len(lech_gia)} (nguon, model) lech qua 1% hoac thieu gia: "
+            f"{[(r[0], r[1]) for r in lech_gia][:4]}", WARN)
 
     # Model có lưu lượng mà không có giá thì mọi báo cáo chi phí đều thiếu nó.
     no_price = connect.query(a.cn, """
