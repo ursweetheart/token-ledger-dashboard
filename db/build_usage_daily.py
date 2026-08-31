@@ -249,6 +249,15 @@ def load_gateway(cn, ph) -> int:
     chính của fact_usage_daily nên dòng không biết model không vào được. Bộ nạp
     db/load_gateway.py in ra số dòng đó mỗi lần chạy chứ không nuốt lặng.
 
+    `outcome = 'success'` THÊM 31/08/2026, cùng ngày `fact_call` bắt đầu nhận cả
+    lượt hỏng. Đã đo lỗ rò trước khi vá: thiếu dòng này thì token gateway ra
+    45.201 thay vì 45.187 - **rò đúng 14 token** của một lượt hỏng mang tên model
+    dạng upstream. Hai lượt hỏng còn lại mang tên bí danh nên `model_id` NULL và
+    đã bị điều kiện trên chặn sẵn.
+
+    Con số nhỏ, nhưng nó rò IM LẶNG, và tỉ lệ sẽ tăng khi có lượt hỏng SAU khi
+    Router đã chốt tuyến (timeout, 429, 500).
+
     MỘT LƯỢT PHÂN LOẠI ĐẺ HAI DÒNG. Nên `calls` ở đây là số lượt gọi LLM, không
     phải số việc nghiệp vụ.
     """
@@ -259,6 +268,7 @@ def load_gateway(cn, ph) -> int:
                SUM(cost_usd)
         FROM fact_call
         WHERE model_id IS NOT NULL AND source = 'gateway'
+          AND outcome = 'success'
         GROUP BY 1, 2, 3, 4
     """)
     out = [(*r, "gateway") for r in rows]
@@ -333,7 +343,8 @@ def main() -> None:
     if gw_tokens is not None:
         gw_src = connect.query_one(cn, "SELECT SUM(total_tokens) FROM fact_call"
                                        " WHERE model_id IS NOT NULL"
-                                       " AND source='gateway'")[0]
+                                       " AND source='gateway'"
+                                       " AND outcome='success'")[0]
         if int(gw_tokens) != int(gw_src or 0):
             errors.append(f"token gateway {gw_tokens} != {gw_src} trong fact_call")
 

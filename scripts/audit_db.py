@@ -555,6 +555,37 @@ def group_d_silent_gaps(a: Audit) -> None:
             f"{len(lech_gia)} (nguon, model) lech qua 1% hoac thieu gia: "
             f"{[(r[0], r[1]) for r in lech_gia][:4]}", WARN)
 
+    # THEM 31/08/2026, cung ngay fact_call bat dau nhan ca luot HONG.
+    #
+    # Luot hong khong duoc dong gop token vao bang tong hop. Da do lo ro truoc khi
+    # va: thieu bo loc `outcome` trong build_usage_daily thi token gateway ra
+    # 45.201 thay vi 45.187 - ro dung 14 token cua mot luot hong.
+    gw_agg = a.num("SELECT COALESCE(SUM(total_tokens), 0) FROM fact_usage_daily"
+                   " WHERE source = 'gateway'")
+    gw_ok = a.num("SELECT COALESCE(SUM(total_tokens), 0) FROM fact_call"
+                  " WHERE source = 'gateway' AND outcome = 'success'"
+                  "   AND model_id IS NOT NULL")
+    a.check(gw_agg == gw_ok, "Luot hong khong lot vao bang tong hop",
+            f"{int(gw_agg)} != {int(gw_ok)} - chenh {int(gw_agg - gw_ok)} token"
+            f" cua luot hong da lot vao fact_usage_daily")
+
+    # Gia tri `outcome` la khac success/failure se bi build_usage_daily loai im
+    # lang (no loc `= 'success'`). Bat o day de mat du lieu thanh mot phep kiem
+    # do, thay vi mot con so tu nhien nho di ma khong ai giai thich duoc.
+    outcome_la = a.num("SELECT COUNT(*) FROM fact_call"
+                       " WHERE outcome IS NOT NULL"
+                       "   AND outcome NOT IN ('success', 'failure')")
+    a.check(outcome_la == 0, "Khong co gia tri outcome la",
+            f"{int(outcome_la)} dong mang outcome ngoai success/failure -"
+            f" chung bi loai khoi bang tong hop ma khong bao")
+
+    # `duration_ms = 0` la "chua do", KHONG phai "do duoc 0 mili giay". Gateway
+    # ghi 0 cho MOI luot hong, ke ca luot da goi toi nha cung cap va bi tu choi -
+    # nen bo nap phai quy no ve NULL. Nap 0 vao la keo tut moi phan vi.
+    do_tre_khong = a.num("SELECT COUNT(*) FROM fact_call WHERE duration_ms = 0")
+    a.check(do_tre_khong == 0, "Khong dong nao co duration_ms = 0",
+            f"{int(do_tre_khong)} dong mang so 0 - phai la NULL")
+
     # Model có lưu lượng mà không có giá thì mọi báo cáo chi phí đều thiếu nó.
     no_price = connect.query(a.cn, """
         SELECT m.name FROM dim_model m

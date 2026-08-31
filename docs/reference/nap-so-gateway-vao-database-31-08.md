@@ -306,7 +306,11 @@ vào lịch sử của một người dùng TLA Hợp Đồng. Im lặng, tổng
 Cùng một người có hai tài khoản ở hai agent. Bảng `account` mịn theo **(người, agent)**, nên
 email định danh được *người* nhưng không định danh được *dòng*.
 
-**Agent 6 không có tài khoản người thật nào:**
+**Agent 6 không có tài khoản `kind='real'` nào — và đó là ĐÚNG QUY ƯỚC, không phải thiếu:**
+
+Quy ước chốt 20/08/2026: 6/8 agent được coi là chỉ có một người dùng, và người đó là tài
+khoản dịch vụ `svc.<code>`. DMS nằm trong sáu agent đó. Nên `svc.dms-feedback → account 949`
+là **kết quả đúng**, không phải giải pháp tạm.
 
 ```
    agent 5  real 45     TLA Hop Dong

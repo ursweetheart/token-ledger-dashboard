@@ -1,0 +1,36 @@
+{
+  "usage_resolved": {
+    "rows": "1276",
+    "tokens": "915969971",
+    "cost_usd": "307.382155",
+    "first_day": "2026-01-01",
+    "last_day": "2026-08-31"
+  },
+  "usage_by_account": {
+    "rows": "337",
+    "tokens": "108554843"
+  },
+  "row_counts": {
+    "account": 954,
+    "dim_agent": 8,
+    "dim_unit": 130,
+    "fact_usage_daily": 1990,
+    "fact_billing_daily": 2575,
+    "fact_monitoring": 651653,
+    "fact_call": 8669,
+    "fact_app_daily": 77,
+    "ref_source": 4
+  },
+  "account_by_kind": {
+    "service_account": 6,
+    "real": 938,
+    "unattributed": 8,
+    "whole_agent": 2
+  },
+  "usage_daily_by_source": {
+    "gateway": 1,
+    "monitoring": 606,
+    "app": 371,
+    "billing": 1012
+  }
+}

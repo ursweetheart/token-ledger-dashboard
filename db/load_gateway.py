@@ -25,10 +25,33 @@ dòng vừa ghi mang 00:56. Nên `tz_confirmed = TRUE` và `ts_local = ts_raw + 
 Bỏ khâu +7h thì tổng cả kỳ vẫn đúng, chỉ có phân bố theo ngày là sai: mọi lượt
 gọi từ 17:00 tới nửa đêm bị dồn sang ngày hôm trước.
 
+NẠP CẢ LƯỢT HỎNG (đổi 31/08/2026)
+----------------------------------
+Bản đầu chỉ nạp lượt thành công. Nay nạp cả hai, vì Master Plan đòi "bản ghi mỗi
+request" và một sổ lặng lẽ bỏ qua lượt hỏng thì không phải sổ đầy đủ - ta chỉ
+biết CÓ hỏng mà không biết VÌ SAO, trong khi câu trả lời nằm sẵn trong sổ.
+
+Ba cột đi kèm:
+
+    duration_ms   độ trễ thô. `NULLIF(request_duration_ms, 0)` ngay ở tầng SQL.
+    outcome       success / failure. MỌI phép tổng hợp PHẢI lọc cột này.
+    error_code    `NULLIF(..., '')`. Đo: 3/5 dòng hỏng mang chuỗi rỗng.
+
+VÌ SAO `duration_ms` PHẢI NULL KHI BẰNG 0 - và lý do KHÔNG phải cái ta tưởng:
+
+    AuthenticationError    độ trễ 0   mã 401   DA GOI GOOGLE, Google từ chối
+    ProxyException         độ trễ 0   mã 403   chặn ở Gateway
+    ValueError             độ trễ 0   mã rỗng  chặn ở Gateway
+    RouterRateLimitError   độ trễ 0   mã rỗng  không tìm được tuyến   x2
+
+Dòng đầu ĐÃ ra tới nhà cung cấp mà độ trễ vẫn 0. Nên lý do thật là **LiteLLM
+không ghi độ trễ cho lượt hỏng**, bất kể nó đi được tới đâu - chứ không phải
+"chưa chạm provider nên không có gì để đo". Nạp 0 vào là kéo tụt mọi phân vị.
+
 NĂM CÁI BẪY - cả năm đều ĐO ĐƯỢC, không phải phòng xa
 ------------------------------------------------------
 1. `status` KHÔNG BAO GIỜ NULL. Nó nhận đúng hai giá trị `success` / `failure`
-   (đo 39/39 dòng, 0 dòng NULL). Lọc `WHERE status IS NULL` trả về 0 dòng và
+   (đo 45/45 dòng, 0 dòng NULL). Lọc `WHERE status IS NULL` trả về 0 dòng và
    không báo lỗi gì - dashboard hiện số 0 trông y hệt "chưa có lưu lượng".
 
 2. `end_user` là CHUỖI RỖNG, không phải NULL, khi thiếu định danh (11 dòng `''`,
@@ -74,8 +97,12 @@ dashboard mà hiểu "2 dòng = 2 lần phân loại" là sai gấp đôi.
 
 NGHIỆM THU
 ----------
-    SELECT COUNT(*), SUM(total_tokens) FROM fact_call WHERE source='gateway';
-    SELECT COUNT(*) FROM fact_call WHERE source='gateway' AND model_id IS NULL;
+    SELECT outcome, COUNT(*), SUM(total_tokens) FROM fact_call
+     WHERE source='gateway' GROUP BY 1;
+    SELECT COUNT(*) FROM fact_call WHERE source='gateway' AND duration_ms = 0;
+    -- câu trên PHẢI trả về 0: số 0 là "chưa đo", phải nạp thành NULL
+    SELECT error_code, COUNT(*) FROM fact_call
+     WHERE source='gateway' AND outcome='failure' GROUP BY 1;
     -- chạy hai lần liên tiếp, lần hai phải nạp thêm 0 dòng
 
 Chạy: python db/load_gateway.py [--dry-run] [--full]
@@ -114,15 +141,18 @@ BASE_SQL = """
            completion_tokens,
            total_tokens,
            (metadata->'usage_object'->'prompt_tokens_details'->>'cached_tokens')::bigint,
-           (metadata->'cost_breakdown'->>'total_cost')::numeric
+           (metadata->'cost_breakdown'->>'total_cost')::numeric,
+           status,
+           NULLIF(request_duration_ms, 0),
+           NULLIF(metadata->'error_information'->>'error_code', '')
       FROM "LiteLLM_SpendLogs"
-     WHERE status = 'success'
+     WHERE status IS NOT NULL
 """
 
 COLUMNS = ["call_id", "agent_id", "ts_raw", "tz_confirmed", "ts_local",
            "user_id", "account_id", "model_id", "prompt_tokens",
            "completion_tokens", "total_tokens", "cached_tokens",
-           "source", "cost_usd"]
+           "source", "cost_usd", "duration_ms", "outcome", "error_code"]
 
 
 def watermark(cn):
@@ -170,7 +200,11 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
         "doc_tu_so": len(ledger),
         "bo_khong_co_tag": 0,
         "bo_nhieu_tag": 0,
-        "khong_noi_duoc_model": 0,
+        "model_chua_khai": 0,
+        "hong_truoc_khi_chot_tuyen": 0,
+        "nap_luot_hong": 0,
+        "trang_thai_la": 0,
+        "duration_null": 0,
         "end_user_rong": 0,
         "danh_tinh_khong_noi_duoc": 0,
         "cached_null": 0,
@@ -178,7 +212,7 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
     }
     for (call_id, ts_raw, model, end_user, tags,
          prompt_tokens, completion_tokens, total_tokens,
-         cached_tokens, cost_usd) in ledger:
+         cached_tokens, cost_usd, outcome, duration_ms, error_code) in ledger:
 
         agent_id, ly_do = resolve_agent(tags, agent_by_code)
         if agent_id is None:
@@ -193,7 +227,15 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
         # chứ không loại. Mất dòng thì không ai biết; NULL thì đếm được.
         model_id = models.get((SOURCE, model))
         if model_id is None:
-            stats["khong_noi_duoc_model"] += 1
+            # TACH HAI NGHIA. Dong `success` khong noi duoc model = tuyen chua
+            # khai trong rules.GATEWAY_MODELS -> VIEC PHAI LAM. Dong `failure`
+            # thi thuong mang ten BI DANH vi request chet TRUOC khi Router chot
+            # tuyen -> binh thuong, khong phai loi. Gop hai thu vao mot bo dem la
+            # de mot con so dang bao dong chim trong tieng on thuong ngay.
+            if outcome == "failure":
+                stats["hong_truoc_khi_chot_tuyen"] += 1
+            else:
+                stats["model_chua_khai"] += 1
 
         # BẪY 2: chuỗi rỗng, không phải NULL.
         user_id = end_user or None
@@ -204,27 +246,33 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
         # NULL. Neo tra theo (kind, unit_agent_id) - xem anchor_account_lookup().
         neo = anchors.get(agent_id)
 
-        # CHỈ NỐI ĐỊNH DANH DO CHÍNH TA ĐẶT RA.
+        # ĐỊNH DANH PHẢI THUỘC ĐÚNG AGENT GỬI REQUEST.
         #
         # Trước 31/08 chỗ này tra thẳng `accounts.get(end_user)`, tức là tin bất
         # kỳ chuỗi nào Gateway gửi tới. Đo ra một đường hỏng có thật: bảng
-        # `account` CÓ dòng `admin` (account_id 1, "Quản trị viên", agent 5 - TLA
-        # Hợp Đồng) và dòng đó ĐÃ mang 480 lượt / 1.588.404 token. Ngày DMS gửi
-        # `X-User: admin` - tên đăng nhập cục bộ của chính nó - lưu lượng DMS sẽ
-        # bị trộn vào lịch sử của một người dùng TLA Hợp Đồng. Im lặng, tổng vẫn
-        # khớp, không phép kiểm nào bắt được.
+        # `account` CÓ dòng `admin` (account_id 1, "Quản trị viên", thuộc agent 5
+        # - TLA Hợp Đồng) và dòng đó ĐÃ mang 480 lượt / 1.588.404 token. Ngày một
+        # agent gửi `X-User: admin` - tên đăng nhập cục bộ của chính nó - lưu
+        # lượng đó bị trộn vào lịch sử của một người dùng TLA Hợp Đồng. Im lặng,
+        # tổng vẫn khớp, không phép kiểm nào bắt được.
         #
-        # Phép thử an toàn, không cần đoán tiền tố: định danh chỉ được chấp nhận
-        # khi nó tra ra ĐÚNG tài khoản neo của chính agent đó. `svc.dms-feedback`
-        # -> 949 = neo của agent 6, hợp lệ. `admin` -> 1 != 949, từ chối.
+        # Bản vá đầu chỉ nhận định danh tra ra ĐÚNG tài khoản neo. Chặn được
+        # `admin`, nhưng SAI với agent nhiều người dùng: cả 45 người thật của TLA
+        # Hợp Đồng cũng khác neo, nên sẽ bị gộp hết vào một tài khoản.
         #
-        # Đo 31/08: agent 6 KHÔNG có tài khoản người thật nào (chỉ agent 5 và 8
-        # có, 45 và 893 dòng). Nên tới ngày DMS gửi tên người thật, chúng sẽ rơi
-        # vào bộ đếm dưới đây - ồn ào, đúng như mong muốn - cho tới khi chiều
-        # người dùng của DMS được dựng.
+        # Quy tắc đúng cho CẢ HAI loại agent: định danh hợp lệ khi tài khoản của
+        # nó thuộc chính agent đang gửi request.
+        #
+        #     svc.dms-feedback -> agent 6, request agent 6  ->  NHAN
+        #     admin            -> agent 5, request agent 6  ->  TU CHOI
+        #     pbh1_ntlong      -> agent 5, request agent 5  ->  NHAN
+        #
+        # Quy ước 20/08: 6/8 agent được coi là chỉ có MỘT người dùng, và người đó
+        # là tài khoản dịch vụ `svc.<code>` (kind='service_account'). Với chúng,
+        # neo CHÍNH LÀ đáp án đúng, không phải giải pháp tạm.
         tra_ra = accounts.get(user_id) if user_id else None
-        if tra_ra is not None and tra_ra == neo:
-            account_id = tra_ra
+        if tra_ra is not None and tra_ra[1] == agent_id:
+            account_id = tra_ra[0]
         else:
             if user_id is not None:
                 stats["danh_tinh_khong_noi_duoc"] += 1
@@ -234,12 +282,25 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
             stats["cached_null"] += 1
         if cost_usd is None:
             stats["cost_null"] += 1
+        if outcome == "failure":
+            stats["nap_luot_hong"] += 1
+        elif outcome != "success":
+            # LiteLLM hom nay chi dat hai gia tri. Nhung neu mot ban sau them
+            # gia tri thu ba (vi du 'timeout'), dong do se nap vao roi bi bo loc
+            # `outcome = 'success'` o tang tong hop loai IM LANG. Dem o day de
+            # no keu, thay vi mat du lieu ma khong ai biet.
+            stats["trang_thai_la"] += 1
+        # `duration_ms` da duoc NULLIF(...,0) o tang SQL: Gateway ghi 0 cho MOI
+        # luot hong, ke ca luot DA goi toi nha cung cap va bi tu choi - nen 0 la
+        # su vang mat cua phep do, khong phai phep do.
+        if duration_ms is None:
+            stats["duration_null"] += 1
 
         rows.append((
             call_id, agent_id, ts_raw, True, ts_raw + VN_OFFSET,
             user_id, account_id, model_id, prompt_tokens,
             completion_tokens, total_tokens, cached_tokens,
-            SOURCE, cost_usd,
+            SOURCE, cost_usd, duration_ms, outcome, error_code,
         ))
     return rows, stats
 
@@ -310,36 +371,71 @@ def main() -> int:
         print("  --dry-run: KHONG ghi gi")
         sau = truoc
     else:
-        connect.insert_many(cn, ph, "fact_call", COLUMNS, rows,
-                            on_conflict="ON CONFLICT (call_id) DO NOTHING")
+        # DO UPDATE cho BA COT MOI, khong phai DO NOTHING.
+        #
+        # Bay bat duoc 31/08 khi them ba cot nay: `DO NOTHING` bo qua HOAN TOAN
+        # dong da co, nen 38 dong nap tu truoc giu nguyen outcome/duration_ms
+        # NULL. Hau qua neu bo lot: (a) them bo loc `outcome='success'` o tang
+        # tong hop se lam token gateway ve 0 - hong im lang; (b) muc dich chinh
+        # cua change - do tre tho - khong dat duoc dong nao.
+        #
+        # An toan vi ba cot nay suy tu chinh so goc, ma dong trong so la BAT BIEN
+        # sau khi ghi. Chay lai bao nhieu lan cung ra cung mot gia tri.
+        #
+        # CHI ba cot nay. Khong DO UPDATE ca hang: neu mai kia mot khau anh xa
+        # doi (vi du dim_model_alias), ta KHONG muon lich su bi viet lai im lang.
+        connect.insert_many(
+            cn, ph, "fact_call", COLUMNS, rows,
+            on_conflict="ON CONFLICT (call_id) DO UPDATE SET"
+                        " duration_ms = EXCLUDED.duration_ms,"
+                        " outcome     = EXCLUDED.outcome,"
+                        " error_code  = EXCLUDED.error_code")
         cn.commit()
         sau = connect.query_one(
             cn, f"SELECT COUNT(*) FROM fact_call WHERE source = '{SOURCE}'")[0]
 
-    # Lượt hỏng: KHÔNG nạp, nhưng phải đếm. Số lượt hỏng là chỉ báo sức khoẻ của
-    # Gateway - vứt đi là mất thông tin. Đo 31/08: 2/5 dòng hỏng vẫn mang 14
-    # token đã thật sự gửi đi, nên đây không phải "mất 0".
     gw_cur = gw_cn.cursor()
-    gw_cur.execute('SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)'
-                   ' FROM "LiteLLM_SpendLogs" WHERE status = %s', ("failure",))
-    n_hong, token_hong = gw_cur.fetchone()
 
-    print(f"  doc {stats['doc_tu_so']} dong thanh cong tu so"
-          f" | dung duoc {len(rows)} | chen them {sau - truoc}")
+    # `sau - truoc` la so dong CHEN MOI. Tu khi dung DO UPDATE (31/08), lan chay
+    # nao cung ghi de ba cot duration_ms/outcome/error_code len dong da co - nen
+    # "chen them 0" KHONG co nghia la "khong lam gi".
+    print(f"  doc {stats['doc_tu_so']} dong tu so | dung duoc {len(rows)}"
+          f" | chen moi {sau - truoc} | ghi de {len(rows) - (sau - truoc)}")
     print(f"  bo: khong co tag {stats['bo_khong_co_tag']}"
           f" | nhieu tag {stats['bo_nhieu_tag']}")
-    print(f"  khong noi duoc model {stats['khong_noi_duoc_model']}"
-          f" | end_user rong {stats['end_user_rong']}"
+    if stats["trang_thai_la"]:
+        print(f"  CANH BAO: {stats['trang_thai_la']} dong mang trang thai KHONG"
+              f" phai success/failure - chung se bi tang tong hop loai im lang")
+    print(f"  nap luot HONG {stats['nap_luot_hong']}"
+          f" | model chua khai {stats['model_chua_khai']}"
+          f" | hong truoc khi chot tuyen {stats['hong_truoc_khi_chot_tuyen']}")
+    print(f"  end_user rong {stats['end_user_rong']}"
           f" | danh tinh khong noi duoc {stats['danh_tinh_khong_noi_duoc']}")
     print(f"  cached_tokens NULL {stats['cached_null']}"
-          f" | cost_usd NULL {stats['cost_null']}")
-    print(f"  luot HONG trong so (khong nap): {n_hong} dong, {token_hong} token")
+          f" | cost_usd NULL {stats['cost_null']}"
+          f" | duration_ms NULL {stats['duration_null']}")
+
+    # Phân bố mã lỗi của những dòng ĐÃ NẠP. Không in ra thì không ai biết Gateway
+    # đang hỏng vì cái gì - mà câu trả lời nằm sẵn trong sổ.
+    gw_cur.execute(
+        '''SELECT COALESCE(
+                   NULLIF(metadata->'error_information'->>'error_code', ''),
+                   '(khong co ma)') AS ma,
+                  COUNT(*)
+             FROM "LiteLLM_SpendLogs"
+            WHERE status = %s
+            GROUP BY 1 ORDER BY 2 DESC''',
+        ("failure",))
+    phan_bo = ", ".join(f"{m}={n}" for m, n in gw_cur.fetchall())
+    print(f"  ma loi cua luot hong trong so: {phan_bo or '(khong co luot hong)'}")
 
     # Đối chiếu với chính sổ gốc, không với số ghim. So trên TOÀN BỘ sổ chứ không
     # riêng vùng vừa đọc: đó mới là câu hỏi thật - "mọi thứ Gateway ghi đã vào
     # đây chưa".
+    #
+    # Từ 31/08 nạp CẢ HAI trạng thái, nên vế nguồn không còn lọc `success` nữa.
     gw_cur.execute('SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)'
-                   ' FROM "LiteLLM_SpendLogs" WHERE status = %s', ("success",))
+                   ' FROM "LiteLLM_SpendLogs" WHERE status IS NOT NULL')
     src_rows, src_tokens = gw_cur.fetchone()
     dst_rows, dst_tokens = connect.query_one(
         cn, "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)"
@@ -353,12 +449,12 @@ def main() -> int:
     # Lấy `bo_qua` của cửa sổ mà so với tổng thì lần nào cũng báo lệch giả.
     gw_cur.execute(
         'SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)'
-        '  FROM "LiteLLM_SpendLogs" WHERE status = %s'
+        '  FROM "LiteLLM_SpendLogs" WHERE status IS NOT NULL'
         '   AND (SELECT COUNT(*)'
         '          FROM jsonb_array_elements_text('
         "                 COALESCE(request_tags, '[]'::jsonb)) AS t"
         '         WHERE t = ANY(%s)) <> 1',
-        ("success", list(agent_by_code)))
+        (list(agent_by_code),))
     bo_qua_ca_so, token_bo_qua = gw_cur.fetchone()
     print(f"  bo qua tren ca so: {bo_qua_ca_so} dong, {token_bo_qua} token")
 

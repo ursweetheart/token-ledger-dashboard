@@ -156,6 +156,27 @@ Dùng thư viện HTTP **đã có sẵn** trong agent. Không thêm phụ thuộ
 Agent và Gateway thường ở hai compose project khác nhau. Cho container của agent vào mạng của
 Gateway bằng `networks.external`, và **luôn liệt kê cả mạng mặc định của chính nó**.
 
+### Bước 5b — Chọn ĐÚNG loại định danh cho `X-User`
+
+Quy ước chốt **20/08/2026**: trong 8 agent, **6 agent được coi là chỉ có một người dùng**
+(tất cả trừ Trợ Lý Ảo Hợp Đồng và Trợ lý ảo Ralli). Chúng **biết được người dùng** — thứ
+duy nhất từng thiếu là một cái tên hợp lý cho "người dùng đặc biệt" đó.
+
+Nên `X-User` gửi gì là tuỳ **loại agent**, không phải tuỳ khẩu vị:
+
+| Loại agent | `X-User` gửi | Bên dashboard |
+|---|---|---|
+| **Một-người-dùng** (6 agent, có DMS) | `svc.<code>` — một chuỗi cố định | `account.kind = 'service_account'` |
+| **Nhiều người dùng** (TLA HĐ, Ralli) | tên người đăng nhập | `account.kind = 'real'` |
+
+Đo 31/08: `kind` đã tách đúng — 6 dòng `service_account` cho agent 1,2,3,4,6,7 và 2 dòng
+`whole_agent` cho agent 5,8. `backend/store.py:479` phụ thuộc trực tiếp vào việc tách này.
+
+> **ĐỪNG gửi tên nhân viên cho một agent một-người-dùng.** Nó không làm dữ liệu chi tiết hơn
+> mà làm hỏng quy ước: `usage_by_account` lọc `kind='real'`, nên tên lạ sẽ rơi ra ngoài chiều
+> người dùng thay vì gộp vào tài khoản dịch vụ của agent. Với DMS, `svc.dms-feedback` khớp
+> thẳng `account_id 949` — đó là kết quả ĐÚNG, không phải giải pháp tạm.
+
 ### Bước 6 — Khai tuyến ở Gateway và ở dashboard
 
 Ba chỗ, thiếu chỗ nào cũng hỏng im lặng:
@@ -242,7 +263,15 @@ Bảng `LiteLLM_SpendLogs` có **34 cột**. Những cột thực sự dùng đ�
 | `metadata.cost_breakdown` | tách `input_cost` / `output_cost` / `total_cost` |
 | `metadata.usage_object` | usage chi tiết, có `cached_tokens` |
 | `metadata.attempted_retries` | số lần thử lại |
+| `request_duration_ms` | **độ trễ**. Xem bẫy bên dưới |
+| `metadata.error_information.error_code` | **mã lỗi** khi hỏng |
 | `response` | response đầy đủ, **nội dung đã che** |
+
+> **BẪY:** `request_duration_ms` bằng **0 trên MỌI lượt hỏng**, kể cả lượt **đã gọi tới nhà
+> cung cấp** và bị từ chối. Nên 0 ở đây không phải một phép đo mà là **sự vắng mặt** của phép
+> đo — bộ nạp quy nó về NULL. Nạp 0 vào là kéo tụt mọi phân vị.
+>
+> Và `error_code` mang **chuỗi rỗng** ở 3/5 dòng hỏng, không phải NULL.
 
 ### Ba cột trông có ích nhưng KHÔNG dùng được
 
@@ -350,13 +379,23 @@ nên bộ nạp mở **hai kết nối** và ánh xạ ở tầng Python.
 Hai cột ưu tiên **ngược nhau**, và đó là cố ý. Ngày hoá đơn về, nó thay thế số ước tính của
 Gateway.
 
-### Ba quy tắc bộ nạp phải giữ
+### Bốn quy tắc bộ nạp phải giữ
 
 ```
-   Truong thieu -> NULL, KHONG phai 0     (cached_tokens vang 45/45)
+   Truong thieu -> NULL, KHONG phai 0     (cached_tokens vang 45/45; duration 0 -> NULL)
    Dung total_tokens cua so                (khong tu cong prompt + completion)
-   Luot HONG khong nap, nhung PHAI DEM     (2/5 dong hong van mang 14 token that)
+   Luot HONG CO nap, kem ma loi            (doi 31/08 - xem duoi)
+   MOI phep tong hop PHAI loc `outcome`    (thieu la ro token cua luot hong)
 ```
+
+**Đổi 31/08:** bản đầu **không nạp** lượt hỏng. Nay nạp, vì Master Plan đòi *"bản ghi mỗi
+request"* — trước đó ta chỉ biết CÓ hỏng mà không biết VÌ SAO, trong khi mã lỗi nằm sẵn trong
+sổ. Đổi lại, mọi chỗ tổng hợp **bắt buộc** phải lọc `outcome = 'success'`; đã đo lỗ rò trước
+khi vá: thiếu bộ lọc thì token gateway ra **45.201 thay vì 45.187**.
+
+**Và:** thêm cột vào bảng đã có dữ liệu thì bộ nạp phải **`ON CONFLICT … DO UPDATE`** cho đúng
+các cột mới. `DO NOTHING` bỏ qua hoàn toàn dòng cũ, nên cột mới sẽ rỗng vĩnh viễn — đã suýt
+làm token gateway về 0.
 
 ### Một lượt phân loại KHÔNG bằng một lượt gọi LLM
 
@@ -412,18 +451,20 @@ cập nhật dashboard sẽ xoá sạch dữ liệu Gateway và không nạp l�
 
 | Việc | Trạng thái |
 |---|---|
-| Danh tính từng nhân viên | `X-User` bị nướng cứng vào client — mọi người cùng một tên. Và agent 6 có **0 tài khoản người thật** trong dashboard, còn `usage_by_account` chỉ đi qua `account_id` chứ không đọc `user_id` |
+| Danh tính từng nhân viên **cho agent nhiều người dùng** | `X-User` bị nướng cứng vào `httpx.Client` lúc khởi tạo, và `GeminiClient` là singleton — nên chưa gửi được định danh theo từng request. **KHÔNG áp dụng cho DMS**: DMS là agent một-người-dùng, `svc.dms-feedback` đã là đáp án đúng. Việc này chỉ cần khi nối TLA Hợp Đồng hoặc Ralli |
 | Agent thứ hai | mới chứng minh trên **một** agent; thiết kế "8 khoá / 8 project" chưa được đo |
 | `finish_reason == "length"` | DMS **không kiểm** — câu trả lời bị cắt sẽ trông như lỗi phân tích cú pháp |
 | Tuyến `gemini-3-flash-preview` | cố ý bỏ khỏi `GATEWAY_MODELS`: đơn giá bản preview chưa ai kiểm |
 | Hoá đơn cho `gemini-3.5-flash-lite` | **chưa từng tồn tại** — lưu lượng mới bắt đầu 31/08, Google xuất hoá đơn trễ ~1 ngày |
 | Hành vi ở quy mô lớn | mới 45 lượt gọi |
+| So sánh độ trễ với monitoring | Gateway `p95 = 1,822 s` (chính xác, 38 giá trị thô) so với monitoring `p95 = 63,6 s` nội suy trong **thùng rộng 33,6 giây**. Chênh 35 lần — **chưa kết luận được** bên nào đúng, vì hai bên đo hai giai đoạn khác nhau |
 
-### Năm điều đáng báo lại nhóm DMS
+### Bốn điều đáng báo lại nhóm DMS
 
 1. `classify_batch` trả **HTTP 200 kèm "safe fallback"** khi LLM hỏng — việc không xảy ra mà
    trông y hệt đã xảy ra.
 2. App **nuốt lỗi cấu hình** rồi vẫn `Application startup complete`, container vẫn `healthy`.
 3. Không kiểm `finish_reason`.
-4. `users.json` chỉ có **một** tài khoản `admin` — mọi người dùng chung.
-5. `GeminiClient` là singleton, nên không thể gửi danh tính theo từng request nếu không sửa.
+4. `GeminiClient` là singleton và `X-User` nướng cứng vào client — không gửi được danh tính
+   theo từng request. Với DMS thì **không sao** (agent một-người-dùng), nhưng cần biết nếu
+   nhóm DMS muốn tách theo người.

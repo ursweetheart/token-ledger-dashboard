@@ -393,13 +393,16 @@ def account_lookup(cn) -> dict[str, int]:
     `username` duy nhất trên toàn bảng (đo 31/08: 0 trùng lặp), nên dùng làm khoá
     tra cứu được.
 
+    Trả về `username -> (account_id, unit_agent_id)`. Cần CẢ HAI: bên gọi phải
+    kiểm định danh có thuộc đúng agent gửi request không, chứ không chỉ có tồn
+    tại hay không. Xem load_gateway.build_rows().
+
     Dòng nào không tra được thì bên gọi phải rơi về tài khoản kỹ thuật mức agent
-    (`svc.<code>` của chính agent đó) - KHÔNG để NULL, vì `account_id` nằm trong
-    khoá chính của fact_usage_daily.
+    - KHÔNG để NULL, vì `account_id` nằm trong khoá chính của fact_usage_daily.
     """
     cur = cn.cursor()
-    cur.execute("SELECT username, account_id FROM account")
-    return {u: a for u, a in cur.fetchall()}
+    cur.execute("SELECT username, account_id, unit_agent_id FROM account")
+    return {u: (a, g) for u, a, g in cur.fetchall()}
 
 
 def anchor_account_lookup(cn) -> dict[int, int]:
