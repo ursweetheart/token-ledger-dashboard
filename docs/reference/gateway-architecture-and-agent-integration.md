@@ -265,6 +265,8 @@ Bảng `LiteLLM_SpendLogs` có **34 cột**. Những cột thực sự dùng đ�
 | `metadata.attempted_retries` | số lần thử lại |
 | `request_duration_ms` | **độ trễ**. Xem bẫy bên dưới |
 | `metadata.error_information.error_code` | **mã lỗi** khi hỏng |
+| `api_key` | **khoá đã gọi**. Xem bẫy bên dưới |
+| `cache_hit` | **trả từ bộ nhớ đệm hay không**. Xem bẫy bên dưới |
 | `response` | response đầy đủ, **nội dung đã che** |
 
 > **BẪY:** `request_duration_ms` bằng **0 trên MỌI lượt hỏng**, kể cả lượt **đã gọi tới nhà
@@ -273,13 +275,32 @@ Bảng `LiteLLM_SpendLogs` có **34 cột**. Những cột thực sự dùng đ�
 >
 > Và `error_code` mang **chuỗi rỗng** ở 3/5 dòng hỏng, không phải NULL.
 
-### Ba cột trông có ích nhưng KHÔNG dùng được
+> **BẪY `api_key`:** cột này **trộn hai loại giá trị**. Khoá ảo ghi thành băm SHA-256 64 ký
+> tự, nhưng khoá quản trị chung ghi thẳng chuỗi `litellm_proxy_master_key`. Bộ nạp giữ
+> **nguyên văn**, không chuẩn hoá — ép về một dạng là mất đúng cái phân biệt đang cần. Đo
+> 01/09: **7/41 dòng nạp được (17,1%) đi bằng khoá tổng**, và chúng nằm lẫn trong lưu lượng
+> của agent vì vẫn quy được về agent nhờ tag.
+
+> **BẪY `cache_hit` — hai bẫy NGƯỢC NHAU ở hai đầu.** Ở **vế nguồn** cột này là `text` và ghi
+> **chuỗi `'None'`** cho trường hợp không có thông tin, không phải SQL NULL (đo 01/09: `'None'`
+> 41 · `'False'` 5 · `'True'` 1, **không một dòng NULL nào**). Nên `WHERE cache_hit IS NULL`
+> trả về **0 dòng**, còn `IS NOT TRUE` thì **lỗi kiểu**. Bộ nạp phải dịch bằng `CASE` tường
+> minh, **không** dùng `::boolean` — gặp giá trị thứ tư là ném lỗi giữa chừng.
+>
+> Ở **vế đích** `fact_call.cache_hit` là `BOOLEAN` thật với NULL thật, nên `NOT cache_hit`
+> biến NULL thành UNKNOWN và **vứt sạch 38/41 dòng**. Ở đó `IS NOT TRUE` mới là cách đúng.
+>
+> Vì sao phải lọc: lượt trúng đệm **không tới nhà cung cấp** nên không bị tính tiền, nhưng
+> Gateway **vẫn ghi đủ token** (đo được một lượt ghi `spend = 0` mà `total_tokens = 352`).
+
+### Hai cột trông có ích nhưng KHÔNG dùng được
 
 ```
    agent_id      NULL 45/45       cot san cua LiteLLM, khong duoc dien
    session_id    45/45 khac nhau  khong gom duoc 2 luot goi cua 1 lan phan loai
-   cache_hit     chuoi 'None'     noi ve cache cua LiteLLM, khong phai cached token
 ```
+
+*(01/09: `cache_hit` đã ra khỏi danh sách này — nó dùng được, và bỏ qua nó thì token phồng.)*
 
 ---
 
@@ -379,19 +400,25 @@ nên bộ nạp mở **hai kết nối** và ánh xạ ở tầng Python.
 Hai cột ưu tiên **ngược nhau**, và đó là cố ý. Ngày hoá đơn về, nó thay thế số ước tính của
 Gateway.
 
-### Bốn quy tắc bộ nạp phải giữ
+### Năm quy tắc bộ nạp phải giữ
 
 ```
-   Truong thieu -> NULL, KHONG phai 0     (cached_tokens vang 45/45; duration 0 -> NULL)
-   Dung total_tokens cua so                (khong tu cong prompt + completion)
-   Luot HONG CO nap, kem ma loi            (doi 31/08 - xem duoi)
-   MOI phep tong hop PHAI loc `outcome`    (thieu la ro token cua luot hong)
+   Truong thieu -> NULL, KHONG phai 0      (cached_tokens vang 45/45; duration 0 -> NULL)
+   Dung total_tokens cua so                 (khong tu cong prompt + completion)
+   Luot HONG CO nap, kem ma loi             (doi 31/08 - xem duoi)
+   MOI phep tong hop PHAI loc `outcome`     (thieu la ro token cua luot hong)
+   MOI phep tong hop PHAI loc `cache_hit`   (them 01/09 - IS NOT TRUE, KHONG phai NOT)
 ```
 
 **Đổi 31/08:** bản đầu **không nạp** lượt hỏng. Nay nạp, vì Master Plan đòi *"bản ghi mỗi
 request"* — trước đó ta chỉ biết CÓ hỏng mà không biết VÌ SAO, trong khi mã lỗi nằm sẵn trong
 sổ. Đổi lại, mọi chỗ tổng hợp **bắt buộc** phải lọc `outcome = 'success'`; đã đo lỗ rò trước
 khi vá: thiếu bộ lọc thì token gateway ra **45.201 thay vì 45.187**.
+
+**Đổi 01/09:** nạp thêm `raw_model`, `virtual_key_id`, `cache_hit` — ba cột sổ đã ghi sẵn mà
+không dòng mã nào đọc tới. Đo lỗ rò bằng phép thử âm đảo ngược được: đặt `cache_hit=true` lên
+một dòng 6.866 token thì bỏ bộ lọc **rò đúng 6.866**, còn viết nhầm `NOT cache_hit` thì
+**mất sạch 38.321** token.
 
 **Và:** thêm cột vào bảng đã có dữ liệu thì bộ nạp phải **`ON CONFLICT … DO UPDATE`** cho đúng
 các cột mới. `DO NOTHING` bỏ qua hoàn toàn dòng cũ, nên cột mới sẽ rỗng vĩnh viễn — đã suýt

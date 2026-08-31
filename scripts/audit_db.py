@@ -579,6 +579,36 @@ def group_d_silent_gaps(a: Audit) -> None:
             f"{int(outcome_la)} dong mang outcome ngoai success/failure -"
             f" chung bi loai khoi bang tong hop ma khong bao")
 
+    # Luot TRUNG CACHE khong toi nha cung cap nen nha cung cap khong tinh tien
+    # no - nhung Gateway VAN ghi du token (do 01/09: mot luot trung cache ghi
+    # spend = 0 ma total_tokens = 352). Cong no vao luu luong la khai khong.
+    #
+    # So sanh nay cung bat luon CACH VIET SAI o build_usage_daily: neu ai do doi
+    # `IS NOT TRUE` thanh `NOT cache_hit` thi 38/41 dong NULL bi vut va ve trai
+    # tut xuong 0, phep kiem do.
+    gw_cache = a.num("SELECT COALESCE(SUM(total_tokens),0) FROM fact_call"
+                     " WHERE source='gateway' AND outcome='success'"
+                     "   AND model_id IS NOT NULL AND cache_hit IS NOT TRUE")
+    gw_bang = a.num("SELECT COALESCE(SUM(total_tokens),0) FROM fact_usage_daily"
+                    " WHERE source='gateway'")
+    a.check(gw_cache == gw_bang, "Luot trung cache khong lot vao bang tong hop",
+            f"{int(gw_bang)} != {int(gw_cache)} - chenh"
+            f" {int(gw_bang - gw_cache)} token")
+
+    # `raw_model` la BANG CHUNG DUY NHAT con lai khi `model_id` ra NULL. Thieu no
+    # thi mot tuyen chua khai bien thanh mot dong trong ma khong tra nguoc duoc.
+    thieu_raw = a.num("SELECT COUNT(*) FROM fact_call"
+                      " WHERE source='gateway' AND raw_model IS NULL")
+    a.check(thieu_raw == 0, "Moi dong gateway deu co raw_model",
+            f"{int(thieu_raw)} dong thieu ten model goc")
+
+    # Khoa la thu duy nhat tach duoc luu luong cua agent khoi luot di bang khoa
+    # quan tri chung. Dong thieu khoa thi khong tach duoc bang gi.
+    thieu_key = a.num("SELECT COUNT(*) FROM fact_call"
+                      " WHERE source='gateway' AND virtual_key_id IS NULL")
+    a.check(thieu_key == 0, "Moi dong gateway deu co virtual_key_id",
+            f"{int(thieu_key)} dong thieu dinh danh khoa")
+
     # `duration_ms = 0` la "chua do", KHONG phai "do duoc 0 mili giay". Gateway
     # ghi 0 cho MOI luot hong, ke ca luot da goi toi nha cung cap va bi tu choi -
     # nen bo nap phai quy no ve NULL. Nap 0 vao la keo tut moi phan vi.

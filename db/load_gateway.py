@@ -144,7 +144,20 @@ BASE_SQL = """
            (metadata->'cost_breakdown'->>'total_cost')::numeric,
            status,
            NULLIF(request_duration_ms, 0),
-           NULLIF(metadata->'error_information'->>'error_code', '')
+           NULLIF(metadata->'error_information'->>'error_code', ''),
+           api_key,
+           -- BAY 5: `cache_hit` la TEXT, va "khong co thong tin" duoc ghi bang
+           -- CHUOI 'None' chu khong phai SQL NULL. Do 01/09: 'None' 41 dong,
+           -- 'False' 5, 'True' 1 - khong mot dong NULL nao. Nen o VE NGUON,
+           -- `IS NULL` tra 0 dong va `IS NOT TRUE` thi LOI KIEU.
+           --
+           -- Dich bang CASE chu KHONG dung ::boolean: gap gia tri thu tu thi
+           -- ep kieu nem loi giua chung, con CASE quy ve NULL va bo dem duoi
+           -- day se keu. Cung cach da lam voi `outcome`.
+           CASE WHEN cache_hit = 'True'  THEN true
+                WHEN cache_hit = 'False' THEN false
+                ELSE NULL END,
+           COALESCE(cache_hit, 'None') NOT IN ('True', 'False', 'None')
       FROM "LiteLLM_SpendLogs"
      WHERE status IS NOT NULL
 """
@@ -152,7 +165,12 @@ BASE_SQL = """
 COLUMNS = ["call_id", "agent_id", "ts_raw", "tz_confirmed", "ts_local",
            "user_id", "account_id", "model_id", "prompt_tokens",
            "completion_tokens", "total_tokens", "cached_tokens",
-           "source", "cost_usd", "duration_ms", "outcome", "error_code"]
+           "source", "cost_usd", "duration_ms", "outcome", "error_code",
+           "raw_model", "virtual_key_id", "cache_hit"]
+
+# Khoa quan tri chung. LiteLLM ghi THANG chuoi nay vao `api_key`, khong bam -
+# nen cot nguon tron hai loai gia tri. Xem COMMENT cua fact_call.virtual_key_id.
+MASTER_KEY = "litellm_proxy_master_key"
 
 
 def watermark(cn):
@@ -209,10 +227,15 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
         "danh_tinh_khong_noi_duoc": 0,
         "cached_null": 0,
         "cost_null": 0,
+        "khoa_tong": 0,
+        "trung_cache": 0,
+        "bi_danh": 0,
+        "cache_hit_la": 0,
     }
     for (call_id, ts_raw, model, end_user, tags,
          prompt_tokens, completion_tokens, total_tokens,
-         cached_tokens, cost_usd, outcome, duration_ms, error_code) in ledger:
+         cached_tokens, cost_usd, outcome, duration_ms, error_code,
+         virtual_key_id, cache_hit, cache_hit_la) in ledger:
 
         agent_id, ly_do = resolve_agent(tags, agent_by_code)
         if agent_id is None:
@@ -295,12 +318,28 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
         # su vang mat cua phep do, khong phai phep do.
         if duration_ms is None:
             stats["duration_null"] += 1
+        if virtual_key_id == MASTER_KEY:
+            # Luot di bang khoa quan tri chung. No VAN quy duoc ve agent nho tag,
+            # nen no NAM LAN trong luu luong that cua agent - va truoc change nay
+            # khong co cach nao tach ra. Con so phai giam ve 0 khi 8 agent deu co
+            # khoa rieng.
+            stats["khoa_tong"] += 1
+        if cache_hit is True:
+            stats["trung_cache"] += 1
+        if cache_hit_la:
+            stats["cache_hit_la"] += 1
+        if "/" not in (model or ""):
+            # Ten KHONG mang tien to nha cung cap = `model_name` khai trong
+            # config.gateway.yaml, tuc BI DANH. Router chi thay ten upstream vao
+            # sau khi da chot tuyen, nen dong mang bi danh la dong chet TRUOC do.
+            stats["bi_danh"] += 1
 
         rows.append((
             call_id, agent_id, ts_raw, True, ts_raw + VN_OFFSET,
             user_id, account_id, model_id, prompt_tokens,
             completion_tokens, total_tokens, cached_tokens,
             SOURCE, cost_usd, duration_ms, outcome, error_code,
+            model, virtual_key_id, cache_hit,
         ))
     return rows, stats
 
@@ -382,14 +421,17 @@ def main() -> int:
         # An toan vi ba cot nay suy tu chinh so goc, ma dong trong so la BAT BIEN
         # sau khi ghi. Chay lai bao nhieu lan cung ra cung mot gia tri.
         #
-        # CHI ba cot nay. Khong DO UPDATE ca hang: neu mai kia mot khau anh xa
+        # CHI sau cot suy tu so goc. Khong DO UPDATE ca hang: neu mai kia mot khau anh xa
         # doi (vi du dim_model_alias), ta KHONG muon lich su bi viet lai im lang.
         connect.insert_many(
             cn, ph, "fact_call", COLUMNS, rows,
             on_conflict="ON CONFLICT (call_id) DO UPDATE SET"
-                        " duration_ms = EXCLUDED.duration_ms,"
-                        " outcome     = EXCLUDED.outcome,"
-                        " error_code  = EXCLUDED.error_code")
+                        " duration_ms    = EXCLUDED.duration_ms,"
+                        " outcome        = EXCLUDED.outcome,"
+                        " error_code     = EXCLUDED.error_code,"
+                        " raw_model      = EXCLUDED.raw_model,"
+                        " virtual_key_id = EXCLUDED.virtual_key_id,"
+                        " cache_hit      = EXCLUDED.cache_hit")
         cn.commit()
         sau = connect.query_one(
             cn, f"SELECT COUNT(*) FROM fact_call WHERE source = '{SOURCE}'")[0]
@@ -414,6 +456,12 @@ def main() -> int:
     print(f"  cached_tokens NULL {stats['cached_null']}"
           f" | cost_usd NULL {stats['cost_null']}"
           f" | duration_ms NULL {stats['duration_null']}")
+    print(f"  di bang KHOA TONG {stats['khoa_tong']}/{len(rows)}"
+          f" | trung cache {stats['trung_cache']}"
+          f" | mang bi danh {stats['bi_danh']}")
+    if stats["cache_hit_la"]:
+        print(f"  CANH BAO: {stats['cache_hit_la']} dong co cache_hit KHONG phai"
+              f" True/False/None - da quy ve NULL, di kiem tra ban LiteLLM")
 
     # Phân bố mã lỗi của những dòng ĐÃ NẠP. Không in ra thì không ai biết Gateway
     # đang hỏng vì cái gì - mà câu trả lời nằm sẵn trong sổ.

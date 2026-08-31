@@ -258,6 +258,19 @@ def load_gateway(cn, ph) -> int:
     Con số nhỏ, nhưng nó rò IM LẶNG, và tỉ lệ sẽ tăng khi có lượt hỏng SAU khi
     Router đã chốt tuyến (timeout, 429, 500).
 
+    `cache_hit IS NOT TRUE` THÊM 01/09/2026. Lượt trúng cache KHÔNG tới nhà cung
+    cấp, nên nhà cung cấp không tính tiền nó - nhưng Gateway VẪN ghi đủ token cho
+    nó (đo được: một lượt trúng cache ghi `spend = 0` mà `total_tokens = 352`).
+    Cộng nó vào lưu lượng là khai khống token.
+
+    PHẢI viết `IS NOT TRUE`, KHÔNG được viết `NOT cache_hit`. Cột này cho phép
+    NULL, mà `NOT NULL` ra UNKNOWN và `WHERE` loại mọi dòng không đúng TRUE - nên
+    cách viết sai sẽ vứt sạch 38/41 dòng gateway và kéo token về 0. Đo cả hai
+    cách viết sai trước khi chốt, xem nhật ký 01/09.
+
+    (Ở VẾ NGUỒN thì ngược lại: `LiteLLM_SpendLogs.cache_hit` là TEXT mang chuỗi
+    'None', nên ở đó `IS NOT TRUE` lỗi kiểu. Hai đầu hai bẫy khác nhau.)
+
     MỘT LƯỢT PHÂN LOẠI ĐẺ HAI DÒNG. Nên `calls` ở đây là số lượt gọi LLM, không
     phải số việc nghiệp vụ.
     """
@@ -269,6 +282,7 @@ def load_gateway(cn, ph) -> int:
         FROM fact_call
         WHERE model_id IS NOT NULL AND source = 'gateway'
           AND outcome = 'success'
+          AND cache_hit IS NOT TRUE
         GROUP BY 1, 2, 3, 4
     """)
     out = [(*r, "gateway") for r in rows]
