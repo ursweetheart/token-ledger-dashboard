@@ -36,6 +36,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
+
+log = logs.get_logger("build_performance")
 
 ROOT = Path(__file__).resolve().parents[1]
 LATENCY_CSV = (ROOT / "data" / "raw_google_console" / "do_tre_phan_bo"
@@ -82,16 +85,21 @@ def load_call_counts(cn, dc) -> int:
           AND m.response_code IS NOT NULL AND m.response_code <> ''
         GROUP BY 1, 2, 3, 4
     """)
+    # `source` khai TUONG MINH, khong dua vao DEFAULT cua migration 008. DEFAULT
+    # o do la de dap 669 dong LICH SU; moi lan ghi MOI phai tu noi minh la nguon
+    # nao, neu khong thi ngay them nguon thu hai se co dong khong ai biet tu dau.
     return connect.insert_many(cn, dc, "fact_perf_daily",
-                        ["day", "agent_id", "method", "response_code", "calls"],
-                        [(n, a, p, m, int(v)) for n, a, p, m, v in rows])
+                        ["day", "agent_id", "method", "response_code", "calls",
+                         "source"],
+                        [(n, a, p, m, int(v), "monitoring")
+                         for n, a, p, m, v in rows])
 
 
 def load_latency(cn, dc) -> tuple[int, list[str]]:
     """Do tre da gop histogram, doc tu CSV. Tra (so dong, project khong biet)."""
     if not LATENCY_CSV.exists():
         raise SystemExit(
-            f"Khong co {LATENCY_CSV}\n"
+            f"{LATENCY_CSV} not found\n"
             f"  Chay truoc: python scripts/pull_latency_distribution.py\n"
             f"              python scripts/merge_latency_daily.py")
 
@@ -114,8 +122,69 @@ def load_latency(cn, dc) -> tuple[int, list[str]]:
     n = connect.insert_many(cn, dc, "fact_latency_daily",
                      ["day", "agent_id", "samples", "p50_seconds", "p95_seconds",
                       "p95_bucket_from", "p95_bucket_to", "p99_seconds",
-                      "enough_samples"], rows)
+                      "enough_samples", "source"],
+                     [(*r, "monitoring") for r in rows])
     return n, sorted(set(unknown))
+
+
+def load_gateway_latency(cn, dc) -> int:
+    """Phan vi CHINH XAC cho nguon gateway, tinh thang tu `duration_ms` tho.
+
+    KHAC HAN load_latency() O BAN CHAT PHEP DO
+    ------------------------------------------
+        monitoring   histogram da gop -> doc mot moc phan vi ra bang NOI SUY
+                     trong mot o. Do 03/09: be rong o trung binh bang 54-67%
+                     chinh gia tri p95 cua ba agent cham nhat.
+        gateway      tung gia tri duration_ms -> percentile_cont doc thang.
+                     KHONG co sai so noi suy nao.
+
+    Nen `p95_bucket_from` / `p95_bucket_to` de NULL. Chung mo ta sai so cua
+    histogram, ma so tho khong co sai so do. Ghi 0 la noi "sai so bang khong do
+    duoc"; ghi gia tri nao khac la bia. NULL noi dung: khong ap dung.
+
+    MOI NGUON MOT DONG, KHONG GOP TRUNG BINH voi monitoring. Trung binh cua hai
+    phan vi la mot con so khong thuoc ve phep do nao - chinh file nay da ghi lai
+    phep do chung minh dieu do o docstring dau file.
+
+    BA BO LOC, VA MOT BO LOC CO Y KHONG DAT
+    ---------------------------------------
+    `duration_ms IS NOT NULL`  phai co phep do. Gateway ghi 0 cho MOI luot hong
+                               (ke ca luot da toi nha cung cap), va tang nap da
+                               NULLIF(...,0) - nen 0 khong bao gio vao day.
+
+    `cache_hit IS NOT TRUE`    luot trung dem KHONG toi nha cung cap, nen do tre
+                               cua no do mot thu khac han. Hom nay khong doi gi
+                               (0/38 dong trung dem, p95 bang nhau ca hai cach),
+                               nhung se doi ngay cache duoc bat lai.
+                               PHAI viet `IS NOT TRUE`, khong duoc `NOT
+                               cache_hit` - cot cho phep NULL, cach viet sai vut
+                               sach 38/38 dong.
+
+    `outcome = 'success'`      CO Y KHONG DAT, khac voi build_usage_daily.
+                               Do tre cua mot luot HONG van la do tre that -
+                               nguoi goi van cho ngan ay lau. Loai no ra la lam
+                               dep so mot cach im lang. Hom nay cau hoi nay chua
+                               co hau qua (3/3 luot hong deu co duration_ms
+                               NULL), nhung khi LiteLLM bat dau ghi do tre cho
+                               luot hong thi lua chon nay moi la lua chon dung.
+    """
+    rows = connect.query(cn, f"""
+        SELECT CAST(ts_local AS DATE), agent_id, COUNT(*),
+               percentile_cont(0.50) WITHIN GROUP (ORDER BY duration_ms) / 1000.0,
+               percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) / 1000.0,
+               percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms) / 1000.0
+        FROM fact_call
+        WHERE source = 'gateway' AND ts_local IS NOT NULL
+          AND duration_ms IS NOT NULL
+          AND cache_hit IS NOT TRUE
+        GROUP BY 1, 2
+    """)
+    out = [(day, aid, n, p50, p95, None, None, p99, n >= MIN_SAMPLES, "gateway")
+           for day, aid, n, p50, p95, p99 in rows]
+    return connect.insert_many(cn, dc, "fact_latency_daily",
+                        ["day", "agent_id", "samples", "p50_seconds",
+                         "p95_seconds", "p95_bucket_from", "p95_bucket_to",
+                         "p99_seconds", "enough_samples", "source"], out)
 
 
 def main() -> None:
@@ -132,16 +201,19 @@ def main() -> None:
 
     n_calls = load_call_counts(cn, dc)
     n_latency, unknown_projects = load_latency(cn, dc)
+    n_gw = load_gateway_latency(cn, dc)
 
     total_calls = connect.query_one(cn, "SELECT SUM(calls) FROM fact_perf_daily")[0]
     by_code = dict(connect.query(cn, "SELECT response_code, SUM(calls) FROM fact_perf_daily"
                                " GROUP BY response_code ORDER BY 2 DESC"))
     few_samples = connect.query_one(cn, "SELECT COUNT(*) FROM fact_latency_daily"
                                 " WHERE enough_samples = FALSE")[0]
-    print(f"  fact_perf_daily    {n_calls:>5} dong | {int(total_calls):,} luot")
-    print(f"  theo ma tra ve     {by_code}")
-    print(f"  fact_latency_daily  {n_latency:>5} dong | {few_samples} ngay khong du mau"
-          f" (<{MIN_SAMPLES} luot)")
+    log.info("  fact_perf_daily    %5d rows | %s calls", n_calls, f"{int(total_calls):,}")
+    log.info("  by response code   %s", by_code)
+    log.info("  fact_latency_daily %5d rows | %d days without enough samples"
+             " (<%d calls)", n_latency + n_gw, few_samples, MIN_SAMPLES)
+    log.info("  ... of which  monitoring %d (histogram, co o sai so)"
+             " | gateway %d (so tho, o = NULL)", n_latency, n_gw)
 
     # ================================================== nghiem thu
     # Doi chieu voi CHINH nguon o moi lan chay, khong ghim so.
@@ -157,9 +229,27 @@ def main() -> None:
         errors.append(f"so luot {int(total_calls or 0):,} != {int(src_calls or 0):,}"
                    f" trong fact_monitoring")
     if unknown_projects:
-        errors.append(f"project khong co trong dim_agent: {unknown_projects}")
+        errors.append(f"projects missing from dim_agent: {unknown_projects}")
     if n_latency == 0:
-        errors.append("khong nap duoc dong do tre nao")
+        errors.append("no latency row could be loaded")
+    # Phan vi tu so THO khong duoc mang o histogram. Mot dong gateway co
+    # p95_bucket_* khac NULL nghia la ai do da dan sai so cua phep do KHAC len
+    # mot con so von khong co sai so do - va no se trong y nhu that.
+    gw_co_o = connect.query_one(cn, """
+        SELECT COUNT(*) FROM fact_latency_daily
+        WHERE source = 'gateway'
+          AND (p95_bucket_from IS NOT NULL OR p95_bucket_to IS NOT NULL)""")[0]
+    if gw_co_o:
+        errors.append(f"{gw_co_o} gateway rows carry a histogram bucket -"
+                      f" raw percentiles have no interpolation error to describe")
+    # Moi (ngay, agent, nguon) dung MOT dong. Hai dong nghia la khoa chinh cua
+    # migration 008 khong lam viec, va mot trong hai nguon dang bi ghi de.
+    trung_khoa = connect.query_one(cn, """
+        SELECT COUNT(*) FROM (
+            SELECT day, agent_id, source FROM fact_latency_daily
+            GROUP BY 1, 2, 3 HAVING COUNT(*) > 1) t""")[0]
+    if trung_khoa:
+        errors.append(f"{trung_khoa} (day, agent, source) keys appear twice")
     # p95 phai nam trong chinh o chua no. Lech nghia la doc nham cot khi anh xa
     # CSV - loi khong the thay bang mat vi moi so deu trong nhu that.
     outside_bucket = connect.query_one(cn, """
@@ -167,20 +257,21 @@ def main() -> None:
         WHERE p95_seconds IS NOT NULL AND p95_bucket_from IS NOT NULL
           AND (p95_seconds < p95_bucket_from OR p95_seconds > p95_bucket_to)""")[0]
     if outside_bucket:
-        errors.append(f"{outside_bucket} dong co p95 nam ngoai o chua no - anh xa cot sai")
+        errors.append(f"{outside_bucket} rows have a p95 outside their own bucket - wrong column mapping?")
     # p50 <= p95 <= p99 la tinh chat cua phan vi, khong phai cua du lieu.
     wrong_order = connect.query_one(cn, """
         SELECT COUNT(*) FROM fact_latency_daily
         WHERE (p50_seconds IS NOT NULL AND p95_seconds IS NOT NULL AND p50_seconds > p95_seconds)
            OR (p95_seconds IS NOT NULL AND p99_seconds IS NOT NULL AND p95_seconds > p99_seconds)""")[0]
     if wrong_order:
-        errors.append(f"{wrong_order} dong co p50>p95 hoac p95>p99")
+        errors.append(f"{wrong_order} rows have p50>p95 or p95>p99")
 
     if errors:
         cn.rollback()
-        raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(errors))
+        raise SystemExit("ACCEPTANCE FAILED - rolled back:\n  "
+                         + "\n  ".join(errors))
     cn.commit()
-    print("  NGHIEM THU DAT")
+    log.info("  acceptance passed")
 
 
 if __name__ == "__main__":

@@ -302,6 +302,48 @@ Bảng `LiteLLM_SpendLogs` có **34 cột**. Những cột thực sự dùng đ�
 
 *(01/09: `cache_hit` đã ra khỏi danh sách này — nó dùng được, và bỏ qua nó thì token phồng.)*
 
+### `completion_tokens_details` — khối CHIỀU RA, đọc 03/09/2026
+
+Khối này nằm trong `metadata.usage_object`. **Đọc nhầm sang `prompt_tokens_details` vẫn ra số**
+— cả hai khối đều có `text_tokens` đầy đủ 42/42 — chỉ là số của **chiều ngược lại**. Không
+crash, không ai thấy. Bản đầu của đề xuất đã trỏ nhầm khối, đo lại mới ra.
+
+Đếm trên 42 lượt thành công:
+
+```
+   text_tokens                 42/42  deu > 0
+   reasoning_tokens             2/42  = 342, ca hai la gemini-3.6-flash
+   audio_tokens                 0/42
+   image_tokens                 0/42
+   video_tokens                 0/42
+   accepted_prediction_tokens   0/42
+   rejected_prediction_tokens   0/42
+```
+
+| Suy ra cột nào | Quy tắc | Đo được |
+|---|---|---|
+| `fact_call.output_modality` | `'text'` khi `text_tokens > 0` và không modality nào khác > 0. Gặp modality lạ thì **NULL và ĐẾM**, không dán nhãn `'text'` cho một phản hồi không phải văn bản | **38/41** — 3 dòng rỗng là 3 lượt hỏng, và lượt hỏng không có phản hồi để dán nhãn |
+| `fact_call.thinking_enabled` | `reasoning_tokens > 0`. Khoá **vắng mặt → NULL**, KHÔNG phải `false` | **0/41** — xem bẫy dưới |
+
+> **BẪY — `thinking_enabled` nạp ra 0/41, và đó là ĐÚNG.**
+> Hai dòng duy nhất có `reasoning_tokens` mang `request_tags` chỉ gồm
+> `["User-Agent: Python-urllib", "User-Agent: Python-urllib/3.13"]` — **không tag định danh
+> agent nào**. `resolve_agent()` trả `None`, mà `fact_call.agent_id` là `NOT NULL`, nên cả hai
+> bị loại ngay ở khâu nạp. Một trong hai còn là lượt trúng cache (`request_id` hậu tố
+> `_cache_hit…`).
+> Cột **đọc đúng**, nhưng **chưa có dữ liệu** — và sẽ chưa có cho tới khi một agent CÓ TAG sinh
+> token suy luận.
+
+> **VÌ SAO NULL CHỨ KHÔNG PHẢI `false`.** Gemini **không gửi** khoá `reasoning_tokens` cho model
+> không suy luận. "Vắng mặt" nghĩa là *nhà cung cấp không nói gì* — khác hẳn *đã đo và bằng
+> không*. Ghi `false` cho 40/42 dòng là khẳng định một phép đo chưa ai thực hiện. Cùng kỷ luật
+> đã áp cho `duration_ms` (migration 006) và `cached_tokens`.
+
+> **KIỂU KHÁC `fact_monitoring`.** Ở bảng đó cột cùng tên là **TEXT** mang chuỗi `'true'` /
+> `'false'` (11.440 / 3.589, NULL 636.624) — vì nó là bảng hạ cánh của nhãn Google gửi sang.
+> `fact_call` là bảng của ta nên dùng **BOOLEAN** thật. Mọi phép so hai bảng **phải dịch kiểu
+> tường minh**.
+
 ---
 
 ## 6. Cấu trúc response trả về agent
@@ -448,8 +490,42 @@ Nó chạy `load_gateway.py` rồi `build_usage_daily.py`, **dừng ngay nếu b
 `build_usage_daily` xoá sạch rồi dựng lại, chạy nó trên dữ liệu thiếu sẽ cho ra một dashboard
 trông y hệt "chưa có lưu lượng".
 
-`scripts/rebuild_db.py` đã có bước `load_gateway.py` ở vị trí 6/8. **Bỏ bước đó thì mỗi lần
+`scripts/rebuild_db.py` đã có bước `load_gateway.py` ở vị trí **6/9**. **Bỏ bước đó thì mỗi lần
 cập nhật dashboard sẽ xoá sạch dữ liệu Gateway và không nạp lại** — không lỗi nào báo.
+
+### Hai nhánh mới, thêm 03/09/2026 (migration 008)
+
+```
+   fact_call  source='gateway'
+        │
+        ├─ db/build_usage_hourly.py    (buoc 8/9)
+        │      date_trunc('hour', ts_local), CUNG bo loc voi bang ngay
+        │      tu doi chieu tong gio == tong ngay, DUNG HAN neu lech
+        ▼
+   fact_usage_hourly  source='gateway'   -> GET /api/usage-hourly
+        (KHONG BAO GIO co source='billing' - hoa don chi tinh theo NGAY)
+
+   fact_call  source='gateway'  (duration_ms tho)
+        │
+        ├─ db/build_performance.py     (buoc 9/9)
+        │      percentile_cont doc THANG tu tung gia tri
+        │      p95_bucket_from/to = NULL  <- so tho khong co sai so noi suy
+        ▼
+   fact_latency_daily  source='gateway'   -> GET /api/performance
+        (moi nguon MOT dong, KHONG gop trung binh voi monitoring)
+```
+
+**`rebuild_db.py` nay là 9 bước, không phải 8.** Bước 8 (`build_usage_hourly`) cũng bị `--rebuild`
+xoá sạch như mọi bảng khác — thiếu nó trong `STEPS` thì bảng theo giờ biến mất sau mỗi lần cập
+nhật, và không lỗi nào báo: nó chỉ là một bảng rỗng.
+
+**`scripts/refresh_gateway.py` CHƯA gọi hai bước mới.** Nó vẫn chỉ chạy `load_gateway.py` +
+`build_usage_daily.py`, nên sau khi refresh thì bảng theo giờ và phân vị Gateway **cũ đi một
+nhịp**. Chưa sửa vì nằm ngoài phạm vi change này — ghi lại để không ai tưởng nó đã đủ.
+
+**Và khi thêm cột mới vào `fact_call`, phải chạy `load_gateway.py --full`.** `DO UPDATE` chỉ ghi
+đè những dòng bộ nạp **đọc tới**, mà mốc nạp (`watermark`) chỉ lùi 1 giờ. Đo 03/09: chạy trần nạp
+được **6/41** dòng, 35 dòng còn lại giữ `NULL`; `--full` mới đủ 41/41.
 
 ---
 

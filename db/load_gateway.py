@@ -118,6 +118,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
+
+log = logs.get_logger("load_gateway")
 
 # Lùi lại bao nhiêu so với mốc đã nạp. Sổ ghi bất đồng bộ nên một dòng có thể
 # xuất hiện SAU khi bộ nạp đã đi qua mốc thời gian của nó. Một giờ là rộng rãi so
@@ -157,16 +160,52 @@ BASE_SQL = """
            CASE WHEN cache_hit = 'True'  THEN true
                 WHEN cache_hit = 'False' THEN false
                 ELSE NULL END,
-           COALESCE(cache_hit, 'None') NOT IN ('True', 'False', 'None')
+           COALESCE(cache_hit, 'None') NOT IN ('True', 'False', 'None'),
+           -- BAY 6: DOC `completion_tokens_details`, KHONG `prompt_tokens_details`.
+           -- Ban dau cua de xuat tro nham khoi. CA HAI khoi deu co `text_tokens`
+           -- day du (42/42), nen doc nham VAN ra so - chi la so cua chieu NGUOC
+           -- lai. Khong crash, khong ai thay.
+           --
+           -- `output_modality` la NHAN, khong phai so token - dung quy uoc cua
+           -- fact_monitoring.output_modality ('text' | NULL). Do 03/09 tren 42
+           -- luot thanh cong: text_tokens > 0 la 42/42, audio/image/video deu 0.
+           -- Gap modality khac thi tra NULL va DEM (cot ke tiep), chu khong dan
+           -- nhan 'text' cho mot phan hoi khong phai van ban.
+           CASE WHEN COALESCE((metadata->'usage_object'->'completion_tokens_details'->>'audio_tokens')::bigint, 0) > 0
+                  OR COALESCE((metadata->'usage_object'->'completion_tokens_details'->>'image_tokens')::bigint, 0) > 0
+                  OR COALESCE((metadata->'usage_object'->'completion_tokens_details'->>'video_tokens')::bigint, 0) > 0
+                     THEN NULL
+                WHEN COALESCE((metadata->'usage_object'->'completion_tokens_details'->>'text_tokens')::bigint, 0) > 0
+                     THEN 'text'
+                ELSE NULL END,
+           -- co modality LA khong (de bo dem keu, thay vi im lang tra NULL)
+           COALESCE((metadata->'usage_object'->'completion_tokens_details'->>'audio_tokens')::bigint, 0) > 0
+             OR COALESCE((metadata->'usage_object'->'completion_tokens_details'->>'image_tokens')::bigint, 0) > 0
+             OR COALESCE((metadata->'usage_object'->'completion_tokens_details'->>'video_tokens')::bigint, 0) > 0,
+           -- `thinking_enabled`: CHI khang dinh khi LiteLLM CO bao khoa
+           -- `reasoning_tokens`. Khoa VANG MAT -> NULL, khong phai false.
+           --
+           -- Day la mot SAI KHAC CO Y so voi cong thuc viet trong design ⑧
+           -- (`reasoning_tokens IS NOT NULL AND > 0`, tuc ra FALSE khi vang
+           -- mat). Ly do: Gemini KHONG gui khoa nay cho model khong suy luan,
+           -- nen "vang mat" nghia la nha cung cap khong noi gi - khac han
+           -- "da do va bang khong". Ghi false cho 40/42 dong la khang dinh mot
+           -- phep do chua ai thuc hien. Cung ky luat da ap cho `duration_ms`
+           -- (006), `cached_tokens` (008) va `cache_hit` (007).
+           CASE WHEN (metadata->'usage_object'->'completion_tokens_details'->>'reasoning_tokens') IS NULL
+                     THEN NULL
+                ELSE (metadata->'usage_object'->'completion_tokens_details'->>'reasoning_tokens')::bigint > 0
+                END
       FROM "LiteLLM_SpendLogs"
      WHERE status IS NOT NULL
 """
 
 COLUMNS = ["call_id", "agent_id", "ts_raw", "tz_confirmed", "ts_local",
-           "user_id", "account_id", "model_id", "prompt_tokens",
+           "user_id", "account_id", "unit_id", "model_id", "prompt_tokens",
            "completion_tokens", "total_tokens", "cached_tokens",
            "source", "cost_usd", "duration_ms", "outcome", "error_code",
-           "raw_model", "virtual_key_id", "cache_hit"]
+           "raw_model", "virtual_key_id", "cache_hit",
+           "output_modality", "thinking_enabled"]
 
 # Khoa quan tri chung. LiteLLM ghi THANG chuoi nay vao `api_key`, khong bam -
 # nen cot nguon tron hai loai gia tri. Xem COMMENT cua fact_call.virtual_key_id.
@@ -211,7 +250,7 @@ def resolve_agent(tags, agent_by_code):
     return None, "nhieu tag dinh danh"
 
 
-def build_rows(ledger, agent_by_code, models, accounts, anchors):
+def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
     """Ánh xạ dòng sổ -> dòng `fact_call`, kèm bộ đếm mọi thứ bị bỏ hoặc hụt."""
     rows = []
     stats = {
@@ -231,11 +270,17 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
         "trung_cache": 0,
         "bi_danh": 0,
         "cache_hit_la": 0,
+        "khong_ro_don_vi": 0,
+        "modality_la": 0,
+        "modality_null": 0,
+        "thinking_null": 0,
+        "co_suy_luan": 0,
     }
     for (call_id, ts_raw, model, end_user, tags,
          prompt_tokens, completion_tokens, total_tokens,
          cached_tokens, cost_usd, outcome, duration_ms, error_code,
-         virtual_key_id, cache_hit, cache_hit_la) in ledger:
+         virtual_key_id, cache_hit, cache_hit_la,
+         output_modality, modality_la, thinking_enabled) in ledger:
 
         agent_id, ly_do = resolve_agent(tags, agent_by_code)
         if agent_id is None:
@@ -301,6 +346,14 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
                 stats["danh_tinh_khong_noi_duoc"] += 1
             account_id = neo
 
+        # PHONG BAN tra tu TAI KHOAN da quy duoc, KHONG tu tag cua request.
+        # Tag noi agent nao gui, khong noi nguoi gui thuoc phong ban nao - xem
+        # connect.account_unit_lookup(). Dong nao khong tra ra thi de NULL va DEM,
+        # chu khong bia mot don vi.
+        unit_id = units.get(account_id)
+        if unit_id is None:
+            stats["khong_ro_don_vi"] += 1
+
         if cached_tokens is None:
             stats["cached_null"] += 1
         if cost_usd is None:
@@ -328,6 +381,19 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
             stats["trung_cache"] += 1
         if cache_hit_la:
             stats["cache_hit_la"] += 1
+        if modality_la:
+            # Phan hoi mang token audio/image/video. Hom nay 0/42, nhung ngay no
+            # xuat hien thi cot `output_modality` de NULL - va bo dem nay la thu
+            # duy nhat noi ra rang co mot loai phan hoi ta chua biet dat ten.
+            stats["modality_la"] += 1
+        if output_modality is None:
+            stats["modality_null"] += 1
+        if thinking_enabled is None:
+            # LiteLLM khong bao khoa `reasoning_tokens`. KHONG suy ra false -
+            # xem ghi chu o BASE_SQL.
+            stats["thinking_null"] += 1
+        elif thinking_enabled:
+            stats["co_suy_luan"] += 1
         if "/" not in (model or ""):
             # Ten KHONG mang tien to nha cung cap = `model_name` khai trong
             # config.gateway.yaml, tuc BI DANH. Router chi thay ten upstream vao
@@ -336,10 +402,11 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors):
 
         rows.append((
             call_id, agent_id, ts_raw, True, ts_raw + VN_OFFSET,
-            user_id, account_id, model_id, prompt_tokens,
+            user_id, account_id, unit_id, model_id, prompt_tokens,
             completion_tokens, total_tokens, cached_tokens,
             SOURCE, cost_usd, duration_ms, outcome, error_code,
             model, virtual_key_id, cache_hit,
+            output_modality, thinking_enabled,
         ))
     return rows, stats
 
@@ -364,9 +431,11 @@ def main() -> int:
     try:
         gw_cn, _ = connect.open_db(args.gateway_db)
     except Exception as exc:
-        print(f"KHONG NOI DUOC SO GATEWAY: {connect.mask_dsn(args.gateway_db)}")
-        print(f"  {type(exc).__name__}: {str(exc).strip().splitlines()[0]}")
-        print("  Gateway dang tat? Chay: docker compose --profile gateway up -d")
+        log.error("CANNOT REACH THE GATEWAY LEDGER: %s",
+                  connect.mask_dsn(args.gateway_db))
+        log.error("  %s: %s", type(exc).__name__,
+                  str(exc).strip().splitlines()[0])
+        log.error("  gateway down? run: docker compose --profile gateway up -d")
         return 1
 
     # CHOT CHAN: `total_cost` chi la gia goc cua nha cung cap KHI margin va
@@ -381,9 +450,9 @@ def main() -> int:
         ("success",))
     n_margin = gw_check.fetchone()[0]
     if n_margin:
-        print(f"DUNG: {n_margin} dong co margin/discount khac 0.")
-        print("  `total_cost` khong con la gia goc cua nha cung cap.")
-        print("  Phai quyet dinh nap so nao truoc khi chay tiep.")
+        log.error("STOPPED: %d rows carry a non-zero margin/discount", n_margin)
+        log.error("  `total_cost` is no longer the provider's own price")
+        log.error("  decide which figure to load before running again")
         gw_cn.close()
         cn.close()
         return 1
@@ -391,9 +460,9 @@ def main() -> int:
     since = None if args.full else watermark(cn)
     if since is not None:
         since = since - OVERLAP
-    print(f"Nap tu {connect.mask_dsn(args.gateway_db)}")
-    print(f"  moc nap: {'TOAN BO' if since is None else since} "
-          f"(da lui lai {OVERLAP})")
+    log.info("loading from %s", connect.mask_dsn(args.gateway_db))
+    log.info("  watermark: %s (rewound by %s)",
+             "ALL" if since is None else since, OVERLAP)
 
     ledger = read_ledger(gw_cn, since)
 
@@ -401,13 +470,15 @@ def main() -> int:
     models = connect.model_lookup(cn)
     accounts = connect.account_lookup(cn)
     anchors = connect.anchor_account_lookup(cn)
+    units = connect.account_unit_lookup(cn)
 
-    rows, stats = build_rows(ledger, agent_by_code, models, accounts, anchors)
+    rows, stats = build_rows(ledger, agent_by_code, models, accounts, anchors,
+                             units)
 
     truoc = connect.query_one(
         cn, f"SELECT COUNT(*) FROM fact_call WHERE source = '{SOURCE}'")[0]
     if args.dry_run:
-        print("  --dry-run: KHONG ghi gi")
+        log.info("  --dry-run: nothing written")
         sau = truoc
     else:
         # DO UPDATE cho BA COT MOI, khong phai DO NOTHING.
@@ -431,7 +502,13 @@ def main() -> int:
                         " error_code     = EXCLUDED.error_code,"
                         " raw_model      = EXCLUDED.raw_model,"
                         " virtual_key_id = EXCLUDED.virtual_key_id,"
-                        " cache_hit      = EXCLUDED.cache_hit")
+                        " cache_hit      = EXCLUDED.cache_hit,"
+                        " unit_id        = EXCLUDED.unit_id,"
+                        # 008: thieu hai dong nay thi 41 dong da nap giu
+                        # NULL VINH VIEN, va bang chi day len tu luot goi
+                        # MOI - dung cai bay da mac 31/08 voi duration_ms.
+                        " output_modality  = EXCLUDED.output_modality,"
+                        " thinking_enabled = EXCLUDED.thinking_enabled")
         cn.commit()
         sau = connect.query_one(
             cn, f"SELECT COUNT(*) FROM fact_call WHERE source = '{SOURCE}'")[0]
@@ -441,41 +518,55 @@ def main() -> int:
     # `sau - truoc` la so dong CHEN MOI. Tu khi dung DO UPDATE (31/08), lan chay
     # nao cung ghi de ba cot duration_ms/outcome/error_code len dong da co - nen
     # "chen them 0" KHONG co nghia la "khong lam gi".
-    print(f"  doc {stats['doc_tu_so']} dong tu so | dung duoc {len(rows)}"
-          f" | chen moi {sau - truoc} | ghi de {len(rows) - (sau - truoc)}")
-    print(f"  bo: khong co tag {stats['bo_khong_co_tag']}"
-          f" | nhieu tag {stats['bo_nhieu_tag']}")
+    log.info("  read %d rows | usable %d | inserted %d | overwritten %d",
+             stats["doc_tu_so"], len(rows), sau - truoc,
+             len(rows) - (sau - truoc))
+    log.info("  dropped: no tag %d | several tags %d",
+             stats["bo_khong_co_tag"], stats["bo_nhieu_tag"])
     if stats["trang_thai_la"]:
-        print(f"  CANH BAO: {stats['trang_thai_la']} dong mang trang thai KHONG"
-              f" phai success/failure - chung se bi tang tong hop loai im lang")
-    print(f"  nap luot HONG {stats['nap_luot_hong']}"
-          f" | model chua khai {stats['model_chua_khai']}"
-          f" | hong truoc khi chot tuyen {stats['hong_truoc_khi_chot_tuyen']}")
-    print(f"  end_user rong {stats['end_user_rong']}"
-          f" | danh tinh khong noi duoc {stats['danh_tinh_khong_noi_duoc']}")
-    print(f"  cached_tokens NULL {stats['cached_null']}"
-          f" | cost_usd NULL {stats['cost_null']}"
-          f" | duration_ms NULL {stats['duration_null']}")
-    print(f"  di bang KHOA TONG {stats['khoa_tong']}/{len(rows)}"
-          f" | trung cache {stats['trung_cache']}"
-          f" | mang bi danh {stats['bi_danh']}")
+        log.warning("  %d rows carry a status other than success/failure -"
+                    " the rollup would drop them silently",
+                    stats["trang_thai_la"])
+    log.info("  failed calls loaded %d | model not declared %d"
+             " | failed before routing %d",
+             stats["nap_luot_hong"], stats["model_chua_khai"],
+             stats["hong_truoc_khi_chot_tuyen"])
+    log.info("  end_user empty %d | identity unresolvable %d",
+             stats["end_user_rong"], stats["danh_tinh_khong_noi_duoc"])
+    log.info("  cached_tokens NULL %d | cost_usd NULL %d | duration_ms NULL %d",
+             stats["cached_null"], stats["cost_null"], stats["duration_null"])
+    log.info("  via MASTER KEY %d/%d | cache hits %d | alias model names %d"
+             " | unit unknown %d",
+             stats["khoa_tong"], len(rows), stats["trung_cache"],
+             stats["bi_danh"], stats["khong_ro_don_vi"])
     if stats["cache_hit_la"]:
-        print(f"  CANH BAO: {stats['cache_hit_la']} dong co cache_hit KHONG phai"
-              f" True/False/None - da quy ve NULL, di kiem tra ban LiteLLM")
+        log.warning("  %d rows have a cache_hit outside True/False/None -"
+                    " mapped to NULL, check the LiteLLM version",
+                    stats["cache_hit_la"])
+    log.info("  output_modality NULL %d | thinking reported %d/%d"
+             " | reasoning tokens seen %d",
+             stats["modality_null"],
+             len(rows) - stats["thinking_null"], len(rows),
+             stats["co_suy_luan"])
+    if stats["modality_la"]:
+        log.warning("  %d rows carry audio/image/video tokens - output_modality"
+                    " left NULL because we have no label for them yet",
+                    stats["modality_la"])
 
     # Phân bố mã lỗi của những dòng ĐÃ NẠP. Không in ra thì không ai biết Gateway
     # đang hỏng vì cái gì - mà câu trả lời nằm sẵn trong sổ.
     gw_cur.execute(
         '''SELECT COALESCE(
                    NULLIF(metadata->'error_information'->>'error_code', ''),
-                   '(khong co ma)') AS ma,
+                   '(no code)') AS ma,
                   COUNT(*)
              FROM "LiteLLM_SpendLogs"
             WHERE status = %s
             GROUP BY 1 ORDER BY 2 DESC''',
         ("failure",))
     phan_bo = ", ".join(f"{m}={n}" for m, n in gw_cur.fetchall())
-    print(f"  ma loi cua luot hong trong so: {phan_bo or '(khong co luot hong)'}")
+    log.info("  error codes of failed calls in the ledger: %s",
+             phan_bo or "(no failed calls)")
 
     # Đối chiếu với chính sổ gốc, không với số ghim. So trên TOÀN BỘ sổ chứ không
     # riêng vùng vừa đọc: đó mới là câu hỏi thật - "mọi thứ Gateway ghi đã vào
@@ -489,8 +580,9 @@ def main() -> int:
         cn, "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)"
             f" FROM fact_call WHERE source = '{SOURCE}'")
 
-    print(f"  doi chieu ca so: nguon {src_rows} dong/{src_tokens:,} token"
-          f" | dich {dst_rows} dong/{dst_tokens:,} token")
+    log.info("  whole-ledger check: source %d rows/%s tokens"
+             " | target %d rows/%s tokens",
+             src_rows, f"{src_tokens:,}", dst_rows, f"{dst_tokens:,}")
 
     # Số dòng bị bỏ phải đếm trên CẢ SỔ, không phải trên cửa sổ vừa đọc: lần
     # chạy tăng dần chỉ đọc vài dòng, còn `src_rows`/`dst_rows` là số của cả sổ.
@@ -504,24 +596,25 @@ def main() -> int:
         '         WHERE t = ANY(%s)) <> 1',
         (list(agent_by_code),))
     bo_qua_ca_so, token_bo_qua = gw_cur.fetchone()
-    print(f"  bo qua tren ca so: {bo_qua_ca_so} dong, {token_bo_qua} token")
+    log.info("  skipped across the ledger: %d rows, %d tokens",
+             bo_qua_ca_so, token_bo_qua)
 
     # Đối chiếu HAI chiều, không chỉ số dòng. Số dòng khớp mà token lệch nghĩa là
     # ánh xạ cột hỏng - đúng loại lỗi mà phép đếm dòng không thấy.
     errors = []
     if not args.dry_run:
         if dst_rows + bo_qua_ca_so != src_rows:
-            errors.append(f"so dong: dich {dst_rows} + bo qua {bo_qua_ca_so}"
+            errors.append(f"rows: target {dst_rows} + skipped {bo_qua_ca_so}"
                           f" != nguon {src_rows}")
         if int(dst_tokens) + int(token_bo_qua) != int(src_tokens):
-            errors.append(f"token: dich {dst_tokens} + bo qua {token_bo_qua}"
+            errors.append(f"tokens: target {dst_tokens} + skipped {token_bo_qua}"
                           f" != nguon {src_tokens}")
 
     gw_cn.close()
     cn.close()
     if errors:
         for e in errors:
-            print(f"  LECH: {e}")
+            log.error("  MISMATCH: %s", e)
         return 1
     return 0
 

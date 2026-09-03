@@ -128,30 +128,30 @@ DASHBOARD_OPEN = _doc_env("DASHBOARD_OPEN") == "1"
 # khoá - cùng hạng lỗi với mọi thứ sửa ngày 20/08: sai một cách im lặng.
 if not DASHBOARD_KEY and not DASHBOARD_OPEN:
     raise SystemExit(
-        "\nTHIEU BIEN MOI TRUONG: DASHBOARD_KEY\n"
-        "  May chu tu choi khoi dong. Khong mo cong nao.\n\n"
-        "  Sinh mot khoa:\n"
+        "\nMISSING ENVIRONMENT VARIABLE: DASHBOARD_KEY\n"
+        "  The server refuses to start. No port is opened.\n\n"
+        "  Generate a key:\n"
         '    python -c "import secrets; print(secrets.token_urlsafe(32))"\n\n'
-        "  Roi chon MOT trong hai cach:\n"
-        "    a) them mot dong vao file .env o goc repo  (khong co chu 'set'):\n"
-        "         DASHBOARD_KEY=<khoa vua sinh>\n"
-        "    b) dat bien moi truong cho phien lam viec:\n"
-        "         set DASHBOARD_KEY=<khoa vua sinh>      (cmd)\n"
-        "         $env:DASHBOARD_KEY=\"<khoa vua sinh>\"    (PowerShell)\n"
-        "         export DASHBOARD_KEY=<khoa vua sinh>   (bash)\n\n"
-        "  Chi khi PHAT TRIEN va CHAP NHAN chay khong xac thuc:\n"
+        "  Then pick ONE of the two:\n"
+        "    a) add a line to the .env file at the repo root  (no 'set' word):\n"
+        "         DASHBOARD_KEY=<the key you just generated>\n"
+        "    b) set an environment variable for this session:\n"
+        "         set DASHBOARD_KEY=<key>      (cmd)\n"
+        "         $env:DASHBOARD_KEY=\"<key>\"    (PowerShell)\n"
+        "         export DASHBOARD_KEY=<key>   (bash)\n\n"
+        "  ONLY in DEVELOPMENT, and only if running unauthenticated is acceptable:\n"
         "    DASHBOARD_OPEN=1\n")
 
 if DASHBOARD_OPEN:
     # In ra stderr MỖI LẦN khởi động. Chế độ mở phải luôn nhìn thấy được - một
     # cảnh báo chỉ hiện một lần rồi thôi là một cảnh báo bị quên.
     print("\n" + "!" * 72
-          + "\n  DASHBOARD_OPEN=1 - MAY CHU DANG CHAY KHONG XAC THUC."
-            "\n  Moi nguoi goi duoc /api/accounts deu lay duoc 937 ho ten"
-            " kem phong ban."
-          + ("\n  (DASHBOARD_KEY CO duoc dat, nhung DANG BI BO QUA.)"
+          + "\n  DASHBOARD_OPEN=1 - THE SERVER IS RUNNING UNAUTHENTICATED."
+            "\n  Anyone who can reach /api/accounts gets 937 full names"
+            " and their departments."
+          + ("\n  (DASHBOARD_KEY IS set, but it is BEING IGNORED.)"
              if DASHBOARD_KEY else "")
-          + "\n  Bo bien nay truoc khi may chu ra khoi 127.0.0.1.\n"
+          + "\n  Remove this variable before the server leaves 127.0.0.1.\n"
           + "!" * 72 + "\n", file=sys.stderr)
 
 
@@ -297,6 +297,38 @@ def usage(start: str | None = Query(None, description="YYYY-MM-DD"),
     with store.open_db() as (cn, ph):
         rows = store.usage(cn, ph, start, end)
     return {"start": start, "end": end, "count": len(rows), "rows": rows}
+
+
+@app.get("/api/usage-hourly", summary="Token theo GIO - bat buoc neu khoang ngay")
+def usage_hourly(start: str | None = Query(None, description="YYYY-MM-DD, BAT BUOC"),
+                 end: str | None = Query(None, description="YYYY-MM-DD, BAT BUOC"),
+                 who: Principal = Depends(nguoi_goi)):
+    """BAT BUOC co `start` va `end` - khong nhu cac endpoint khac.
+
+    Cac endpoint theo ngay mac dinh 30 ngay gan nhat khi goi tran. O day thi
+    KHONG: bang theo gio min gap ~24 lan, nen mot loi goi tran se keo ve hang
+    nghin dong cho mot cau hoi ma nguoi goi chua kip nghi. Bat khai khoang la
+    bat nguoi goi noi ra minh muon gi.
+
+    BA NGUON, KHONG PHAI BON. `billing` khong co mat va se khong bao gio co -
+    hoa don Google chi tinh theo ngay. Doc cot `source` de biet nguon nao co
+    mat, dung gia dinh bang nay phu het luu luong.
+    """
+    thieu = [t for t, v in (("start", start), ("end", end)) if not v]
+    if thieu:
+        raise HTTPException(
+            400,
+            f"Endpoint theo gio BAT BUOC co khoang thoi gian. Thieu: "
+            f"{', '.join(thieu)}. Vi du: /api/usage-hourly"
+            f"?start=2026-08-31&end=2026-08-31")
+    start, end = date_range(start, end)
+    with store.open_db() as (cn, ph):
+        rows = store.usage_hourly(cn, ph, start, end)
+    by_source = {}
+    for r in rows:
+        by_source[r["source"]] = by_source.get(r["source"], 0) + 1
+    return {"start": start, "end": end, "count": len(rows),
+            "sources": by_source, "rows": rows}
 
 
 @app.get("/api/accounts", summary="Danh ba nhan vien kem don vi")
