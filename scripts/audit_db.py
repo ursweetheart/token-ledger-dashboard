@@ -983,6 +983,50 @@ def group_g_account_dimension(a: Audit) -> None:
               " GROUP BY 1 ORDER BY 2 DESC"))
     a.note(OK, "Resolved latency by source", co_lat)
 
+    # ====== BANG DAN XUAT CO BI BO LAI KHONG ======
+    #
+    # `scripts/refresh_gateway.py` la duong lam moi NHANH cho nguon gateway. Truoc
+    # 03/09 no chi chay 2/4 buoc, nen `fact_usage_hourly` va phan gateway cua
+    # `fact_latency_daily` cu di IM LANG sau moi lan refresh.
+    #
+    # Phep kiem "Hourly totals match daily totals" o tren BAT DUOC chuyen do,
+    # nhung bat MUON: chi khi tong da lech, tuc da co du lieu moi bi bo lai. Moc
+    # THOI GIAN lech som hon - ngay o luot goi dau tien cua mot ngay moi.
+    #
+    # PHAI SO TREN TAP DONG MA TANG TONG HOP NHAN, KHONG SO `MAX` THO
+    # ---------------------------------------------------------------
+    # Neu ngay moi nhat cua fact_call chi co luot HONG thi `MAX` tho lech mot cach
+    # HOP LE, va ta vua them mot bao dong gia - ma bao dong gia thi se bi tat.
+    #
+    # VA HAI BANG DUNG HAI BO LOC KHAC NHAU, khong duoc dung chung mot cau:
+    #     build_usage_hourly    outcome='success' · model_id IS NOT NULL · cache_hit IS NOT TRUE
+    #     load_gateway_latency  duration_ms IS NOT NULL · cache_hit IS NOT TRUE
+    #                           (KHONG loc outcome - co y, xem build_performance.py)
+    #
+    # CANH BAO cho nguoi sua sau: do 03/09, ca `MAX` tho lan hai `MAX` da loc deu
+    # ra 2026-08-31 (3 luot hong nam luc 02:27, thanh cong keo toi 10:17). Nen SO
+    # LIEU HOM NAY KHONG PHAN BIET DUOC hai cach cai. Doc bo loc, dung thu chay.
+    gw_call_dong = a.num("SELECT COUNT(*) FROM fact_call WHERE source = 'gateway'")
+    cu_hon = []
+    for bang, cot, loc in (
+        ("fact_usage_hourly", "CAST(hour AS DATE)",
+         "outcome = 'success' AND model_id IS NOT NULL AND cache_hit IS NOT TRUE"),
+        ("fact_latency_daily", "day",
+         "duration_ms IS NOT NULL AND cache_hit IS NOT TRUE"),
+    ):
+        nguon = connect.query_one(a.cn, f"""
+            SELECT MAX(CAST(ts_local AS DATE)) FROM fact_call
+             WHERE source = 'gateway' AND ts_local IS NOT NULL AND {loc}""")[0]
+        dan_xuat = connect.query_one(
+            a.cn, f"SELECT MAX({cot}) FROM {bang} WHERE source = 'gateway'")[0]
+        if nguon is not None and dan_xuat != nguon:
+            cu_hon.append(f"{bang}: moc {dan_xuat} nhung fact_call co den {nguon}")
+    a.check_tren(gw_call_dong, not cu_hon,
+                 "Gateway derived tables are as fresh as fact_call",
+                 "; ".join(cu_hon)
+                 + " - gan nhu chac chan `refresh_gateway.py` da chay ma bo buoc."
+                   " Chua: python scripts/refresh_gateway.py")
+
     # ====== so luot theo ma tra ve, nguon gateway ======
     #
     # Hom nay `fact_perf_daily` CHI co monitoring (669 dong); gateway, app va

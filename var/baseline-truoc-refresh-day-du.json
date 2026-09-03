@@ -1,0 +1,34 @@
+{
+  "fact_latency_daily": {
+    "gateway": 1,
+    "monitoring": 339
+  },
+  "fact_usage_hourly": {
+    "app": 698,
+    "gateway": 5,
+    "monitoring": 2624
+  },
+  "fact_perf_daily": {
+    "monitoring": 669
+  },
+  "fact_usage_daily": {
+    "app": 371,
+    "billing": 1012,
+    "gateway": 1,
+    "monitoring": 606
+  },
+  "fact_call": {
+    "app": 8631,
+    "gateway": 41
+  },
+  "moc_thoi_gian": {
+    "fact_call_gateway_THO": "2026-08-31",
+    "fact_call_gateway_SAU_BO_LOC": "2026-08-31",
+    "fact_usage_hourly_gateway": "2026-08-31",
+    "fact_latency_daily_gateway": "2026-08-31"
+  },
+  "chu_ky_truoc_khi_them_buoc_giay": [
+    1.4,
+    0.89
+  ]
+}

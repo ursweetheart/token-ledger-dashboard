@@ -187,14 +187,84 @@ def load_gateway_latency(cn, dc) -> int:
                          "p99_seconds", "enough_samples", "source"], out)
 
 
+def chi_gateway(cn, dc) -> None:
+    """Dung lai CHI phan `gateway` cua fact_latency_daily. Khong doc CSV.
+
+    VI SAO CO CHE DO NAY (them 03/09/2026)
+    --------------------------------------
+    `scripts/refresh_gateway.py` la duong lam moi NHANH, chay duoc vong lap
+    (`--every 120`). No phai dung lai moi bang dan xuat ma nguon gateway nuoi -
+    ke ca fact_latency_daily.
+
+    Nhung `main()` day du KHONG dung duoc o do: `load_latency()` doc
+    `latency-daily.csv`, mot file CAO TAY (`pull_latency_distribution.py` +
+    `merge_latency_daily.py`), va no DUNG HAN neu file vang mat. Do 03/09: file
+    ay cu 4 ngay. Mot vong lap chay ca buoi ma phu thuoc mot file phai cao tay la
+    qua bom hen gio dat o noi khong ai nhin.
+
+    `load_gateway_latency()` thi KHONG can CSV - no doc duy nhat
+    `fact_call.duration_ms`. Ca 4 cho nhac `LATENCY_CSV` deu nam o nhanh
+    `load_latency()`. Nen phan gateway tach ra chay rieng duoc.
+
+    GOI LAI CHINH `load_gateway_latency()`, KHONG CHEP PHEP TINH
+    -----------------------------------------------------------
+    Chep phep tinh percentile sang day la tao ban sao thu hai cua mot phep do, va
+    ban sao SE TROI - dung bay da dinh 21/08 khi tools/dien_tap_gateway.py chep
+    cau SQL cua store.py roi do bang logic da bi bo.
+
+    XOA CO DIEU KIEN - CHO NGUY HIEM NHAT CUA HAM NAY
+    -------------------------------------------------
+    `fact_latency_daily` co 340 dong: monitoring 339, gateway 1. Quen `WHERE` la
+    mat 339 dong monitoring, MA CHUNG CHI DUNG LAI DUOC NEU CSV CON - tuc phuc hoi
+    phu thuoc dung cai file ma ham nay sinh ra de tranh phu thuoc.
+    Ham tu dem CA HAI nguon truoc/sau va dung han neu monitoring doi.
+    """
+    truoc = {k: v for k, v in connect.query(
+        cn, "SELECT source, COUNT(*) FROM fact_latency_daily GROUP BY 1")}
+
+    cur = cn.cursor()
+    cur.execute("DELETE FROM fact_latency_daily WHERE source = 'gateway'")
+    n_gw = load_gateway_latency(cn, dc)
+
+    sau = {k: v for k, v in connect.query(
+        cn, "SELECT source, COUNT(*) FROM fact_latency_daily GROUP BY 1")}
+
+    # Dem MOI nguon, khong chi nguon vua dung lai. Chi dem gateway thi mot lenh
+    # DELETE quen WHERE VAN cho ket qua "dung" - gateway van ra dung so dong sau
+    # khi nap lai, trong khi monitoring da bien mat.
+    khac = {k: (truoc.get(k, 0), sau.get(k, 0))
+            for k in set(truoc) | set(sau)
+            if k != "gateway" and truoc.get(k, 0) != sau.get(k, 0)}
+    if khac:
+        cn.rollback()
+        raise SystemExit(
+            "ACCEPTANCE FAILED - rolled back: che do --chi-gateway da dung vao"
+            f" nguon khac: {khac}")
+
+    cn.commit()
+    log.info("  --chi-gateway: fact_latency_daily gateway %d -> %d dong"
+             " | cac nguon khac KHONG doi (%s)",
+             truoc.get("gateway", 0), n_gw,
+             ", ".join(f"{k}={v}" for k, v in sorted(sau.items()) if k != "gateway"))
+    cn.close()
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
+    p.add_argument("--chi-gateway", action="store_true",
+                   help="CHI dung lai phan `gateway` cua fact_latency_daily."
+                        " Khong doc CSV, khong dung fact_perf_daily, khong dung"
+                        " dong `monitoring`. Danh cho scripts/refresh_gateway.py.")
     args = p.parse_args()
 
     cn, dc = connect.open_db(args.db)
+
+    if args.chi_gateway:
+        return chi_gateway(cn, dc)
+
     cur = cn.cursor()
     cur.execute("DELETE FROM fact_perf_daily")
     cur.execute("DELETE FROM fact_latency_daily")
