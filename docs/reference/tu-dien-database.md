@@ -816,6 +816,35 @@ Dòng cuối của bảng trên là lý do view tồn tại: quên lọc thì gi
 
 ---
 
+# Phụ lục: cách đọc kết quả `scripts/audit_db.py`
+
+Từ **03/09/2026** báo cáo audit có ba mức thay vì hai, và nhãn của mỗi phép kiểm nói thêm một chuyện: **nó đã soi bao nhiêu dòng**.
+
+```
+   [  ok  ] Every gateway row has raw_model (41 rows checked)
+                                            ^^^^^^^^^^^^^^^^
+   [ note ] Gateway rows in fact_perf_daily carry method and response_code
+            CHUA KIEM DUOC - 0 dong de quan sat. Day KHONG phai ket qua dat.
+```
+
+**Vì sao cần con số đó.** Mọi phép kiểm theo nguồn đều mang hình dạng *"đếm dòng xấu, đòi bằng 0"*. Chạy trên **0 dòng** thì nó trả 0 và báo ĐẠT — nó **không phân biệt** *"nguồn ghi đúng"* với *"nguồn không ghi gì cả"*.
+
+Đây không phải chuyện lý thuyết. Bước `load_gateway.py` hỏng im lặng thì `fact_call` không có dòng gateway nào, **mọi** phép kiểm gateway vẫn xanh, và dashboard chỉ trông như *"chưa có lưu lượng"*. Cùng hình dạng lỗi đã để container `api` chạy 38 phút trên một database nó không đọc nổi ngày 02/09.
+
+| Mức | Nghĩa | Có làm script thất bại không |
+|---|---|---|
+| `ok` | đã soi **n > 0** dòng, không dòng nào vi phạm | không |
+| `note` | **0 dòng để soi** — chưa kiểm được, hoặc một khoảng trống dữ liệu đã biết | không |
+| `FAIL` | đã soi n > 0 dòng, có dòng vi phạm | có |
+
+**`note` KHÔNG phải một dạng ĐẠT nhẹ hơn.** Nó nói rằng phép kiểm ấy **chưa khẳng định được gì**. Số `note` tăng lên sau một lần sửa thường là dấu hiệu **tốt**: những chỗ trước nay báo đạt mà chưa quan sát gì đang lộ ra.
+
+Mốc 03/09/2026 sau khi áp cơ chế: **72 phép · 65 đạt · 7 lưu ý · 0 hỏng** (trước đó 68 · 64 · 4 · 0).
+
+**Khoá ngoại nay đọc từ `pg_constraint`,** không từ danh sách gõ tay. Đo ngày 03/09: danh sách cũ đã trôi mất **13/36** quan hệ, trong đó 6 do migration 008 tạo ra cùng sáng hôm đó. Nhãn `Foreign keys (36 relations, read from the database)` in ra số quan hệ **có thật**. Kèm một mốc số lượng (`>= 36`) để bắt chiều ngược lại: xoá một khoá ngoại thì danh sách tự sinh vẫn xanh, vì nó chỉ kiểm những gì còn lại.
+
+---
+
 # Phụ lục: bảng tra nhanh số dòng
 
 | Đối tượng | Loại | Số dòng | Khoá chính |

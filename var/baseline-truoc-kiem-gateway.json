@@ -1,0 +1,95 @@
+{
+  "audit_db": {
+    "kiem": 68,
+    "dat": 64,
+    "luu_y": 4,
+    "hong": 0,
+    "nhan_luu_y": [
+      "Every usage_resolved row carries tokens",
+      "Latency coverage",
+      "Coverage of the 'who used it' dimension",
+      "Accounts whose unit two apps declare differently"
+    ]
+  },
+  "check_api": {
+    "kiem": 27,
+    "dat": 27,
+    "hong": 0
+  },
+  "khoa_ngoai": {
+    "that": 36,
+    "khai": 23,
+    "thieu": 13,
+    "danh_sach_thieu": [
+      "dim_function.agent_id",
+      "dim_model_alias.model_id",
+      "dim_unit.canonical_unit_id",
+      "fact_call.source",
+      "fact_call.unit_id",
+      "fact_latency_daily.source",
+      "fact_perf_daily.source",
+      "fact_usage_hourly.account_id",
+      "fact_usage_hourly.agent_id",
+      "fact_usage_hourly.model_id",
+      "fact_usage_hourly.source",
+      "ref_budget.agent_id",
+      "ref_price.model_id"
+    ]
+  },
+  "doi_chieu_cache": {
+    "gateway_dong": 41,
+    "gateway_co_cached": 0,
+    "gateway_tong_cached": 0,
+    "gateway_tu": "2026-08-31",
+    "gateway_den": "2026-08-31",
+    "billing_dong": 461,
+    "billing_token": 252321118,
+    "billing_ngay": 214,
+    "billing_agent": 6,
+    "billing_tu": "2026-01-05",
+    "billing_den": "2026-08-29",
+    "so_ngay_giao_nhau": 0
+  },
+  "nguon_theo_bang": {
+    "fact_usage_daily": {
+      "app": 371,
+      "billing": 1012,
+      "gateway": 1,
+      "monitoring": 606
+    },
+    "fact_usage_hourly": {
+      "app": 698,
+      "billing": 0,
+      "gateway": 5,
+      "monitoring": 2624
+    },
+    "fact_perf_daily": {
+      "app": 0,
+      "billing": 0,
+      "gateway": 0,
+      "monitoring": 669
+    },
+    "fact_latency_daily": {
+      "app": 0,
+      "billing": 0,
+      "gateway": 1,
+      "monitoring": 339
+    },
+    "fact_call": {
+      "app": 8631,
+      "billing": 0,
+      "gateway": 41,
+      "monitoring": 0
+    }
+  },
+  "tap_rong_tu_nhien": [
+    "fact_call.billing",
+    "fact_call.monitoring",
+    "fact_latency_daily.app",
+    "fact_latency_daily.billing",
+    "fact_perf_daily.app",
+    "fact_perf_daily.billing",
+    "fact_perf_daily.gateway",
+    "fact_usage_hourly.billing"
+  ]
+}

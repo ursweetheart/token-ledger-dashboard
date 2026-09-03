@@ -105,6 +105,7 @@ PATHS = [
 class Check:
     def __init__(self) -> None:
         self.failures: list[str] = []
+        self.notes: list[str] = []
         self.passed = 0
 
     def expect(self, ok: bool, label: str, detail: str = "") -> None:
@@ -114,6 +115,31 @@ class Check:
         else:
             self.failures.append(f"{label}: {detail}")
             print(f"[ FAIL ] {label}\n         {detail}")
+
+    def expect_tren(self, quan_sat: int, ok: bool, label: str,
+                    detail: str = "") -> None:
+        """Như `expect()`, nhưng KHAI CẢ MẪU SỐ - số dòng đã quan sát.
+
+        Cùng lý lẽ với `Audit.check_tren()` ở scripts/audit_db.py: một phép kiểm
+        `khong dong nao xau` chạy trên **0 dòng** sẽ báo ĐẠT, và nó không phân biệt
+        *"nguồn ghi đúng"* với *"nguồn không ghi gì cả"*.
+
+        BA KẾT CỤC:
+            quan sat 0 dong             -> CHUA KIEM DUOC (khong tinh la dat,
+                                           va KHONG lam script that bai)
+            quan sat n > 0, khong loi   -> DAT, nhan kem "(n rows)"
+            quan sat n > 0, co loi      -> HONG
+
+        Không làm script thất bại vì kỳ chưa có lưu lượng của nguồn đó là trạng
+        thái HỢP LỆ. Nhưng nó phải HIỆN RA - hôm nay nó vô hình.
+        """
+        if quan_sat == 0:
+            self.notes.append(f"{label}: {detail}")
+            print(f"[ note ] {label}\n         CHUA KIEM DUOC - 0 dong de quan sat."
+                  f" Day KHONG phai ket qua dat."
+                  + (f"\n         {detail}" if detail else ""))
+            return
+        self.expect(ok, f"{label} ({quan_sat} rows)", detail)
 
 
 def _headers(auth: bool) -> dict:
@@ -260,6 +286,55 @@ def theo_gio(c: Check, base: str) -> None:
     c.expect(d["count"] > 0,
              "Ngay 31/08/2026 co du lieu theo gio",
              f"count = {d['count']}")
+
+
+def nguon_gateway(c: Check, base: str) -> None:
+    """Nguon `gateway` co len toi API khong - HOI QUA ENDPOINT.
+
+    KHONG CHEP CAU SQL CUA audit_db.py SANG DAY
+    -------------------------------------------
+    `audit_db.py` chay bang vai `token` va soi thang bang. File nay phai soi THU
+    API THAT SU TRA RA, qua vai `api_readonly`. Chep cau SQL sang day la tao ban
+    sao thu hai cua cung mot phep do, va ban sao SE TROI - dung cai bay da dinh
+    ngay 21/08 khi tools/dien_tap_gateway.py tu chep cau SQL cua store.py roi do
+    bang logic da bi bo.
+
+    Ba endpoint, ba cau hoi khac nhau:
+        /api/usage           so Gateway co len toi cua chinh khong (token_source)
+        /api/usage-hourly    nguon gateway co xuong duoc gio khong
+        /api/performance     phan vi ngay Gateway phu co ra so THO khong
+    """
+    P = f"?start={START}&end={END}"
+
+    # (1) /api/usage - dong nao mang token_source = 'gateway'
+    rows = get(base, "/api/usage" + P)["rows"]
+    gw = [r for r in rows if r.get("token_source") == "gateway"]
+    c.expect_tren(len(gw), all((r.get("total_tokens") or 0) > 0 for r in gw),
+                  "Nguon gateway len toi /api/usage va mang token",
+                  "co dong gateway nhung total_tokens bang 0 hoac rong")
+
+    # (2) /api/usage-hourly - nguon gateway co mat, va KHONG duoc co billing
+    d = get(base, "/api/usage-hourly"
+            + f"?start={START}&end={END}")
+    theo_nguon = d.get("sources") or {}
+    c.expect_tren(theo_nguon.get("gateway", 0), True,
+                  "Nguon gateway co mat trong bang theo gio")
+    c.expect("billing" not in theo_nguon,
+             "Bang theo gio van KHONG co nguon `billing`",
+             f"sources = {theo_nguon}")
+
+    # (3) /api/performance - ngay Gateway phu phai co phan vi, va la SO THO.
+    #
+    # So tho khong co sai so noi suy nen HAI cot o histogram phai RONG. Mot dong
+    # mang o nghia la ai do da dan sai so cua phep do KHAC len mot con so von
+    # khong co - va no trong y nhu that.
+    lat = get(base, "/api/performance" + P)["latency"]
+    tho = [r for r in lat
+           if r.get("p95_bucket_from") is None and r.get("p95_bucket_to") is None]
+    c.expect_tren(len(tho),
+                  all((r.get("p95_seconds") or 0) > 0 for r in tho),
+                  "Phan vi tu so tho len toi /api/performance, khong mang o histogram",
+                  "co dong khong mang o nhung p95 rong")
 
 
 def xac_thuc(c: Check, base: str) -> None:
@@ -535,6 +610,8 @@ def main() -> None:
     bad_params(c, args.base)
     print("\nHourly endpoint\n" + "─" * 72)
     theo_gio(c, args.base)
+    print("\nGateway source\n" + "─" * 72)
+    nguon_gateway(c, args.base)
     print("\nAuthentication\n" + "─" * 72)
     xac_thuc(c, args.base)
     print("\nExposed data scope\n" + "─" * 72)
@@ -551,7 +628,10 @@ def main() -> None:
         compare_engines(c, args.base, args.compare)
 
     print("\n" + "═" * 72)
-    print(f"{c.passed + len(c.failures)} checks | {c.passed} passed"
+    # Dem CA `notes`: mot phep kiem "chua kiem duoc" van la mot phep kiem da chay,
+    # va giau no khoi tong so la lam dung cai viec ma no sinh ra de chong.
+    tong = c.passed + len(c.notes) + len(c.failures)
+    print(f"{tong} checks | {c.passed} passed | {len(c.notes)} notes"
           f" | {len(c.failures)} failed")
     if c.failures:
         sys.exit(1)

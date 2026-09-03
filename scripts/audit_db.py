@@ -62,9 +62,103 @@ class Audit:
               level_if_bad: str = FAIL) -> None:
         self.note(OK if ok else level_if_bad, label, "" if ok else detail_if_bad)
 
+    def check_tren(self, quan_sat: float, ok: bool, label: str,
+                   detail_if_bad: str, level_if_bad: str = FAIL) -> None:
+        """Như `check()`, nhưng KHAI CẢ MẪU SỐ - số dòng phép kiểm đã quan sát.
 
+        VÌ SAO CẦN (thêm 03/09/2026)
+        ----------------------------
+        Mọi phép kiểm theo nguồn đang mang hình dạng:
+
+            n = COUNT(*) WHERE source='gateway' AND <dieu kien xau>
+            check(n == 0, ...)
+
+        Với **0 dòng gateway**, `n` bằng 0 và phép kiểm báo ĐẠT. Nó không phân
+        biệt *"Gateway ghi đúng"* với *"Gateway không ghi gì cả"*.
+
+        Đây không phải chuyện lý thuyết. Bước `load_gateway.py` hỏng im lặng thì
+        `fact_call` không có dòng gateway nào, MỌI phép kiểm gateway vẫn xanh, và
+        dashboard chỉ trông như "chưa có lưu lượng". Cùng hình dạng lỗi đã để API
+        mù 38 phút ngày 02/09: một phép kiểm khẳng định tính chất mà nó chưa thực
+        sự quan sát.
+
+        BA KẾT CỤC, KHÔNG PHẢI HAI
+        --------------------------
+            quan sat 0 dong             -> CANH BAO "chua kiem duoc"
+            quan sat n > 0, khong loi   -> DAT, nhan kem "(n rows checked)"
+            quan sat n > 0, co loi      -> HONG
+
+        CẢNH BÁO chứ không HỎNG: database mới dựng, hoặc kỳ chưa có lưu lượng của
+        nguồn đó, là trạng thái HỢP LỆ. Ranh giới của file này đã chốt ở docstring
+        đầu - *"có sửa được bằng cách nạp lại không"*. Chưa có dữ liệu thì nạp lại
+        không giúp gì. Nhưng nó PHẢI HIỆN RA, vì hôm nay nó vô hình.
+
+        Con số `n` in ra trong nhãn: *"đạt trên 41 dòng"* khác hẳn *"đạt"*, và
+        khác đúng ở chỗ người đọc cần biết.
+        """
+        if quan_sat == 0:
+            self.note(WARN, label,
+                      "CHUA KIEM DUOC - 0 dong de quan sat."
+                      " Day KHONG phai ket qua dat.")
+            return
+        self.note(OK if ok else level_if_bad,
+                  f"{label} ({int(quan_sat)} rows checked)",
+                  "" if ok else detail_if_bad)
+
+
+# Số quan hệ khoá ngoại ĐỌC ĐƯỢC ngày 03/09/2026. Danh sách nay tự sinh từ
+# `pg_constraint`, nên nó tự phủ mọi bảng mới - nhưng đúng vì thế mà nó có ĐIỂM MÙ
+# NGƯỢC LẠI: xoá một khoá ngoại thì danh sách ngắn đi và phép kiểm VẪN XANH, vì nó
+# chỉ kiểm những gì còn lại.
+#
+# Con số này là chốt chặn cho điểm mù đó. Tụt xuống dưới là HỎNG.
+# Thêm bảng mới thì con số thật tăng lên - đó là bình thường, và phép kiểm không
+# kêu. Chỉ cần cập nhật mốc này khi muốn nâng sàn.
+MOC_KHOA_NGOAI = 36
+
+
+def doc_khoa_ngoai(cn) -> list[tuple[str, str, str, str]]:
+    """(bảng con, cột con, bảng cha, cột cha) - đọc TỪ DATABASE, không chép tay.
+
+    VÌ SAO KHÔNG GIỮ DANH SÁCH GÕ TAY (đổi 03/09/2026)
+    ---------------------------------------------------
+    Bản trước là hằng số `FOREIGN_KEYS` 23 dòng. Đo ngày 03/09: database có **36**
+    quan hệ, tức **13 quan hệ không ai canh**. Danh sách không sai vì ai đó cẩu
+    thả - nó sai vì CẤU TRÚC ĐI TIẾP CÒN BẢN CHÉP THÌ ĐỨNG LẠI:
+
+        6/13 quan he thieu do chinh migration 008 tao ra SANG NAY
+             (fact_usage_hourly 4 khoa, fact_latency_daily.source,
+              fact_perf_daily.source)
+
+    Và nó tụt trong im lặng: nhãn vẫn báo `Foreign keys (23 relations)` ĐẠT, mà 23
+    là số quan hệ ĐƯỢC KHAI chứ không phải số quan hệ CÓ THẬT.
+
+    CHỈ CHẠY TRÊN POSTGRESQL. `pg_constraint` là catalog riêng của PostgreSQL.
+    Dự án đã bỏ SQLite từ change `drop-the-sqlite-escape-hatch` (24/08/2026) nên
+    đây không phải mất mát mới - nhưng đừng để ai tưởng file này còn chạy đa hệ.
+    """
+    return [(r[0], r[1], r[2], r[3]) for r in connect.query(cn, """
+        SELECT c.conrelid::regclass::text  AS bang_con,
+               ac.attname                  AS cot_con,
+               c.confrelid::regclass::text AS bang_cha,
+               ap.attname                  AS cot_cha
+        FROM pg_constraint c
+        JOIN unnest(c.conkey)  WITH ORDINALITY kc(attnum, ord) ON TRUE
+        JOIN unnest(c.confkey) WITH ORDINALITY kp(attnum, ord) ON kp.ord = kc.ord
+        JOIN pg_attribute ac ON ac.attrelid = c.conrelid  AND ac.attnum = kc.attnum
+        JOIN pg_attribute ap ON ap.attrelid = c.confrelid AND ap.attnum = kp.attnum
+        WHERE c.contype = 'f' AND c.connamespace = 'public'::regnamespace
+        ORDER BY 1, 2""")]
+
+
+# GIỮ LẠI để đối chiếu: đây là danh sách gõ tay của bản trước 03/09/2026. Nó KHÔNG
+# còn được dùng để kiểm - `doc_khoa_ngoai()` thay chỗ đó - nhưng phép kiểm
+# `Foreign keys are read from the database, not from a hand-written list` so hai
+# con số để chuyện "bản chép tay tụt lại" hiện ra thành một số, chứ không phải một
+# lời kể.
+#
 # (bảng con, cột con, bảng cha, cột cha)
-FOREIGN_KEYS = [
+FOREIGN_KEYS_GO_TAY = [
     ("dim_unit", "agent_id", "dim_agent", "agent_id"),
     ("dim_unit", "parent_id", "dim_unit", "unit_id"),
     ("account", "unit_id", "dim_unit", "unit_id"),
@@ -98,15 +192,37 @@ def group_a_structure(a: Audit) -> None:
     """Khoá ngoại, cây đơn vị, khoá trống."""
     # LEFT JOIN nói rõ bảng/cột nào bị treo thay vì trả một danh sách rowid mơ hồ,
     # và chạy trực tiếp trên PostgreSQL hiện tại.
+    quan_he = doc_khoa_ngoai(a.cn)
     dangling = []
-    for child, col, parent, key in FOREIGN_KEYS:
+    for child, col, parent, key in quan_he:
         n = a.num(f"""SELECT COUNT(*) FROM {child} c
                       LEFT JOIN {parent} p ON p.{key} = c.{col}
                       WHERE c.{col} IS NOT NULL AND p.{key} IS NULL""")
         if n:
             dangling.append(f"{child}.{col} -> {parent}: {int(n)} rows")
-    a.check(not dangling, f"Foreign keys ({len(FOREIGN_KEYS)} relations)",
+    # Con so trong nhan la so quan he CO THAT, khong phai so quan he duoc khai.
+    a.check(not dangling, f"Foreign keys ({len(quan_he)} relations, read from the database)",
             "; ".join(dangling))
+
+    # DIEM MU NGUOC LAI cua danh sach tu sinh: xoa mot khoa ngoai thi danh sach
+    # ngan di va phep kiem tren VAN XANH - no chi kiem nhung gi con lai. Moc so
+    # luong la cho chan chuyen do.
+    a.check(len(quan_he) >= MOC_KHOA_NGOAI,
+            f"Foreign key count has not dropped (>= {MOC_KHOA_NGOAI})",
+            f"chi con {len(quan_he)} quan he, moc la {MOC_KHOA_NGOAI}"
+            f" - mot khoa ngoai da bien mat khoi database")
+
+    # Bang chep tay cu tut lai bao nhieu. KHONG phai phep kiem ve du lieu - no do
+    # KHOANG CACH giua cach lam cu va cach lam moi, va no la ly do change nay ton
+    # tai. Muc CANH BAO: bang cu khong con duoc dung, nen lech khong lam hong gi.
+    khai_tay = {(b, c) for b, c, _, _ in FOREIGN_KEYS_GO_TAY}
+    that = {(b, c) for b, c, _, _ in quan_he}
+    tut = sorted(that - khai_tay)
+    a.check(not tut,
+            "Foreign keys are read from the database, not from a hand-written list",
+            f"danh sach go tay cu bo sot {len(tut)}/{len(that)} quan he:"
+            f" {', '.join(f'{b}.{c}' for b, c in tut[:6])}"
+            + (" ..." if len(tut) > 6 else ""), WARN)
 
     # Cây đơn vị: level phải bằng độ sâu thật. Lệch nghĩa là `path` đã sai theo,
     # và mọi báo cáo gom theo cấp đều gom nhầm.
@@ -560,12 +676,17 @@ def group_d_silent_gaps(a: Audit) -> None:
     # Luot hong khong duoc dong gop token vao bang tong hop. Da do lo ro truoc khi
     # va: thieu bo loc `outcome` trong build_usage_daily thi token gateway ra
     # 45.201 thay vi 45.187 - ro dung 14 token cua mot luot hong.
+    # MAU SO cho moi phep kiem gateway o duoi. Xem Audit.check_tren(): mot phep
+    # kiem `COUNT(dong xau) == 0` tren 0 dong gateway se bao DAT, va no khong phan
+    # biet "Gateway ghi dung" voi "Gateway khong ghi gi ca".
+    gw_dong = a.num("SELECT COUNT(*) FROM fact_call WHERE source = 'gateway'")
+
     gw_agg = a.num("SELECT COALESCE(SUM(total_tokens), 0) FROM fact_usage_daily"
                    " WHERE source = 'gateway'")
     gw_ok = a.num("SELECT COALESCE(SUM(total_tokens), 0) FROM fact_call"
                   " WHERE source = 'gateway' AND outcome = 'success'"
                   "   AND model_id IS NOT NULL")
-    a.check(gw_agg == gw_ok, "Failed calls never reach the rollup",
+    a.check_tren(gw_dong, gw_agg == gw_ok, "Failed calls never reach the rollup",
             f"{int(gw_agg)} != {int(gw_ok)} - chenh {int(gw_agg - gw_ok)} token"
             f" tokens from failed calls reached fact_usage_daily")
 
@@ -591,7 +712,7 @@ def group_d_silent_gaps(a: Audit) -> None:
                      "   AND model_id IS NOT NULL AND cache_hit IS NOT TRUE")
     gw_bang = a.num("SELECT COALESCE(SUM(total_tokens),0) FROM fact_usage_daily"
                     " WHERE source='gateway'")
-    a.check(gw_cache == gw_bang, "Cache hits never reach the rollup",
+    a.check_tren(gw_dong, gw_cache == gw_bang, "Cache hits never reach the rollup",
             f"{int(gw_bang)} != {int(gw_cache)} - off by"
             f" {int(gw_bang - gw_cache)} token")
 
@@ -599,14 +720,14 @@ def group_d_silent_gaps(a: Audit) -> None:
     # thi mot tuyen chua khai bien thanh mot dong trong ma khong tra nguoc duoc.
     thieu_raw = a.num("SELECT COUNT(*) FROM fact_call"
                       " WHERE source='gateway' AND raw_model IS NULL")
-    a.check(thieu_raw == 0, "Every gateway row has raw_model",
+    a.check_tren(gw_dong, thieu_raw == 0, "Every gateway row has raw_model",
             f"{int(thieu_raw)} rows are missing the original model name")
 
     # Khoa la thu duy nhat tach duoc luu luong cua agent khoi luot di bang khoa
     # quan tri chung. Dong thieu khoa thi khong tach duoc bang gi.
     thieu_key = a.num("SELECT COUNT(*) FROM fact_call"
                       " WHERE source='gateway' AND virtual_key_id IS NULL")
-    a.check(thieu_key == 0, "Every gateway row has virtual_key_id",
+    a.check_tren(gw_dong, thieu_key == 0, "Every gateway row has virtual_key_id",
             f"{int(thieu_key)} rows are missing the key identifier")
 
     # `duration_ms = 0` la "chua do", KHONG phai "do duoc 0 mili giay". Gateway
@@ -625,9 +746,39 @@ def group_d_silent_gaps(a: Audit) -> None:
             f"{len(no_price)} models missing: {[r[0] for r in no_price][:4]}", WARN)
 
     # Ngày tương lai = đồng hồ sai ở đâu đó trong chuỗi thu thập.
-    future = a.num("SELECT COUNT(*) FROM usage_resolved"
-                   " WHERE CAST(day AS TEXT) > '2026-12-31'")
-    a.check(future == 0, "No future-dated rows", f"{int(future)} rows")
+    #
+    # HAI KHUYẾT TẬT ĐÃ SỬA 03/09/2026, cả hai đều nổ MUỘN
+    # -----------------------------------------------------
+    # (1) Bản cũ ghim ngưỡng `'2026-12-31'`. Sang 2027 thì mọi dòng dữ liệu THẬT
+    #     đều bị coi là ngày tương lai - phép kiểm chuyển từ im lặng sang kêu ầm,
+    #     không phải vì hệ thống hỏng. Nay lấy mốc từ CHÍNH NGÀY CHẠY.
+    #
+    # (2) Bản cũ chỉ soi `usage_resolved`. `fact_call` - nơi Gateway ghi TỪNG LƯỢT
+    #     - không được soi, nên đồng hồ sai ở khâu nạp Gateway đi thẳng vào
+    #     database mà không ai chặn.
+    #
+    # DUNG SAI MỘT NGÀY, KHÔNG PHẢI BẰNG KHÔNG. Quy ước dự án là mọi cột thời gian
+    # theo GIỜ VIỆT NAM (chốt 14/08), mà `CURRENT_DATE` là ngày của máy chủ
+    # database - hai đồng hồ có thể cách nhau tới 7 giờ. Một dòng của hôm nay
+    # không được coi là tương lai chỉ vì lệch múi.
+    BANG_CO_THOI_GIAN = [
+        ("fact_call",          "ts_local"),   # tung luot goi - app va gateway
+        ("fact_usage_daily",   "day"),
+        ("fact_usage_hourly",  "hour"),
+        ("fact_billing_daily", "day"),
+        ("fact_monitoring",    "ts_local"),
+    ]
+    tuong_lai = []
+    for bang, cot in BANG_CO_THOI_GIAN:
+        n = a.num(f"SELECT COUNT(*) FROM {bang}"
+                  f" WHERE {cot} IS NOT NULL"
+                  f"   AND CAST({cot} AS DATE) > CURRENT_DATE + 1")
+        if n:
+            tuong_lai.append(f"{bang}.{cot}: {int(n)} rows")
+    a.check(not tuong_lai,
+            f"No future-dated rows ({len(BANG_CO_THOI_GIAN)} tables, threshold ="
+            f" today + 1)",
+            "; ".join(tuong_lai))
 
     n_conflict = a.num("SELECT COUNT(*) FROM account WHERE unit_conflict = 1")
     if n_conflict:
@@ -688,9 +839,10 @@ def group_f_hourly(a: Audit) -> None:
 
     # 9.3 Moi dong gateway phai co `unit_id`. Cot nay la truong BAT BUOC cua
     # sheet Data Out, va no tung rong 0/41 truoc migration 007.
+    gw_dong_f = a.num("SELECT COUNT(*) FROM fact_call WHERE source = 'gateway'")
     gw_thieu_unit = a.num("SELECT COUNT(*) FROM fact_call"
                           " WHERE source = 'gateway' AND unit_id IS NULL")
-    a.check(gw_thieu_unit == 0, "Every gateway row has unit_id",
+    a.check_tren(gw_dong_f, gw_thieu_unit == 0, "Every gateway row has unit_id",
             f"{int(gw_thieu_unit)} rows have no unit")
 
     # 9.4 Phan vi tinh tu SO THO khong duoc mang o histogram.
@@ -698,11 +850,13 @@ def group_f_hourly(a: Audit) -> None:
     # Hai cot `p95_bucket_*` mo ta sai so cua phep NOI SUY trong mot o. So tho
     # khong co sai so do. Mot dong gateway mang o nghia la ai do da dan sai so
     # cua phep do KHAC len mot con so von khong co - va no trong y nhu that.
+    gw_lat_dong = a.num("SELECT COUNT(*) FROM fact_latency_daily"
+                        " WHERE source = 'gateway'")
     gw_co_o = a.num("SELECT COUNT(*) FROM fact_latency_daily"
                     " WHERE source = 'gateway'"
                     "   AND (p95_bucket_from IS NOT NULL"
                     "     OR p95_bucket_to IS NOT NULL)")
-    a.check(gw_co_o == 0, "Raw percentiles have no histogram bucket",
+    a.check_tren(gw_lat_dong, gw_co_o == 0, "Raw percentiles have no histogram bucket",
             f"{int(gw_co_o)} gateway rows carry a bucket")
 
     # Nguoc lai: dong monitoring PHAI co o. Thieu o nghia la khau doc CSV da
@@ -829,6 +983,126 @@ def group_g_account_dimension(a: Audit) -> None:
               " GROUP BY 1 ORDER BY 2 DESC"))
     a.note(OK, "Resolved latency by source", co_lat)
 
+    # ====== so luot theo ma tra ve, nguon gateway ======
+    #
+    # Hom nay `fact_perf_daily` CHI co monitoring (669 dong); gateway, app va
+    # billing deu 0 dong. Nen phep kiem nay chay tren mot TAP RONG - va no phai
+    # noi ra dieu do thay vi bao DAT.
+    #
+    # Do cung la phep NGHIEM THU cua ca co che `check_tren()`: neu no bao DAT o
+    # day thi co che khong lam viec, va moi phep kiem gateway khac deu dang noi
+    # doi theo cung mot cach.
+    gw_perf_dong = a.num("SELECT COUNT(*) FROM fact_perf_daily"
+                         " WHERE source = 'gateway'")
+    gw_perf_xau = a.num("""
+        SELECT COUNT(*) FROM fact_perf_daily
+         WHERE source = 'gateway'
+           AND (method IS NULL OR method = ''
+             OR response_code IS NULL OR response_code = '')""")
+    a.check_tren(gw_perf_dong, gw_perf_xau == 0,
+                 "Gateway rows in fact_perf_daily carry method and response_code",
+                 f"{int(gw_perf_xau)} rows are missing method or response_code")
+
+
+# Ngưỡng chấp nhận sai lệch khi đối chiếu token cache Gateway <-> hoá đơn Google.
+#
+# CHỐT TRƯỚC KHI CÓ SỐ ĐẦU TIÊN, và ghi rõ như vậy. Kỷ luật này do chính Master Plan
+# đặt ra ở STT 7 dòng 19: *"ngưỡng chấp nhận sai lệch và quy trình xử lý khi vượt
+# ngưỡng, BAN HÀNH TRƯỚC KỲ ĐO"*. Chốt sau khi thấy số là tự vẽ đích quanh mũi tên.
+#
+# VÌ SAO 1% CHỨ KHÔNG PHẢI 0: hai nguồn đếm ở hai thời điểm khác nhau trong đường
+# gọi, và hoá đơn Google gộp theo ngày phía Mỹ trong khi ta coi mọi ngày là giờ Việt
+# Nam. Đòi khớp tuyệt đối là đòi một thứ không nguồn nào hứa.
+#
+# CON SỐ NÀY CHƯA CÓ CƠ SỞ ĐO ĐẠC - chưa ngày nào hai nguồn cùng có dữ liệu để hiệu
+# chỉnh. Nếu nó sai thì sẽ hỏng thành tiếng ở lần đo thật, và lúc đó sửa nó là một
+# quyết định CÓ BẰNG CHỨNG. Nới nó trong im lặng thì không.
+NGUONG_LECH_CACHE = 0.01
+
+
+def group_h_cache_reconciliation(a: Audit) -> None:
+    """Đối chiếu token cache của Gateway với SKU cache trên hoá đơn Google.
+
+    STT 7 mục tiêu 2 của Master Plan đòi phép kiểm này. Đo 03/09/2026 thì nó CHƯA
+    CHẠY ĐƯỢC, và lý do là dữ liệu chứ không phải công sức:
+
+        ve GATEWAY   fact_call source='gateway'         41 dong · cached_tokens 0/41
+        ve HOA DON   fact_billing_daily kind='cached'  461 dong · 252.321.118 token
+                                                       214 ngay · 6 agent
+        so ngay ca hai nguon CUNG co du lieu:  0
+            gateway  31/08 -> 31/08     billing  01/01 -> 29/08
+
+    VIẾT PHÉP KIỂM NGAY BÂY GIỜ DÙ CHƯA CHẠY ĐƯỢC. Ngày hai nguồn giao nhau, nó phải
+    ĐÃ SẴN Ở ĐÓ - viết sau nghĩa là ngày đó không ai nhớ, và cửa sổ so sánh trôi qua.
+    Đúng như cửa sổ lưu giữ của Cloud Monitoring đã trôi mất ba tháng dữ liệu.
+
+    VÀ TUYỆT ĐỐI KHÔNG BÁO ĐẠT TRÊN TẬP RỖNG. Đó là cách dễ nhất để tick xanh một mục
+    Master Plan bằng một phép kiểm chưa từng kiểm gì.
+    """
+    gw_ngay = connect.query_one(a.cn, """
+        SELECT MIN(ts_local)::date, MAX(ts_local)::date, COUNT(DISTINCT ts_local::date)
+        FROM fact_call WHERE source = 'gateway'""")
+    bl_ngay = connect.query_one(a.cn, """
+        SELECT MIN(day), MAX(day), COUNT(DISTINCT day)
+        FROM fact_billing_daily WHERE kind = 'cached'""")
+
+    # Ngay CA HAI nguon cung co du lieu. Chi so tren dung nhung ngay nay - so hai
+    # khoang thoi gian khac nhau roi ket luan la cai bay da mac hai lan (change 006
+    # voi do tre, va chinh muc nay voi cached_tokens).
+    chung = connect.query(a.cn, """
+        SELECT ts_local::date AS ngay FROM fact_call WHERE source = 'gateway'
+        INTERSECT
+        SELECT day FROM fact_billing_daily WHERE kind = 'cached'
+        ORDER BY 1""")
+
+    if not chung:
+        a.note(WARN, "Gateway cache tokens match the invoice cache SKU",
+               f"CHUA KIEM DUOC - khong ngay nao ca hai nguon cung co du lieu."
+               f" gateway {gw_ngay[0]} -> {gw_ngay[1]} ({gw_ngay[2]} ngay) ·"
+               f" hoa don {bl_ngay[0]} -> {bl_ngay[1]} ({bl_ngay[2]} ngay)."
+               f" Day KHONG phai ket qua dat.")
+        return
+
+    ds = ", ".join(f"'{r[0]}'" for r in chung)
+    gw_co = a.num(f"""
+        SELECT COUNT(cached_tokens) FROM fact_call
+         WHERE source = 'gateway' AND ts_local::date IN ({ds})""")
+    if gw_co == 0:
+        a.note(WARN, "Gateway cache tokens match the invoice cache SKU",
+               f"CHUA KIEM DUOC - co {len(chung)} ngay chung, nhung ve GATEWAY rong:"
+               f" 0 dong co cached_tokens. NULL KHONG duoc coi la 0."
+               f" Day KHONG phai ket qua dat.")
+        return
+
+    # Ca hai ve co so -> so tung (ngay, agent), ap nguong.
+    lech = connect.query(a.cn, f"""
+        WITH g AS (SELECT ts_local::date AS ngay, agent_id,
+                          COALESCE(SUM(cached_tokens), 0) AS tok
+                     FROM fact_call
+                    WHERE source = 'gateway' AND ts_local::date IN ({ds})
+                    GROUP BY 1, 2),
+             b AS (SELECT day AS ngay, agent_id, COALESCE(SUM(quantity), 0) AS tok
+                     FROM fact_billing_daily
+                    WHERE kind = 'cached' AND day IN ({ds})
+                    GROUP BY 1, 2)
+        SELECT COALESCE(g.ngay, b.ngay), COALESCE(g.agent_id, b.agent_id),
+               COALESCE(g.tok, 0), COALESCE(b.tok, 0)
+        FROM g FULL OUTER JOIN b ON b.ngay = g.ngay AND b.agent_id = g.agent_id
+        ORDER BY 1, 2""")
+    xau = []
+    for ngay, aid, gtok, btok in lech:
+        mau = max(float(gtok), float(btok))
+        if mau == 0:
+            continue
+        ty_le = abs(float(gtok) - float(btok)) / mau
+        if ty_le > NGUONG_LECH_CACHE:
+            xau.append(f"{ngay} agent {aid}: gateway {int(gtok):,}"
+                       f" vs hoa don {int(btok):,} ({ty_le:.1%})")
+    a.check_tren(len(lech), not xau,
+                 f"Gateway cache tokens match the invoice cache SKU"
+                 f" (nguong {NGUONG_LECH_CACHE:.0%}, {len(chung)} ngay chung)",
+                 "; ".join(xau[:5]) + (" ..." if len(xau) > 5 else ""))
+
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
@@ -845,7 +1119,8 @@ def main() -> None:
                       ("D. Silent gaps", group_d_silent_gaps),
                       ("E. Adoption", group_e_adoption),
                       ("F. Hourly and source", group_f_hourly),
-                      ("G. Account dimension", group_g_account_dimension)):
+                      ("G. Account dimension", group_g_account_dimension),
+                      ("H. Cache reconciliation", group_h_cache_reconciliation)):
         print(f"\n{title}\n{'─' * 72}")
         start = len(a.results)
         fn(a)

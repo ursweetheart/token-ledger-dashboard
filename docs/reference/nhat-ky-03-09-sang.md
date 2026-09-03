@@ -1,4 +1,10 @@
-# Nhật ký sáng 03/09/2026 — đóng change "điền nốt trường đã khai, và ghi log theo giờ"
+# Nhật ký 03/09/2026 — ba change đóng trong một ngày
+
+Tên file giữ hậu tố `-sang` vì phiên sáng viết trước; phiên chiều nối vào từ mục 10.
+
+**Sáng:** `fill-the-declared-fields-and-log-by-the-hour` (59/59) và
+`answer-what-each-agent-did-on-a-day` (48/48).
+**Chiều:** `extend-the-checks-to-gateway-data` (40/40).
 
 Tiếp theo `soat-stt6-tich-hop-03-09.md`. Đọc nhanh: mục 1, mục 4, mục 7.
 
@@ -300,3 +306,107 @@ hỏng** — nó đòi có người biết mà chạy.
 **`scripts/refresh_gateway.py` CHƯA gọi hai bước mới** (`build_usage_hourly`,
 `build_performance`). Sau mỗi lần refresh, bảng theo giờ và phân vị Gateway **cũ đi một nhịp**.
 Nằm ngoài phạm vi change này — ghi lại để không ai tưởng nó đã đủ.
+
+---
+
+# PHIÊN CHIỀU — mở rộng bộ kiểm tra sang dữ liệu Gateway
+
+Đóng **STT 7 mục tiêu 2**. Change `extend-the-checks-to-gateway-data`, **40/40 việc**.
+
+## 10. Ba thứ đo được trước khi viết một dòng mã nào
+
+```
+   ① khoa ngoai      audit khai 23 · database co 36  ->  13 KHONG AI CANH
+   ② ngay tuong lai  nguong ghim '2026-12-31', chi soi 1/5 bang
+   ③ phep kiem gateway DAT ca khi khong co dong gateway nao
+```
+
+**① Danh sách khoá ngoại đã trôi, và đang trôi nhanh hơn.** Mười ba quan hệ không được kiểm, trong đó **sáu** do chính migration 008 tạo ra **sáng cùng ngày**. Đây không phải nợ đứng yên — cứ thêm một bảng là danh sách tụt thêm, trong im lặng, vì nhãn vẫn báo `Foreign keys (23 relations)` ĐẠT. Con số 23 nằm ngay trong nhãn, và nó là số quan hệ **được khai** chứ không phải số **có thật**.
+
+**② Ngưỡng ngày ghim `2026`** (`audit_db.py:629`). Sang 2027 thì mọi dòng dữ liệu **thật** đều bị coi là tương lai. Và nó chỉ soi `usage_resolved` — `fact_call`, nơi Gateway ghi từng lượt, không được soi.
+
+**③ Hình dạng lỗi trung tâm.** Mọi phép kiểm theo nguồn là *"đếm dòng xấu, đòi bằng 0"*. Trên **0 dòng** nó trả 0 và báo ĐẠT — **không phân biệt** *"Gateway ghi đúng"* với *"Gateway không ghi gì cả"*. Cùng hình dạng đã để API mù 38 phút ngày 02/09.
+
+## 11. Sửa hình dạng, không chỉ thêm phép kiểm
+
+`Audit.check_tren()` và `Check.expect_tren()` — mỗi phép kiểm theo nguồn nay khai **cả mẫu số**:
+
+```
+   quan sat 0 dong             ->  CANH BAO "chua kiem duoc"
+   quan sat n > 0, khong loi   ->  DAT, nhan kem "(n rows checked)"
+   quan sat n > 0, co loi      ->  HONG
+```
+
+CẢNH BÁO chứ không HỎNG: kỳ chưa có lưu lượng của một nguồn là trạng thái **hợp lệ**. Nhưng nó phải **hiện ra** — hôm nay nó vô hình.
+
+**Nghiệm thu bằng tập rỗng THẬT, không dựng database giả.** Đo ra **8 cặp (bảng, nguồn) rỗng tự nhiên**; dùng `fact_perf_daily` × `gateway` (bảng đó chỉ có monitoring, 669 dòng). Kết quả:
+
+```
+   [ note ] Gateway rows in fact_perf_daily carry method and response_code
+            CHUA KIEM DUOC - 0 dong de quan sat. Day KHONG phai ket qua dat.
+```
+
+Cơ chế hoạt động, và **không xoá một dòng dữ liệu nào** để chứng minh.
+
+## 12. Đối chiếu token cache — viết xong một phép kiểm CHƯA CHẠY ĐƯỢC
+
+```
+   ve GATEWAY   fact_call source='gateway'         41 dong · cached_tokens 0/41
+   ve HOA DON   fact_billing_daily kind='cached'  461 dong · 252.321.118 token
+                                                  214 ngay · 6 agent
+   so ngay CA HAI nguon cung co du lieu:  0
+```
+
+Vế hoá đơn giàu, vế Gateway rỗng, hai khoảng ngày **rời nhau hoàn toàn**.
+
+Vẫn viết phép kiểm **đầy đủ** ngay bây giờ: ngày hai nguồn giao nhau, nó phải **đã sẵn ở đó**. Viết sau nghĩa là ngày đó không ai nhớ, và cửa sổ so sánh trôi qua — đúng như cửa sổ lưu giữ của Cloud Monitoring đã trôi mất ba tháng dữ liệu.
+
+Ngưỡng **1%** chốt **trước** khi có số đầu tiên, theo đúng kỷ luật STT 7 dòng 19. Ghi rõ tại chỗ: nó **chưa có cơ sở đo đạc**.
+
+Chạy hôm nay:
+
+```
+   [ note ] Gateway cache tokens match the invoice cache SKU
+            CHUA KIEM DUOC - khong ngay nao ca hai nguon cung co du lieu.
+            gateway 2026-08-31 -> 2026-08-31 (1 ngay) ·
+            hoa don 2026-01-05 -> 2026-08-29 (214 ngay).
+            Day KHONG phai ket qua dat.
+```
+
+**Cám dỗ lớn nhất của cả change này** là cho phép kiểm chạy trên tập rỗng, nó báo ĐẠT, và mục Master Plan được tick xanh. Thiết kế làm điều đó **không thể xảy ra** — hai nhánh rỗng đều đi thẳng vào `note(WARN, ...)`, không đi qua `check()`.
+
+## 13. Bốn phép kiểm đổi màu, và vì sao đó là dấu hiệu tốt
+
+```
+   luu y  4 -> 7      hong  0 -> 0
+
+   + Foreign keys are read from the database, not from a hand-written list
+                                              (do troi 13/36 quan he)
+   + Gateway cache tokens match the invoice cache SKU        (chua kiem duoc)
+   + Gateway rows in fact_perf_daily carry method and ...    (0 dong quan sat)
+
+   bon luu y CU giu nguyen, khong cai nao bien mat
+```
+
+Số lưu ý tăng là **đúng**: ba cái mới đều là chỗ trước nay báo đạt mà **chưa quan sát gì**. Hạ tiêu chuẩn để giữ màu cũ chính là thứ change này đi bịt.
+
+## 14. Nghiệm thu cuối phiên chiều
+
+```
+   scripts/audit_db.py    72 kiem · 65 dat · 7 luu y · 0 hong   (moc 68/64/4/0)
+   backend/check_api.py   31 kiem · 31 dat · 0 luu y · 0 hong   (moc 27/27)
+   khoa ngoai             36/36 duoc kiem · 0 quan he treo
+   ngay tuong lai         0 dong tren ca 5 bang
+   chay hai lan lien tiep (72,65,7,0) = (72,65,7,0)             KHOP
+   usage_resolved         khop 4/4 khoa, lech 0
+```
+
+Con số cuối là quan trọng nhất: change này **không đụng một dòng dữ liệu nào**, và số liệu chứng minh điều đó.
+
+## 15. Một lỗi bắt được ngoài phạm vi
+
+Soát bind IP trước khi push thì phát hiện `docker-compose.yml` đang bind `web` vào `127.0.0.1` thay vì `192.168.20.111`. Hai dòng bị **hoán đổi** để chạy trên máy dev và không trả lại — và hoán đổi làm **chú thích trỏ nhầm dòng**, nên đọc lướt thì tưởng đúng.
+
+Commit `9ef9626` của phiên này đưa `docker-compose.yml` vào mà không soát bind IP; nó chỉ nên mang phần `logging`. Đã sửa ở commit `622b52b`.
+
+Nếu đẩy lên với `127.0.0.1` thì dashboard chỉ mở được **trên chính máy chủ** — và hỏng im lặng: container vẫn `healthy`, `docker ps` vẫn đẹp, chỉ là không ai trong mạng nội bộ gọi tới được.
