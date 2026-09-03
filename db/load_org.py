@@ -34,6 +34,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
+
+log = logs.get_logger("load_org")
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,14 +54,14 @@ def _latest(parent: Path, *required: str) -> Path:
     """
     children = sorted((p for p in parent.glob("*") if p.is_dir()), reverse=True)
     if not children:
-        raise SystemExit(f"Khong co dot thu thap nao trong {parent}."
+        raise SystemExit(f"no collection batch in {parent}."
                          f" Chay scripts/pull_web_apps.py truoc.")
     for p in children:
         if all((p / f).exists() for f in required):
             return p
     missing = [f for f in required if not (children[0] / f).exists()]
     raise SystemExit(
-        f"Khong dot nao trong {parent} co du file can thiet."
+        f"no batch in {parent} has every required file."
         f" Dot moi nhat ({children[0].name}) thieu: {', '.join(missing)}."
         f" Chay scripts/pull_web_apps.py truoc.")
 
@@ -153,7 +156,7 @@ def walk_up(nid: str, parent: dict[str, str], name: dict[str, str]) -> list[str]
         if cur in seen:                       # vòng lặp trong dữ liệu
             raise SystemExit(f"Cay don vi co vong lap tai {cur}")
         if cur not in name:
-            raise SystemExit(f"Don vi {nid} tro vao cha {cur} khong ton tai")
+            raise SystemExit(f"unit {nid} points at a parent {cur} that does not exist")
         seen.add(cur)
         path.append(name[cur])
         cur = parent.get(cur) or None
@@ -313,6 +316,15 @@ def main() -> None:
                           None, 0, "Chưa quy được", True))
 
     # Thứ tự xoá ngược với thứ tự khoá ngoại: con trước, cha sau.
+    #
+    # CHÚ Ý (31/08/2026): `fact_call` nay chứa HAI nguồn - `app` và `gateway`.
+    # Câu DELETE dưới đây KHÔNG lọc được theo nguồn: khoá ngoại account_id bắt
+    # phải dọn sạch bảng con trước khi dựng lại `account`. Nên chạy file này MỘT
+    # MÌNH sẽ xoá cả dữ liệu Gateway, và `load_ralli.py` không nạp lại phần đó.
+    #
+    # `scripts/rebuild_db.py` đã xếp đúng thứ tự (org ở bước 2, gateway ở bước 6)
+    # nên đường chính an toàn. Chạy lẻ thì phải chạy lại `db/load_gateway.py`,
+    # hoặc gọn hơn là `scripts/refresh_gateway.py`.
     cur.execute("DELETE FROM fact_usage_daily")
     cur.execute("DELETE FROM fact_call")
     cur.execute("DELETE FROM dim_function")
@@ -339,8 +351,9 @@ def main() -> None:
     cur.executemany(
         f"UPDATE dim_unit SET is_report_aggregate = TRUE WHERE unit_id = {ph}",
         [(x,) for x in aggregates])
-    print(f"  gop {len(canonical)} don vi trung giua hai cay to chuc"
-          f" | {len(aggregates)} cap gom, bao cao bat dau ben duoi")
+    log.info("  merged %d units duplicated across the two org trees"
+             " | %d aggregate levels, reporting starts below them",
+             len(canonical), len(aggregates))
 
     # ================================================== (3) dim_user từ danh bạ
     # Tuple: (user_id, agent_id, username, full_name, email, unit_id,
@@ -639,23 +652,25 @@ def main() -> None:
     by_source = dict(connect.query(cn, "SELECT found_in, COUNT(*) FROM dim_user"
                                        " GROUP BY found_in"))
 
-    print(f"  nguon        {RALLI_DIR.parent.name}/{RALLI_DIR.name}"
-          f" + {TLA_DIR.parent.name}/{TLA_DIR.name}")
-    print(f"  dim_unit     {n_units:>4}  ({len(unit_rows) - 8} that + 6 ky thuat"
-          f" + 2 chua quy duoc)")
-    print(f"  dim_user     {n_users:>4}  {by_source}")
-    print(f"  account      {connect.query_one(cn, 'SELECT COUNT(*) FROM account')[0]:>4}"
-          f"  {dict(connect.query(cn, 'SELECT kind, COUNT(*) FROM account GROUP BY kind'))}")
-    print(f"  dim_function {n_funcs:>4}")
+    log.info("  source       %s/%s + %s/%s", RALLI_DIR.parent.name, RALLI_DIR.name,
+             TLA_DIR.parent.name, TLA_DIR.name)
+    log.info("  dim_unit     %4d  (%d real + 6 technical + 2 unresolved)",
+             n_units, len(unit_rows) - 8)
+    log.info("  dim_user     %4d  %s", n_users, by_source)
+    log.info("  account      %4d  %s",
+             connect.query_one(cn, "SELECT COUNT(*) FROM account")[0],
+             dict(connect.query(cn, "SELECT kind, COUNT(*) FROM account"
+                                    " GROUP BY kind")))
+    log.info("  dim_function %4d", n_funcs)
 
     # Xung đột đơn vị KHÔNG phải lỗi - là PHÁT HIỆN, in ra chứ không chặn việc.
     # Cùng một tổ chức được hai app mô hình hoá khác nhau; ta đã chọn một bên
     # theo quy tắc tất định và đánh dấu lại ở cột unit_conflict.
     if conflicts:
-        print(f"  don vi lech  {len(conflicts):>4}  (da chon theo quy tac, cot"
-              f" unit_conflict=1)")
+        log.warning("  unit clashes %4d  (resolved by rule, column"
+                    " unit_conflict=1)", len(conflicts))
         for c in conflicts:
-            print(f"                 {c}")
+            log.warning("                 %s", c)
 
     # Mọi user_id trong nhật ký PHẢI có chỗ trỏ tới - nếu không, fact_call sẽ hỏng
     known_users = {r[0] for r in connect.query(
@@ -685,7 +700,7 @@ def main() -> None:
     dangling = connect.query_one(
         cn, "SELECT COUNT(*) FROM dim_user WHERE account_id IS NULL")[0]
     if dangling:
-        errors.append(f"{dangling} dong dim_user khong co account_id")
+        errors.append(f"{dangling} dim_user rows have no account_id")
     # Đơn vị của tài khoản phải là MỘT TRONG các đơn vị mà chính dòng dim_user
     # của nó đã khai. Phép kiểm này bắt đúng cái dễ sai nhất khi viết đoạn trên:
     # lấy nhầm chỉ số trong tuple, khiến ta gán cho người ta một phòng ban mà
@@ -697,14 +712,14 @@ def main() -> None:
                           WHERE u.account_id = a.account_id
                             AND u.unit_id = a.unit_id)""")[0]
     if invented:
-        errors.append(f"{invented} tai khoan co don vi khong nguon nao khai")
+        errors.append(f"{invented} accounts have a unit no source declares")
 
     if errors:
         cn.rollback()
-        raise SystemExit("NGHIEM THU KHONG DAT - da huy, khong ghi gi:\n  "
+        raise SystemExit("ACCEPTANCE FAILED - rolled back, nothing written:\n  "
                          + "\n  ".join(errors))
     cn.commit()
-    print("  NGHIEM THU DAT")
+    log.info("  acceptance passed")
 
 
 if __name__ == "__main__":

@@ -31,6 +31,19 @@
 # Khong dat thi dung gia tri mac dinh duoi day - chap nhan duoc vi CHI mo tren
 # 127.0.0.1, khong ra mang.
 
+# Xoay vong log. KHONG dat thi Docker dung json-file KHONG GIOI HAN kich thuoc:
+# file log lon dan mai cho toi luc day o - ma o do cung dang chua volume pgdata,
+# tuc ca token_ledger_v2 lan so Gateway.
+#
+# 10m x 3 = 30 MB moi container. Dat o khoi dung chung chu khong chep vao tung
+# dich vu: 13 dich vu ma chep 13 lan thi lan sau doi se sot. Cung co che neo YAML
+# ma `x-litellm` ngay duoi dang dung.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 # Hai instance LiteLLM giong het nhau, tru ten container va cong mo ra ngoai.
 # Giong het la CO Y: "stateless" nghia la roi vao may nao cung ra cung ket qua.
 x-litellm: &litellm
@@ -80,6 +93,7 @@ x-litellm: &litellm
 
 services:
   postgres:
+    logging: *logging
     image: postgres:17-alpine
     container_name: token-ledger-postgres
     restart: unless-stopped
@@ -106,6 +120,7 @@ services:
       start_period: 10s
 
   pgadmin:
+    logging: *logging
     image: dpage/pgadmin4:8
     container_name: token-ledger-pgadmin
     restart: unless-stopped
@@ -136,6 +151,7 @@ services:
   # Creates the read-only role. Not /docker-entrypoint-initdb.d, which only
   # runs while the volume is still empty.
   api-db-init:
+    logging: *logging
     image: postgres:17-alpine
     container_name: token-ledger-api-db-init
     environment:
@@ -162,6 +178,7 @@ services:
     restart: "no"
 
   api:
+    logging: *logging
     build:
       context: .
       dockerfile: docker/api.Dockerfile
@@ -170,6 +187,9 @@ services:
     restart: unless-stopped
     environment:
       # Read-only role, not the admin one -- see docker/read-only-api.sql.
+      # Muc chi tiet log. Phai khai TUONG MINH o day: compose noi suy
+      # `.env` cho chinh file compose, KHONG bom bien vao container.
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       TOKEN_LEDGER_DSN: "postgresql://api_readonly:${API_READONLY_PASSWORD:-api_readonly_local}@postgres:5432/${PGDATABASE:-token_ledger_v2}"
       # No default on purpose, but NOT `${VAR:?}`: compose interpolates the whole
       # file before filtering profiles, so `:?` would take postgres down with it
@@ -187,6 +207,7 @@ services:
         condition: service_completed_successfully
 
   web:
+    logging: *logging
     build:
       context: .
       dockerfile: docker/web.Dockerfile
@@ -196,6 +217,15 @@ services:
     ports:
       # Switch to 0.0.0.0 for a real deployment -- but answer this first:
       # who can reach this machine.
+      #
+      # BAY khi chay tren may KHONG PHAI server: may do khong co IP nay nen `web`
+      # khong bind duoc, va `docker compose up` THOAT GIUA CHUNG -- keo theo
+      # `gateway-lb` khong bao gio duoc dung, trong khi `docker ps` van cho thay
+      # hai instance LiteLLM `healthy`. Rat de tuong la da dung xong.
+      # Xem docs/reference/dua-dms-qua-gateway-31-08.md muc 4.6.
+      #
+      # Chay tren may dev thi doi tam sang dong duoi, va TRA LAI TRUOC KHI PUSH:
+      #     - "127.0.0.1:${WEB_PORT:-8080}:80"
       - "192.168.20.111:${WEB_PORT:-8080}:80"
     depends_on:
       - api
@@ -203,6 +233,7 @@ services:
   # Collection pipeline. Runs once and exits, not a long-lived service:
   #     docker compose run --rm tools python3 scripts/update_dashboard.py
   tools:
+    logging: *logging
     build:
       context: .
       dockerfile: docker/tools.Dockerfile
@@ -210,6 +241,9 @@ services:
     profiles: ["tools"]
     environment:
       # Admin role, unlike api: rebuild_db.py runs DROP SCHEMA.
+      # Muc chi tiet log. Phai khai TUONG MINH o day: compose noi suy
+      # `.env` cho chinh file compose, KHONG bom bien vao container.
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       TOKEN_LEDGER_DSN: "postgresql://${PGUSER:-token}:${PGPASSWORD:-token_local}@postgres:5432/${PGDATABASE:-token_ledger_v2}"
       RALLI_USER: ${RALLI_USER:-}
       RALLI_PASS: ${RALLI_PASS:-}
@@ -233,6 +267,7 @@ services:
   # role do co doc duoc token_ledger khong. Chay xong la thoat; cac dich vu duoi
   # doi no thoat voi ma 0.
   gateway-db-init:
+    logging: *logging
     image: postgres:17-alpine
     container_name: token-ledger-gateway-db-init
     profiles: ["gateway"]
@@ -257,9 +292,45 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Vai CHI-DOC cho db/load_gateway.py. Tach khoi gateway-db-init o tren vi hai
+  # viec khac han: cai kia tao database va vai CHU SO HUU cho LiteLLM ghi vao,
+  # cai nay chi cap quyen DOC dung mot bang cho phia dashboard.
+  #
+  # KHONG dung lai docker/read-only-api.sql: script do REVOKE tren ca schema va
+  # moi bang. Chay len database ma LiteLLM dang migrate bang Prisma la rui ro
+  # thua. File duoi day chi GRANT, khong REVOKE gi.
+  gateway-readonly-init:
+    logging: *logging
+    image: postgres:17-alpine
+    container_name: token-ledger-gateway-readonly-init
+    profiles: ["gateway"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${PGUSER:-token}
+      PGPASSWORD: ${PGPASSWORD:-token_local}
+      GW_DB: ${GATEWAY_PGDATABASE:-litellm}
+      GW_RO_USER: ${GATEWAY_READONLY_USER:-gateway_readonly}
+      GW_RO_PASSWORD: ${GATEWAY_READONLY_PASSWORD:-gateway_readonly_local}
+    volumes:
+      - ./docker/read-only-gateway.sql:/read-only-gateway.sql:ro
+    entrypoint:
+      - sh
+      - -c
+      - >
+        psql -d "$$GW_DB" -v ON_ERROR_STOP=1
+        -v gw_role="$$GW_RO_USER"
+        -v gw_password="$$GW_RO_PASSWORD"
+        -v gw_db="$$GW_DB"
+        -f /read-only-gateway.sql
+    depends_on:
+      gateway-db-init:
+        condition: service_completed_successfully
+    restart: "no"
+
   # Trang thai dung chung cua CA HAI instance LiteLLM: bo dem rpm/tpm, danh sach
   # tuyen dang bi phat nguoi. Chinh no lam LiteLLM chay stateless duoc.
   redis:
+    logging: *logging
     image: redis:7-alpine
     container_name: token-ledger-redis
     profiles: ["gateway"]
@@ -294,6 +365,7 @@ services:
   # NOI RO GIOI HAN: chua co Sentinel. Primary chet thi replica KHONG tu len
   # thay - phai doi tay. No giu ban sao du lieu, khong tu phuc hoi dich vu.
   redis-replica:
+    logging: *logging
     image: redis:7-alpine
     container_name: token-ledger-redis-replica
     profiles: ["gateway"]
@@ -328,6 +400,7 @@ services:
         condition: service_healthy
 
   litellm-1:
+    logging: *logging
     <<: *litellm
     container_name: token-ledger-litellm-1
     ports:
@@ -336,6 +409,7 @@ services:
       - "127.0.0.1:${LITELLM_1_PORT:-4001}:4000"
 
   litellm-2:
+    logging: *logging
     <<: *litellm
     container_name: token-ledger-litellm-2
     ports:
@@ -345,6 +419,7 @@ services:
   # vong bang cach dem loi that - nginx ban mo nguon khong co health check chu
   # dong (xem chu thich trong docker/gateway/nginx.conf).
   gateway-lb:
+    logging: *logging
     image: nginx:1.27-alpine
     container_name: token-ledger-gateway-lb
     profiles: ["gateway"]

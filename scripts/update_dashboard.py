@@ -51,23 +51,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PY = sys.executable
 
+sys.path.insert(0, str(ROOT / "db"))
+import logs  # noqa: E402
+
+log = logs.get_logger("pipeline")
+
 
 class StepFailed(Exception):
     pass
 
 
 def run_step(label: str, cmd: list[str]) -> float:
-    print(f"\n{'─' * 72}\n{label}\n{'─' * 72}")
-    # Tien trinh con ghi thang ra terminal, con print() o day di qua bo dem.
-    # Khong flush thi thong bao loi cua con HIEN TRUOC tieu de buoc, va nguoi
-    # doc khong biet loi thuoc ve buoc nao.
+    log.info("%s", label)
+    # Tien trinh con ghi thang ra stdout, con dong tren di qua bo dem cua logger.
+    # Khong flush thi thong bao loi cua con HIEN TRUOC dong danh dau buoc, va
+    # nguoi doc khong biet loi thuoc ve buoc nao.
+    #
+    # logging.StreamHandler DA tu flush sau moi ban ghi, nen dong duoi la bao
+    # hiem chu khong phai bat buoc. Giu lai: no khong ton gi, va la thu duy nhat
+    # con dung neu sau nay ai do doi handler.
     sys.stdout.flush()
     started = time.time()
     result = subprocess.run(cmd, cwd=ROOT)
     elapsed = time.time() - started
     if result.returncode != 0:
-        raise StepFailed(f"{label} that bai (ma thoat {result.returncode}) sau {elapsed:.0f}s")
-    print(f"  [xong sau {elapsed:.0f}s]")
+        raise StepFailed(f"{label} failed (exit {result.returncode}) after {elapsed:.0f}s")
+    log.info("%s done in %ds", label, elapsed)
     return elapsed
 
 
@@ -91,7 +100,7 @@ def check_billing(allow_stale: bool) -> str:
                     newest = day
 
     yesterday = (date.today() - timedelta(days=1)).isoformat()
-    print(f"  {len(files)} file hoa don | ngay moi nhat: {newest}")
+    log.info("%d billing files | newest day: %s", len(files), newest)
     if newest < yesterday:
         if not allow_stale:
             raise StepFailed(
@@ -99,7 +108,7 @@ def check_billing(allow_stale: bool) -> str:
                 f"  Tai lai 7 file GMSSub tu Google Cloud Console vao {folder}\n"
                 f"  roi chay lai. Neu co y muon dung hoa don cu, them --hoa-don-cu."
             )
-        print(f"  CANH BAO: hoa don cu ({newest}), van chay tiep theo yeu cau.")
+        log.warning("billing data is stale (%s), continuing as requested", newest)
     return newest
 
 
@@ -116,12 +125,10 @@ def main() -> None:
     args = p.parse_args()
 
     total = time.time()
-    print("=" * 72)
-    print("CAP NHAT DU LIEU DASHBOARD")
-    print("=" * 72)
+    log.info("dashboard data refresh started")
 
     try:
-        print("\n[0/9] Kiem hoa don")
+        log.info("[0/9] check billing files")
         check_billing(args.hoa_don_cu)
 
         # Buoc nay dang nhap mot lan roi vut token di; buoc 4 dang nhap lai.
@@ -132,7 +139,7 @@ def main() -> None:
              [PY, "scripts/pull_web_apps.py", "--chi-kiem-token"])
 
         if args.bo_monitoring:
-            print("\n[2/9] Keo Monitoring - BO QUA theo yeu cau")
+            log.info("[2/9] pull Cloud Monitoring - SKIPPED as requested")
         else:
             run_step("[2/9] Keo Cloud Monitoring",
                  [PY, "scripts/pull_monitoring.py",
@@ -154,16 +161,16 @@ def main() -> None:
         run_step("[9/9] Soi database", [PY, "scripts/audit_db.py"])
 
     except StepFailed as e:
-        print(f"\n{'=' * 72}\nDUNG: {e}\n{'=' * 72}")
+        log.error("STOPPED: %s", e)
         sys.exit(1)
 
-    print(f"\n{'=' * 72}")
-    print(f"XONG sau {(time.time() - total) / 60:.1f} phut.")
-    print("Mo index.html de xem (nho bat backend:")
-    print("  python -m uvicorn backend.main:app --port 8000). Neu so khong doi, xoa localStorage cua trang")
-    print("(F12 > Application > Local Storage) - app.js co bump phien ban nhung")
-    print("trinh duyet doi khi con giu ban cu.")
-    print("=" * 72)
+    log.info("dashboard data refresh done in %.1f min", (time.time() - total) / 60)
+    # Huong dan cho nguoi chay TAY, khong phai log van hanh. Xuong DEBUG.
+    log.debug("open index.html to view; the backend must be running: "
+              "python -m uvicorn backend.main:app --port 8000")
+    log.debug("if the numbers look unchanged, clear the page localStorage "
+              "(F12 > Application > Local Storage): app.js bumps its version "
+              "but the browser sometimes keeps the old copy")
 
 
 if __name__ == "__main__":

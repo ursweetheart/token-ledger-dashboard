@@ -97,7 +97,7 @@ def rows_for(project: str, token: str, start: datetime, end: datetime,
             # Dung han con hon ghi ra mot file trong ma khong ai nhan ra.
             if distribution is None:
                 raise SystemExit(
-                    f"Diem khong co distributionValue o {project}.\n"
+                    f"a point has no distributionValue in {project}.\n"
                     f"Nhan duoc: {json.dumps(point.get('value', {}))[:300]}\n"
                     "Kiem lai METRIC va ALIGNER truoc khi chay tiep."
                 )
@@ -172,23 +172,23 @@ def main() -> None:
 
     projects = [p.strip() for p in args.projects.split(",") if p.strip()]
 
-    print(f"Phep do : {METRIC}")
-    print(f"Aligner : {ALIGNER}  (giu nguyen histogram)")
-    print(f"Service : {service or 'TAT CA'}")
-    print(f"Khoang  : {start:%Y-%m-%d %H:%M} -> {end:%Y-%m-%d %H:%M} UTC ({args.days} ngay)")
-    print(f"Do min  : {args.align}s ({label})")
-    print(f"Ghi vao : {out_dir}")
-    print(f"Project : {len(projects)} - {', '.join(projects)}\n")
+    print(f"metric  : {METRIC}")
+    print(f"aligner : {ALIGNER}  (histogram kept intact)")
+    print(f"service : {service or 'ALL'}")
+    print(f"range   : {start:%Y-%m-%d %H:%M} -> {end:%Y-%m-%d %H:%M} UTC ({args.days} days)")
+    print(f"grain   : {args.align}s ({label})")
+    print(f"writing : {out_dir}")
+    print(f"projects: {len(projects)} - {', '.join(projects)}\n")
 
     if args.dry_run:
-        print("--dry-run: dung o day. Khong goi mang, khong ghi file.")
+        print("--dry-run: stopping here. No network call, no file written.")
         return
 
     # Chan X2: khong bao gio ghi de len mot ban cao da co.
     if out_dir.exists() and any(out_dir.iterdir()):
         raise SystemExit(
             f"Thu muc da co du lieu: {out_dir}\n"
-            "Script nay khong ghi de. Google chi giu 196 ngay va `data/` khong nam\n"
+            "this script never overwrites. Google keeps only 196 days and `data/` is not\n"
             "trong git - de len la mat vinh vien. Doi --out hoac doi ten thu muc cu."
         )
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -210,15 +210,15 @@ def main() -> None:
         measured = [r for r in rows if r["count"] is not None]
         calls = sum(int(r["count"]) for r in measured)
         missing = len(rows) - len(measured)
-        print(f"  {len(rows):>7} diem | {calls:>9,} luot goi | {target.name}")
+        print(f"  {len(rows):>7} points | {calls:>9,} calls | {target.name}")
         if missing:
-            print(f"          {missing} diem KHONG co truong count (ghi NULL, khong ghi 0)")
+            print(f"          {missing} points have NO count field (written as NULL, not 0)")
         print()
         total += len(rows)
 
-    print(f"Xong. {total} diem, {len(projects)} project.")
+    print(f"done. {total} points, {len(projects)} projects.")
     if total == 0:
-        print("\nCANH BAO: khong co diem nao. Kiem lai quyen Monitoring Viewer va khoang thoi gian.")
+        print("\nWARNING: no points at all. Re-check the Monitoring Viewer permission and the time range.")
         sys.exit(1)
 
 

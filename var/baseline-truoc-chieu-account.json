@@ -1,0 +1,67 @@
+{
+  "usage_resolved": {
+    "rows": "1276",
+    "tokens": "915969971",
+    "calls": "122504",
+    "cost_usd": "307.382155",
+    "first_day": "2026-01-01",
+    "last_day": "2026-08-31"
+  },
+  "usage_by_account_cu": {
+    "rows": "337",
+    "agents": "2",
+    "accounts": "53",
+    "tokens": "108554843",
+    "first_day": "2026-03-14",
+    "last_day": "2026-08-29"
+  },
+  "account_by_kind": {
+    "service_account": 6,
+    "real": 938,
+    "unattributed": 8,
+    "whole_agent": 2
+  },
+  "usage_daily_by_source": {
+    "gateway": 1,
+    "monitoring": 606,
+    "app": 371,
+    "billing": 1012
+  },
+  "row_counts": {
+    "account": 954,
+    "dim_agent": 8,
+    "dim_unit": 130,
+    "fact_usage_daily": 1990,
+    "fact_usage_hourly": 3327,
+    "fact_billing_daily": 2575,
+    "fact_monitoring": 651653,
+    "fact_call": 8672,
+    "fact_app_daily": 77,
+    "fact_latency_daily": 340,
+    "fact_perf_daily": 669,
+    "ref_source": 4
+  },
+  "latency_by_source": {
+    "gateway": 1,
+    "monitoring": 339
+  },
+  "health_coverage": {
+    "service": "793613395",
+    "people": "107125668",
+    "opaque": "15230908"
+  },
+  "p95_truoc_khi_doi": {
+    "ghi_chu": "Bon cho hien p95 (app.js 2384/2900/3518/3531) deu an tu CUNG bo so nay. A.lat = trung binh CO TRONG SO theo so request (app.js:1155,1172).",
+    "so_dong_fact_latency_daily": 340,
+    "p95_theo_agent": {
+      "1": 13.1092,
+      "2": 12.6311,
+      "3": 6.3014,
+      "4": 14.05,
+      "5": 45.6006,
+      "6": 61.451,
+      "7": 49.8854
+    },
+    "A_lat_gop": 13.8002
+  }
+}

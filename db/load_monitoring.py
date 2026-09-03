@@ -38,6 +38,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
+
+log = logs.get_logger("load_monitoring")
 from rules import guess_service, is_quota_limit  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +56,7 @@ def _latest_monitoring() -> Path:
     parent_dir = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"
     remaining = sorted(p for p in parent_dir.glob("*") if p.is_dir())
     if not remaining:
-        raise SystemExit(f"Khong co thu muc nao tno_model {parent_dir}."
+        raise SystemExit(f"no folder in {parent_dir}."
                          f" Chay scripts/merge_monitoring.py truoc.")
     merged = [p for p in remaining if p.name.endswith("-gop")]
     return (merged or remaining)[-1]
@@ -86,7 +89,7 @@ def main() -> None:
 
     files = sorted(glob.glob(str(Path(args.dir) / "*.csv")))
     if not files:
-        raise SystemExit(f"Khong co file .csv nao tno_model {args.dir}")
+        raise SystemExit(f"no .csv file in {args.dir}")
 
     cur = cn.cursor()
     cur.execute("DELETE FROM fact_monitoring")
@@ -151,17 +154,17 @@ def main() -> None:
     # nguoi chay se co mot database tno_model nhu binh thuong nhung thieu model.
     fatal = []
     if missing_model:
-        fatal.append(f"nhan model chua co tno_model danh muc: {dict(missing_model)}")
+        fatal.append(f"model labels not yet in the model catalog: {dict(missing_model)}")
     if missing_agent:
         fatal.append(f"project khong co tno_model dim_agent: {dict(missing_agent)}")
     if missing_metric:
-        fatal.append(f"phep do chua co bi danh: {dict(missing_metric)}")
+        fatal.append(f"metrics with no alias yet: {dict(missing_metric)}")
     if quota_mismatch:
-        fatal.append(f"bang bi danh va hau to '_limit' KHONG dong y: {dict(quota_mismatch)}")
+        fatal.append(f"the alias table and the '_limit' suffix DISAGREE: {dict(quota_mismatch)}")
     if fatal:
         cn.rollback()
         raise SystemExit(
-            "Da huy, khong ghi gi. Chay lai db/gen_catalog.py roi nap lai:\n  "
+            "rolled back, nothing written. Re-run db/gen_catalog.py and load again:\n  "
             + "\n  ".join(hong))
     cn.commit()
 
@@ -174,26 +177,27 @@ def main() -> None:
     cur.execute("SELECT COUNT(*) FROM fact_monitoring WHERE model_id IS NULL")
     no_model = cur.fetchone()[0]
 
-    print(f"  {n} dong | {projects} du an | monitoring_ai {clean} | model_id NULL {no_model}")
+    log.info("  %d rows | %d projects | monitoring_ai %d | model_id NULL %d",
+             n, projects, clean, no_model)
 
     if args.limit:
-        print("  (lat mong - bo qua nghiem thu)")
+        log.info("  (thin slice - acceptance skipped)")
         return
     src_projects = len({Path(f).stem for f in files})
 
     errors = []
     if n != written:
-        errors.append(f"so dong tno_model DB {n} != {written} dong da doc tu file nguon")
+        errors.append(f"row count in the DB {n} != {written} read from the source file")
     if projects != src_projects:
         errors.append(f"so du an {projects} != {src_projects} file nguon")
     if clean == 0:
-        errors.append("monitoring_ai = 0 - bo loc dich vu chet, khong con dong nao di qua")
+        errors.append("monitoring_ai = 0 - the service filter is dead, no row gets through")
     elif clean >= n:
-        errors.append(f"monitoring_ai {clean} >= tong {n} - bo loc khong chay, "
+        errors.append(f"monitoring_ai {clean} >= total {n} - the filter did not run, "
                    f"luu luong Drive/Sheets dang bi tinh chung")
     if errors:
-        raise SystemExit("NGHIEM THU KHONG DAT: " + " | ".join(errors))
-    print(f"  NGHIEM THU DAT (nguon: {MONITORING_DIR.name})")
+        raise SystemExit("ACCEPTANCE FAILED: " + " | ".join(errors))
+    log.info("  acceptance passed (source: %s)", MONITORING_DIR.name)
 
 
 if __name__ == "__main__":

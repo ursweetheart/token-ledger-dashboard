@@ -398,13 +398,27 @@ function applyRealAccountUsage(rows){
             bm.req+=req; bm.ti+=ti; bm.to+=to; }
     if(!u.last||x.day>u.last) u.last=x.day;
   });
-  /* NGƯỜI DÙNG QUY ƯỚC CỦA AGENT DỊCH VỤ LẤY SỐ TỪ TỔNG CỦA AGENT.
+  /* NGƯỜI DÙNG QUY ƯỚC CỦA AGENT DỊCH VỤ — KHỐI NÀY NAY LÀ ĐƯỜNG LUI, KHÔNG
+     CÒN LÀ ĐƯỜNG CHÍNH (sửa 03/09/2026).
 
-     /api/usage-by-account chỉ phủ nguồn BIẾT NGƯỜI DÙNG (ref_source.knows_user),
-     nên tài khoản dịch vụ không có dòng nào ở đó — vòng lặp trên để chúng bằng 0.
-     Nhưng với sáu agent này, database nói rõ toàn bộ lưu lượng thuộc về đúng một
-     tài khoản dịch vụ (store.adoption: mẫu số 1). Nên gán tổng của agent cho
-     người dùng quy ước là ĐÚNG chứ không phải rải: không có ai khác để chia. */
+     CÂU CŨ Ở ĐÂY ĐÃ SAI, và nó sai theo kiểu nguy hiểm: nó mô tả một giả định mà
+     chính khối mã dưới đang dựa vào. Nguyên văn: *"/api/usage-by-account chỉ phủ
+     nguồn BIẾT NGƯỜI DÙNG (ref_source.knows_user), nên tài khoản dịch vụ không có
+     dòng nào ở đó — vòng lặp trên để chúng bằng 0."*
+
+     Từ 03/09/2026 endpoint đó đọc `usage_by_account_resolved`, phủ CẢ 8 AGENT:
+     1.453 dòng / 60 tài khoản, trong đó 1.057 dòng là `kind='service_account'`.
+     Nên vòng lặp trên KHÔNG còn để chúng bằng 0 — chúng đã có số thật.
+
+     VÌ SAO VẪN GIỮ KHỐI NÀY: phép gán dưới đây là `=` chứ không phải `+=`, nên nó
+     GHI ĐÈ chứ không cộng dồn — không có nguy cơ đếm hai lần. Và đã đo 03/09: hai
+     đường cho CÙNG một con số, 0/8 agent lệch trên cả `calls`, `input_tokens` lẫn
+     `output_tokens`. Giữ lại làm đường lui phòng khi view mất dòng dịch vụ.
+
+     THỨ ĐÃ ĐỔI THẬT: `u.costDerived`, `u.byModel`, `u.costRows` nay ĐƯỢC ĐIỀN cho
+     tài khoản dịch vụ (trước đây rỗng, vì không có dòng nào để cộng). Khối này
+     không đụng tới ba trường đó nên chúng giữ số vừa tính — và đó là cải thiện:
+     sáu agent dịch vụ vốn CÓ tiêu tiền, trước đây chúng hiện 0. */
   var tongAgent={};
   (rows||[]).forEach(function(x){
     if(!x||!x.a) return;
@@ -1579,10 +1593,17 @@ function deptDisplayName(dept){
    được", dù hai agent này có cây tổ chức đầy đủ. Sửa nhãn xong thì nó thành "Toàn
    công ty": đúng hơn, nhưng vẫn chưa phải phòng ban.
 
-   Chiều phòng ban THẬT nằm ở /api/usage-by-account, mỗi dòng có unit_id. Nó không
-   phủ hết — chỉ những nguồn biết người dùng (ref_source.knows_user) — nên chia
-   theo phần đo được, còn phần chưa quy được đứng RIÊNG thành một hàng mang đúng
-   tên đó, thay vì gán bừa cho một phòng ban nào.
+   Chiều phòng ban THẬT nằm ở /api/usage-by-account, mỗi dòng có unit_id.
+
+   TỪ 03/09/2026 NÓ PHỦ CẢ 8 AGENT, không còn chỉ những nguồn biết người dùng.
+   Câu cũ ở đây viết *"chỉ những nguồn biết người dùng (ref_source.knows_user)"* —
+   đúng cho tới 02/09, sai từ 03/09: endpoint nay đọc `usage_by_account_resolved`,
+   1.453 dòng / 60 tài khoản / 8 agent.
+
+   Phần CHƯA QUY ĐƯỢC vẫn đứng RIÊNG thành một hàng mang đúng tên đó, thay vì gán
+   bừa cho một phòng ban nào — nhưng nay nó nhỏ hơn hẳn và ĐO ĐƯỢC: `kind` bằng
+   'whole_agent' (1,7%) hoặc 'unattributed' (0,5%), tổng 2,2%. Sáu agent dịch vụ
+   KHÔNG còn nằm trong phần đó: chúng quy về đúng một tài khoản `svc.<code>`.
 
    Request, Token và User của mỗi hàng đều là SỐ ĐO. Riêng TIỀN thì chia theo tỷ
    lệ request và có dấu xấp xỉ: hoá đơn Google ghi theo project chứ không ghi
@@ -3207,6 +3228,15 @@ function renderInactiveAccounts(accounts){
 
    CÓ DATABASE thì đây là số ĐẾM ĐƯỢC: bao nhiêu tài khoản khác nhau phát sinh
    request trong ngày đó, lấy từ /api/usage-by-account.
+
+   ĐỔI HÀNH VI 03/09/2026 — biểu đồ này nay phủ 8/8 agent, trước chỉ 2/8.
+   Endpoint đọc `usage_by_account_resolved` thay vì `usage_by_account`, nên sáu
+   agent chạy bằng một tài khoản dịch vụ ĐÃ CÓ MẶT, mỗi agent đúng một tài khoản.
+   Đường cong vì thế NHẢY LÊN — đó là dữ liệu mới, không phải lỗi.
+
+   Đếm là đếm TÀI KHOẢN, không phải đếm người ngoài đời: một agent dịch vụ đóng
+   góp đúng 1, dù nó phục vụ cả công ty. Muốn đếm riêng người thật thì lọc
+   `kind = 'real'` — cột đó có trong mỗi dòng trả về.
 
    Trước 15/08 nó là một công thức:
        dau = tổng_tài_khoản × (0,10 + 0,16 × lượt_ngày / lượt_lớn_nhất)

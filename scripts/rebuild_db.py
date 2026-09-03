@@ -49,13 +49,31 @@ THU TU BAT BUOC
     3  load_ralli               fact_call
     4  load_hd                  fact_app_daily
     5  load_monitoring          fact_monitoring
-    6  build_usage_daily        fact_usage_daily (bang dan xuat)
-    7  build_performance        fact_perf_daily + fact_latency_daily
+    6  load_gateway             fact_call (nguon 'gateway')
+    7  build_usage_daily        fact_usage_daily (bang dan xuat)
+    8  build_usage_hourly       fact_usage_hourly (bang dan xuat)
+    9  build_performance        fact_perf_daily + fact_latency_daily
+   10  check_db_grants          KIEM quyen doc cua vai `api_readonly`
 
 Buoc 1 phai dau vi --rebuild xoa sach. Buoc 2 truoc buoc 3-4 vi load_org xoa
 fact_call, va vi ca hai buoc do deu tra account_id trong bang `account` do
-load_org dung len. Hai buoc cuoi la bang DAN XUAT: chung doc cac bang tren chu
+load_org dung len. BA buoc cuoi la bang DAN XUAT: chung doc cac bang tren chu
 khong doc file, nen phai chay sau cung.
+
+Buoc 8 doc CUNG mot bo loc voi buoc 7 va tu doi chieu tong cua minh voi tong
+theo ngay - no dung han neu hai con so lech. Nen thu tu 7 truoc 8 la bat buoc.
+
+BUOC 10 KHONG NAP GI - NO LA PHEP KIEM, VA NO PHAI DUNG CUOI
+------------------------------------------------------------
+Buoc 1 goi `DROP SCHEMA public CASCADE`, xoa MOI GRANT - ke ca quyen doc cua vai
+ma container `api` dung. Do 02/09/2026: sau mot lan dung lai, `api_readonly` doc
+duoc 0/20 bang · 0/3 view, va container `api` chay 38 phut tren mot database no
+khong doc noi. Khong bo kiem nao bat duoc: audit_db.py chay bang vai `token`
+(chu schema), con check_api.py chi thu mot lenh GHI - ma mat quyen doc thi lenh
+ghi VAN bi tu choi.
+
+Buoc nay BAO DONG chu khong tu chua. Van de khong phai quyen bi xoa, ma la khong
+ai duoc bao. Chua bang mot lenh:  docker compose up -d api
 
 VI SAO CO RIENG MOT BUOC CHO TLA HD
 -----------------------------------
@@ -80,16 +98,45 @@ PY = sys.executable
 sys.path.insert(0, str(ROOT / "db"))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
 
-# (nhan, ten file, tham so rieng)
+log = logs.get_logger("rebuild")
+
+# (nhan, duong dan tuong doi ROOT, tham so rieng)
+#
+# Mang DUONG DAN chu khong chi ten file (doi 03/09/2026): buoc cuoi nam o
+# `scripts/` chu khong o `db/`, va no la phep KIEM chu khong phai buoc NAP.
 STEPS = [
-    ("Hoa don",          "load_billing.py",      ["--rebuild"]),
-    ("To chuc",          "load_org.py",          []),
-    ("Nhat ky Ralli",    "load_ralli.py",        []),
-    ("Su dung TLA HD",   "load_hd.py",           []),
-    ("Monitoring",       "load_monitoring.py",   []),
-    ("Tong hop su dung", "build_usage_daily.py", []),
-    ("Hieu nang",        "build_performance.py", []),
+    ("Billing",          "db/load_billing.py",      ["--rebuild"]),
+    ("Org tree",         "db/load_org.py",          []),
+    ("Ralli log",        "db/load_ralli.py",        []),
+    ("TLA HD usage",     "db/load_hd.py",           []),
+    ("Monitoring",       "db/load_monitoring.py",   []),
+    # PHAI dung TRUOC build_usage_daily: buoc do la bang DAN XUAT, no doc
+    # fact_call. Va PHAI co mat o day - buoc 1 (`--rebuild`) xoa sach fact_call,
+    # nen thieu dong nay thi moi lan cap nhat dashboard la du lieu Gateway bien
+    # mat, khong loi nao bao. Bo nap tu do lai tu dau vi moc nap doc chinh
+    # fact_call: bang rong -> doc toan bo so.
+    ("Gateway ledger",   "db/load_gateway.py",      []),
+    ("Usage rollup",     "db/build_usage_daily.py", []),
+    # PHAI co mat, cung ly le voi buoc Gateway o tren: buoc 1 (`--rebuild`) xoa
+    # sach schema, nen thieu dong nay thi moi lan cap nhat dashboard la bang
+    # theo gio bien mat - khong loi nao bao, chi la mot bang rong.
+    ("Usage hourly",     "db/build_usage_hourly.py", []),
+    ("Performance",      "db/build_performance.py", []),
+    # BUOC CUOI, va no la mot PHEP KIEM chu khong phai mot buoc nap.
+    #
+    # Buoc 1 (`--rebuild`) goi `DROP SCHEMA public CASCADE` (db/connect.py:251),
+    # va lenh do xoa MOI GRANT - ke ca quyen doc cua vai ma container `api` dung.
+    # Cho cap lai la docker/read-only-api.sql, chi chay qua `api-db-init`.
+    #
+    # Do 02/09/2026: sau mot lan dung lai, `api_readonly` doc duoc 0/20 bang va
+    # 0/3 view, trong khi CA HAI bo kiem deu bao lanh - audit_db.py chay bang vai
+    # `token` (chu schema), con check_api.py chi thu mot lenh GHI, ma mat quyen
+    # doc thi lenh ghi VAN bi tu choi.
+    #
+    # Buoc nay BAO DONG, KHONG tu cap lai - xem docstring cua check_db_grants.py.
+    ("Read-role grants", "scripts/check_db_grants.py", []),
 ]
 
 
@@ -103,23 +150,22 @@ def main() -> None:
                    help=f"Bat dau tu buoc N (1-{len(STEPS)}). Dung khi mot buoc hong va da sua xong.")
     args = p.parse_args()
 
-    print("=" * 72)
-    print("DUNG LAI DATABASE TU DU LIEU DA THU THAP")
-    print("=" * 72)
-    print(f"Dich: {connect.mask_dsn(args.db)}")
+    log.info("rebuilding database from collected data -> %s",
+             connect.mask_dsn(args.db))
     if args.from_step > 1:
-        print(f"Bat dau tu buoc {args.from_step} - CAC BUOC TRUOC BI BO QUA.")
-        if args.from_step > 1 and "--rebuild" in STEPS[0][2]:
-            print("Luu y: bo qua buoc 1 nghia la KHONG dung lai schema.")
+        log.warning("starting at step %d - EARLIER STEPS ARE SKIPPED", args.from_step)
+        if "--rebuild" in STEPS[0][2]:
+            log.warning("skipping step 1 means the schema is NOT rebuilt")
 
     started = time.time()
     for i, (label, filename, extra_args) in enumerate(STEPS, start=1):
         if i < args.from_step:
-            print(f"\n[{i}/{len(STEPS)}] {label} - bo qua")
+            log.info("[%d/%d] %s - skipped", i, len(STEPS), label)
             continue
-        print(f"\n{'─' * 72}\n[{i}/{len(STEPS)}] {label}  ({filename})\n{'─' * 72}")
-        # Tien trinh con ghi thang ra terminal con print() o day qua bo dem;
-        # khong flush thi loi cua con hien truoc tieu de buoc.
+        log.info("[%d/%d] %s  (%s)", i, len(STEPS), label, filename)
+        # Tien trinh con ghi thang ra stdout, con logger o day qua bo dem cua no;
+        # khong flush thi loi cua con hien truoc dong danh dau buoc.
+        # logging.StreamHandler da tu flush - dong duoi la bao hiem.
         sys.stdout.flush()
         # DSN di qua BIEN MOI TRUONG, khong qua dong lenh: dong lenh cua mot
         # tien trinh nhin thay duoc tu ngoai (ps / Task Manager), nen dat DSN
@@ -128,21 +174,18 @@ def main() -> None:
         #
         # Con doc duoc vi connect.DEFAULT_DSN uu tien TOKEN_LEDGER_DSN, va --db
         # cua moi script nap mac dinh bang connect.DEFAULT_DSN.
-        result = subprocess.run([PY, str(ROOT / "db" / filename), *extra_args],
+        result = subprocess.run([PY, str(ROOT / filename), *extra_args],
                                  cwd=ROOT, env={**os.environ,
                                                 "TOKEN_LEDGER_DSN": args.db})
         if result.returncode != 0:
-            print(f"\n{'=' * 72}")
-            print(f"DUNG o buoc {i} ({filename}), ma thoat {result.returncode}.")
-            print(f"Sua xong chay lai tu day:  python scripts/rebuild_db.py "
-                  f"--db <dsn> --from-step {i}")
-            print("=" * 72)
+            log.error("STOPPED at step %d (%s), exit code %d",
+                      i, filename, result.returncode)
+            log.error("after fixing, resume from here:  python scripts/rebuild_db.py"
+                      " --db <dsn> --from-step %d", i)
             sys.exit(1)
 
-    print(f"\n{'=' * 72}")
-    print(f"XONG sau {time.time() - started:.0f}s."
-          f" Ca {len(STEPS)} buoc deu dat nghiem thu.")
-    print("=" * 72)
+    log.info("done in %ds - all %d steps passed their acceptance checks",
+             time.time() - started, len(STEPS))
 
 
 if __name__ == "__main__":

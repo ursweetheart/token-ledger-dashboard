@@ -89,7 +89,7 @@ def gcloud_path() -> str:
         if found:
             return found
     raise SystemExit(
-        "Khong tim thay gcloud trong PATH.\n"
+        "gcloud not found on PATH.\n"
         "Mo terminal moi sau khi cai, hoac chi duong dan bang --gcloud."
     )
 
@@ -243,13 +243,13 @@ def pull_project(project: str, token: str, out_dir: Path,
         json.dumps(descriptors, ensure_ascii=False, indent=2), encoding="utf-8")
 
     targets = wanted(descriptors, all_genlang)
-    print(f"  {len(descriptors)} descriptor, keo {len(targets)} phep do")
+    print(f"  {len(descriptors)} descriptors, pulling {len(targets)} metrics")
 
     rows: list[dict] = []
     for descriptor in targets:
         got = fetch_series(project, descriptor, token, start, end, align)
         if got:
-            print(f"    {alias_for(descriptor['type']):<52} {len(got):>6} diem")
+            print(f"    {alias_for(descriptor['type']):<52} {len(got):>6} points")
         rows.extend(got)
 
     target = out_dir / f"{project}.csv"
@@ -293,9 +293,9 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     projects = [p.strip() for p in args.projects.split(",") if p.strip()]
-    print(f"Khoang: {start:%Y-%m-%d %H:%M} -> {end:%Y-%m-%d %H:%M} UTC ({args.days} ngay)")
-    print(f"Do min: {args.align}s ({label})")
-    print(f"Ghi vao: {out_dir}\n")
+    print(f"range: {start:%Y-%m-%d %H:%M} -> {end:%Y-%m-%d %H:%M} UTC ({args.days} days)")
+    print(f"granularity: {args.align}s ({label})")
+    print(f"writing to: {out_dir}\n")
 
     total = 0
     for project in projects:
@@ -303,13 +303,13 @@ def main() -> None:
         # Refreshed per project: a wide sweep can outlive a single token.
         count = pull_project(project, access_token(gcloud), out_dir, start, end,
                              args.all_genlang, args.align)
-        print(f"  -> {count} dong\n")
+        print(f"  -> {count} rows\n")
         total += count
 
-    print(f"Xong. {total} dong, {len(projects)} project.")
-    print(f"Buoc tiep: python scripts/check_monitoring.py --dir \"{out_dir}\"")
+    print(f"done. {total} rows, {len(projects)} projects.")
+    print(f"next: python scripts/check_monitoring.py --dir \"{out_dir}\"")
     if total == 0:
-        print("\nCANH BAO: khong co dong nao. Kiem lai quyen Monitoring Viewer va khoang thoi gian.")
+        print("\nWARNING: no rows at all. Re-check the Monitoring Viewer permission and the time range.")
         sys.exit(1)
 
 

@@ -171,29 +171,29 @@ def main() -> None:
     else:
         pulls = sorted((ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat").glob("*/"))
         if not pulls:
-            raise SystemExit("Chua co dot keo nao. Chay pull_monitoring.py truoc.")
+            raise SystemExit("No pull batch yet. Run pull_monitoring.py first.")
         paths = sorted(pulls[-1].glob("*.csv"))
 
     paths = [p for p in paths if p.exists()]
     if not paths:
-        raise SystemExit("Khong tim thay file nao. Dung --dir hoac --file.")
+        raise SystemExit("No file found. Use --dir or --file.")
 
-    print("Doc:")
+    print("read:")
     for path in paths:
         print(f"  {path.relative_to(ROOT) if ROOT in path.parents else path}")
     rows = read_rows(paths)
-    print(f"  {len(rows)} dong\n")
+    print(f"  {len(rows)} rows\n")
 
     report = summarise(rows)
 
-    print("TRUOC KHI LOC  ->  SAU KHI LOC   (chenh lech cang lon, bay cang nguy hiem)")
+    print("BEFORE FILTER  ->  AFTER FILTER   (the wider the gap, the more dangerous the trap)")
     print(f"{'project':<26}{'quota req':>22}{'api req':>22}")
     for project, data in report.items():
         quota = f"{data['quota_raw']:,.0f} -> {data['quota']:,.0f}"
         api = f"{data['api_raw']:,.0f} -> {data['api']:,.0f}"
         print(f"{project:<26}{quota:>22}{api:>22}")
 
-    print("\nBANG KIEM CHUNG")
+    print("\nCROSS-CHECK TABLE")
     header = (f"{'project':<26}{'GenContent':>11}{'req(API)':>9}{'loi':>6}"
               f"{'ty le loi':>11}{'p95':>8}{'p99':>8}{'key':>5}{'gio':>6}{'model':>7}  khoang")
     print(header)
@@ -207,11 +207,11 @@ def main() -> None:
               f"{rate:>10.2f}%{data['p95_max']:>8.2f}{data['p99_max']:>8.2f}"
               f"{len(data['keys']):>5}{data['hours']:>6}{len(data['models']):>7}  {span}")
 
-    print("\nCHI TIET")
+    print("\nDETAIL")
     for project, data in report.items():
         print(f"  {project}")
-        print(f"    limit da chon : {data['limit'] or '(khong co)'}  [{data['limit_note']}]")
-        print(f"    ma tra ve     : {', '.join(data['codes']) or '-'}")
+        print(f"    chosen limit  : {data['limit'] or '(none)'}  [{data['limit_note']}]")
+        print(f"    response codes: {', '.join(data['codes']) or '-'}")
         print(f"    model         : {', '.join(data['models']) or '-'}")
         print(f"    quota requests: {data['quota']:,.0f}"
               f"  (don vi han muc, KHONG phai luot goi)")
@@ -240,7 +240,7 @@ def main() -> None:
                                     extrasaction="ignore")
             writer.writeheader()
             writer.writerows(filtered)
-        print(f"\nDa ghi ban loc: {out_path}  ({len(filtered)} dong)")
+        print(f"\nwrote the filtered copy: {out_path}  ({len(filtered)} rows)")
 
 
 if __name__ == "__main__":

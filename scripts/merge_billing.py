@@ -332,9 +332,9 @@ def warn_discount(records: list[dict]) -> None:
     total_by_project = sum((d["discount_commit_usd"] + d["discount_other_usd"] for d in present), Decimal(0))
     print("")
     print("  " + "!" * 68)
-    print(f"  !! LAN DAU XUAT HIEN KHOAN GIAM GIA: {len(present)} dong, tong ${fmt_money(total_by_project)}")
-    print("  !! Tu day chi_phi_usd la tien SAU giam gia, khac chi_phi_niem_yet_usd.")
-    print("  !! Moi con so chi phi phia sau doi nghia. Xem lai cac bao cao dang co.")
+    print(f"  !! A DISCOUNT APPEARS FOR THE FIRST TIME: {len(present)} rows, ${fmt_money(total_by_project)} in total")
+    print("  !! From now on chi_phi_usd is the cost AFTER the discount, unlike chi_phi_niem_yet_usd.")
+    print("  !! Every cost figure downstream changes meaning. Review the existing reports.")
     print("  " + "!" * 68)
     print("")
 
@@ -390,10 +390,10 @@ def reconcile(records: list[dict], ref_path: Path) -> None:
 
     extra = new_side - old_side
     missing = old_side - new_side
-    print(f"  tang 3: ban gop tay {len(old_rows)} dong "
+    print(f"  layer 3: the hand-merged file has {len(old_rows)} rows "
           f"${fmt_money(sum((Decimal(r['cost']) for r in old_rows), Decimal(0)))}")
     if not extra and not missing:
-        print(f"  tang 3: TRUNG KHIT {len(records)} dong")
+        print(f"  layer 3: EXACT MATCH on {len(records)} rows")
         return
 
     examples = ([f"    THUA  {fmt_key(k)}" for k in sorted(extra, key=str)[:5]]
@@ -427,12 +427,12 @@ def main() -> int:
 
         files = find_files(Path(args.folder))
         by_file: dict[Path, list[dict]] = {}
-        print(f"Doc {len(files)} file tu {args.folder}:")
+        print(f"read {len(files)} files from {args.folder}:")
         for f in files:
             project = lookup_project(f)
             rows = read_file(f, project)
             by_file[f] = rows
-            print(f"  {len(rows):5d} dong  {project:26s}  {f.name}")
+            print(f"  {len(rows):5d} rows  {project:26s}  {f.name}")
 
         records = [d for rows in by_file.values() for d in rows]
         if not records:
@@ -441,11 +441,11 @@ def main() -> int:
         check_tier1(records)
         n_discounted = sum(1 for d in records
                      if d["discount_commit_usd"] != 0 or d["discount_other_usd"] != 0)
-        print(f"  tang 1: DAT ({len(records)} dong, {len(records) - n_discounted} dong "
+        print(f"  layer 1: PASS ({len(records)} rows, {len(records) - n_discounted} rows "
               f"kiem du 3 dang thuc, {n_discounted} dong co giam gia kiem 2)")
         warn_discount(records)
         check_tier2(by_file, records)
-        print(f"  tang 2: DAT ({len(by_file)} project)")
+        print(f"  layer 2: PASS ({len(by_file)} projects)")
 
         # Sap xep ON DINH -> hai lan chay cho ra file giong het nhau toi tung byte,
         # dieu kien de `diff` co y nghia.
@@ -472,7 +472,7 @@ def main() -> int:
         sys.stdout.flush()  # de thong diep loi khong nhay len truoc phan da in
         print("")
         print(str(e), file=sys.stderr)
-        print("KHONG ghi file dau ra.", file=sys.stderr)
+        print("output file NOT written.", file=sys.stderr)
         return 1
 
     total_by_project = sum((d["cost_usd"] for d in records), Decimal(0))
@@ -481,10 +481,10 @@ def main() -> int:
     for d in records:
         money_by_kind[d["kind"]] += d["cost_usd"]
     print("")
-    print(f"  {len(records)} dong | ${fmt_money(total_by_project)}")
+    print(f"  {len(records)} rows | ${fmt_money(total_by_project)}")
     for kind in sorted(rows_by_kind):
-        print(f"    {kind:8s} {rows_by_kind[kind]:5d} dong  ${fmt_money(money_by_kind[kind])}")
-    print(f"  Da ghi: {out_path}")
+        print(f"    {kind:8s} {rows_by_kind[kind]:5d} rows  ${fmt_money(money_by_kind[kind])}")
+    print(f"  wrote: {out_path}")
     return 0
 
 

@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from rules import MODEL_ID, MODELS, guess_kind, guess_model  # noqa: E402
+from rules import GATEWAY_MODELS, MODEL_ID, MODELS, guess_kind, guess_model  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def _latest_dir(parent: Path, prefer_suffix: str = "") -> Path:
     children = sorted(p for p in parent.glob("*") if p.is_dir())
     if not children:
-        raise SystemExit(f"Khong co thu muc thu thap nao trong {parent}")
+        raise SystemExit(f"no collection folder in {parent}")
     if prefer_suffix:
         match = [p for p in children if p.name.endswith(prefer_suffix)]
         if match:
@@ -46,7 +46,7 @@ def _latest_dir(parent: Path, prefer_suffix: str = "") -> Path:
 def _latest_file(parent: Path, pattern: str) -> Path:
     candidates = sorted(parent.glob(pattern))
     if not candidates:
-        raise SystemExit(f"Khong co file nao khop {parent / pattern}")
+        raise SystemExit(f"no file matches {parent / pattern}")
     return candidates[-1]
 
 
@@ -168,12 +168,24 @@ def model_aliases() -> list[tuple[str, str, int]]:
                 labels.add(("app", r["model"]))
     for source, name in sorted(labels):
         if name not in MODEL_ID:
-            failed.append(f"nhan {source} '{name}' khong co trong danh sach model chuan")
+            failed.append(f"label {source} '{name}' is not in the canonical model list")
         else:
             aliases.append((source, name, MODEL_ID[name]))
 
+    # Nguon 'gateway'. KHAC ba nguon tren: ten khong doc tu file du lieu ma khai
+    # trong rules.GATEWAY_MODELS, vi Gateway ghi ten upstream cua nha cung cap
+    # chu khong ghi bi danh. Tuyen nao chua khai thi luu luong cua no roi vao
+    # muc "khong noi duoc model" cua db/load_gateway.py -- duoc dem va in ra,
+    # khong bien mat im lang.
+    for raw in GATEWAY_MODELS:
+        canonical = guess_model(raw)
+        if not canonical or canonical not in MODEL_ID:
+            failed.append(f"tuyen gateway '{raw}' -> model={canonical}")
+        else:
+            aliases.append(("gateway", raw, MODEL_ID[canonical]))
+
     if failed:
-        raise SystemExit("KHONG ANH XA DUOC - them vao db/rules.py roi chay lai:\n  "
+        raise SystemExit("CANNOT BE MAPPED - add it to db/rules.py and run again:\n  "
                          + "\n  ".join(failed))
     return aliases
 
@@ -203,7 +215,7 @@ def _classify_metric(metric_type: str) -> tuple[str, str | None]:
     if tail.endswith("requests") or tail.endswith("request_count") \
             or tail.endswith("requests_per_model"):
         return "calls", None
-    raise SystemExit(f"Khong phan loai duoc phep do '{metric_type}'.\n"
+    raise SystemExit(f"cannot classify the metric '{metric_type}'.\n"
                      "  Them nhanh moi vao _classify_metric() roi chay lai.")
 
 
@@ -249,7 +261,7 @@ def metric_aliases() -> list[tuple]:
         out.append(("monitoring", mt, (d.get("description") or "").strip() or None,
                     measures, kind, metric_kind, value_type))
     if mismatch:
-        raise SystemExit("Ten phep do va metadata cua Google KHONG khop:\n  "
+        raise SystemExit("the metric name and Google's metadata DISAGREE:\n  "
                          + "\n  ".join(mismatch))
     return out
 
@@ -278,16 +290,16 @@ def sku_aliases(cat: dict[str, dict]) -> list[tuple]:
     for sid, csv_name in sorted(sku.items()):
         s = cat.get(sid)
         if not s:
-            failed.append(f"SKU {sid} '{csv_name[:60]}' khong co trong catalog")
+            failed.append(f"SKU {sid} '{csv_name[:60]}' is not in the catalog")
             continue
         description = s.get("description", "")
         kind = guess_kind(description)
         if not kind:
-            failed.append(f"SKU {sid} '{description[:60]}' -> khong suy duoc kind")
+            failed.append(f"SKU {sid} '{description[:60]}' -> cannot infer a kind")
             continue
         out.append(("billing_sku", sid, description, "token", kind, None, None))
     if failed:
-        raise SystemExit("SKU khong tra cuu duoc:\n  " + "\n  ".join(failed))
+        raise SystemExit("SKUs that cannot be looked up:\n  " + "\n  ".join(failed))
     return out
 
 
@@ -330,6 +342,53 @@ def price_table(cat: dict[str, dict]) -> list[tuple]:
         k = (MODEL_ID[model], kind)
         if k not in best or vol > best[k][0]:
             best[k] = (vol, price, day, sid)
+
+    # DU PHONG cho model CHUA CO HOA DON.
+    #
+    # Quy tac "SKU co khoi luong lon nhat" o tren doi ta da tung bi tinh tien cho
+    # model do. Model moi bat qua Gateway thi chua - va cho hoa don ve nghia la
+    # dashboard hien dau gach ngang thay vi tien, du catalog DA CO gia.
+    #
+    # Do 31/08/2026: `gemini-3.5-flash-lite` co 24 SKU dau vao trong catalog
+    # (text/anh/am thanh/video x thuong/flex/priority/batch/caching). Khong co
+    # khoi luong thi khong biet cai nao chi phoi -> chon SKU TEXT TIEU CHUAN,
+    # tuc la khong mang bat ky bien the nao. Do la thu mot luot goi API binh
+    # thuong dung toi.
+    #
+    # DA DOI CHIEU DOC LAP: gia catalog cho model do la $0,30 vao / $2,50 ra, va
+    # don gia suy nguoc tu 40/40 dong that cua LiteLLM cung ra dung hai so do.
+    # Hai nguon khong lien quan gi nhau, khop den tung xu.
+    BIEN_THE = ("flex", "priority", "batch", "caching", "storage")
+    # CHI ap dung cho model KHONG CO MOT DONG GIA NAO tu hoa don.
+    #
+    # Ban dau dieu kien la `if k in best` - tuc la vá theo TUNG LOAI gia. Sai:
+    # model 1, 7, 8 co hoa don cho input/output nhung khong co khoi luong cho SKU
+    # cached, va cach do lang le dien `price_cached` cho ca ba. Chung DA CO hoa
+    # don; dien them gia cached la mot quyet dinh khac, phai lam co chu dich chu
+    # khong phai roi ra tu day.
+    da_co_hoa_don = {mid for (mid, _kind) in best}
+    for sid, s_ in cat.items():
+        description = s_.get("description", "")
+        model, kind = guess_model(description), guess_kind(description)
+        if not model or not kind:
+            continue
+        mid = MODEL_ID[model]
+        if mid in da_co_hoa_don:
+            continue
+        k = (mid, kind)
+        if k in best:
+            continue
+        t = description.lower()
+        if " text" not in t or any(v in t for v in BIEN_THE):
+            continue
+        pi = (s_.get("pricingInfo") or [{}])[0]
+        tiers = pi.get("pricingExpression", {}).get("tieredRates") or []
+        if not tiers:
+            continue
+        u = tiers[-1]["unitPrice"]
+        best[k] = (0,                        # khoi luong 0 = chon theo du phong
+                   (int(u.get("units", 0)) + u.get("nanos", 0) / 1e9) * 1e6,
+                   (pi.get("effectiveTime") or "")[:10] or "1970-01-01", sid)
 
     grouped: dict[tuple[int, str], dict] = collections.defaultdict(dict)
     for (mid, kind), (_, price, day, _sid) in best.items():
@@ -388,6 +447,8 @@ def main() -> None:
     A(f"-- {len(prices)} bang gia CHINH CHU tu Cloud Billing Catalog (USD / 1 trieu token).")
     A("-- Truoc day bang nay RONG. Moi model lay gia cua SKU co khoi luong lon nhat")
     A("-- trong hoa don. Catalog chi co gia HIEN HANH, khong co lich su.")
+    A("-- Model CHUA CO HOA DON thi khong co khoi luong de chon -> lay SKU TEXT")
+    A("-- TIEU CHUAN (khong flex/priority/batch/caching). Xem price_table().")
     A("INSERT INTO ref_price (model_id, effective_from, price_input, price_output,"
       " price_cached, source) VALUES")
     A(",\n".join(f"  ({m}, {q(d)}, {'NULL' if i is None else f'{i:.8f}'},"
@@ -413,11 +474,11 @@ def main() -> None:
 
     OUT.write_text("\n".join(out), encoding="utf-8")
     n = collections.Counter(x[0] for x in aliases)
-    print(f"Ghi {OUT}")
-    print(f"  {len(AGENTS)} agent | {len(MODELS)} model | {len(aliases)} anh xa {dict(n)} "
+    print(f"wrote {OUT}")
+    print(f"  {len(AGENTS)} agents | {len(MODELS)} models | {len(aliases)} aliases {dict(n)} "
           f"| 1 ty gia | {len(budgets)} ngan sach")
     nm = collections.Counter(x[3] for x in metrics)
-    print(f"  {len(metrics)} bi danh phep do {dict(nm)} | {len(skus)} bi danh SKU"
+    print(f"  {len(metrics)} metric aliases {dict(nm)} | {len(skus)} SKU aliases"
           f" | {len(prices)} dong bang gia")
 
 

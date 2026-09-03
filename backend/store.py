@@ -354,14 +354,70 @@ def usage(cn, ph, start: str, end: str) -> list[dict]:
     return r
 
 
+def usage_hourly(cn, ph, start: str, end: str) -> list[dict]:
+    """Lưu lượng theo GIỜ. BA nguồn, không phải bốn.
+
+    `billing` KHÔNG có mặt và sẽ không bao giờ có: hoá đơn Google chỉ tính theo
+    ngày. Cột `source` nói ra điều đó, nên người gọi biết bằng cách ĐỌC DỮ LIỆU
+    chứ không phải bằng một dòng chú thích trên giao diện.
+
+    Hệ quả phải nhớ khi đọc: tổng của bảng này KHÔNG bằng tổng theo ngày, vì
+    thiếu hẳn nguồn hoá đơn - và nguồn `app` cũng chỉ có phần Ralli (TLA Hợp
+    Đồng nằm ở `fact_app_daily`, gộp sẵn theo ngày, không có giờ). So theo TỪNG
+    NGUỒN thì khớp; so tổng thì không, và đó là đúng.
+
+    `start`/`end` là NGÀY, không phải giờ. Khoảng bao trọn cả hai ngày đầu cuối.
+    """
+    r = _rows(cn, f"""
+        SELECT h.hour, h.agent_id, g.name AS agent, h.model_id, h.account_id,
+               h.calls, h.total_tokens, h.input_tokens, h.output_tokens,
+               h.cached_tokens, h.cost_usd, h.source
+        FROM fact_usage_hourly h
+        JOIN dim_agent g ON g.agent_id = h.agent_id
+        WHERE h.hour >= {ph} AND h.hour < ({ph}::date + 1)
+        ORDER BY h.hour, h.agent_id, h.model_id, h.account_id, h.source""",
+        (start, end))
+    for x in r:
+        # ISO 8601 không có múi giờ. Mọi cột thời gian của database này là giờ
+        # Việt Nam (chốt 14/08); gắn hậu tố 'Z' hay '+07:00' vào đây là mời
+        # trình duyệt quy đổi thêm một lần nữa.
+        x["hour"] = str(x["hour"])[:19]
+        x["cost_usd"] = _money(x["cost_usd"])
+    return r
+
+
 def usage_by_account(cn, ph, start: str, end: str) -> list[dict]:
-    """Sử dụng quy về từng người. CHỈ phủ phần đến từ nguồn BIẾT NGƯỜI DÙNG
-    (ref_source.knows_user) - xem `health`."""
+    """Sử dụng quy về từng TÀI KHOẢN, phủ CẢ 8 AGENT.
+
+    ĐỌC `usage_by_account_resolved`, KHÔNG đọc `usage_by_account` (đổi 03/09/2026).
+    Hai view trả lời hai câu khác nhau:
+
+        usage_by_account            "quy về một CON NGƯỜI"    -> 2/8 agent
+        usage_by_account_resolved   "quy về một TÀI KHOẢN"    -> 8/8 agent
+
+    Câu thứ hai mới là câu dashboard cần. Sáu agent chạy bằng MỘT tài khoản dịch
+    vụ: ta biết chính xác ai gọi, chỉ là "ai" đó không phải một con người - và
+    `001_baseline.sql:176-186` đã ghi rõ hai câu hỏi đó phải tách nhau.
+
+    Đo 03/09: view cũ 337 dòng / 2 agent / 53 account; view mới **1.453 dòng /
+    8 agent / 60 account**, và tổng khớp `usage_resolved` ở CẢ token (915.969.971)
+    lẫn calls (122.504).
+
+    Cột `kind` trả về để người gọi phân biệt được bốn loại - đặc biệt là
+    `whole_agent` và `unattributed` (2,2%), phần ta THẬT SỰ không quy được về tài
+    khoản nào. Giấu chúng đi là nói dối rằng độ phủ bằng 100%.
+
+    KHÔNG có `cost_usd`, và đó là có chủ ý: tiền chỉ tồn tại ở mức
+    (ngày, agent, model). Chia đều cho các tài khoản là bịa ra một con số không
+    nguồn nào từng báo cáo.
+    """
     r = _rows(cn, f"""
         SELECT v.day, v.agent_id, g.name AS agent, v.model_id, v.account_id,
-               v.username, v.full_name, v.unit_id, v.unit_path, v.unit_conflict,
-               v.is_shared, v.calls, v.total_tokens, v.input_tokens, v.output_tokens
-        FROM usage_by_account v
+               v.username, v.full_name, v.kind, v.unit_id, v.unit_path,
+               v.unit_conflict, v.is_shared, v.calls, v.total_tokens,
+               v.input_tokens, v.output_tokens, v.cached_tokens,
+               v.token_source, v.call_source
+        FROM usage_by_account_resolved v
         JOIN dim_agent g ON g.agent_id = v.agent_id
         WHERE v.day >= {ph} AND v.day <= {ph}
         ORDER BY v.day, v.account_id, v.agent_id, v.model_id""", (start, end))
@@ -382,10 +438,24 @@ def performance(cn, ph, start: str, end: str) -> dict:
         FROM fact_perf_daily
         WHERE day >= {ph} AND day <= {ph}
         ORDER BY day, agent_id, method, response_code""", (start, end))
+    # ĐỌC `latency_resolved`, KHÔNG đọc `fact_latency_daily` (đổi 03/09/2026).
+    #
+    # Từ migration 008 bảng đó có thể có HAI dòng cho cùng một (ngày, agent) -
+    # một của monitoring, một của gateway. Tầng đọc chưa chịu nổi điều đó:
+    # `web/js/api.js:187` gán đè trên khoá `day|agent_id` KHÔNG có `source`, mà
+    # `ORDER BY day, agent_id` ở đây cũng KHÔNG có tie-break trên nguồn. Hai dòng
+    # cho cùng khoá thì dòng đến sau thắng, và không ai biết là dòng nào - không
+    # crash, không nhân đôi, chỉ là một con số KHÔNG XÁC ĐỊNH.
+    #
+    # View chọn sẵn một nguồn, nên mỗi khoá chỉ còn một dòng.
+    #
+    # KHÔNG trả `latency_source` ra API: dashboard hiện MỘT CON SỐ TRẦN, không
+    # nhãn nguồn. Cột đó tồn tại trong view để `scripts/audit_db.py` kiểm được
+    # view đã chọn đúng chưa - nó phục vụ phép kiểm, không phục vụ người xem.
     latency = _rows(cn, f"""
         SELECT day, agent_id, samples, p50_seconds, p95_seconds, p95_bucket_from,
                p95_bucket_to, p99_seconds, enough_samples
-        FROM fact_latency_daily
+        FROM latency_resolved
         WHERE day >= {ph} AND day <= {ph}
         ORDER BY day, agent_id""", (start, end))
     for x in codes:

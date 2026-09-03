@@ -62,3 +62,13 @@
 - Đổi cách TÍNH tiền. Con số giữ nguyên, chỉ thêm phần nói nó từ đâu ra
 - Nối Google Billing cho `tla-ralli` — đó là việc hạ tầng, change này chỉ làm nó **nhìn
   thấy được**
+
+---
+
+> **THAY THẾ MỘT PHẦN — 31/08/2026.** Nguồn thứ tư `gateway` **không** áp dụng yêu cầu
+> "phân biệt tiền hoá đơn với tiền suy ra" của `specs/visible-data-provenance`. Chủ dự án
+> chốt hiển thị thẳng số tiền của LiteLLM, không gắn dấu `≈`. Lý do và số đo:
+> `openspec/changes/load-the-gateway-ledger-into-the-database/tasks.md` mục 9, và đầu file
+> `db/migrations/sql/005_gateway_cost_vao_view.sql`.
+>
+> Ba nguồn cũ (`billing`, `monitoring`, `app`) **giữ nguyên** yêu cầu này.

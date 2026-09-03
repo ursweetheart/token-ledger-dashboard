@@ -39,6 +39,13 @@ model_list:
       api_key: os.environ/KEY_GOOGLE_AI_STU
       rpm: 60
       tpm: 1000000
+      # Truc chon KHOA PROJECT khi len 8 tuyen. Virtual key mang tag nao thi
+      # request cua no chi roi vao deployment mang dung tag do -- nho vay hoa don
+      # Google van tach duoc theo project, va con dung lam nguon doi chieu doc lap
+      # voi so cua Gateway (Giai doan 6).
+      #
+      # KHONG co tac dung neu thieu `enable_tag_filtering: true` o router_settings.
+      tags: ["dms-feedback"]
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
@@ -90,6 +97,17 @@ litellm_settings:
   #   ttl: 600
 
 router_settings:
+
+  # [BAT] Loc theo tag. MAC DINH LA False (litellm/router.py:430) -- thieu dong
+  # nay thi `tags` o tren bi bo qua HOAN TOAN va IM LANG:
+  # tag_based_routing.py:483 thoat som, tra ve NGUYEN danh sach deployment, roi
+  # usage-based-routing-v2 chon theo han muc con lai.
+  #
+  # Kieu hong: request van 200, so van ghi dung token va dung chi phi, CHI RIENG
+  # khoa project la chon ngau nhien -> hoa don Google rai deu ra 8 project ma
+  # khong ai keu mot tieng. Phat hien 30/08 luc tu soat change
+  # route-the-first-agent-through-the-gateway, TRUOC khi kip hong that.
+  enable_tag_filtering: true
   # Trang thai dung chung dat tren Redis: bo dem rpm/tpm va danh sach instance
   # dang bi phat nguoi. Nho no ma hai instance LiteLLM chay STATELESS -- them hay
   # bot mot instance khong lam mat bo dem.

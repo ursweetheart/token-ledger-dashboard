@@ -125,17 +125,17 @@ def main() -> None:
     else:
         pulls = sorted(p for p in RAW.glob("*") if p.is_dir())
         if not pulls:
-            raise SystemExit(f"Khong thay dot keo nao trong {RAW}")
+            raise SystemExit(f"no pull batch found in {RAW}")
         source = pulls[-1]
 
     if not source.is_dir():
-        raise SystemExit(f"Khong thay thu muc: {source}")
+        raise SystemExit(f"folder not found: {source}")
 
     rows, columns = read_pull(source)
     if not rows:
-        raise SystemExit(f"Khong co dong nao trong {source}")
+        raise SystemExit(f"no rows in {source}")
 
-    print(f"Doc  : {source}   ({len(rows):,} dong)")
+    print(f"read  : {source}   ({len(rows):,} rows)")
 
     dropped = 0
     if args.loc:
@@ -168,11 +168,11 @@ def main() -> None:
     combined = target / "_tat-ca.csv"
     write(combined, rows, ordered)
 
-    print(f"Ghi  : {target}")
+    print(f"wrote : {target}")
     if dropped:
-        print(f"       da bo {dropped:,} dong rac (--loc)")
-    print(f"       {len(projects)} file theo project + _tat-ca.csv ({len(rows):,} dong)")
-    print(f"Khoang: {to_vn(ict_of(rows[0]))}  ->  {to_vn(ict_of(rows[-1]))}  (gio Viet Nam)")
+        print(f"        dropped {dropped:,} junk rows (--loc)")
+    print(f"        {len(projects)} per-project files + _tat-ca.csv ({len(rows):,} rows)")
+    print(f"Khoang: {to_vn(ict_of(rows[0]))}  ->  {to_vn(ict_of(rows[-1]))}  (Vietnam time)")
 
 
 if __name__ == "__main__":

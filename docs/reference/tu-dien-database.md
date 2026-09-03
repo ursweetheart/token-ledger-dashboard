@@ -394,6 +394,11 @@ Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Comp
 | 3 | `method` | `text` | phương thức API | 12 giá trị, đều thuộc `generativelanguage` | `google.ai.generativelanguage.v1beta.GenerativeService.EmbedContent` |
 | 4 | `response_code` | `text` | **mã HTTP** | `200` (554) · `503` (21) · `400` (11) · `404` (6) · `499` (6) · `500` (2) | `200` |
 | 5 | `calls` | `integer` | số lượt | 1 → 5.790 | `51` |
+| 6 | `source` | `text` | **nguồn của dòng** (migration 008, 03/09) | `monitoring` (669). Đếm qua `serviceruntime/api/request_count`, đã lọc `service = generativelanguage` | `monitoring` |
+
+**Cột `source` thêm 03/09/2026.** Nó nằm trong **khoá chính**, không phải cột phụ. Hai nguồn đếm **hai thứ khác nhau** dù cùng tên cột: `monitoring` đếm qua công tơ Google, `gateway` sẽ đếm từng lượt trong sổ LiteLLM. Cộng hai nguồn lại là đếm hai lần cùng một lưu lượng.
+
+669 dòng cũ nhận `DEFAULT 'monitoring'` — **đúng nghĩa**, chúng thật sự dựng từ `fact_monitoring`.
 
 ---
 
@@ -414,6 +419,77 @@ Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Comp
 | 7 | `p95_bucket_to` | `double precision` | **cận trên** ô đó | Trung vị bề rộng ô = **57% của chính giá trị p95** → dashboard phải hiện **KHOẢNG**, không phải số lẻ | `4.1943` |
 | 8 | `p99_seconds` | `double precision` | phân vị 99 | 0,261 → 506,00 giây | `4.0894` |
 | 9 | `enough_samples` | `boolean` | đủ mẫu để phân vị có nghĩa? | `true` (259) · **`false` (38) khi `samples < 10`** | `true` |
+| 10 | `source` | `text` | **nguồn của phân vị** (migration 008, 03/09) | `monitoring` (339) · `gateway` (1) | `gateway` |
+
+### Cột `source` và hai cách tính phân vị hoàn toàn khác nhau (03/09/2026)
+
+`source` nằm trong **khoá chính** `(day, agent_id, source)`. Thiếu nó thì dòng Gateway đụng khoá với dòng monitoring của cùng một ngày — hoặc `INSERT` hỏng, hoặc tệ hơn, `DO UPDATE` ghi đè và mất một nguồn mà tổng vẫn "khớp".
+
+**ĐỌC `source` CÙNG `p95_bucket_*` ĐỂ BIẾT ĐỘ TIN CẬY — hai cột đó là thước đo sai số:**
+
+```
+   source = 'monitoring'   p95 NOI SUY trong mot o histogram
+                           p95_bucket_from/to CO gia tri
+                           do 03/09: be rong o = 54-67% chinh gia tri p95
+                           (agent 6: p95 58,206 s, o rong 31,318 s)
+
+   source = 'gateway'      p95 tinh THANG tu tung gia tri duration_ms
+                           p95_bucket_from/to = NULL  <- KHONG AP DUNG
+                           khong co sai so noi suy nao
+```
+
+`NULL` ở hai cột ô nghĩa là *"không áp dụng"*, **không** phải *"chưa nạp"*. Ghi `0` vào đó là nói "sai số bằng không đo được" — sai hẳn nghĩa.
+
+**MỖI NGUỒN MỘT DÒNG, KHÔNG GỘP TRUNG BÌNH.** Trung bình hai phân vị cho ra một con số không thuộc về phép đo nào. Muốn **một** con số duy nhất thì phải **CHỌN** một nguồn — và hôm nay chưa view nào làm việc đó.
+
+**Chưa giải thích được, ghi lại để đừng ai kết luận vội (đo 03/09/2026):** hai nguồn lệch **31,9 lần** cho cùng agent 6 — thủ công p95 TB **58,206 s** vs gateway **1,822 s**; p50 lệch 24,9 lần (19,66 s vs 0,788 s). Ba phép đo đã loại trừ các giải thích dễ dãi: 0/38 lượt Gateway vượt 33,55 s; số lượt/ngày tương đương (45,4 vs 38); p50 cũng lệch, mà p50 ít chịu sai số ô hơn nhiều. **Chưa ngày nào hai nguồn cùng có số**, nên chưa nguồn nào kiểm chứng được nguồn kia.
+
+---
+
+## `fact_usage_hourly` — **Lưu lượng theo GIỜ.** Cùng năm chiều khoá như bảng ngày
+
+3.327 dòng · Khoá chính `(hour, agent_id, model_id, account_id, source)` · migration 008, 03/09/2026
+
+**BA nguồn, không phải bốn — và nguồn vắng mặt là một thông tin.**
+
+```
+   app          fact_call.ts_local        698 dong    -> xuong duoc gio
+   gateway      fact_call.ts_local          5 dong    -> xuong duoc gio
+   monitoring   fact_monitoring.ts_local 2.624 dong   -> xuong duoc gio
+   billing      fact_billing_daily.day    KHONG CO    -> KHONG BAO GIO co gio
+```
+
+Hoá đơn Google tính theo **ngày**. Đó là giới hạn của nhà cung cấp, không phải của ta. Chia đều tiền một ngày cho 24 giờ sẽ cho ra một biểu đồ đẹp và một con số **bịa**. Người đọc biết `billing` vắng mặt bằng cách **truy vấn cột `source`**, không phải bằng một dòng chú thích trên giao diện.
+
+| # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
+|---|---|---|---|---|---|
+| 1 | `hour` | `timestamp` | **đầu giờ**, giờ VN | 1.751 giờ riêng biệt trên 153 ngày | `2026-08-31 18:00:00` |
+| 2 | `agent_id` | `integer` | agent | 1–8 | `6` |
+| 3 | `model_id` | `integer` | model | | `3` |
+| 4 | `account_id` | `integer` | tài khoản. Nguồn `monitoring` dùng **tài khoản neo** vì Google chỉ báo mức project | | `949` |
+| 5 | `calls` | `integer` | số lượt | | `38` |
+| 6 | `total_tokens` | `bigint` | tổng token | | `45187` |
+| 7 | `input_tokens` | `bigint` | token vào | | |
+| 8 | `output_tokens` | `bigint` | token ra | | |
+| 9 | `cached_tokens` | `bigint` | token cache. **NULL ở `monitoring`** — Cloud Monitoring không có phép đo nào cho nó | | |
+| 10 | `cost_usd` | `numeric(14,6)` | tiền. **CHỈ `gateway` có**, và đó là số LiteLLM tự nhân từ bảng giá — không phải hoá đơn | | `0.021305` |
+| 11 | `source` | `text` | nguồn | `monitoring` · `app` · `gateway`. **Không bao giờ có `billing`** | `gateway` |
+
+**TỔNG THEO GIỜ PHẢI BẰNG TỔNG THEO NGÀY — nhưng CHO TỪNG NGUỒN, không phải tổng chung.**
+
+```
+   gateway       45.187 = 45.187        calls  38 = 38          DAT
+   monitoring   496.933.793 = 496.933.793  calls 111.290        DAT
+   app           50.068.543  <- so voi PHAN fact_call cua nguon app
+                 bang ngay 112.775.370, vi TLA Hop Dong nam o
+                 fact_app_daily (gop san theo ngay, KHONG co gio)
+```
+
+So tổng chung là biến một sự thật đã biết thành một báo động giả — rồi người ta sẽ tắt phép kiểm đi. `scripts/audit_db.py` nhóm F kiểm theo từng nguồn.
+
+**Vì sao bảng riêng, không thêm cột `hour` vào `fact_usage_daily`:** khoá chính của bảng ngày đang được 10 chỗ đầu đọc dựa vào; và một bảng mà hai độ mịn nằm chung thì **mọi phép SUM đều phải nhớ lọc** — đúng hình dạng lỗi `source` hồi 31/08.
+
+**Đọc qua API:** `GET /api/usage-hourly?start=…&end=…`. Endpoint này **bắt buộc** có khoảng thời gian, khác 9 endpoint kia (chúng mặc định 30 ngày gần nhất).
 
 ---
 
@@ -533,6 +609,12 @@ Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Comp
 
 ## `usage_by_account` — Cùng số liệu, **nhìn theo tài khoản**
 
+> ⚠ **Từ 03/09/2026, hỏi `usage_by_account_resolved` (mục ngay dưới) thay cho view này.**
+> View này chỉ phủ **2/8 agent**. Nó trả lời câu *"quy về một CON NGƯỜI"*; câu dashboard cần
+> là *"quy về một TÀI KHOẢN"*. Giữ lại vì `tools/baseline_db.py` và
+> `tools/dien_tap_gateway.py` đọc nó làm mốc lịch sử — đổi nó là mọi số mốc cũ không so lại
+> được.
+
 320 dòng · Lọc `source='app'` và `kind='real'`
 
 **Chỉ phủ phần có nguồn `app`** — vì Google không ghi ai gọi. Chỉ agent 5 và 8 xuất hiện.
@@ -554,6 +636,115 @@ Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Comp
 | 13 | `total_tokens` | `bigint` | tổng token | 350 → 8.126.973 | `75588` |
 | 14 | `input_tokens` | `bigint` | token vào | 236 → 6.815.690 | `73500` |
 | 15 | `output_tokens` | `bigint` | token ra | 3 → 1.311.283 | `2088` |
+
+---
+
+## `usage_by_account_resolved` — **Chiều tài khoản cho CẢ 8 AGENT.** Dùng view này
+
+1.453 dòng · 8 agent · 60 tài khoản · migration 009, 03/09/2026
+
+**Dùng view này, không dùng `usage_by_account`.** Hai view trả lời hai câu khác nhau:
+
+```
+   usage_by_account            "quy ve mot CON NGUOI"    ->  2/8 agent · 53 account
+   usage_by_account_resolved   "quy ve mot TAI KHOAN"    ->  8/8 agent · 60 account
+```
+
+Sáu agent chạy bằng **một** tài khoản dịch vụ: ta biết chính xác ai gọi, chỉ là "ai" đó không phải một con người — `001_baseline.sql:176-186` đã tách hai câu hỏi đó từ 20/08.
+
+### Vì sao KHÔNG sửa view cũ (đã đo cả hai đường, cả hai hỏng)
+
+```
+   noi `kind` IN ('real','service_account')   338 dong · 3 AGENT   <- chi THEM MOT
+       vi `knows_user` van chan: service_account co token o billing (741.641.736)
+       va monitoring (485.267.016), ca hai deu knows_user = false
+
+   bo LUON `knows_user`                       1.903 dong · 1.335.508.782 token
+       tong chuan 915.969.971                 -> PHONG 145,8%
+       vi fact_usage_daily de BON NGUON CANH NHAU, khong chong len nhau
+```
+
+### Cách dựng: JOIN với nguồn ĐÃ ĐƯỢC CHỌN, và phải JOIN **HAI LẦN**
+
+`usage_resolved` không mang `account_id`, nhưng nó **nói ra** nó đã chọn nguồn nào. Lấy đúng nguồn ấy quay lại `fact_usage_daily` là có chiều tài khoản mà không đếm hai lần.
+
+**Một lần là không đủ.** Đo: JOIN chỉ theo `token_source` cho **token lệch 0** trong khi **calls hụt 77,9%** (27.056/122.504) — vì `usage_resolved` chọn nguồn theo **từng chỉ tiêu**, và `billing` **không có** cột `calls`:
+
+```
+   token_source | call_source | dong |    token    | calls
+   -------------+-------------+------+-------------+--------
+   billing      | monitoring  |  524 | 472.161.741 | 93.062   <- lech o day
+   billing      |   (khong)   |  488 | 279.027.663 |      -
+     (khong)    | monitoring  |   11 |           - |  2.386   <- CHI co calls
+```
+
+11 dòng chỉ-có-calls là lý do phải `FULL OUTER JOIN`: `LEFT JOIN` từ phía token vứt chúng đi mà **tổng token vẫn khớp**.
+
+> **NGHIỆM THU PHẢI LÀ HAI CON SỐ.** `SUM(total_tokens)` **và** `SUM(calls)` đều phải bằng `usage_resolved`. Kiểm một con số thì một lỗi 78% vẫn báo ĐẠT — đã xảy ra thật.
+
+### Phân bố, và vì sao GIỮ phần không quy được
+
+```
+   service_account  1.057 dong · 6 agent ·  6 account · 793.613.395 · 86,6%
+   real               324 dong · 2 agent · 52 account · 102.905.141 · 11,2%
+   whole_agent         38 dong · 1 agent ·  1 account ·  15.230.908 ·  1,7%
+   unattributed        34 dong · 1 agent ·  1 account ·   4.220.527 ·  0,5%
+```
+
+`whole_agent` + `unattributed` = **2,2%** ta THẬT SỰ không quy được về tài khoản nào. Lọc chúng đi là nói dối rằng độ phủ bằng 100%.
+
+**Chéo kiểm với `/api/health`** — một đường tính hoàn toàn khác (đi từ `usage_resolved`, không qua `account`) — khớp cả ba: people 107.125.668 · service 793.613.395 · opaque 15.230.908.
+
+**KHÔNG có `cost_usd`, và đó là có chủ ý:** tiền chỉ tồn tại ở mức (ngày, agent, model). Chia đều cho các tài khoản là bịa ra một con số không nguồn nào từng báo cáo.
+
+Cột riêng so với view cũ: `kind` · `cached_tokens` · `token_source` · `call_source`.
+
+---
+
+## `latency_resolved` — **MỘT con số độ trễ** cho mỗi (ngày, agent). Chọn, không trung bình
+
+340 dòng · migration 010, 03/09/2026
+
+Từ migration 008, `fact_latency_daily` **có thể có hai dòng** cho cùng một `(day, agent_id)`. Đó là đúng ở tầng dữ liệu — mỗi nguồn giữ phép đo của nó. Nhưng tầng đọc chưa chịu nổi:
+
+```
+   web/js/api.js:187   d.lat = x.p95_seconds || 0;   <- GAN DE
+                       khoa la `day|agent_id`, KHONG co `source`
+   backend/store.py    ORDER BY day, agent_id        <- KHONG co tie-break
+```
+
+Hai dòng cho cùng khoá thì dòng đến **sau** thắng, và không ai biết là dòng nào. Không crash, không nhân đôi — chỉ là một con số **không xác định**.
+
+**TUYỆT ĐỐI KHÔNG trung bình hai phân vị.** Phân vị không cộng được: trung bình của p95=2,1 s (trên 100 lượt) và p95=8,4 s (trên 2 lượt) ra 5,25 s trong khi số thật ~2,3 s.
+
+View lấy **tất cả** cột từ **cùng** nguồn đã chọn — không COALESCE riêng từng cột, vì trộn p50 nguồn này với p95 nguồn kia ra một cặp số không nguồn nào từng báo cáo.
+
+### `latency_source` — cột phục vụ PHÉP KIỂM, không lên màn hình
+
+```
+   monitoring  339 dong    p95 NOI SUY, p95_bucket_* CO gia tri
+   gateway       1 dong    p95 tu SO THO, p95_bucket_* = NULL
+```
+
+Dashboard hiện **một con số trần**. `/api/performance` **không** trả cột này — kiểm qua HTTP: `'latency_source' in row` là `False`.
+
+### ⚠ Thứ tự ưu tiên hiện tại là LỰA CHỌN TẠM
+
+`monitoring` trước `gateway`. Lý lẽ là **rủi ro bất đối xứng**, không phải độ chính xác:
+
+```
+   monitoring truoc  ->  dashboard KHONG doi con so nao hom nay (do: A.lat 13,8002
+                         truoc = 13,8002 sau). Sai lam nay khong ai nhin thay.
+   gateway truoc     ->  p95 cua DMS roi tu ~58 s xuong ~1,8 s. Nguoi xem thay
+                         he thong nhanh len 31,9 LAN sau mot dem, va no trong y
+                         nhu that.
+```
+
+Hai nguồn lệch **31,9 lần** trên cùng agent 6 (p95 58,206 s vs 1,822 s; p50 lệch 24,9 lần) và **chưa ngày nào chồng lấn** để kiểm chứng lẫn nhau. Ba phép đo đã loại trừ giải thích dễ dãi: 0/38 lượt Gateway vượt 33,55 s; số lượt/ngày tương đương (45,4 vs 38); p50 cũng lệch mà p50 ít chịu sai số ô hơn.
+
+**Đổi chiều = sửa đúng MỘT dòng `CASE`** trong SQL của view. Phép đo sẽ trả lời: một buổi chạy DMS qua Gateway **trong ngày** mà Cloud Monitoring đang ghi.
+
+**Chỗ này đi ngược `usage_resolved`, và đó là có chủ ý.** View kia cho `gateway` đứng trước billing về **token** vì hai nguồn đếm **cùng một thứ**. Với **độ trễ** thì chưa chứng minh được điều đó — cùng một tên "nguồn" không bảo đảm cùng một phép đo.
 
 ---
 
@@ -622,6 +813,35 @@ Dòng cuối của bảng trên là lý do view tồn tại: quên lọc thì gi
                   │  (đã chọn sẵn nguồn)  │    hỏi số liệu ở đây
                   └───────────────────────┘
 ```
+
+---
+
+# Phụ lục: cách đọc kết quả `scripts/audit_db.py`
+
+Từ **03/09/2026** báo cáo audit có ba mức thay vì hai, và nhãn của mỗi phép kiểm nói thêm một chuyện: **nó đã soi bao nhiêu dòng**.
+
+```
+   [  ok  ] Every gateway row has raw_model (41 rows checked)
+                                            ^^^^^^^^^^^^^^^^
+   [ note ] Gateway rows in fact_perf_daily carry method and response_code
+            CHUA KIEM DUOC - 0 dong de quan sat. Day KHONG phai ket qua dat.
+```
+
+**Vì sao cần con số đó.** Mọi phép kiểm theo nguồn đều mang hình dạng *"đếm dòng xấu, đòi bằng 0"*. Chạy trên **0 dòng** thì nó trả 0 và báo ĐẠT — nó **không phân biệt** *"nguồn ghi đúng"* với *"nguồn không ghi gì cả"*.
+
+Đây không phải chuyện lý thuyết. Bước `load_gateway.py` hỏng im lặng thì `fact_call` không có dòng gateway nào, **mọi** phép kiểm gateway vẫn xanh, và dashboard chỉ trông như *"chưa có lưu lượng"*. Cùng hình dạng lỗi đã để container `api` chạy 38 phút trên một database nó không đọc nổi ngày 02/09.
+
+| Mức | Nghĩa | Có làm script thất bại không |
+|---|---|---|
+| `ok` | đã soi **n > 0** dòng, không dòng nào vi phạm | không |
+| `note` | **0 dòng để soi** — chưa kiểm được, hoặc một khoảng trống dữ liệu đã biết | không |
+| `FAIL` | đã soi n > 0 dòng, có dòng vi phạm | có |
+
+**`note` KHÔNG phải một dạng ĐẠT nhẹ hơn.** Nó nói rằng phép kiểm ấy **chưa khẳng định được gì**. Số `note` tăng lên sau một lần sửa thường là dấu hiệu **tốt**: những chỗ trước nay báo đạt mà chưa quan sát gì đang lộ ra.
+
+Mốc 03/09/2026 sau khi áp cơ chế: **72 phép · 65 đạt · 7 lưu ý · 0 hỏng** (trước đó 68 · 64 · 4 · 0).
+
+**Khoá ngoại nay đọc từ `pg_constraint`,** không từ danh sách gõ tay. Đo ngày 03/09: danh sách cũ đã trôi mất **13/36** quan hệ, trong đó 6 do migration 008 tạo ra cùng sáng hôm đó. Nhãn `Foreign keys (36 relations, read from the database)` in ra số quan hệ **có thật**. Kèm một mốc số lượng (`>= 36`) để bắt chiều ngược lại: xoá một khoá ngoại thì danh sách tự sinh vẫn xanh, vì nó chỉ kiểm những gì còn lại.
 
 ---
 
