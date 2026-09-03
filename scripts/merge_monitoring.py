@@ -122,17 +122,17 @@ def main() -> None:
     if missing:
         raise SystemExit(f"Khong thay thu muc: {[str(t) for t in missing]}")
     if not batches:
-        raise SystemExit(f"Khong co dot keo nao trong {base}")
+        raise SystemExit(f"no pull batch in {base}")
 
     # MOI TRUOC CU SAU: dot moi la nguon uu tien khi trung khoa.
     batches = sorted(batches, key=lambda d: d.name, reverse=True)
     out_name = args.out_path or (batches[0].name + "-gop")
     dest = Path(RA) / out_name
 
-    print(f"Gop {len(batches)} dot (uu tien tu tren xuong):")
+    print(f"merging {len(batches)} batches (priority top-down):")
     for d in batches:
         print(f"    {d.name}")
-    print(f"Ghi vao: {dest}\n")
+    print(f"writing to: {dest}\n")
 
     projects: dict[str, list[Path]] = {}
     for d in batches:
@@ -146,19 +146,19 @@ def main() -> None:
         tk = merge_project(name, projects[name], dest / f"{name}.csv")
         for k in total:
             total[k] += tk[k]
-        print(f"  {name:<28} {tk['vao']:>8,} vao -> {tk['ra']:>8,} ra"
-              f" | trung {tk['trung']:>7,} | lech gia tri {tk['lech']:,}")
+        print(f"  {name:<28} {tk['vao']:>8,} in -> {tk['ra']:>8,} out"
+              f" | dup {tk['trung']:>7,} | value clash {tk['lech']:,}")
         for example in tk["lech_vi_du"]:
-            print(f"        LECH {example[0]} @ {example[1]}:")
-            print(f"             {example[2]} = {example[3]}   (dot duoc GIU)")
-            print(f"             {example[4]} = {example[5]}   (dot bi BO)")
+            print(f"        MISMATCH {example[0]} @ {example[1]}:")
+            print(f"             {example[2]} = {example[3]}   (batch KEPT)")
+            print(f"             {example[4]} = {example[5]}   (batch DROPPED)")
 
-    print(f"\n  TONG {total['vao']:,} vao -> {total['ra']:,} ra"
-          f" | trung {total['trung']:,} | lech gia tri {total['lech']:,}")
+    print(f"\n  TOTAL {total['vao']:,} in -> {total['ra']:,} out"
+          f" | dup {total['trung']:,} | value clash {total['lech']:,}")
     if total["lech"]:
-        print("\n  CANH BAO: co khoa trung nhung gia tri khac nhau giua hai dot keo.")
-        print("  Da giu gia tri cua dot MOI. Xem vi du o tren truoc khi tin ket qua.")
-    print(f"\nXong. Buoc tiep: db/load_monitoring.py doc {out_name} khi dung lai database")
+        print("\n  WARNING: some keys repeat with different values across two pull batches.")
+        print("  Kept the value from the NEWER batch. Read the example above before trusting the result.")
+    print(f"\ndone. Next: db/load_monitoring.py reads {out_name} when rebuilding the database")
 
 
 if __name__ == "__main__":

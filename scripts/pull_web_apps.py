@@ -212,8 +212,8 @@ def get_token(name: str, config: dict, env: dict) -> tuple[str, str]:
     password = env.get(config["bien_pass"], "").strip()
     if not (username and password):
         raise SystemExit(
-            f"[{name}] khong co token va khong co tai khoan de dang nhap.\n"
-            f"  Dat {config['bien']} trong moi truong,\n"
+            f"[{name}] no token and no account to log in with.\n"
+            f"  set {config['bien']} in the environment,\n"
             f"  HOAC dien {config['bien_user']} va {config['bien_pass']} vao {ENV_FILE}.\n"
             f"  Xem .env.example."
         )
@@ -269,7 +269,7 @@ def pull_one_app(name: str, folder: Path, thin_slice: bool, token: str) -> list[
         try:
             body = http_get(config["goc"], path, token)
         except PullError as e:
-            result.append({"file": filename, "trang_thai": f"HONG: {e}",
+            result.append({"file": filename, "trang_thai": f"FAILED: {e}",
                             "bat_buoc": required, "byte": 0, "noi_dung": "-"})
             print(f"  {'X':<2} {filename:<34} {e}")
             continue
@@ -279,9 +279,9 @@ def pull_one_app(name: str, folder: Path, thin_slice: bool, token: str) -> list[
         except json.JSONDecodeError:
             # Tra ve HTML (thuong la trang SPA) nghia la duong dan khong ton tai
             # that su, du ma tra ve 200. Day la loi, khong duoc luu.
-            result.append({"file": filename, "trang_thai": "HONG: khong phai JSON",
+            result.append({"file": filename, "trang_thai": "FAILED: not JSON",
                             "bat_buoc": required, "byte": len(body), "noi_dung": "-"})
-            print(f"  {'X':<2} {filename:<34} tra ve khong phai JSON ({len(body):,} byte)")
+            print(f"  {'X':<2} {filename:<34} did not return JSON ({len(body):,} bytes)")
             continue
 
         (folder / filename).write_text(
@@ -322,7 +322,7 @@ def pull_tla_members(folder: Path, token: str) -> str:
     (folder / "units-members.json").write_text(
         json.dumps(merged, ensure_ascii=False, indent=1), encoding="utf-8")
     total = sum(len(x.get("members") or []) for x in merged)
-    print(f"  {'v':<2} {'units-members.json':<34} {len(merged)}/{len(unit_list)} don vi,"
+    print(f"  {'v':<2} {'units-members.json':<34} {len(merged)}/{len(unit_list)} units,"
           f" {total} thanh vien")
     return f"khong keo duoc thanh vien cua {len(failed)} don vi: {failed[:3]}" if failed else ""
 
@@ -349,11 +349,11 @@ def crosscheck_ralli(folder: Path) -> list[str]:
     actual = len(raw_json) if isinstance(raw_json, list) else len(raw_json.get("data", []))
 
     if declared is None:
-        warnings.append("khong tim thay token_usage trong danh sach collection")
+        warnings.append("token_usage not found in the collection list")
     elif declared != actual:
         warnings.append(f"token_usage: API khai {declared:,} ban ghi nhung export tra ve {actual:,}")
     else:
-        print(f"  KIEM CHEO DAT: token_usage {actual:,} ban ghi, khop so API tu khai")
+        print(f"  CROSS-CHECK PASSED: token_usage {actual:,} records, matches what the API reports")
     return warnings
 
 
@@ -387,7 +387,7 @@ def main() -> None:
         token_of[app] = tk
         print(f"[{app}] token: {source} | {expires_in(tk)}")
     if args.chi_kiem_token:
-        print("Chi kiem token - dung tai day.")
+        print("token check only - stopping here.")
         return
 
     all_rows: dict[str, list[dict]] = {}
@@ -408,7 +408,7 @@ def main() -> None:
     failed_required = []
     for app, rows in all_rows.items():
         ok = sum(1 for r in rows if r["trang_thai"] == "OK")
-        print(f"{app:<10} {ok}/{len(rows)} endpoint lay duoc")
+        print(f"{app:<10} {ok}/{len(rows)} endpoints fetched")
         # "BO QUA (lat mong)" la lua chon co chu dinh, khong phai that bai.
         failed_required += [f"{app}/{r['file']}: {r['trang_thai']}"
                           for r in rows if r["bat_buoc"]
@@ -416,16 +416,16 @@ def main() -> None:
                           and not r["trang_thai"].startswith("BO QUA")]
 
     for c in warnings:
-        print(f"CANH BAO: {c}")
+        print(f"WARNING: {c}")
 
     if failed_required:
-        print("\nENDPOINT BAT BUOC HONG:")
+        print("\nREQUIRED ENDPOINTS FAILED:")
         for h in failed_required:
             print(f"  {h}")
         raise SystemExit(1)
     if warnings:
-        raise SystemExit("Co canh bao kiem cheo - xem o tren, khong coi la dat.")
-    print("XONG - moi endpoint bat buoc deu lay duoc")
+        raise SystemExit("cross-check warnings above - not treated as a pass.")
+    print("DONE - every required endpoint was fetched")
 
 
 if __name__ == "__main__":

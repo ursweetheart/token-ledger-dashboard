@@ -43,6 +43,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
+
+log = logs.get_logger("load_hd")
 
 ROOT = Path(__file__).resolve().parents[1]
 TLA_HD = 5
@@ -50,7 +53,7 @@ SRC_FILE = "usage-day-user-model.json"
 
 # Ten API tra ve nhung KHONG phai model. Bo, nhung bo co ghi chep.
 NOT_A_MODEL = {
-    "none": "app khong ghi duoc model cho luot goi nay (trung legacy_calls)",
+    "none": "the app could not record a model for this call (matches legacy_calls)",
 }
 
 COLUMNS = ["row_id", "day", "agent_id", "account_id", "model_id", "raw_model",
@@ -64,7 +67,7 @@ def _latest(parent: Path, filename: str) -> Path:
         if (p / filename).exists():
             return p
     raise SystemExit(
-        f"Khong dot nao trong {parent} co {filename}."
+        f"no batch in {parent} contains {filename}."
         f" Chay scripts/pull_hd_usage.py truoc.")
 
 
@@ -78,8 +81,8 @@ def main() -> None:
     folder = _latest(ROOT / "data" / "raw_web" / "tla-hd", SRC_FILE)
     payload = json.loads((folder / SRC_FILE).read_text(encoding="utf-8"))
     rows = payload["rows"]
-    print(f"  Nguon: {folder.name}/{SRC_FILE}"
-          f" ({payload['tu_ngay']} -> {payload['den_ngay']}, keo luc {payload['keo_luc']})")
+    log.info("  source: %s/%s (%s -> %s, pulled at %s)", folder.name, SRC_FILE,
+             payload["tu_ngay"], payload["den_ngay"], payload["keo_luc"])
 
     cn, ph = connect.open_db(args.db)
     cn.cursor().execute("DELETE FROM fact_app_daily")
@@ -146,11 +149,11 @@ def main() -> None:
     if actual[0] != len(rows):
         errors.append(f"nap {actual[0]} dong != {len(rows)} dong trong file")
     if int(actual[1] or 0) != want_calls:
-        errors.append(f"luot {actual[1]} != {want_calls} trong file")
+        errors.append(f"calls {actual[1]} != {want_calls} in the file")
     if int(actual[2] or 0) != want_tokens:
         errors.append(f"token {actual[2]} != {want_tokens} trong file")
     if want_calls != payload["tong_luot"]:
-        errors.append(f"file tu mau thuan: cong dong ra {want_calls}"
+        errors.append(f"the file contradicts itself: summing rows gives {want_calls}"
                    f" != tong_luot {payload['tong_luot']}")
 
     # Khoa tu nhien phai duy nhat, du khoa chinh la so thu tu. Trung o day nghia
@@ -161,28 +164,29 @@ def main() -> None:
             FROM fact_app_daily GROUP BY day, account_id, raw_model
             HAVING COUNT(*) > 1) t""")[0]
     if dupes:
-        errors.append(f"{dupes} bo (ngay, tai khoan, model) bi trung - keo hut")
+        errors.append(f"{dupes} duplicated (day, account, model) tuples - the pull is broken")
 
-    print(f"  fact_app_daily: {n} dong, {int(actual[1] or 0):,} luot,"
-          f" {int(actual[2] or 0):,} token")
+    log.info("  fact_app_daily: %d rows, %s calls, %s tokens",
+             n, f"{int(actual[1] or 0):,}", f"{int(actual[2] or 0):,}")
     if skipped:
         for name, calls in sorted(skipped.items()):
-            print(f"  BO ({calls} luot): model {name!r} - {NOT_A_MODEL[name]}")
+            log.info("  DROPPED (%d calls): model %r - %s", calls, name, NOT_A_MODEL[name])
     missing_model = connect.query_one(
         cn, "SELECT COUNT(*), SUM(calls) FROM fact_app_daily WHERE model_id IS NULL")
     if missing_model[0]:
-        print(f"  {missing_model[0]} dong khong co model_id"
-              f" ({int(missing_model[1] or 0)} luot) - khong vao fact_usage_daily")
+        log.warning("  %d rows have no model_id (%d calls) - they do not reach"
+                    " fact_usage_daily", missing_model[0], int(missing_model[1] or 0))
     if unmappable:
         total = sum(unmappable.values())
-        print(f"  {len(unmappable)} nguoi khong quy duoc ve tai khoan"
-              f" ({total} luot): {sorted(unmappable)}")
+        log.warning("  %d people not resolvable to an account (%d calls): %s",
+                    len(unmappable), total, sorted(unmappable))
 
     if errors:
         cn.rollback()
-        raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(errors))
+        raise SystemExit("ACCEPTANCE FAILED - rolled back:\n  "
+                         + "\n  ".join(errors))
     cn.commit()
-    print("  NGHIEM THU DAT")
+    log.info("  acceptance passed")
 
 
 if __name__ == "__main__":

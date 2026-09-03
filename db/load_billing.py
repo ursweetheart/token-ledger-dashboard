@@ -29,6 +29,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
+
+log = logs.get_logger("load_billing")
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,7 +41,7 @@ def _latest_billing() -> Path:
     folder = ROOT / "data" / "da_xu_ly" / "billing"
     candidates = sorted(folder.glob("billing_*.csv"))
     if not candidates:
-        raise SystemExit(f"Khong co file gop nao trong {folder}."
+        raise SystemExit(f"no merged file in {folder}."
                          f" Chay scripts/merge_billing.py truoc.")
     return candidates[-1]
 
@@ -64,7 +67,7 @@ def main() -> None:
 
     if args.rebuild:
         cn, ph = connect.rebuild(args.db)
-        print(f"Da dung lai schema + danh muc tren {connect.mask_dsn(args.db)}")
+        log.info("schema + catalog rebuilt on %s", connect.mask_dsn(args.db))
     else:
         cn, ph = connect.open_db(args.db)
 
@@ -102,7 +105,7 @@ def main() -> None:
     # mọi biểu đồ "chi phí theo model" sau đó đều thiếu tiền mà không báo gì.
     if no_model or no_kind or no_agent:
         raise SystemExit(
-            "Chua co trong danh muc - chay lai python db/gen_catalog.py:\n"
+            "not in the catalog yet - re-run python db/gen_catalog.py:\n"
             f"  khong ra model: {dict(no_model)}\n"
             f"  khong ra kind : {dict(no_kind)}\n"
             f"  project la    : {dict(no_agent)}"
@@ -121,9 +124,9 @@ def main() -> None:
     cur.execute("SELECT kind, COUNT(*) FROM fact_billing_daily GROUP BY kind ORDER BY kind")
     by_kind = cur.fetchall()
 
-    print(f"  nguon: {Path(args.file).name}")
-    print(f"  {n} dong | ${float(total):.4f}")
-    print(f"  theo kind: {dict(by_kind)}")
+    log.info("  source: %s", Path(args.file).name)
+    log.info("  %d rows | $%.4f", n, float(total))
+    log.info("  by kind: %s", dict(by_kind))
 
     # Số mong đợi SUY TỪ FILE NGUỒN ở mỗi lần chạy, không ghim.
     src_rows = len(records)
@@ -131,12 +134,12 @@ def main() -> None:
 
     errors = []
     if n != src_rows:
-        errors.append(f"so dong {n} != {src_rows} dong dung tu file nguon")
+        errors.append(f"row count {n} != {src_rows} counted from the source file")
     if abs(float(total) - src_total) > 0.0001:
         errors.append(f"tong ${float(total):.6f} != ${src_total:.6f} trong file nguon")
     if errors:
-        raise SystemExit("NGHIEM THU KHONG DAT: " + " | ".join(errors))
-    print("  NGHIEM THU DAT (doi chieu voi chinh file nguon)")
+        raise SystemExit("ACCEPTANCE FAILED: " + " | ".join(errors))
+    log.info("  acceptance passed (checked against the source file itself)")
 
 
 if __name__ == "__main__":

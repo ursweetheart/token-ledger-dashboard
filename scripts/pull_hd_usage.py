@@ -117,10 +117,10 @@ def days_with_calls(config: dict, token: str, start: date, end: date) -> list[st
         if buc != "day":
             raise SystemExit(
                 f"Thang {marker:%m/%Y} tra bucket={buc!r}, mong doi 'day'."
-                f" Khong suy ra duoc ngay nao co luot - dung lai.")
+                f" could not derive which days have calls - stopping.")
         days_present = [t["timestamp"][:10] for t in (payload.get("timeline") or []) if t.get("calls")]
         out_path.extend(days_present)
-        print(f"  {marker:%m/%Y}  {payload['totals']['call_count']:>6,} luot"
+        print(f"  {marker:%m/%Y}  {payload['totals']['call_count']:>6,} calls"
               f"  {len(days_present):>3} ngay co du lieu")
     return sorted(set(out_path))
 
@@ -205,19 +205,19 @@ def main() -> None:
     env = {**P.read_env(P.ENV_FILE), **os.environ}
     token, source = P.get_token(APP, config, env)
     print(f"Token: {source} - {P.expires_in(token)}")
-    print(f"Khoang: {start} -> {end}\n")
+    print(f"range: {start} -> {end}\n")
 
-    print("Buoc 1/2  Hoi theo thang de biet ngay nao co luot")
+    print("step 1/2  query by month to find which days have calls")
     day = days_with_calls(config, token, start, end)
-    print(f"  -> {len(day)} ngay co du lieu\n")
+    print(f"  -> {len(day)} days with data\n")
 
-    print(f"Buoc 2/2  Keo tung ngay ({len(day)} ngay)")
+    print(f"step 2/2  pull each day ({len(day)} days)")
     all_rows, total_by_day = [], {}
     for i, d in enumerate(day, start=1):
         rows, total = pull_day(config, token, d)
         all_rows.extend(rows)
         total_by_day[d] = total
-        print(f"  [{i:>3}/{len(day)}] {d}  {total:>5,} luot"
+        print(f"  [{i:>3}/{len(day)}] {d}  {total:>5,} calls"
               f"  {len(rows):>3} dong (nguoi x model)")
 
     # ── NGHIEM THU ────────────────────────────────────────────────────
@@ -228,15 +228,15 @@ def main() -> None:
     for d, total in total_by_day.items():
         days_present = sum(x["calls"] or 0 for x in all_rows if x["day"] == d)
         if days_present != total:
-            errors.append(f"{d}: gop duoc {days_present} luot != {total} server bao")
+            errors.append(f"{d}: rows sum to {days_present} calls != {total} reported by the server")
 
     missing_model = [x for x in all_rows if not x["model"]]
     if missing_model:
-        print(f"\n  LUU Y: {len(missing_model)} dong khong xac dinh duoc model"
+        print(f"\n  NOTE: {len(missing_model)} rows have no identifiable model"
               f" ({sum(x['calls'] or 0 for x in missing_model)} luot).")
 
     if errors:
-        raise SystemExit("NGHIEM THU KHONG DAT - khong ghi file:\n  "
+        raise SystemExit("ACCEPTANCE FAILED - no file written:\n  "
                          + "\n  ".join(errors[:20]))
 
     folder = ROOT / "data" / "raw_web" / APP / date.today().isoformat()
@@ -249,10 +249,10 @@ def main() -> None:
         "rows": all_rows,
     }, ensure_ascii=False, indent=1), encoding="utf-8")
 
-    print(f"\nNGHIEM THU DAT - {len(all_rows)} dong,"
+    print(f"\nacceptance passed - {len(all_rows)} rows,"
           f" {sum(total_by_day.values()):,} luot,"
           f" {sum(x['total_tokens'] or 0 for x in all_rows):,} token")
-    print(f"Da ghi: {out_path.relative_to(ROOT)}")
+    print(f"wrote: {out_path.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

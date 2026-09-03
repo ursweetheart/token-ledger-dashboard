@@ -71,7 +71,7 @@ def mot_luot(dsn: str, im_lang: bool) -> int:
                            capture_output=im_lang, text=True,
                            encoding="utf-8", errors="replace")
         if r.returncode != 0:
-            print(f"HONG o buoc '{nhan}' ({ten}), ma thoat {r.returncode}."
+            print(f"FAILED at step '{nhan}' ({ten}), exit code {r.returncode}."
                   f" DUNG LAI - khong tong hop tren du lieu thieu.")
             # In CA hai luong. Traceback nam o stderr; in moi stdout la giau
             # dung thu can xem.
@@ -83,7 +83,7 @@ def mot_luot(dsn: str, im_lang: bool) -> int:
 
     print(f"  fact_call gateway  {truoc[0]:>6} -> {sau[0]:<6} (+{sau[0] - truoc[0]})"
           f"  | token {truoc[1]:,} -> {sau[1]:,}")
-    print(f"  fact_usage_daily   {truoc[2]:>6} -> {sau[2]:<6} dong nguon gateway")
+    print(f"  fact_usage_daily   {truoc[2]:>6} -> {sau[2]:<6} gateway rows")
     return 0
 
 
@@ -99,18 +99,18 @@ def main() -> int:
     if not args.every:
         return mot_luot(args.db, args.quiet)
 
-    print(f"Vong lap moi {args.every}s. Ctrl-C de dung.")
+    print(f"Looping every {args.every}s. Ctrl-C to stop.")
     while True:
         # Bat CA loi cua dem(): database co the dang khoi dong lai, va mot vong
         # lap chet vi mot luot hong la mat luon co che tu dong.
         try:
             ma = mot_luot(args.db, True)
         except Exception as exc:
-            print(f"  LOI: {type(exc).__name__}: "
+            print(f"  ERROR: {type(exc).__name__}: "
                   f"{str(exc).strip().splitlines()[0]}")
             ma = 1
         if ma != 0:
-            print(f"  (se thu lai sau {args.every}s)")
+            print(f"  (retrying in {args.every}s)")
         time.sleep(args.every)
 
 

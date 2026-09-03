@@ -11,21 +11,21 @@
 # gay theo du nguoi dung khong he dinh bat Gateway.
 set -eu
 
-fail() { echo "DUNG: $1" >&2; exit 1; }
+fail() { echo "STOP: $1" >&2; exit 1; }
 
 for v in LITELLM_MASTER_KEY LITELLM_SALT_KEY KEY_GOOGLE_AI_STU DATABASE_URL REDIS_PASSWORD; do
   eval "val=\${$v:-}"
-  [ -n "$val" ] || fail "thieu $v. Dien vao .env roi chay lai. Xem .env.example."
+  [ -n "$val" ] || fail "$v is missing. Fill it in .env and run again. See .env.example."
 done
 
 case "$LITELLM_MASTER_KEY" in
   sk-*) ;;
-  *) fail "LITELLM_MASTER_KEY phai bat dau bang 'sk-' (LiteLLM doi dung tien to nay)." ;;
+  *) fail "LITELLM_MASTER_KEY must start with 'sk-' (LiteLLM requires that prefix)." ;;
 esac
 
 # Khoa mac dinh cua ban vi du khong duoc phep di ra ngoai may cua nguoi viet no.
 case "$LITELLM_MASTER_KEY" in
-  sk-doi-khoa-nay|sk-1234|sk-test|sk-local) fail "LITELLM_MASTER_KEY con la khoa vi du. Sinh khoa that: python -c \"import secrets; print('sk-' + secrets.token_urlsafe(32))\"" ;;
+  sk-doi-khoa-nay|sk-1234|sk-test|sk-local) fail "LITELLM_MASTER_KEY is still the example key. Generate a real one: python -c \"import secrets; print('sk-' + secrets.token_urlsafe(32))\"" ;;
 esac
 
 exec /app/docker/prod_entrypoint.sh "$@"

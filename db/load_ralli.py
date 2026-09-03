@@ -33,6 +33,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
+
+log = logs.get_logger("load_ralli")
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,7 +45,7 @@ def _latest_ralli() -> Path:
     parent_dir = ROOT / "data" / "raw_web" / "ralli"
     remaining = sorted(p for p in parent_dir.glob("*") if p.is_dir())
     if not remaining:
-        raise SystemExit(f"Khong co dot keo nao trong {parent_dir}."
+        raise SystemExit(f"no pull batch in {parent_dir}."
                          f" Chay scripts/pull_web_apps.py truoc.")
     return remaining[-1]
 
@@ -123,7 +126,7 @@ def main() -> None:
 
     if unknown_format or missing_model:
         raise SystemExit(
-            "Du lieu co dang chua biet - dung han, khong nap:\n"
+            "the data has an unknown shape - stopping, nothing loaded:\n"
             f"  so truong la : {dict(unknown_format)}\n"
             f"  model chua co: {dict(missing_model)}")
 
@@ -143,8 +146,9 @@ def main() -> None:
         cn, f"SELECT COUNT(*) FROM fact_call WHERE unit_id = {dc}",
         (unattributed_unit,))[0]
 
-    print(f"  {n} dong | {tok:,} token | dinh dang {by_format}")
-    print(f"  cached_tokens NULL {missing_cached} | khong quy duoc ve don vi {unattributed_calls}")
+    log.info("  %d rows | %s tokens | record format %s", n, f"{tok:,}", by_format)
+    log.info("  cached_tokens NULL %d | not resolvable to a unit %d",
+             missing_cached, unattributed_calls)
 
     # ── so mong doi suy tu chinh bang tho ──
     src_rows = len(records)
@@ -163,23 +167,24 @@ def main() -> None:
 
     errors = []
     if n != src_rows:
-        errors.append(f"so dong {n} != {src_rows} dong dung tu bang tho")
+        errors.append(f"row count {n} != {src_rows} counted from the raw table")
     if tok != src_tokens:
         errors.append(f"token {tok} != {src_tokens} trong bang tho")
     if missing_cached != src_missing_cached:
-        errors.append(f"cached NULL {missing_cached} != {src_missing_cached} ban ghi thieu truong")
+        errors.append(f"cached NULL {missing_cached} != {src_missing_cached} records missing the field")
     if by_format != dict(src_by_format):
         errors.append(f"dinh dang {by_format} != {dict(src_by_format)} dem tu bang tho")
     if unattributed_app is None:
-        errors.append(f"khong tim thay muc 'Khong xac dinh' trong {YEAR_STATS.name}"
-                   f" - mat doi chung doc lap, khong nap mu")
+        errors.append(f"could not find the 'Khong xac dinh' entry in {YEAR_STATS.name}"
+                   f" - the independent cross-check is gone, refusing to load blind")
     elif unattributed_calls != unattributed_app:
         errors.append(f"khong quy duoc {unattributed_calls} != {unattributed_app} (so app tu tinh doc lap)")
     if errors:
         cn.rollback()
-        raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(errors))
+        raise SystemExit("ACCEPTANCE FAILED - rolled back:\n  "
+                         + "\n  ".join(errors))
     cn.commit()
-    print("  NGHIEM THU DAT")
+    log.info("  acceptance passed")
 
 
 if __name__ == "__main__":

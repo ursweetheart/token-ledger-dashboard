@@ -405,6 +405,28 @@ def account_lookup(cn) -> dict[str, int]:
     return {u: (a, g) for u, a, g in cur.fetchall()}
 
 
+def account_unit_lookup(cn) -> dict[int, str]:
+    """account_id -> unit_id.
+
+    Truong "phong ban" cua ban ghi luot goi. Master Plan STT 4 muc tieu 1 doi no,
+    va do 02/09/2026 thi cot `fact_call.unit_id` RONG tren ca 41 dong gateway:
+    `load_ralli.py` co ghi cot nay, `load_gateway.py` khong khai no trong COLUMNS.
+
+    TRA TU TAI KHOAN, KHONG TU TAG. Tag cua request noi AGENT nao gui, khong noi
+    NGUOI GUI thuoc phong ban nao. Voi agent mot-nguoi-dung thi hai thu trung nhau
+    HOM NAY - va dung vi the ma loi se im lang khi mot agent nhieu nguoi dung di
+    qua Gateway.
+
+    Gia tri co the la don vi KY THUAT (`__technical_6__` cho tai khoan dich vu).
+    Do la cau tra loi trung thuc: tai khoan dich vu khong thuoc phong ban that nao.
+    De NULL thi mat thong tin - khong phan biet duoc "chua nap" voi "khong co
+    phong ban".
+    """
+    cur = cn.cursor()
+    cur.execute("SELECT account_id, unit_id FROM account WHERE unit_id IS NOT NULL")
+    return {int(a): u for a, u in cur.fetchall()}
+
+
 def anchor_account_lookup(cn) -> dict[int, int]:
     """agent_id -> account_id kỹ thuật mức agent, thay cho NULL ở khoá.
 

@@ -59,7 +59,7 @@ def find_gcloud() -> str:
         d = shutil.which(name)
         if d:
             return d
-    raise SystemExit("Khong tim thay gcloud. Cai Google Cloud SDK truoc.")
+    raise SystemExit("gcloud not found. Install the Google Cloud SDK first.")
 
 
 def token() -> str:
@@ -68,9 +68,9 @@ def token() -> str:
         r = subprocess.run([find_gcloud(), "auth", "print-access-token"],
                            capture_output=True, text=True, timeout=60)
     except FileNotFoundError:
-        raise SystemExit("Khong tim thay gcloud. Cai Google Cloud SDK truoc.")
+        raise SystemExit("gcloud not found. Install the Google Cloud SDK first.")
     if r.returncode != 0:
-        raise SystemExit("gcloud khong cap duoc token. Chay `gcloud auth login` truoc.\n"
+        raise SystemExit("gcloud could not issue a token. Run `gcloud auth login` first.\n"
                          f"  {r.stderr.strip()[:200]}")
     return r.stdout.strip()
 
@@ -101,7 +101,7 @@ def paged_get(url: str, key: str, tok: str) -> list[dict]:
 def find_service(tok: str) -> None:
     """In ra cac dich vu co ten nghe giong AI - de doi chieu DICH_VU_GEMINI."""
     svc = paged_get(f"{CATALOG}/services?pageSize=5000", "services", tok)
-    print(f"{len(svc)} dich vu trong catalog. Cac ma nghe giong AI:")
+    print(f"{len(svc)} services in the catalog. Ids that look AI-related:")
     for s in svc:
         name = s.get("displayName", "")
         if any(k in name.lower() for k in ("generative", "gemini", "vertex")):
@@ -126,7 +126,7 @@ def main() -> None:
     skus = paged_get(f"{CATALOG}/services/{GEMINI_SERVICE}/skus?pageSize=5000", "skus", tok)
     if not skus:
         raise SystemExit(f"Catalog tra ve 0 SKU cho dich vu {GEMINI_SERVICE}."
-                         " Ma dich vu co con dung khong? Chay --tim-dich-vu.")
+                         " is the service id still correct? Run --tim-dich-vu.")
 
     dest = Path(args.dest)
     dest.mkdir(parents=True, exist_ok=True)
@@ -135,8 +135,8 @@ def main() -> None:
 
     with_price = sum(1 for s in skus if (s.get("pricingInfo") or [{}])[0]
                  .get("pricingExpression", {}).get("tieredRates"))
-    print(f"Dich vu {GEMINI_SERVICE} (Gemini API)")
-    print(f"  {len(skus):,} SKU, {with_price:,} SKU co bang gia")
+    print(f"service {GEMINI_SERVICE} (Gemini API)")
+    print(f"  {len(skus):,} SKUs, {with_price:,} with a price")
     print(f"  -> {f.relative_to(ROOT)}")
 
 

@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def _latest_dir(parent: Path, prefer_suffix: str = "") -> Path:
     children = sorted(p for p in parent.glob("*") if p.is_dir())
     if not children:
-        raise SystemExit(f"Khong co thu muc thu thap nao trong {parent}")
+        raise SystemExit(f"no collection folder in {parent}")
     if prefer_suffix:
         match = [p for p in children if p.name.endswith(prefer_suffix)]
         if match:
@@ -46,7 +46,7 @@ def _latest_dir(parent: Path, prefer_suffix: str = "") -> Path:
 def _latest_file(parent: Path, pattern: str) -> Path:
     candidates = sorted(parent.glob(pattern))
     if not candidates:
-        raise SystemExit(f"Khong co file nao khop {parent / pattern}")
+        raise SystemExit(f"no file matches {parent / pattern}")
     return candidates[-1]
 
 
@@ -168,7 +168,7 @@ def model_aliases() -> list[tuple[str, str, int]]:
                 labels.add(("app", r["model"]))
     for source, name in sorted(labels):
         if name not in MODEL_ID:
-            failed.append(f"nhan {source} '{name}' khong co trong danh sach model chuan")
+            failed.append(f"label {source} '{name}' is not in the canonical model list")
         else:
             aliases.append((source, name, MODEL_ID[name]))
 
@@ -185,7 +185,7 @@ def model_aliases() -> list[tuple[str, str, int]]:
             aliases.append(("gateway", raw, MODEL_ID[canonical]))
 
     if failed:
-        raise SystemExit("KHONG ANH XA DUOC - them vao db/rules.py roi chay lai:\n  "
+        raise SystemExit("CANNOT BE MAPPED - add it to db/rules.py and run again:\n  "
                          + "\n  ".join(failed))
     return aliases
 
@@ -215,7 +215,7 @@ def _classify_metric(metric_type: str) -> tuple[str, str | None]:
     if tail.endswith("requests") or tail.endswith("request_count") \
             or tail.endswith("requests_per_model"):
         return "calls", None
-    raise SystemExit(f"Khong phan loai duoc phep do '{metric_type}'.\n"
+    raise SystemExit(f"cannot classify the metric '{metric_type}'.\n"
                      "  Them nhanh moi vao _classify_metric() roi chay lai.")
 
 
@@ -261,7 +261,7 @@ def metric_aliases() -> list[tuple]:
         out.append(("monitoring", mt, (d.get("description") or "").strip() or None,
                     measures, kind, metric_kind, value_type))
     if mismatch:
-        raise SystemExit("Ten phep do va metadata cua Google KHONG khop:\n  "
+        raise SystemExit("the metric name and Google's metadata DISAGREE:\n  "
                          + "\n  ".join(mismatch))
     return out
 
@@ -290,16 +290,16 @@ def sku_aliases(cat: dict[str, dict]) -> list[tuple]:
     for sid, csv_name in sorted(sku.items()):
         s = cat.get(sid)
         if not s:
-            failed.append(f"SKU {sid} '{csv_name[:60]}' khong co trong catalog")
+            failed.append(f"SKU {sid} '{csv_name[:60]}' is not in the catalog")
             continue
         description = s.get("description", "")
         kind = guess_kind(description)
         if not kind:
-            failed.append(f"SKU {sid} '{description[:60]}' -> khong suy duoc kind")
+            failed.append(f"SKU {sid} '{description[:60]}' -> cannot infer a kind")
             continue
         out.append(("billing_sku", sid, description, "token", kind, None, None))
     if failed:
-        raise SystemExit("SKU khong tra cuu duoc:\n  " + "\n  ".join(failed))
+        raise SystemExit("SKUs that cannot be looked up:\n  " + "\n  ".join(failed))
     return out
 
 
@@ -474,11 +474,11 @@ def main() -> None:
 
     OUT.write_text("\n".join(out), encoding="utf-8")
     n = collections.Counter(x[0] for x in aliases)
-    print(f"Ghi {OUT}")
-    print(f"  {len(AGENTS)} agent | {len(MODELS)} model | {len(aliases)} anh xa {dict(n)} "
+    print(f"wrote {OUT}")
+    print(f"  {len(AGENTS)} agents | {len(MODELS)} models | {len(aliases)} aliases {dict(n)} "
           f"| 1 ty gia | {len(budgets)} ngan sach")
     nm = collections.Counter(x[3] for x in metrics)
-    print(f"  {len(metrics)} bi danh phep do {dict(nm)} | {len(skus)} bi danh SKU"
+    print(f"  {len(metrics)} metric aliases {dict(nm)} | {len(skus)} SKU aliases"
           f" | {len(prices)} dong bang gia")
 
 

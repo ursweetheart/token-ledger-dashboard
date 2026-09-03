@@ -104,7 +104,7 @@ def percentile_from_histogram(counts: list[int], bounds: list[float], q: float):
 
     # Chi den day neu tong > 0 nhung vong lap khong bat duoc muc tieu -> loi logic,
     # khong phai du lieu la. Dung han thay vi tra ve mot so trong.
-    raise SystemExit(f"Khong tim duoc phan vi {q} tren histogram co tong {total}.")
+    raise SystemExit(f"cannot find percentile {q} on a histogram totalling {total}.")
 
 
 def read_batch(folder: Path, by_method: bool):
@@ -120,7 +120,7 @@ def read_batch(folder: Path, by_method: bool):
 
     files = sorted(glob.glob(str(folder / "*.jsonl")))
     if not files:
-        raise SystemExit(f"Khong co file .jsonl nao trong {folder}")
+        raise SystemExit(f"no .jsonl file in {folder}")
 
     def per_row():
         """Doc lan luot, dong file ngay khi doc xong - khong giu handle mo."""
@@ -147,7 +147,7 @@ def read_batch(folder: Path, by_method: bool):
                 bounds = bucket_bounds(opts)
             elif json.dumps(opts, sort_keys=True) != schema_json:
                 raise SystemExit(
-                    "Gap bucketOptions thu hai - cac o khong ung nhau, khong gop duoc.\n"
+                    "a second bucketOptions appeared - the buckets do not line up, cannot merge.\n"
                     f"  dang dung: {json.dumps(schema)}\n"
                     f"  gap phai : {json.dumps(opts)}\n"
                     f"  tai      : {r['gcp_project_id']} {r['ts_utc']}"
@@ -185,24 +185,24 @@ def main() -> None:
         remaining = sorted(p for p in folder.glob("*") if p.is_dir() and list(p.glob("*.jsonl")))
         if len(remaining) != 1:
             raise SystemExit(
-                f"Khong ro lay thu muc nao trong {folder}. Tim thay: {[p.name for p in remaining]}\n"
+                f"ambiguous which folder to take in {folder}. Found: {[p.name for p in remaining]}\n"
                 "Chi ro bang --in."
             )
         folder = remaining[0]
 
-    print(f"Doc: {folder}", file=sys.stderr)
+    print(f"read: {folder}", file=sys.stderr)
     merged, old_way, schema, n_points, n_empty = read_batch(folder, args.by_method)
     if schema is None:
         raise SystemExit(
-            f"Doc {n_points} diem nhung KHONG diem nao co histogram.\n"
-            "Tat ca deu la phut khong co luot goi. Kiem lai thu muc dau vao."
+            f"read {n_points} points but NONE carries a histogram.\n"
+            "They are all minutes with no calls. Re-check the input folder."
         )
     bounds = bucket_bounds(schema)
 
-    print(f"  {n_points} diem, trong do {n_empty} phut khong co luot goi", file=sys.stderr)
+    print(f"  {n_points} points, of which {n_empty} minutes had no calls", file=sys.stderr)
     print(f"  bucketOptions: {json.dumps(schema)}", file=sys.stderr)
-    print(f"  o cuoi cung bat dau tu {bounds[-1]:.1f}s", file=sys.stderr)
-    print(f"  -> {len(merged)} dong ket qua", file=sys.stderr)
+    print(f"  the last bucket starts at {bounds[-1]:.1f}s", file=sys.stderr)
+    print(f"  -> {len(merged)} result rows", file=sys.stderr)
 
     cols = ["day", "project"] + (["res_method"] if args.by_method else []) + [
         "samples", "p50_s", "p95_s", "p99_s", "p95_bucket_from",
@@ -234,14 +234,14 @@ def main() -> None:
         ])))
 
     total_calls = sum(d["samples"] for d in row)
-    print(f"  tong so luot goi: {total_calls:,}", file=sys.stderr)
+    print(f"  total calls: {total_calls:,}", file=sys.stderr)
 
     if args.out:
         with open(args.out, "w", encoding="utf-8", newline="") as h:
             w = csv.DictWriter(h, fieldnames=cols, quoting=csv.QUOTE_ALL)
             w.writeheader()
             w.writerows(row)
-        print(f"Ghi: {args.out}", file=sys.stderr)
+        print(f"wrote: {args.out}", file=sys.stderr)
     else:
         w = csv.DictWriter(sys.stdout, fieldnames=cols)
         w.writeheader()

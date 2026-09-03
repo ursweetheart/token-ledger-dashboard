@@ -34,20 +34,20 @@ admin() {
 admin_val() { printf '%s\n' "$1" | admin -tAq; }   # cau hoi, tra ve mot gia tri
 admin_run() { printf '%s\n' "$1" | admin -q; }     # cau lenh, khong can ket qua
 
-echo "== 1/3  role $GW_USER"
+echo "step 1/3: role $GW_USER"
 if [ "$(admin_val "SELECT 1 FROM pg_roles WHERE rolname = :'gw_user';")" = "1" ]; then
-  echo "   da co, khong dung toi (mat khau KHONG duoc dong bo lai -- xem buoc 3)"
+  echo "   already exists, left alone (the password is NOT re-synced -- see step 3)"
 else
   admin_run "CREATE ROLE :\"gw_user\" LOGIN PASSWORD :'gw_pass';"
-  echo "   da tao"
+  echo "   created"
 fi
 
-echo "== 2/3  database $GW_DB"
+echo "step 2/3: database $GW_DB"
 if [ "$(admin_val "SELECT 1 FROM pg_database WHERE datname = :'gw_db';")" = "1" ]; then
-  echo "   da co, khong dung toi"
+  echo "   already exists, left alone"
 else
   admin_run "CREATE DATABASE :\"gw_db\" OWNER :\"gw_user\";"
-  echo "   da tao, chu so huu $GW_USER"
+  echo "   created, owned by $GW_USER"
 fi
 
 # --- 3/3 -------------------------------------------------------------------
@@ -59,12 +59,12 @@ fi
 # lan `token_ledger_v2`, va `db/connect.py` mac dinh tro vao cai THU HAI trong
 # khi docker-compose.yml mac dinh tao cai THU NHAT. Do dung mot cai la co the
 # dang do cai khong ai dung toi.
-echo "== 3/3  do ranh gioi: $GW_USER co doc duoc database so khong"
+echo "step 3/3: probing the boundary - can $GW_USER read the ledger database?"
 
 LEDGER_DBS=$(admin_val "SELECT datname FROM pg_database WHERE datname ~ '^token_ledger' ORDER BY datname;")
 if [ -z "$LEDGER_DBS" ]; then
-  echo "   DUNG: khong tim thay database so nao khop '^token_ledger'." >&2
-  echo "   Phep do ranh gioi se vo nghia. Dung lai." >&2
+  echo "   STOP: found no ledger database matching '^token_ledger'." >&2
+  echo "   The boundary probe would be meaningless. Stopping." >&2
   exit 1
 fi
 
@@ -79,7 +79,7 @@ for db in $LEDGER_DBS; do
     "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename LIMIT 1")
 
   if [ -z "$probe_table" ]; then
-    echo "   $db: chua co bang nao -- khong co gi de doc, bo qua"
+    echo "   $db: no tables yet -- nothing to read, skipped"
     continue
   fi
 
@@ -98,8 +98,8 @@ for db in $LEDGER_DBS; do
   probe_msg=$(echo "$probe_out" | tr -d '\r' | head -1)
 
   if [ "$probe_rc" -eq 0 ]; then
-    echo "   HONG: $GW_USER doc duoc $probe_msg dong tu $db.$probe_table." >&2
-    echo "   Role Gateway dang co quyen tren bo so that. Dung lai." >&2
+    echo "   FAIL: $GW_USER could read $probe_msg rows from $db.$probe_table." >&2
+    echo "   The gateway role has rights on the real ledger. Stopping." >&2
     exit 1
   fi
 
@@ -113,20 +113,20 @@ for db in $LEDGER_DBS; do
   # DATABASE_URL sai mat khau va chet o luc chay migration.
   case "$probe_out" in
     *"permission denied"*|*"must be owner"*)
-      echo "   $db.$probe_table: dat -- $probe_msg" ;;
+      echo "   $db.$probe_table: pass -- $probe_msg" ;;
     *"authentication failed"*|*"no pg_hba.conf entry"*)
-      echo "   DUNG: $GW_USER khong dang nhap duoc vao $db." >&2
+      echo "   STOP: $GW_USER cannot log in to $db." >&2
       echo "   $probe_msg" >&2
-      echo "   Phep do khong cham toi bang nao nen khong ket luan duoc gi ve quyen." >&2
-      echo "   Thuong la role da ton tai voi mat khau khac GATEWAY_PGPASSWORD dang dat." >&2
+      echo "   The probe never touched a table, so it concludes nothing about rights." >&2
+      echo "   Usually the role already exists with a password other than the current GATEWAY_PGPASSWORD." >&2
       exit 1 ;;
     *)
-      echo "   DUNG: bi tu choi nhung KHONG phai vi thieu quyen." >&2
+      echo "   STOP: refused, but NOT for lack of rights." >&2
       echo "   $probe_msg" >&2
-      echo "   Phep do khong ket luan duoc gi -- khong duoc coi la dat." >&2
+      echo "   The probe concludes nothing -- it must not be treated as a pass." >&2
       exit 1 ;;
   esac
 done
 
 echo
-echo "Gateway se noi vao: postgresql://$GW_USER@$PGHOST:5432/$GW_DB"
+echo "the gateway will connect to: postgresql://$GW_USER@$PGHOST:5432/$GW_DB"

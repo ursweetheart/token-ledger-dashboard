@@ -34,6 +34,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import connect  # noqa: E402
+import logs  # noqa: E402
+
+log = logs.get_logger("build_usage_daily")
 
 # RALLI/TLA_HD/SINGLE_USER_AGENTS đã bỏ: chúng chỉ phục vụ việc chọn đơn vị kỹ
 # thuật trong `anchor_accounts`, mà đơn vị không còn nằm trong bảng này nữa.
@@ -73,7 +76,7 @@ def anchor_accounts(cn) -> dict[int, int]:
     thieu = [aid for (aid,) in connect.query(cn, "SELECT agent_id FROM dim_agent")
              if aid not in out]
     if thieu:
-        raise SystemExit(f"agent khong co dong gop muc agent: {thieu}."
+        raise SystemExit(f"agents with no agent-level contribution: {thieu}."
                          f" Chay lai db/load_org.py.")
     if len(out) != len(rows):
         raise SystemExit(f"co agent >1 dong gop muc agent: {len(rows)} dong,"
@@ -304,7 +307,8 @@ def main() -> None:
     n_m = load_monitoring(cn, ph, anchor)
     n_a = load_app(cn, ph)
     n_g = load_gateway(cn, ph)
-    print(f"  billing {n_b} | monitoring {n_m} | app {n_a} | gateway {n_g}")
+    log.info("  billing %d | monitoring %d | app %d | gateway %d",
+             n_b, n_m, n_a, n_g)
 
     cost = connect.query_one(cn, "SELECT SUM(cost_usd) FROM fact_usage_daily"
                                  " WHERE source='billing'")[0]
@@ -320,9 +324,10 @@ def main() -> None:
             " JOIN dim_agent g ON g.agent_id = f.agent_id"
             " WHERE f.source='app' ORDER BY g.name")]
 
-    print(f"  theo nguon: {by_source}")
-    print(f"  tien billing ${float(cost):.6f} | token app {app_tokens:,}")
-    print(f"  agent co nguon 'app': {', '.join(app_agents)}")
+    log.info("  by source: %s", by_source)
+    log.info("  billing cost $%.6f | app tokens %s",
+             float(cost), f"{app_tokens:,}")
+    log.info("  agents with an 'app' source: %s", ", ".join(app_agents))
 
     # Đối chiếu với các bảng gốc, không với số ghim.
     src_cost = connect.query_one(cn, "SELECT SUM(cost_usd) FROM fact_billing_daily")[0]
@@ -404,14 +409,16 @@ def main() -> None:
             errors.append(f"nguon {source}: tach {parts:,} != tong {total:,}"
                           f" (lech {total - parts:,}, bang nguon lech {allowed:,})")
     if source_conflict:
-        print(f"  app lech {source_conflict:,} token giua total va prompt+completion"
-              f" - do chinh app ghi vay, da doi chieu tu bang nguon")
+        log.warning("  app: %s token gap between total and prompt+completion"
+                    " - the app records it that way, checked against the source"
+                    " table", f"{source_conflict:,}")
 
     if errors:
         cn.rollback()
-        raise SystemExit("NGHIEM THU KHONG DAT - da huy:\n  " + "\n  ".join(errors))
+        raise SystemExit("ACCEPTANCE FAILED - rolled back:\n  "
+                         + "\n  ".join(errors))
     cn.commit()
-    print("  NGHIEM THU DAT")
+    log.info("  acceptance passed")
 
 
 if __name__ == "__main__":
