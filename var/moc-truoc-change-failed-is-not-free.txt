@@ -1,0 +1,59 @@
+MOC TRUOC CHANGE  stop-treating-a-failed-call-as-a-free-call
+Do luc 04/09/2026. Moi con so o day phai KHONG DOI sau khi change xong,
+tru nhung cho change co y doi va da noi ra.
+
+1.1  scripts/audit_db.py      73 phep | 66 dat | 7 luu y | 0 hong
+1.2  backend/check_api.py     31 phep | 31 dat | 0 luu y | 0 hong
+
+1.3  usage_resolved  -- 4 khoa moc, change nay MUST NOT lam doi bat ky so nao
+       dong    1.276
+       token   915.969.971
+       calls   122.504
+       tien    307,382155 USD
+
+1.4  Ngay 31/08/2026, nguon gateway
+       fact_call         41 dong = 38 thanh cong (45.187 token) + 3 hong (14 token)
+                         tong 45.201 token | vao 41.679 | ra 3.522
+       fact_usage_daily  38 calls | 45.187 token
+       LiteLLM_SpendLogs 44 dong = 39 thanh cong + 5 hong
+                         tong 45.240 token | vao 41.717 | ra 3.523
+       => 3 ban ghi nguon KHONG vao duoc fact_call, mang 39 token:
+            lG-UarHhIYXmosUPv4ihmQ8   THANH CONG  co tag   25 token  00:59:47
+            372eb089-aac5-4436-...    hong        khong tag  0 token  01:56:07
+            6ff4a85c-7354-4b11-...    hong        co tag    14 token  01:57:54
+
+1.5  Ngay 31/08/2026, so cua nha cung cap
+       project    project-e62bad30-a591-407b-ba7
+       tai khoan  dinhthinhan18111971@gmail.com
+       model      gemini-3.5-flash-lite  (free tier)
+       request    41  -- TAT CA response_code = 200, khong mot loi nao
+       token vao  47.613
+       token ra    3.922
+       tong       51.535
+
+     KHOANG CACH
+       51.535 - 45.201 = 6.334  = 12,29% cua so nha cung cap
+         trong do 6.295 (12,21%) la LiteLLM vs Google  -> loi "luot hong khong mien phi"
+         va          39  (0,08%) la LiteLLM vs fact_call -> bo nap danh roi ban ghi
+
+     BAY: metric token vao tra ve HAI chuoi mang cung con so, tach theo limit_name
+       GenerateContentInputTokensPerModelPerDay-FreeTier      47.613
+       GenerateContentInputTokensPerModelPerMinute-FreeTier   47.613
+     Cong gop = nhan doi = ra "lech 2,19 lan" sai.
+
+1.6  Cua so luu giu Cloud Monitoring, do 04/09/2026
+       metric  serviceruntime.googleapis.com/api/request_count, align 86400s
+       pro-tuner-454203-v3       som nhat 2026-01-22  -> 225 ngay
+       tranquil-post-471401-c1   som nhat 2026-01-22  -> 225 ngay
+     Hai project doc lap cung ra mot ngay => nhieu kha nang la mep chinh sach,
+     nhung 22/01 CUNG co the la ngay hai project bat dau chay. Chua tach duoc.
+
+     KHONG do duoc tren project-e62bad30: no chi co du lieu tu 26/08, nen
+     "som nhat 26/08" la ngay BAT DAU CO LUU LUONG chu khong phai mep luu giu.
+     Lan do dau tien toi nham hai thu nay va bao "cua so 9 ngay" -- sai.
+
+     Ghi chu cu trong bo nho ("196 -> 112 ngay chi sau mot tuan") do tren HO
+     METRIC KHAC (generativelanguage token, align 60s). Khong so truc tiep duoc
+     voi con so 225 ngay o tren. Chua do lai ho metric do.
+
+     KET LUAN CHO CHANGE NAY: ngay 31/08 moi 4 ngay tuoi, khong gap.

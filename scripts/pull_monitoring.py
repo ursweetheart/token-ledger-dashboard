@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -94,14 +95,27 @@ def gcloud_path() -> str:
     )
 
 
-def access_token(gcloud: str) -> str:
-    result = subprocess.run([gcloud, "auth", "print-access-token"],
-                            capture_output=True, text=True)
+def access_token(gcloud: str, account: str = "") -> str:
+    """Khoa truy cap cua MOT tai khoan cu the, hoac cua tai khoan dang hoat dong.
+
+    `account` rong = giu nguyen hanh vi cu (tai khoan dang hoat dong cua gcloud).
+
+    Project ma Gateway goi toi nam tren mot tai khoan KHAC bay project san xuat,
+    nen phai goi ten tuong minh. Va khi goi ten ma tai khoan do chua dang nhap
+    thi phai DUNG chu khong duoc lui ve tai khoan mac dinh: lui ve se keo nham
+    mot the gioi khac va bao "thanh cong", kieu hong im lang te nhat.
+    """
+    cmd = [gcloud, "auth", "print-access-token"]
+    if account:
+        cmd += ["--account", account]
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise SystemExit(
-            "gcloud auth print-access-token that bai:\n"
-            f"{result.stderr.strip()}\n"
-            "Chay `gcloud auth login` roi thu lai."
+            "gcloud auth print-access-token that bai"
+            + (f" cho tai khoan {account}:\n" if account else ":\n")
+            + f"{result.stderr.strip()}\n"
+            + (f"Chay `gcloud auth login {account}` roi thu lai."
+               if account else "Chay `gcloud auth login` roi thu lai.")
         )
     return result.stdout.strip()
 
@@ -273,6 +287,10 @@ def main() -> None:
     parser.add_argument("--align", type=int, default=3600,
                         help="Do min, tinh bang giay. 60 = min nhat Google co (mac dinh 3600)")
     parser.add_argument("--gcloud", default="", help="Duong dan gcloud neu khong co trong PATH")
+    parser.add_argument("--account", default="",
+                        help="Tai khoan Google dung de keo. De rong = tai khoan dang hoat "
+                             "dong cua gcloud (hanh vi cu). Project ma Gateway goi toi nam "
+                             "tren tai khoan KHAC bay project san xuat nen phai goi ten.")
     args = parser.parse_args()
 
     if args.align < 60:
@@ -289,19 +307,33 @@ def main() -> None:
     # Resolution belongs in the folder name. Without it a second pull on the same
     # day silently overwrites the first, and the two are not interchangeable.
     label = f"{args.align // 60}m" if args.align < 3600 else f"{args.align // 3600}h"
-    out_dir = Path(args.out) / f"{end:%Y-%m-%d}-{label}"
+
+    # Tai khoan cung phai nam trong ten thu muc. Hai tai khoan keo cung mot ngay
+    # voi cung do min se ghi de nhau - dung loai mat du lieu ma quy uoc "khong
+    # bao gio ghi de thu muc keo cu" sinh ra de chan. Tai khoan mac dinh KHONG
+    # them hau to, de moi thu muc cu va moi script cu doc duoc nguyen ven.
+    hau_to = ""
+    if args.account:
+        hau_to = "-" + re.sub(r"[^A-Za-z0-9]+", "-", args.account.split("@")[0]).strip("-")
+    out_dir = Path(args.out) / f"{end:%Y-%m-%d}-{label}{hau_to}"
+
+    # Xac thuc TRUOC khi tao thu muc. Tao truoc thi mot lan chay hong o khau dang
+    # nhap van de lai mot thu muc rong mang ten hop le, va lan sau se doc no nhu
+    # mot lan keo "khong co du lieu" chu khong phai mot lan keo that bai.
+    access_token(gcloud, args.account)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     projects = [p.strip() for p in args.projects.split(",") if p.strip()]
     print(f"range: {start:%Y-%m-%d %H:%M} -> {end:%Y-%m-%d %H:%M} UTC ({args.days} days)")
     print(f"granularity: {args.align}s ({label})")
+    print(f"account: {args.account or '(dang hoat dong)'}")
     print(f"writing to: {out_dir}\n")
 
     total = 0
     for project in projects:
         print(f"[{project}]")
         # Refreshed per project: a wide sweep can outlive a single token.
-        count = pull_project(project, access_token(gcloud), out_dir, start, end,
+        count = pull_project(project, access_token(gcloud, args.account), out_dir, start, end,
                              args.all_genlang, args.align)
         print(f"  -> {count} rows\n")
         total += count

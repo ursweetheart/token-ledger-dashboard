@@ -257,6 +257,7 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         "doc_tu_so": len(ledger),
         "bo_khong_co_tag": 0,
         "bo_nhieu_tag": 0,
+        "bo_ban_sao_cache": 0,
         "model_chua_khai": 0,
         "hong_truoc_khi_chot_tuyen": 0,
         "nap_luot_hong": 0,
@@ -276,18 +277,48 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         "thinking_null": 0,
         "co_suy_luan": 0,
     }
+    # Token của những dòng BỊ BỎ, tách theo lý do. Đếm số dòng thôi là chưa đủ:
+    # "bỏ 6 dòng" nghe như chuyện nhỏ, "bỏ 6 dòng mang 760 token" thì không.
+    bo_token = {"bo_khong_co_tag": 0, "bo_nhieu_tag": 0, "bo_ban_sao_cache": 0}
+    bo_ma = {"bo_khong_co_tag": [], "bo_nhieu_tag": [], "bo_ban_sao_cache": []}
+
+    def bo(khoa: str, ma: str, tong) -> None:
+        stats[khoa] += 1
+        bo_token[khoa] += int(tong or 0)
+        bo_ma[khoa].append(ma)
+
     for (call_id, ts_raw, model, end_user, tags,
          prompt_tokens, completion_tokens, total_tokens,
          cached_tokens, cost_usd, outcome, duration_ms, error_code,
          virtual_key_id, cache_hit, cache_hit_la,
          output_modality, modality_la, thinking_enabled) in ledger:
 
+        # BẪY 7: BẢN SAO CỦA CÚ CACHE HIT. Bỏ TRƯỚC mọi bước khác, và bỏ CÓ TÊN.
+        #
+        # LiteLLM ghi thêm một dòng cho cú cache hit, mang chính `request_id` của
+        # dòng gốc cộng hậu tố `_cache_hit<epoch>`, và LẶP LẠI nguyên token của
+        # dòng gốc. Đo 05/09/2026 trên toàn sổ: đúng 1 dòng như vậy,
+        # `GsaVavubFOD21e8PnvHx2QE_cache_hit1788200480.9219387`, 352 token, và
+        # dòng gốc `GsaVavubFOD21e8PnvHx2QE` tồn tại với ĐÚNG 352 token. Nhà cung
+        # cấp xác nhận độc lập: ngày 01/09 họ phục vụ 1 lượt, 8 vào + 344 ra.
+        # Nạp cả hai là đếm đôi 352 token.
+        #
+        # VÌ SAO PHẢI BỎ TƯỜNG MINH DÙ HÔM NAY NÓ ĐÃ RỚT SẴN: hôm nay dòng này bị
+        # loại vì KHÔNG CÓ TAG ĐỊNH DANH - tức là rớt vì một lý do CHẲNG LIÊN
+        # QUAN. Ngày nào khâu định danh được nới ra (và đó là việc phải làm - xem
+        # cảnh báo cuối hàm này), bản sao sẽ theo cửa đó mà vào, và không phép
+        # kiểm nào hiện có bắt được: tổng token vẫn "khớp sổ nguồn", chỉ có điều
+        # sổ nguồn tự nó đã đếm đôi.
+        if "_cache_hit" in call_id:
+            bo("bo_ban_sao_cache", call_id, total_tokens)
+            continue
+
         agent_id, ly_do = resolve_agent(tags, agent_by_code)
         if agent_id is None:
             # `fact_call.agent_id` là NOT NULL, nên đây không chỉ là chính sách -
             # schema cưỡng chế. Đếm rồi bỏ, không nuốt lặng.
-            stats["bo_khong_co_tag" if ly_do == "khong co tag dinh danh"
-                  else "bo_nhieu_tag"] += 1
+            bo("bo_khong_co_tag" if ly_do == "khong co tag dinh danh"
+               else "bo_nhieu_tag", call_id, total_tokens)
             continue
 
         # BẪY 4: tra theo tên upstream ở cột `model`. Dòng nào chưa khai trong
@@ -408,6 +439,10 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
             model, virtual_key_id, cache_hit,
             output_modality, thinking_enabled,
         ))
+    # Tra ca `bo_token` / `bo_ma`: bao cao phai noi duoc BO BAO NHIEU TOKEN va
+    # BO DONG NAO, khong chi bo bao nhieu dong.
+    stats["bo_token"] = bo_token
+    stats["bo_ma"] = bo_ma
     return rows, stats
 
 
@@ -521,8 +556,23 @@ def main() -> int:
     log.info("  read %d rows | usable %d | inserted %d | overwritten %d",
              stats["doc_tu_so"], len(rows), sau - truoc,
              len(rows) - (sau - truoc))
-    log.info("  dropped: no tag %d | several tags %d",
-             stats["bo_khong_co_tag"], stats["bo_nhieu_tag"])
+    # BỎ BAO NHIÊU DÒNG là nửa câu trả lời; nửa còn lại là BỎ BAO NHIÊU TOKEN và
+    # BỎ DÒNG NÀO. "bỏ 6 dòng" nghe như chuyện nhỏ; "bỏ 6 dòng mang 760 token,
+    # trong đó một dòng THÀNH CÔNG 25 token" thì không ai bỏ qua được nữa.
+    for khoa, nhan in (("bo_khong_co_tag",  "no identity tag"),
+                       ("bo_nhieu_tag",     "several identity tags"),
+                       ("bo_ban_sao_cache", "cache-hit duplicate row")):
+        n = stats[khoa]
+        if not n:
+            continue
+        ma = stats["bo_ma"][khoa]
+        log.info("  dropped %d rows (%s) carrying %s tokens: %s%s",
+                 n, nhan, f"{stats['bo_token'][khoa]:,}",
+                 ", ".join(m[:28] for m in ma[:5]),
+                 f" ... +{len(ma) - 5}" if len(ma) > 5 else "")
+    if not any(stats[k] for k in ("bo_khong_co_tag", "bo_nhieu_tag",
+                                  "bo_ban_sao_cache")):
+        log.info("  dropped: nothing - every source row in range was loaded")
     if stats["trang_thai_la"]:
         log.warning("  %d rows carry a status other than success/failure -"
                     " the rollup would drop them silently",
@@ -567,6 +617,40 @@ def main() -> int:
     phan_bo = ", ".join(f"{m}={n}" for m, n in gw_cur.fetchall())
     log.info("  error codes of failed calls in the ledger: %s",
              phan_bo or "(no failed calls)")
+
+    # SỐ LƯỢT HỎNG KHÔNG ĐỦ - PHẢI IN KÈM TOKEN SỔ GHI CHO CHÚNG
+    # ---------------------------------------------------------
+    # In riêng số lượt là mời người đọc tự điền vào chỗ trống, và ai cũng điền
+    # "hỏng thì chắc chẳng tốn gì". Đo 04/09/2026 trên dữ liệu 31/08/2026 thì điều
+    # đó SAI: nhà cung cấp báo 41 lượt với `response_code = 200` cho TẤT CẢ, trong
+    # khi sổ này ghi 5 lượt hỏng. Hai lượt đã được phục vụ xong và đã tiêu token
+    # thật - 6.334 token, 12,29% của ngày hôm đó - nhưng sổ ghi cho chúng 0.
+    #
+    # Nên con số dưới đây là ĐIỀU SỔ KHAI, không phải ĐIỀU ĐÃ TIÊU. Hai chuyện đó
+    # trùng nhau chỉ khi lượt hỏng thật sự hỏng trước khi nhà cung cấp phục vụ.
+    # Câu trả lời thật nằm ở `fact_provider_daily`, và phép kiểm đối chiếu ở
+    # scripts/audit_db.py nhóm I là chỗ so hai con số đó.
+    #
+    # Tên gọi của hình dạng lỗi: `failed_is_not_free`.
+    gw_cur.execute(
+        '''SELECT COUNT(*),
+                  COALESCE(SUM(prompt_tokens), 0),
+                  COALESCE(SUM(completion_tokens), 0),
+                  COALESCE(SUM(total_tokens), 0),
+                  COUNT(*) FILTER (WHERE COALESCE(total_tokens, 0) = 0)
+             FROM "LiteLLM_SpendLogs" WHERE status = %s''',
+        ("failure",))
+    n_hong, h_vao, h_ra, h_tong, h_khong = gw_cur.fetchone()
+    log.info("  failed calls in the ledger: %d rows | the ledger DECLARES"
+             " %s in + %s out = %s tokens for them (%d of them declare zero)",
+             n_hong, f"{h_vao:,}", f"{h_ra:,}", f"{h_tong:,}", h_khong)
+    if h_khong:
+        log.warning("  %d failed rows declare ZERO tokens - that is what the"
+                    " LEDGER SAYS, not what was SPENT. A call the provider"
+                    " served and then the proxy lost still burned tokens."
+                    " Check scripts/audit_db.py group I against"
+                    " fact_provider_daily before believing the zero.",
+                    h_khong)
 
     # Đối chiếu với chính sổ gốc, không với số ghim. So trên TOÀN BỘ sổ chứ không
     # riêng vùng vừa đọc: đó mới là câu hỏi thật - "mọi thứ Gateway ghi đã vào

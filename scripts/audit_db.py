@@ -1148,6 +1148,327 @@ def group_h_cache_reconciliation(a: Audit) -> None:
                  "; ".join(xau[:5]) + (" ..." if len(xau) > 5 else ""))
 
 
+def group_i_provider_reconciliation(a: Audit) -> None:
+    """Đối chiếu sổ Gateway với sổ NHÀ CUNG CẤP, theo ngày, trên cả ba trục.
+
+    VÌ SAO CẦN
+    ----------
+    Sổ Gateway tự nó nhất quán: tổng khớp tổng, giờ khớp ngày, không phép kiểm nội
+    bộ nào đỏ. Nên lỗi NẰM TRONG nó không lộ ra bằng cách nhìn vào nó - chỉ ý kiến
+    thứ hai mới thấy. Đo 04/09/2026 trên dữ liệu 31/08/2026:
+
+        truc          nha cung cap   fact_call    lech
+        so luot             41            41          0
+        token vao       47.613        41.679      5.934
+        token ra         3.922         3.522        400
+                                                 ------
+                                                  6.334   = 12,29%
+
+    Nhà cung cấp báo 41 lượt, `response_code = 200` cho TẤT CẢ, không một lỗi nào.
+    Sổ Gateway ghi 5 lượt hỏng. Hai trong số đó đã được phục vụ xong và đã tiêu
+    token thật. Ta loại lượt hỏng khỏi bảng tổng hợp - điều đó đúng - nhưng phần bị
+    loại KHÔNG bằng không. Tên gọi của hình dạng lỗi: `failed_is_not_free`.
+
+    VÌ SAO SO Ở MỨC NGÀY, KHÔNG MỨC GIỜ
+    -----------------------------------
+    Nhà cung cấp gắn nhãn ô theo THỜI ĐIỂM KẾT THÚC, sổ Gateway ghi theo THỜI ĐIỂM
+    BẮT ĐẦU. Đo 04/09 thì giờ 01h lệch −12 còn giờ 02h lệch +5.864 - một phần của
+    con số đó chỉ là ranh giới ô chứ không phải lỗi. Ở mức ngày ranh giới ô biến
+    mất, trừ đúng nửa đêm.
+
+    HAI CHIỀU LỆCH KHÔNG CÙNG MỘT NGHĨA
+    -----------------------------------
+        nha cung cap > fact_call   -> LƯU Ý kèm số. Đây là chiều KỲ VỌNG: sổ ta bỏ
+                                      sót thì bỏ sót về phía thiếu. Báo hỏng chiều
+                                      này thì phép kiểm đỏ vĩnh viễn rồi bị bỏ qua.
+        fact_call > nha cung cap   -> HỎNG. Ta không thể tiêu thứ họ không phục vụ.
+
+    KHÔNG CÓ NGƯỠNG PHẦN TRĂM CHO CHIỀU THIẾU HỤT, VÀ ĐÓ LÀ CHỦ Ý. Ta ĐÃ BIẾT kết
+    quả là 12,21%, nên đặt ngưỡng bây giờ là chọn con số vừa khít với đáp án - trái
+    đúng kỷ luật "ban hành ngưỡng trước kỳ đo" mà `gateway-cache-reconciliation` đã
+    chốt. Phép kiểm in con số ra; ngưỡng để sau, khi có nhiều hơn một ngày.
+
+    NẾU CHIỀU HỎNG NỔ Ở TRỤC SỐ LƯỢT
+    --------------------------------
+    Giả thuyết đầu tiên phải thử: một lượt bị proxy từ chối TRƯỚC khi tới nhà cung
+    cấp (sai khoá, quá hạn mức) vẫn là một dòng trong `fact_call` mà nhà cung cấp
+    không hề thấy. Đó là lời GIẢI THÍCH, không phải cái cớ để nới phép kiểm - ghi
+    bằng chứng lại, đừng hạ ngưỡng.
+    """
+    NHAN = "Gateway ledger agrees with the provider's own count"
+
+    # Project nào là điểm quan sát của Gateway? Project đó KHÔNG THUỘC AGENT NÀO -
+    # đúng lý lẽ ở migration 011 khi để `provider_project` là TEXT trần.
+    #
+    # Lọc là BẮT BUỘC chứ không phải phòng xa: `scripts/pull_monitoring.py` mặc
+    # định kéo cả 7 project sản xuất, và `db/load_provider.py` nạp mọi thứ có
+    # trong đợt kéo. Cộng gộp tất cả rồi so với riêng lưu lượng Gateway là so hai
+    # tập khác nhau - và lệch ra sẽ trông y hệt một phát hiện thật.
+    #
+    # `IS NOT NULL` trong truy vấn con không thừa: `NOT IN` gặp một NULL là cả vị
+    # từ thành NULL, danh sách rỗng, và phép kiểm im lặng bỏ qua mọi thứ.
+    du_an = [r[0] for r in connect.query(a.cn, """
+        SELECT DISTINCT provider_project
+          FROM fact_provider_daily
+         WHERE provider_project NOT IN (SELECT gcp_project_id FROM dim_agent
+                                         WHERE gcp_project_id IS NOT NULL)
+         ORDER BY 1""")]
+    if not du_an:
+        tong_dong = a.num("SELECT COUNT(*) FROM fact_provider_daily")
+        a.note(WARN, NHAN,
+               f"CHUA KIEM DUOC - so nha cung cap co {int(tong_dong)} dong nhung"
+               f" khong project nao nam ngoai dim_agent, tuc chua co dot keo nao"
+               f" cho project cua Gateway. Day KHONG phai ket qua dat.")
+        return
+
+    ngay_gw = connect.query_one(a.cn, """
+        SELECT MIN(ts_local)::date, MAX(ts_local)::date,
+               COUNT(DISTINCT ts_local::date)
+          FROM fact_call WHERE source = 'gateway'""")
+    ngay_ncc = connect.query_one(a.cn, """
+        SELECT MIN(day), MAX(day), COUNT(DISTINCT day)
+          FROM fact_provider_daily WHERE provider_project = ANY(%s)""", (du_an,))
+
+    # Ngày CẢ HAI sổ cùng có dữ liệu. So hai khoảng thời gian khác nhau rồi kết
+    # luận là cái bẫy dự án này đã mắc hai lần: change 006 với độ trễ, và mục
+    # cache với `cached_tokens`.
+    chung = [r[0] for r in connect.query(a.cn, """
+        SELECT ts_local::date FROM fact_call WHERE source = 'gateway'
+        INTERSECT
+        SELECT day FROM fact_provider_daily WHERE provider_project = ANY(%s)
+        ORDER BY 1""", (du_an,))]
+    if not chung:
+        a.note(WARN, NHAN,
+               f"CHUA KIEM DUOC - khong ngay nao ca hai so cung co du lieu."
+               f" gateway {ngay_gw[0]} -> {ngay_gw[1]} ({int(ngay_gw[2] or 0)} ngay) ·"
+               f" nha cung cap {ngay_ncc[0]} -> {ngay_ncc[1]}"
+               f" ({int(ngay_ncc[2] or 0)} ngay, {len(du_an)} project)."
+               f" Day KHONG phai ket qua dat.")
+        return
+
+    # NULL = CHƯA ĐO, khác hẳn 0 = ĐÃ ĐO VÀ BẰNG KHÔNG. `SUM()` bỏ qua NULL, nên
+    # một trục chưa đo được sẽ lặng lẽ cộng ra con số NHỎ HƠN sự thật - và nhỏ hơn
+    # ở vế nhà cung cấp thì đẩy thẳng phép kiểm sang chiều HỎNG. Loại trục đó ra,
+    # và NÓI RA là đã loại.
+    #
+    # Khoá theo TÊN TRỤC chứ không so chuỗi mô tả: bản đầu tiên viết
+    # `m.startswith(ten)` trên câu mô tả, và cách đó chỉ đúng chừng nào không tên
+    # trục nào là tiền tố của tên trục khác - một điều kiện không ai bảo đảm cho
+    # lần thêm trục sau.
+    khong_do: dict = {}          # ngay -> {ten truc: [ly do]}
+    for ngay, r0, i0, o0 in connect.query(a.cn, """
+        SELECT day,
+               COUNT(*) FILTER (WHERE requests      IS NULL),
+               COUNT(*) FILTER (WHERE input_tokens  IS NULL),
+               COUNT(*) FILTER (WHERE output_tokens IS NULL)
+          FROM fact_provider_daily
+         WHERE provider_project = ANY(%s) AND day = ANY(%s)
+         GROUP BY 1""", (du_an, chung)):
+        for ten, n in (("so luot", r0), ("token vao", i0), ("token ra", o0)):
+            if n:
+                khong_do.setdefault(ngay, {}).setdefault(ten, []).append(
+                    f"nha cung cap {n} dong NULL")
+    for ngay, p0, c0 in connect.query(a.cn, """
+        SELECT ts_local::date,
+               COUNT(*) FILTER (WHERE prompt_tokens     IS NULL),
+               COUNT(*) FILTER (WHERE completion_tokens IS NULL)
+          FROM fact_call
+         WHERE source = 'gateway' AND ts_local::date = ANY(%s)
+         GROUP BY 1""", (chung,)):
+        for ten, n in (("token vao", p0), ("token ra", c0)):
+            if n:
+                khong_do.setdefault(ngay, {}).setdefault(ten, []).append(
+                    f"gateway {n} dong NULL")
+
+    doi = connect.query(a.cn, """
+        WITH g AS (
+            SELECT ts_local::date AS ngay, COUNT(*)::bigint AS luot,
+                   COALESCE(SUM(prompt_tokens), 0)     AS tok_vao,
+                   COALESCE(SUM(completion_tokens), 0) AS tok_ra
+              FROM fact_call
+             WHERE source = 'gateway' AND ts_local::date = ANY(%s)
+             GROUP BY 1),
+             p AS (
+            SELECT day AS ngay,
+                   COALESCE(SUM(requests), 0)      AS luot,
+                   COALESCE(SUM(input_tokens), 0)  AS tok_vao,
+                   COALESCE(SUM(output_tokens), 0) AS tok_ra
+              FROM fact_provider_daily
+             WHERE provider_project = ANY(%s) AND day = ANY(%s)
+             GROUP BY 1)
+        SELECT g.ngay, g.luot, g.tok_vao, g.tok_ra, p.luot, p.tok_vao, p.tok_ra
+          FROM g JOIN p ON p.ngay = g.ngay
+         ORDER BY 1""", (chung, du_an, chung))
+
+    # (ten truc, chi so ve GATEWAY, chi so ve NHA CUNG CAP) trong mỗi dòng trên.
+    # BA trục chứ không một: khớp số lượt mà lệch token là đúng hình dạng lỗi
+    # `failed_is_not_free` - 31/08 khớp 41/41 lượt trong khi lệch 6.334 token. Chỉ
+    # kiểm một trục là bỏ lọt chính cái lỗi sinh ra phép kiểm này.
+    TRUC = (("so luot", 1, 4), ("token vao", 2, 5), ("token ra", 3, 6))
+
+    hong, thieu_hut, da_so = [], [], 0
+    for dong in doi:
+        ngay = dong[0]
+        bo_qua = khong_do.get(ngay, {})
+        for ten, ig, ip in TRUC:
+            if ten in bo_qua:
+                continue
+            gw, ncc = float(dong[ig]), float(dong[ip])
+            da_so += 1
+            if gw > ncc:
+                hong.append(f"{ngay} {ten}: fact_call {int(gw):,}"
+                            f" > nha cung cap {int(ncc):,}"
+                            f" (thua {int(gw - ncc):,})")
+            elif ncc > gw:
+                ty_le = (ncc - gw) / ncc if ncc else 0.0
+                thieu_hut.append(f"{ngay} {ten}: nha cung cap {int(ncc):,}"
+                                 f" vs fact_call {int(gw):,}"
+                                 f" (thieu {int(ncc - gw):,} = {ty_le:.2%})")
+
+    a.check_tren(da_so, not hong,
+                 f"{NHAN} ({len(chung)} ngay, {len(du_an)} project)",
+                 "; ".join(hong[:8])
+                 + (f" ... con {len(hong) - 8} truc-ngay nua" if len(hong) > 8 else ""))
+
+    # KHÔNG ngưỡng, và KHÔNG bao giờ HỎNG - xem docstring. In con số ra để người
+    # đọc tự thấy độ lớn; ngưỡng chỉ được ban hành khi có nhiều hơn một ngày.
+    if thieu_hut:
+        a.note(WARN, f"Provider counts more than the gateway ledger"
+                     f" ({len(thieu_hut)}/{da_so} truc-ngay tren {len(chung)} ngay)",
+               "; ".join(thieu_hut[:6]) + (" ..." if len(thieu_hut) > 6 else ""))
+
+    if khong_do:
+        a.note(WARN, f"Provider reconciliation skipped unmeasured axes"
+                     f" ({len(khong_do)} ngay)",
+               "; ".join(f"{ngay}: " + ", ".join(f"{ten} ({'/'.join(ly_do)})"
+                                                 for ten, ly_do in sorted(m.items()))
+                         for ngay, m in sorted(khong_do.items())))
+
+
+def group_j_gateway_row_accounting(a: Audit) -> None:
+    """Mọi dòng sổ nguồn phải VÀO ĐƯỢC `fact_call`, hoặc bị bỏ CÓ TÊN.
+
+    VÌ SAO CẦN
+    ----------
+    `db/load_gateway.py` báo "read 47 rows | usable 41". Sáu dòng chênh kia đi
+    đâu là câu hỏi mà chính bộ nạp trả lời - nên nếu chỉ tin bộ nạp, ta đang lấy
+    lời khai của bị cáo làm bằng chứng. Nhóm này TỰ TÍNH LẠI từ sổ nguồn, bằng
+    câu SQL của riêng nó, rồi so với `fact_call`.
+
+    BA KẾT CỤC, KHÔNG PHẢI HAI
+    --------------------------
+        dong co dung mot tag dinh danh, DA co trong fact_call   -> dat
+        dong bi bo VI MOT LY DO GOI TEN DUOC                    -> LƯU Ý kem so
+        dong khong vao, cung khong co ly do nao                 -> HONG
+
+    Chỉ kết cục thứ ba mới là HỎNG, và đó KHÔNG phải nới lỏng: nó nhắm đúng thứ
+    cần bắt - dòng biến mất mà không ai giải thích được. Đòi `COUNT(*)` hai vế
+    bằng nhau thì phép kiểm đỏ vĩnh viễn vì một lý do đã biết trước
+    (`fact_call.agent_id` là NOT NULL, dòng không có tag định danh KHÔNG THỂ lưu),
+    và một phép kiểm đỏ vĩnh viễn là một phép kiểm bị bỏ qua.
+
+    ĐO 05/09/2026 TRÊN TOÀN SỔ
+    --------------------------
+        doc tu so                          47 dong
+        vao duoc fact_call                 41 dong
+        bo - khong co tag dinh danh         5 dong ·   408 token
+        bo - ban sao cua cu cache hit       1 dong ·   352 token
+                                          ----------------------
+        khong giai thich duoc               0 dong
+
+    NĂM DÒNG KIA LÀ MỘT KHOẢN NỢ, KHÔNG PHẢI MỘT KẾT LUẬN. Trong đó có
+    `lG-UarHhIYXmosUPv4ihmQ8` - một lượt THÀNH CÔNG, 25 token, người dùng
+    `tuan.tran`, mà sổ ta không giữ được vì tag của nó chỉ có `User-Agent:`.
+    Lưu lượng không quy được về ai cũng không phải lưu lượng miễn phí - cùng đúng
+    một hình dạng lỗi với `failed_is_not_free`, chỉ khác trục.
+    """
+    NHAN = "Every source row is either loaded or dropped for a named reason"
+
+    ma_agent = [r[0] for r in connect.query(a.cn, "SELECT code FROM dim_agent")]
+    da_nap = {r[0] for r in connect.query(a.cn, """
+        SELECT call_id FROM fact_call WHERE source = 'gateway'""")}
+
+    # Sổ nguồn là database KHÁC. Không với tới được thì đó là "chưa kiểm được",
+    # KHÔNG phải "đạt" - và cũng không phải cớ để audit sập.
+    try:
+        gw, _ = connect.open_db(connect.GATEWAY_DSN)
+    except Exception as e:                        # noqa: BLE001
+        a.note(WARN, NHAN,
+               f"CHUA KIEM DUOC - khong mo duoc so nguon"
+               f" ({connect.mask_dsn(connect.GATEWAY_DSN)}): {type(e).__name__}."
+               f" Day KHONG phai ket qua dat.")
+        return
+
+    try:
+        # `request_tags` là **jsonb**, không phải `text[]` - nên `unnest()` sẽ
+        # lỗi kiểu ở đây. Phải đi qua `jsonb_array_elements_text`, và phải chặn
+        # trường hợp cột NULL hoặc không phải mảng, nếu không cả dòng biến mất
+        # khỏi kết quả mà không báo gì.
+        #
+        # Tag định danh = tag KHỚP MỘT DÒNG `dim_agent.code`. Không phải "tag đầu
+        # tiên", cũng không phải "tag không bắt đầu bằng User-Agent:" - xem BẪY 3
+        # ở db/load_gateway.py.
+        nguon = connect.query(gw, """
+            SELECT request_id,
+                   ("startTime" + interval '7 hours')::date AS ngay,
+                   COALESCE(total_tokens, 0) AS tok,
+                   request_id LIKE %s AS ban_sao,
+                   (SELECT COUNT(*)
+                      FROM jsonb_array_elements_text(
+                             CASE WHEN jsonb_typeof(request_tags) = 'array'
+                                  THEN request_tags ELSE '[]'::jsonb END) AS t
+                     WHERE t = ANY(%s)) AS so_tag
+              FROM "LiteLLM_SpendLogs"
+             WHERE status IS NOT NULL
+             ORDER BY "startTime" """, (r"%\_cache\_hit%", ma_agent))
+    finally:
+        gw.close()
+
+    nen_nap, bo_khong_tag, bo_nhieu_tag, bo_ban_sao = [], [], [], []
+    for rid, ngay, tok, ban_sao, so_tag in nguon:
+        if ban_sao:
+            bo_ban_sao.append((rid, ngay, int(tok)))
+        elif so_tag == 1:
+            nen_nap.append((rid, ngay, int(tok)))
+        elif so_tag == 0:
+            bo_khong_tag.append((rid, ngay, int(tok)))
+        else:
+            bo_nhieu_tag.append((rid, ngay, int(tok)))
+
+    # HỎNG: dòng lẽ ra nạp được mà không có trong `fact_call`. Không lý do nào.
+    mat = [x for x in nen_nap if x[0] not in da_nap]
+    # Và chiều ngược lại cũng phải kiểm: dòng có trong `fact_call` mà sổ nguồn
+    # không còn - nghĩa là ta đang giữ một bản ghi không ai xác nhận được nữa.
+    thua = sorted(da_nap - {x[0] for x in nen_nap})
+
+    loi = []
+    if mat:
+        loi.append(f"{len(mat)} dong nap duoc nhung VANG trong fact_call: "
+                   + ", ".join(f"{r[0][:24]} ({r[1]}, {r[2]} token)"
+                               for r in mat[:5])
+                   + (f" ... +{len(mat) - 5}" if len(mat) > 5 else ""))
+    if thua:
+        loi.append(f"{len(thua)} dong co trong fact_call ma so nguon khong con: "
+                   + ", ".join(t[:24] for t in thua[:5])
+                   + (f" ... +{len(thua) - 5}" if len(thua) > 5 else ""))
+
+    a.check_tren(len(nguon), not loi, f"{NHAN} ({len(da_nap)} dong da nap)",
+                 " · ".join(loi))
+
+    # Phần bị bỏ CÓ LÝ DO: không phải hỏng, nhưng phải hiện ra kèm token. Đếm số
+    # dòng thôi là mời người đọc tự điền "chắc chẳng đáng bao nhiêu".
+    for nhom, ten in ((bo_khong_tag,  "no identity tag"),
+                      (bo_nhieu_tag,  "several identity tags"),
+                      (bo_ban_sao,    "cache-hit duplicate row")):
+        if not nhom:
+            continue
+        tok = sum(x[2] for x in nhom)
+        a.note(WARN, f"Source rows dropped: {ten}"
+                     f" ({len(nhom)} dong, {tok:,} token)",
+               ", ".join(f"{r[0][:24]} ({r[1]}, {r[2]} token)" for r in nhom[:6])
+               + (f" ... +{len(nhom) - 6}" if len(nhom) > 6 else ""))
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
@@ -1164,7 +1485,11 @@ def main() -> None:
                       ("E. Adoption", group_e_adoption),
                       ("F. Hourly and source", group_f_hourly),
                       ("G. Account dimension", group_g_account_dimension),
-                      ("H. Cache reconciliation", group_h_cache_reconciliation)):
+                      ("H. Cache reconciliation", group_h_cache_reconciliation),
+                      ("I. Provider reconciliation",
+                       group_i_provider_reconciliation),
+                      ("J. Gateway row accounting",
+                       group_j_gateway_row_accounting)):
         print(f"\n{title}\n{'─' * 72}")
         start = len(a.results)
         fn(a)
