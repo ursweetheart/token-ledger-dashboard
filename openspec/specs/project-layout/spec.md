@@ -33,12 +33,17 @@ Quy tắc này tồn tại để câu hỏi "file mới để đâu" có câu tr
 
 ### Requirement: Mã nguồn tách khỏi dữ liệu chạy
 
-Thư mục chứa mã SHALL không chứa dữ liệu do chương trình sinh ra khi chạy. Database
-SQLite SHALL nằm trong `var/`, tách khỏi `db/` — nơi chỉ còn giữ schema và module nạp.
+Thư mục chứa mã SHALL không chứa dữ liệu do chương trình sinh ra khi chạy.
 
 Ranh giới này phân biệt hai thứ có hậu quả khác hẳn nhau khi mất: `data/` là dữ liệu
 thô kéo về, mất là mất vĩnh viễn vì cửa sổ lưu giữ ở nguồn trượt nhanh; `var/` dựng lại
 được hoàn toàn từ `data/`.
+
+**Sửa 24/08/2026.** Bản trước ra lệnh *"Database SQLite SHALL nằm trong `var/`, tách khỏi
+`db/`"*. Câu đó nay không còn đối tượng: SQLite đã bị gỡ khỏi dự án, và database sống trong
+volume Docker `pgdata` chứ không nằm trong cây thư mục repo. Yêu cầu **tách mã khỏi dữ liệu
+chạy vẫn giữ nguyên** — chỉ đổi cái ví dụ minh hoạ, vì `var/` nay chứa bản chụp bộ số bất
+biến của `tools/baseline_db.py` thay vì một file database.
 
 #### Scenario: Xoá dữ liệu chạy là thao tác an toàn
 
@@ -49,8 +54,8 @@ thô kéo về, mất là mất vĩnh viễn vì cửa sổ lưu giữ ở ngu�
 #### Scenario: Không còn dữ liệu trong thư mục mã
 
 - **WHEN** liệt kê `db/`
-- **THEN** chỉ thấy file `.sql` và `.py`
-- **AND** không thấy file `.sqlite` nào
+- **THEN** chỉ thấy file `.sql`, `.py` và thư mục `migrations/`
+- **AND** MUST NOT thấy file database nào
 
 ### Requirement: Thư mục kiểm thử phân biệt theo nghĩa vụ
 
