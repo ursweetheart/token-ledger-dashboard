@@ -1,0 +1,37 @@
+# Cau hinh cho instance LiteLLM DUNG RIENG DE DO TAI. KHONG dung cho chay that.
+#
+# Bon lop cach ly voi luong chinh, moi lop chan mot duong ban khac nhau:
+#
+#   1. `mock_response` o duoi -> KHONG BAO GIO goi nha cung cap. Khong ton tien,
+#      khong ton quota cua khoa that.
+#   2. DATABASE_URL tro vao database `litellm_bench` rieng -> so that
+#      (`LiteLLM_SpendLogs` trong database `litellm`) khong nhan mot dong nao.
+#   3. KHONG khai redis -> khong dung chung bo dem rpm/tpm voi litellm-1/2.
+#      Bench ban 500 rps cung khong cuop han muc cua agent that.
+#   4. `api_key` duoi day CO Y SAI. Neu vi mot ly do nao do mock khong an va
+#      request di ra ngoai that, no se hong NGAY va ON AO (401 tu Google) chu
+#      khong am tham tieu tien. Che do hong phai la "khong chay", khong phai
+#      "chay ma khong ai biet" - cung ky luat voi entrypoint.sh va DASHBOARD_KEY.
+#
+# CO Y KHONG dat `rpm`/`tpm`: tuyen that bi ep 60 rpm, nen ban nhanh hon chi do
+# duoc cai rate limiter. Bo han muc di thi moi do duoc hang muc that cua nginx +
+# LiteLLM + Postgres.
+
+model_list:
+  - model_name: bench-mock
+    litellm_params:
+      model: gemini/gemini-3.5-flash-lite
+      api_key: "KHONG-PHAI-KHOA-THAT-neu-thay-401-tu-Google-la-mock-da-khong-an"
+      mock_response: "BENCH: cau tra loi gia, khong co lan goi nao ra ngoai."
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: false
+
+litellm_settings:
+  drop_params: true
+  # Giu nguyen ky luat cua ban that: khong ghi noi dung prompt/response vao
+  # database. Bench khong co du lieu that, nhung de khac ban that mot khoa la
+  # tao co hoi ket luan nham khi so hai ben.
+  turn_off_message_logging: true
