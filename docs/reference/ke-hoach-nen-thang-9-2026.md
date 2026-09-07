@@ -90,34 +90,63 @@ balancer, và ba yêu cầu ① ② ③ đã gửi đi — *đã gửi*, chưa c
 
 ```
    [ ] Khai 8 tuyen / 8 project vao config.gateway.yaml, moi tuyen mot khoa rieng
-   [ ] Them gemini-3.6-flash vao db/rules.py + dim_model  (muc 6 ②, viec nho)
+       -- CHUA. config.gateway.yaml hom nay chi 3 tuyen, ca 3 dung CHUNG mot
+       khoa KEY_GOOGLE_AI_STU. Cho dieu kien ① (8 khoa API cua 8 project)
+   [x] Them gemini-3.6-flash vao db/rules.py + dim_model  (muc 6 ②, viec nho)
+       -- XONG 06/09, qua close-the-known-gateway-loose-ends (chua commit)
    [ ] Cap 8 Virtual Key, moi agent mot khoa, thu hoi doc lap tung khoa
-   [ ] Chot dinh dang danh tinh: end_user = claim `sub`, KHONG phai ca chuoi JWT
-   [ ] Xac nhan ingestion chi ghi token_ledger_v2; token_ledger legacy chi doc
+       -- 1/8. Chi dms-feedback co Virtual Key that (tag "dms-feedback",
+       config.gateway.yaml). 7 agent con lai (Ralli, TLA Hop Dong, CRM,
+       Contact Center, Sale Agent, Multi modal AI Invoice, Tools Quizzer)
+       van goi thang nha cung cap
+   [x] Chot dinh dang danh tinh: end_user = claim `sub`, KHONG phai ca chuoi JWT
+       -- XONG. config.gateway.yaml: user_header_name="X-User" nhan claim
+       `sub`, co ghi chu "da chot" ngay trong file cau hinh
+   [x] Xac nhan ingestion chi ghi token_ledger_v2; token_ledger legacy chi doc
+       -- XONG 31/08, qua load-the-gateway-ledger-into-the-database
 ```
 
-**Chốt tuần 1:** một request thật của **một** agent đi qua Gateway tới Google và về, có
-dòng `LiteLLM_SpendLogs` với `end_user` đúng người, `spend` khác 0, prompt đã bị xoá.
+**Chốt tuần 1: ĐẠT 31/08 — nhưng (trên một agent).** Request thật của `dms-feedback` đi
+qua Gateway tới Google và về, `LiteLLM_SpendLogs` có `end_user = svc.dms-feedback` đúng
+người, `spend 0,0026954` khác 0, prompt đã bị xoá. Đây là mốc tối thiểu của kế hoạch, đã
+đạt — nhưng mới đúng cho **một** agent trong 8, không suy rộng ra cả 8 được.
 
 > Ba ngày cho khối này là chặt. Nếu tới hết 04/09 mà chưa có một request thật đi qua
 > Gateway thì **dừng lại báo ngay**, đừng bù bằng cách làm đêm.
+>
+> *(Đã không phải dừng — mốc trên đạt đúng hạn 31/08.)*
 
 ### Tuần 2 — 07/09 → 11/09 · 5 ngày · *đường dữ liệu + diễn tập*
 
 ```
-   [ ] Migration 004: bang fact_request. BAT BUOC co cot `status`
+   [x] Migration 004: bang fact_request. BAT BUOC co cot `status`
        (do duoc 26/08: LiteLLM ghi ca request THAT BAI kem token count)
-   [ ] Loader Gateway -> fact_usage_daily, source='gateway'
+       -- XONG, nhung KHAC TEN: khong dung bang `fact_request` moi, ma mo rong
+       `fact_call` co san (migration 004_fact_call_source_cost + sau do
+       006_do_tre_va_ket_cuc them duration_ms/outcome/error_code). Yeu cau goc
+       -- co cot trang thai, ghi duoc luot HONG kem token -- da dat
+   [x] Loader Gateway -> fact_usage_daily, source='gateway'
+       -- XONG 31/08, qua load-the-gateway-ledger-into-the-database
    [x] Doi chieu 26 truong Data Out x 34 cot SpendLogs   -- XONG 27/08
        -> docs/reference/doi-chieu-data-out-litellm.md
-   [ ] Mo rong audit_db.py + check_api.py cho nguon gateway
+   [x] Mo rong audit_db.py + check_api.py cho nguon gateway
+       -- XONG 03-05/09, qua extend-the-checks-to-gateway-data +
+       refresh-every-table-the-gateway-touches + stop-treating-a-failed-call-
+       as-a-free-call. Moc cuoi: audit_db.py 78 phep / 68 dat / 10 luu y /
+       0 hong; check_api.py 31/31
    [ ] DIEN TAP: tat litellm-2, do thoi gian phuc hoi; roi do THOI GIAN LUI
        (tro base_url mot agent ve thang nha cung cap, bam gio)
-   [ ] Chuyen agent DAU TIEN qua Gateway -- chon agent it luu luong nhat
+       -- CHUA THAY BANG CHUNG DA LAM. Day la rui ro so 1 cua tuan nay, xem
+       §6③ -- duong lui chua duoc do, "danh sach dep" nhung chua thu that
+   [x] Chuyen agent DAU TIEN qua Gateway -- chon agent it luu luong nhat
+       -- XONG 31/08, chon dms-feedback. (trên một agent — day dung la
+       "AGENT DAU TIEN" theo dung pham vi cua dong nay, KHONG phai ca 8)
 ```
 
-**Chốt tuần 2:** một agent chạy thật qua Gateway, số của nó vào `fact_usage_daily` với
-`source='gateway'`, `audit_db.py` xanh, và **thời gian lùi đã có con số**.
+**Chốt tuần 2 (đến hết 07/09): một nửa.** Đường dữ liệu XONG cả — agent thật vào
+`fact_usage_daily` với `source='gateway'`, `audit_db.py` xanh (78/68/10/0). Nhưng
+**thời gian lùi CHƯA có con số** — vế diễn tập của mốc này chưa đạt, và đây là việc còn
+lại nặng nhất trước khi bước vào cửa sổ đối chiếu 14/09.
 
 ### Tuần 3 + 4 — 14/09 → 25/09 · 10 ngày · *cửa sổ đối chiếu, không đụng vào*
 
@@ -255,8 +284,8 @@ một ngày lệch +8% và một ngày lệch −8% triệt tiêu nhau thành "0
 | 🟡 | `gemini-2.5-flash-image` bị gộp vào `gemini-2.5-flash`, mất nhánh ảnh | task 6.4(b) |
 | 🟡 | `gemini-2.0-flash` (9,5% lưu lượng cũ) đã rút khỏi API | task 6.4(c) |
 | 🟡 | Sheet `Data Out` §A5: đổi "Nguồn" thành "dẫn xuất" | task 6.2 |
-| 🟡 | Kế hoạch đóng gói Docker viết 18/08 dựa vào file đã xoá 24/08 — còn sống hay đã lỗi thời | nhật ký 26/08 §14 |
-| ⚪ | Thư mục sao lưu đặt tên `2026-26-08`, phải là `2026-08-26` | — |
+| ✅ | Kế hoạch đóng gói Docker viết 18/08 dựa vào file đã xoá 24/08 — **đã đóng 06/09**: dashboard đã lên server thật, plan đã hoàn thành mục tiêu, không lỗi thời | `close-the-known-gateway-loose-ends/tasks.md` §3 |
+| ✅ | Thư mục sao lưu đặt tên `2026-26-08`, phải là `2026-08-26` — **đã đổi tên** | `close-the-known-gateway-loose-ends/tasks.md` §1 |
 
 ---
 
