@@ -191,6 +191,44 @@ Ba chỗ, thiếu chỗ nào cũng hỏng im lặng:
 > trước**. Thiếu `"3.5 flash lite"` thì `guess_model("gemini/gemini-3.5-flash-lite")` trả về
 > `gemini-3.5-flash` — model khác, đơn giá khác, và **vẫn báo là tìm thấy**.
 
+### Bước 7 — Bốn điều đã đo được ở tuyến đầu, đừng đo lại từ đầu
+
+Rút từ phép đo thật ngày 31/08 khi đưa `dms-feedback` qua Gateway. Bốn điều này đã tốn công
+mới biết; lặp lại tuyến thứ hai mà không nhớ chúng là mất công y hệt.
+
+**① Virtual Key phải cấp MỚI, không sửa được khoá cũ.** LiteLLM chỉ lưu **hash**, không lưu
+chuỗi `sk-…`. Một khoá đã cấp mà thiếu `metadata.tags` thì sửa metadata **là ngõ cụt** — sửa
+xong vẫn không ai gọi được vì không ai còn biết khoá là gì. Ở DMS đã phải cấp khoá mới
+`dms-feedback-tagged` và **giữ nguyên khoá cũ** làm hồ sơ phép đo. Hệ quả cho mai: cấp khoá
+xong phải **chép ngay chuỗi `sk-…` ra chỗ an toàn**, không có lần thứ hai.
+
+**② Tag nằm ở `metadata` của khoá, không phải trường `tags` cấp cao.** Đã truy tới nơi:
+`litellm_pre_call_utils.py:1942` đọc `user_api_key_dict.metadata`. Trường `tags` trong
+response của `/key/generate` là thứ khác và đang `null`; bảng `LiteLLM_VerificationToken`
+**không có cột `tags`**. Khai nhầm chỗ thì im lặng không có tác dụng.
+
+**③ Thiếu tag KHÔNG hỏng hẳn — nó hỏng lác đác.** Đo 8 lượt gọi không mang tag:
+**7/8 thành công, 1/8 trượt** vì rơi vào tuyến sai. Tức **12,5%**. Đây là kiểu hỏng tệ nhất:
+chạy thử vài lượt thấy 200 hết rồi kết luận "xong", trong khi thực tế cứ tám lượt lại sai một.
+**Đừng lấy "gọi thử thấy chạy" làm bằng chứng tag đã đúng.**
+
+**④ Sổ KHÔNG chứng minh được tag lọc đúng.** Cột `tags` và `routing_decision` trong
+`LiteLLM_SpendLogs` đều **rỗng**. Muốn chứng minh phải dùng **phép kiểm âm**: dựng một tuyến
+mồi cùng `model_name`, mang `tags: ["khong-ai-dung"]` và `api_key` cố ý sai, rồi đếm **số lượt
+chạm** tuyến mồi trong log — chứ **không** đếm số lượt thành công. Lý do: `num_retries: 3` sẽ
+thử lại qua tuyến đúng và **che mất** lỗi định tuyến, nên "10/10 thành công" là con số nói dối.
+Đo đúng cách cho ba dấu vết: 10/10 HTTP 200 · đúng 10 dòng SpendLogs mới · `attempted_retries
+= 0` cả 10 dòng · **0 lần chạm tuyến mồi**. Xong nhớ **gỡ tuyến mồi** và triển khai lại.
+
+> **Ràng buộc model cho tuyến kế tiếp.** Gateway đang phục vụ ba bí danh, nhưng
+> `rules.GATEWAY_MODELS` **cố ý** chỉ khai hai (`gemini/gemini-3.6-flash`,
+> `gemini/gemini-3.5-flash-lite`). Bí danh `gemini-flash-preview` trỏ tới
+> `gemini/gemini-3-flash-preview` — `guess_model` sẽ suy nó thành `gemini-3-flash`, tức **gộp
+> bản preview vào bản chính thức khi đơn giá hai bản chưa ai kiểm**, nên nó bị để ngoài có chủ
+> ý và lưu lượng rơi vào bộ đếm `model_chua_khai` (`db/load_gateway.py:337`) — được đếm và in
+> ra, không mất. **Nên agent đem ra thử phải dùng `gemini-flash` hoặc `gemini-flash-lite`.**
+> Muốn dùng `gemini-flash-preview` thì phải chốt đơn giá bản preview trước, đó là việc riêng.
+
 ---
 
 ## 4. Một request đi qua những bước nào
