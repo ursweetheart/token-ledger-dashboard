@@ -34,12 +34,14 @@
       nén không hề "thay thế" kiến trúc này, chỉ trùng chữ "gateway". Đo được: 0/40
       checkbox đã tick, 0/9 file mô tả trong "File Structure" tồn tại trong repo, 2 tham
       chiếu hỏng (`copy_to_postgres.py` xoá 24/08, `var/token_ledger.sqlite` xoá 17/08)
-- [ ] 3.3 **HOÃN — chờ hỏi.** Đây là quyết định phạm vi sản phẩm (còn muốn deploy dashboard
-      ra domain thật hay không), không suy ra được từ code. Anh Tuấn chọn "để lại, đi hỏi"
-      ngày 29/08/2026. Chưa sửa file `docker-packaging.md`, chưa đánh dấu lỗi thời hay còn
-      sống — quay lại task này sau khi có câu trả lời
-- [ ] 3.4 (chờ 3.3)
-- [ ] 3.5 (chờ 3.3)
+- [x] 3.3 **Hết hoãn — đã có câu trả lời ngày 06/09/2026.** Anh Tuấn xác nhận dashboard
+      đã triển khai lên server thật, không còn ở giai đoạn kế hoạch. Vậy plan không lỗi
+      thời — nó đã **hoàn thành mục tiêu**, chỉ không còn ai chạy theo runbook nữa
+- [x] 3.4 Thêm banner trạng thái vào đầu `docker-packaging.md`, trỏ về quyết định này,
+      ghi rõ hai tham chiếu hỏng (`copy_to_postgres.py`, `var/token_ledger.sqlite`) giữ
+      nguyên không sửa vì plan đã thực thi xong
+- [x] 3.5 Không sửa `Global Constraints`/`Task 1-6` trong file — chúng là hồ sơ lịch sử
+      của cách plan được thực thi, không phải hướng dẫn còn hiệu lực cho việc tương lai
 
 ## 4. Nghiệm thu
 
@@ -51,5 +53,7 @@
       nghiệm thu 18+11 dự án đang dùng)
 - [x] 4.3 Không tự tạo file nhật ký ngày mới — đó là nếp ghi chép riêng của anh Tuấn. Tóm
       tắt 2/3 việc đã đóng (model catalog, đổi tên backup) đưa thẳng vào cuối phiên
-      `/opsx:apply` này; việc còn lại (docker-packaging plan) đang hoãn chờ hỏi, chưa đối
-      chiếu vào mục 8 `ke-hoach-nen-thang-9-2026.md` được vì chưa có kết luận
+      `/opsx:apply` này
+- [x] 4.4 **06/09/2026 — việc thứ 3 hết hoãn.** Đã đối chiếu cả 2 dòng liên quan trong
+      mục 8 `docs/reference/ke-hoach-nen-thang-9-2026.md` (Docker packaging, thư mục sao
+      lưu) sang ✅, trỏ về change này. Đủ 3/3 việc đóng — sẵn sàng archive

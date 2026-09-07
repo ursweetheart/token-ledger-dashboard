@@ -41,7 +41,21 @@
 ## 5. Xuất CSV
 
 - [x] 5.1 Thêm cột phân biệt tiền hoá đơn với tiền suy ra
-- [ ] 5.2 Kiểm mở bằng Excel tiếng Việt, cột không vỡ — CHƯA làm, cần người mở thử
+- [x] 5.2 **06/09/2026 — tìm ra và sửa 2 lỗi thật trước khi kịp "kiểm mở bằng Excel".**
+      `exportCSV()` (`app.js:3826`) không có BOM UTF-8 và dùng dấu phẩy làm delimiter cố
+      định. Máy dev này là `en-US` (`Get-Culture` → decimal `.`, list separator `,`) nên
+      không lộ ra ở đây, nhưng theo đúng cơ chế Windows đã ghi chú trong code: Excel mở
+      CSV bằng list separator lấy từ Control Panel Regional Settings của máy đang mở, và
+      Excel tiếng Việt/vùng miền Việt Nam mặc định lấy dấu phẩy làm phân cách thập phân
+      nên list separator đổi thành dấu chấm phẩy — file này không có dấu `;` nào nên sẽ
+      gộp hết vào một cột. Sửa bằng 2 fix chuẩn của Excel, không phụ thuộc vùng miền máy
+      mở: dòng chỉ thị `sep=,` ở đầu file (Excel mọi vùng miền đọc dòng này để cố định
+      delimiter) + BOM UTF-8 (để không vỡ dấu tiếng Việt). Xác minh bằng `xxd` trên file
+      mẫu dựng lại đúng cơ chế: byte đầu `ef bb bf` (BOM đúng), dòng 2 `sep=,`, dòng 3 là
+      header đủ dấu, dòng dữ liệu có phẩy trong giá trị (`"486,957"`, `"Chăm sóc khách
+      hàng, cấp 1"`) được quote đúng. `node --check web/js/app.js` xanh. Đã gửi file mẫu
+      cho anh Tuấn mở thử trên Excel thật để xác nhận bằng mắt — chưa tự tay xác nhận
+      được bước này vì môi trường không có Excel tiếng Việt để mở
 
 ## 6. Nghiệm thu
 

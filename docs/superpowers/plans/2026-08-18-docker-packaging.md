@@ -1,5 +1,12 @@
 # Token Ledger Docker Packaging Implementation Plan
 
+> **Trạng thái (06/09/2026):** Đã triển khai lên server thật — anh Trần Xuân Tuấn xác
+> nhận dashboard đã chạy trên server, không còn ở giai đoạn kế hoạch. Quyết định đóng
+> việc này nằm ở `openspec/changes/close-the-known-gateway-loose-ends/tasks.md` mục 3.
+> Hai tham chiếu hỏng trong plan (`scripts/copy_to_postgres.py`,
+> `var/token_ledger.sqlite` — cả hai đã bị xoá khỏi repo) giữ nguyên không sửa: plan đã
+> thực thi xong, không ai còn chạy theo runbook này nữa nên sửa lại không còn giá trị.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a reproducible Docker Compose stack with an Nginx gateway, a non-root FastAPI API, and persistent PostgreSQL, first testable on the Windows VM at `http://127.0.0.1:8080` and later deployable at `https://dashboard.rangdong.com.vn:45501`.

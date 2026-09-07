@@ -3830,7 +3830,13 @@ function exportCSV(){
      dashboard suy từ bảng giá chứ không từ hoá đơn. Số mang ra khỏi màn hình mà
      mất dấu vết thì người nhận file không có cách nào biết - và file CSV thường
      đi xa hơn màn hình, vào bảng tính rồi vào báo cáo. */
-  var lines=["Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,"
+  /* `sep=,` là dòng chỉ thị Excel hiểu ở mọi vùng miền (kể cả Excel tiếng Việt,
+     nơi dấu phẩy thập phân khiến Excel mặc định tách cột bằng dấu chấm phẩy) -
+     thiếu dòng này thì Excel tiếng Việt gộp cả dòng vào một cột duy nhất. BOM
+     (`﻿`) đứng đầu file để Excel nhận đúng UTF-8, không thì "Kỳ", "Phòng
+     ban", "Chi phí VNĐ" hiện thành ký tự vỡ. */
+  var lines=["sep=,",
+             "Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,"
             +"Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình,Nguồn tiền"];
   rows.forEach(function(r){
     var nguon = r.cost!=null ? "hoá đơn"
@@ -3839,7 +3845,7 @@ function exportCSV(){
                 num(r.er).toFixed(2),cost(r).toFixed(2),toVnd(cost(r)),VND_RATE,
                 nguon].map(csv).join(","));
   });
-  var blob=new Blob([lines.join("\n")],{type:"text/csv;charset=utf-8;"});
+  var blob=new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8;"});
   var url=URL.createObjectURL(blob); var a=document.createElement("a");
   a.href=url; a.download="token-ledger_"+state.range.start+"_"+state.range.end+".csv"; a.click(); URL.revokeObjectURL(url);
 }
