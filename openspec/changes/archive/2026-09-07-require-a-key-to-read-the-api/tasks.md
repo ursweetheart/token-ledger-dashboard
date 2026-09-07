@@ -81,8 +81,28 @@
       → so **trước/sau trên cùng một máy chủ**: `/api/usage` 1.189 dòng · 867.657.110
       token · $291,985601 · `/api/accounts` 937 dòng — trùng khít, và khớp bất biến đã
       chốt sáng 21/08. `audit_db.py` vẫn 36 phép / 0 hỏng (change này không đụng `db/`)
-- [ ] 5.4 `Ctrl+Shift+R` trước khi kết luận frontend đã đổi — Chrome giữ `app.js` cũ trong
+- [x] 5.4 `Ctrl+Shift+R` trước khi kết luận frontend đã đổi — Chrome giữ `app.js` cũ trong
       bộ đệm, bẫy này mất một vòng ngày 20/08
+      → **ĐO 07/09/2026 trên Chrome thật.** Container `token-ledger-web` không bật được ở
+      máy dev vì nó bind `192.168.20.111:8080` (IP máy chủ, đúng quy ước trước khi push) —
+      **không sửa `docker-compose.yml` để lách**. Thay vào đó phục vụ `web/` bằng máy chủ
+      tĩnh ở `127.0.0.1:8081` và trỏ backend qua tham số `?api=http://127.0.0.1:8000` mà
+      `api.js:51` đã có sẵn. Origin này Chrome chưa từng ghé nên **không có gì trong bộ
+      đệm để mà cũ** — mạnh hơn `Ctrl+Shift+R`; vẫn bấm `Ctrl+Shift+R` hai lượt cho đúng
+      mục.
+      **Bằng chứng, hai vế:**
+      · *Frontend*: màn hình hiện ô chặn “Dashboard cần một khoá để đọc dữ liệu… đây là
+        chủ ý, không phải lỗi”, đèn trạng thái `Chưa nhập khoá`, kèm câu “khoá không được
+        gửi qua URL”. Đây là bản MỚI, không phải bản đệm.
+      · *Không gọi lén*: bật bộ theo dõi mạng TRƯỚC rồi mới nạp lại (lượt đọc đầu tiên trả
+        rỗng nhưng **không tính là bằng chứng** — bộ đếm chỉ bắt đầu từ lúc gọi). Lượt đo
+        thật: **13 request, KHÔNG request nào tới `127.0.0.1:8000`**. Frontend không chạm
+        backend khi chưa có khoá.
+      · *Backend*: `/api/usage`, `/api/accounts`, `/api/catalog` đều trả **401** khi không
+        mang khoá — 3/3.
+      **Không tự nhập khoá thật vào ô** (không gõ bí mật vào form). Vế “nhập khoá đúng thì
+      số hiện ra y hệt” đã được chứng minh ở mục 5.3 bằng đối chiếu trước/sau trên cùng máy
+      chủ, không cần làm lại
 - [x] 5.5 `python backend/check_api.py` — **18/18** (16 cũ + 2 mới ở 4.2)
 - [x] 5.6 `node --test tests/` — **6 + 11**
       → cả 4 kịch bản hỏng cũ **trượt** lúc đầu: `localStorage` giả rỗng nên `load()` dừng

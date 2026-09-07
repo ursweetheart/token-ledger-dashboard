@@ -76,7 +76,7 @@
 - [x] 7.4 Xoá `scripts/sinh_du_lieu_dashboard.py` và `scripts/va_app_js.py`
 - [x] 7.5 Đọc toàn bộ lời gọi lệnh trong `update_dashboard.py`, xác nhận không lời gọi nào sinh hoặc sửa file trong `web/`
 - [x] 7.6 `tools/doi_chieu_web_vs_file.py:38` tìm file **cạnh chính nó** trong `tools/`, nhưng file nằm ở `tests/fixtures/` — nên công cụ đó **đang hỏng**. Đã `git mv` về `tools/`: vừa đúng quy ước layout, vừa sửa một thứ hỏng từ trước. Xác nhận công cụ chạy lại được. `tests/fixtures/` đã rỗng nên xoá
-- [ ] 7.7 Chạy trọn đường ống rồi kiểm `git status` trên `web/` — không file nào bị đường ống sửa
+- [ ] 7.7 Chạy trọn đường ống rồi kiểm `git status` trên `web/` — không file nào bị đường ống sửa — **CHƯA chạy trọn, nhưng đã chứng minh bằng đường khác (07/09/2026).** Quét toàn bộ 6 script mà `update_dashboard.py` gọi qua 9 bước: **không script nào có đường ghi vào `web/`**. Ba chỗ duy nhất nhắc tới tên đó đều vô hại — `update_dashboard.py:19` là docstring khẳng định đúng điều này, `:21` là ghi chú lịch sử về bước 10 đã xoá, `rebuild_db.py:26` là `data/raw_web/` (khác thư mục). Dấu vết hai lần chạy `rebuild_db.py` + `audit_db.py` ngày 02/09 và 04/09 còn trong `var/rebuild-cuoi.txt`, `var/audit-cuoi.txt`; `git status web/` hôm nay chỉ hiện `M web/js/app.js` — sửa tay bằng Edit cho lỗi BOM/CSV, không phải đường ống sinh ra. **Giữ ô trống có chủ ý:** soát tĩnh mạnh hơn một lần chạy (nó phủ mọi lần chạy, không chỉ lần này) nhưng nó KHÔNG phải là việc mà mục này yêu cầu, và các bước 1–7 gọi API ngoài nên chưa được chạy lần nào trong phiên. Không tự tick để khỏi biến "chứng minh kiểu khác" thành "đã làm đúng như ghi"
 
 ## 8. Nghiệm thu bằng mắt
 
@@ -112,7 +112,7 @@
 - [x] 11.1 Đổi định danh tiếng Việt trong `renderDataProvenance` — **theo phạm vi hàm**, không thay toàn file, vì `y` cũng là biến năm ở ba chỗ khác: `ngayCuoi`→`lastDay` · `soNgayCu`→`daysStale` · `tienHoaDon`→`invoicedUsd` · `tienUoc`→`estimatedUsd` · `dongUoc`→`estimatedRows` · `dongTong`→`totalRows` · `tong`→`totalUsd` · `y`→`notes`
 - [x] 11.2 Hàm mới đặt tên tiếng Anh ngay: `loadNote`, `hideLoadNote`, `setConnIndicator`, `renderShell`, `renderError`, `renderDataProvenance`, `today0`, `makeError`, `PREF_KEYS`
 - [x] 11.3 Ghi chú giữ nguyên tiếng Việt; **không** đổi chuỗi hiển thị nào — người dùng đọc chúng
-- [ ] 11.4 `napTuBackend` (có sẵn) và `cachedNgoai` (`api.js`) vẫn là tiếng Việt — thuộc phần ② của kế hoạch, làm ở change riêng `rename-identifiers-to-english` sau khi change này lành
+- [x] 11.4 `napTuBackend` (có sẵn) và `cachedNgoai` (`api.js`) vẫn là tiếng Việt — thuộc phần ② của kế hoạch, làm ở change riêng `rename-identifiers-to-english` sau khi change này lành — **ĐO 07/09/2026: mô tả trên đã lỗi thời, việc ĐÃ xong.** `grep` toàn bộ `web/js/` không còn dòng nào mang hai tên đó: `napTuBackend` → `loadFromBackend` (`app.js:21,521,891,903`), `cachedNgoai` → `cachedOutsideInput` (`api.js:350`). Không cần change `rename-identifiers-to-english` riêng cho hai tên này nữa. **Còn sót ở ghi chú, không ở mã:** tên cũ vẫn nằm trong chú thích tại `tools/chay_dashboard_trong_node.js:143,199,209` và `tests/load-failure-states.test.js:6,111` — đã kiểm từng dòng, **tất cả đều là comment `//`, không dòng nào là lời gọi hàm**, nên không có gì gãy. Chỉ là chú thích gọi tên đã đổi
 
 ## 12. Bộ kiểm mới, thường trực
 
