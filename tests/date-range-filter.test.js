@@ -95,7 +95,11 @@ test("range rendering changes without changing other dashboard dates", () => {
 
   api.renderStatus();
   assert.equal(document.ids["status-period"].innerHTML, "01/07/2026 → 09/08/2026");
-  assert.equal(document.ids["header-data-date"].innerHTML, "08/13/2026");
+  // `08/13/2026` là kỳ vọng CŨ và nó SAI, không phải mã nguồn sai. Ba dòng ngay
+  // trên cùng test này đều kiểm `dd/MM/yyyy`, và `parseTypedDate("31/02/2026")`
+  // trả null cũng theo `dd/MM` - chỉ riêng dòng này còn sót định dạng Mỹ. Ngày
+  // `2026-08-13` đọc kiểu Việt là 13/08. Sửa phép kiểm, KHÔNG sửa mã.
+  assert.equal(document.ids["header-data-date"].innerHTML, "13/08/2026");
 });
 
 test("range controls do not add fixed calendar period buttons", () => {
