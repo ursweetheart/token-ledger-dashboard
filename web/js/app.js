@@ -1264,6 +1264,80 @@ function configuredBudgetSummary(rows){
     rows:matchedRows
   };
 }
+/* ─── Cảnh báo agent tiêu vượt mặt bằng ─── */
+/* NGƯỠNG ĐẶT TÊN, không rải số 1.3 giữa mã. Biên bản 25/07 chốt 30%. */
+var AGENT_COST_OUTLIER_RATIO = 1.30;
+/* Dưới ngần này agent thì trung bình không nói lên điều gì: với 2 agent, mức
+   trung bình bị chính agent đang xét kéo lên, nên "vượt 30%" gần như luôn đúng
+   về số học mà vô nghĩa về ý nghĩa. Không chặn hẳn — vẫn hiện, nhưng nói rõ mẫu
+   nhỏ để người đọc tự trừ hao. */
+var AGENT_COST_SAMPLE_MIN = 3;
+
+/* `averageAgentCost = tổng chi phí agent hoạt động / số agent hoạt động`
+   (design.md §7). "Hoạt động" = CÓ CẢ chi phí lẫn request trong kỳ; agent có
+   request mà chưa quy được tiền không được kéo mẫu số xuống. */
+function agentCostOutliers(rows){
+  var groups = groupAgg(rows, function(r){ return r.a; })
+    .filter(function(g){ return g.cost > 0 && g.r > 0; });
+  var total = groups.reduce(function(s,g){ return s + g.cost; }, 0);
+  var avg = groups.length ? total / groups.length : 0;
+  var flagged = groups
+    .filter(function(g){ return g.cost > avg * AGENT_COST_OUTLIER_RATIO; })
+    .sort(function(a,b){ return b.cost - a.cost; });
+  return { agents:groups, sample:groups.length, avg:avg, flagged:flagged,
+           small: groups.length < AGENT_COST_SAMPLE_MIN };
+}
+
+function renderAgentCostAlerts(rows){
+  var el = document.getElementById("co-alert-body"); if(!el) return;
+  var o = agentCostOutliers(rows);
+  var ky = dayLabel(state.range.start) + " → " + dayLabel(state.range.end);
+  var mau = document.getElementById("co-alert-note");
+
+  if(!o.sample){
+    el.innerHTML = emptyRow(5);
+    if(mau) mau.textContent = "Chưa agent nào vừa có chi phí vừa có request trong kỳ này.";
+    return;
+  }
+  if(mau){
+    mau.textContent = "Mức trung bình " + moneyCompact(o.avg) + " tính trên " + o.sample
+      + " agent hoạt động trong kỳ " + ky + ". Ngưỡng cảnh báo: vượt "
+      + Math.round((AGENT_COST_OUTLIER_RATIO - 1) * 100) + "%."
+      + (o.small ? " MẪU NHỎ (dưới " + AGENT_COST_SAMPLE_MIN
+                 + " agent) — mức trung bình bị chính agent đang xét kéo lên, đọc dè chừng." : "");
+  }
+  if(!o.flagged.length){
+    el.innerHTML = "<tr><td colspan='5' class='subtle' style='text-align:center;padding:14px'>"
+      + "Không agent nào vượt mặt bằng " + Math.round((AGENT_COST_OUTLIER_RATIO - 1) * 100)
+      + "% trong kỳ này.</td></tr>";
+    return;
+  }
+  el.innerHTML = o.flagged.map(function(g){
+    var vuot = o.avg > 0 ? (g.cost / o.avg - 1) * 100 : 0;
+    return "<tr data-alert-agent=\"" + escAttr(g.key) + "\" title='Bấm để lọc dashboard theo agent này'>"
+      + "<td>" + esc(g.key) + "</td>"
+      /* moneyCell tự gắn dấu ≈ và lời giải thích khi tiền suy từ bảng giá —
+         spec `visible-data-provenance` buộc mọi ô tiền tự khai nguồn, và cảnh
+         báo này đứng hay đổ hoàn toàn dựa vào con số đó. */
+      + moneyCell(g.cost, "num cost", g)
+      + "<td class='num'>" + moneyCompact(o.avg) + "</td>"
+      + "<td class='num text-red'>+" + fmtDecimal(vuot, 0) + "%</td>"
+      + "<td class='num'>" + fmt(g.r) + "</td></tr>";
+  }).join("");
+}
+
+function bindAgentCostAlerts(){
+  var tb = document.getElementById("co-alert-body"); if(!tb) return;
+  if(tb.getAttribute("data-alert-bound")) return;
+  tb.setAttribute("data-alert-bound","1");
+  tb.addEventListener("click", function(ev){
+    var tr = ev.target && ev.target.closest ? ev.target.closest("tr[data-alert-agent]") : null;
+    if(!tr) return;
+    state.filters.agent = tr.getAttribute("data-alert-agent");
+    renderAll();
+  });
+}
+
 function reachedBudgetThreshold(rate){
   var reached=0;
   BUDGET_ALERT_THRESHOLDS.forEach(function(threshold){if(rate>=threshold) reached=threshold;});
@@ -3527,6 +3601,11 @@ function mkToggleLine(id, labels, series, legendId, fmtVal, emptyMsg){
 
 function chartsCost(rows){
   renderAgentBudgetChart(rows);
+  /* Vẽ MỖI LẦN chartsCost chạy, tức mỗi lần đổi khoảng ngày hoặc bộ lọc — mục 6.6
+     đòi cảnh báo phải bám theo bộ lọc, và cách chắc nhất là tính lại từ chính
+     `rows` đã lọc thay vì giữ một bản tính sẵn. */
+  renderAgentCostAlerts(rows);
+  bindAgentCostAlerts();
   // Xu hướng chung trước, rồi mới tách theo phòng ban — cùng mạch đọc tổng → chi tiết.
   var tl=trendSeries();
   mkOverviewLine("c-co-trend", tl.labels, tl.cost, "money", "#38bdf8");

@@ -1106,6 +1106,26 @@
     </div>
   </div>
 
+  <!-- Cảnh báo agent tiêu vượt mặt bằng (biên bản 25/07, mục 6.4-6.5).
+       KHÁC với biểu đồ ngân sách ngay trên: biểu đồ đó so agent với NGÂN SÁCH đã
+       cấu hình, còn bảng này so agent với NHAU. Một agent chưa cấu hình ngân sách
+       vẫn lọt vào đây được. -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">3</span>Agent tiêu vượt mặt bằng</h3>
+  </div>
+
+  <div class="table-container">
+    <p class="subtle" id="co-alert-note" style="margin:0 0 10px">—</p>
+    <table>
+      <thead><tr>
+        <th>Agent</th><th class="num">Chi phí trong kỳ</th>
+        <th class="num">Trung bình agent</th><th class="num">Vượt</th>
+        <th class="num">Lượt gọi</th>
+      </tr></thead>
+      <tbody id="co-alert-body"></tbody>
+    </table>
+  </div>
+
   <!-- ④ BẢNG CHI TIẾT -->
   <div class="overview-flow-head">
     <h3><span class="flow-step">4</span>Bảng chi phí chi tiết</h3>

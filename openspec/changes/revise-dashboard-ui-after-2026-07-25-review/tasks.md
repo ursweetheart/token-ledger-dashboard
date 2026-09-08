@@ -71,9 +71,28 @@
 - [x] 6.1 Chuyển biểu đồ chi phí theo agent từ bar sang donut
 - [ ] 6.2 Bổ sung bộ chọn agent cho biểu đồ thực tế so với ngân sách
 - [x] 6.3 Hiển thị trạng thái chưa cấu hình thay vì tự chia ngân sách toàn cục cho agent — **ĐÃ XONG 17/08** ở change `serve-dashboard-from-database-only`: hạn mức chỉ đến từ `ref_budget` qua `/api/catalog`, ba trạng thái (có USD / chỉ có token / chưa đặt), không suy 0. Xem `app.js:20-31`
-- [ ] 6.4 Tính cảnh báo agent có chi phí cao hơn 30% trung bình agent hoạt động
-- [ ] 6.5 Tạo bảng cảnh báo gồm bằng chứng, mức vượt, kỳ và thao tác lọc theo agent
-- [ ] 6.6 Kiểm tra cảnh báo cập nhật theo time range và bộ lọc toàn cục
+- [x] 6.4 Tính cảnh báo agent có chi phí cao hơn 30% trung bình agent hoạt động
+      → **LÀM 08/09.** `agentCostOutliers(rows)`: mẫu là agent có **CẢ** chi phí lẫn request
+      trong kỳ (agent có request mà chưa quy được tiền không được kéo mẫu số xuống).
+      Ngưỡng đặt tên `AGENT_COST_OUTLIER_RATIO = 1.30`, không rải số 1.3 giữa mã.
+      **Tính chất đã ghim bằng phép kiểm, không phải lỗi:** một agent quá lớn tự kéo trung
+      bình lên và che agent lớn vừa — `[200, 900, 10, 10]` cho trung bình 280, ngưỡng 364,
+      nên 200 KHÔNG bị cảnh báo dù gấp 20 lần hai agent nhỏ. Ai đổi công thức thì phép kiểm
+      gãy chứ không im
+- [x] 6.5 Tạo bảng cảnh báo gồm bằng chứng, mức vượt, kỳ và thao tác lọc theo agent
+      → **LÀM 08/09.** Bảng 5 cột: Agent · Chi phí trong kỳ · Trung bình agent · Vượt ·
+      Lượt gọi. Dòng ghi chú phía trên nêu mức trung bình, **số agent làm mẫu** và khoảng
+      ngày. Bấm một hàng là đặt `state.filters.agent` rồi `renderAll()`.
+      **Ô tiền dùng `moneyCell(g.cost, ..., g)`** chứ không `money()`: spec chính
+      `visible-data-provenance` buộc mọi ô tiền tự khai nguồn, mà cảnh báo này đứng hay đổ
+      hoàn toàn dựa vào con số đó — 28,2% tiền trên dashboard là suy từ bảng giá.
+      Mẫu dưới 3 agent bị **đánh dấu chứ không giấu**: vẫn cảnh báo, kèm câu nhắc trung bình
+      bị chính agent đang xét kéo lên
+- [x] 6.6 Kiểm tra cảnh báo cập nhật theo time range và bộ lọc toàn cục
+      → **LÀM 08/09 bằng thiết kế chứ không bằng cách kiểm sau.** `renderAgentCostAlerts(rows)`
+      gọi trong `chartsCost(rows)` và tính lại từ chính `rows` **đã lọc**, không giữ bản tính
+      sẵn — nên không có đường nào để nó lệch khỏi bộ lọc. Sự kiện click gắn một lần
+      (`data-alert-bound`) nên vẽ lại nhiều lần không chồng handler
 
 ## 7. Performance UI
 
