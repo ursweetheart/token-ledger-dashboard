@@ -1089,10 +1089,17 @@ var DELTA_BASIS = {
   KT: { abbr:"KT", full:"kỳ trước",            label:previousPeriodLabel },
   CK: { abbr:"CK", full:"cùng kỳ (năm trước)", label:samePeriodLabel }
 };
-function deltaBaseline(realBase, cur, mockFactor){
-  // Chỉ sử dụng dữ liệu thật; không dựng baseline bằng hệ số.
-  if(realBase != null && realBase > 0) return { v:realBase, mock:false };
-  return { v:0, mock:false };
+/* CHỈ dữ liệu thật. Không có kỳ gốc thì trả 0, và `deltaLine` hiện
+   "chưa có dữ liệu" — KHÔNG dựng baseline bằng hệ số.
+
+   Trước 08/09 hàm này còn nhận `mockFactor` và `deltaLine` còn nhánh vẽ dấu "≈"
+   cho baseline giả. Cả hai đã CHẾT từ lâu (thân hàm không đụng tới mockFactor),
+   nhưng lời gọi ở tab Chi phí vẫn truyền `0.88, 0.57` — ai đọc dòng đó đều có
+   quyền kết luận dashboard đang bịa kỳ gốc ở mức 88%/57%. Đã bỏ hẳn tham số và
+   nhánh chết: giờ không còn chỗ nào để baseline giả quay lại mà không phải thêm
+   mã mới. */
+function deltaBaseline(realBase){
+  return { v: (realBase != null && realBase > 0) ? realBase : 0 };
 }
 function deltaLine(basisKey, cur, b, betterUp, fmtFn){
   var basis=DELTA_BASIS[basisKey]||DELTA_BASIS.KT, period=basis.label();
@@ -1113,19 +1120,19 @@ function deltaLine(basisKey, cur, b, betterUp, fmtFn){
   // phải rê chuột mới biết 75% đó là từ 4 lên 7 hay từ 4 nghìn lên 7 nghìn.
   var baseText = fmtFn ? fmtFn(b.v) : String(b.v);
   // Chi tiết đầy đủ (tên kỳ, giá trị gốc → hiện tại) vẫn giữ trong tooltip.
-  var detail = tip+": "+(b.mock?"≈":"")+baseText+" → "+(fmtFn?fmtFn(cur):String(cur));
+  var detail = tip+": "+baseText+" → "+(fmtFn?fmtFn(cur):String(cur));
   return "<div class='delta-line "+cls+"' title='"+esc(detail)+"'>"+arrow+" "+
     percent+" <span class='delta-basis'>"+basis.abbr+"</span>"+
-    " <span class='delta-base-val'>"+esc((b.mock?"≈":"")+baseText)+"</span></div>";
+    " <span class='delta-base-val'>"+esc(baseText)+"</span></div>";
 }
-function renderDelta(id, cur, prev, same, betterUp, fmtFn, mockPrev, mockSame){
+function renderDelta(id, cur, prev, same, betterUp, fmtFn){
   var el=document.getElementById(id); if(!el) return;
-  var pb=deltaBaseline(prev, cur, mockPrev), sb=deltaBaseline(same, cur, mockSame);
+  var pb=deltaBaseline(prev), sb=deltaBaseline(same);
   el.innerHTML = deltaLine("KT", cur, pb, betterUp, fmtFn) + deltaLine("CK", cur, sb, betterUp, fmtFn);
 }
 function renderSingleDelta(id, cur, prev, fmtFn){
   var el=document.getElementById(id); if(!el) return;
-  el.innerHTML=deltaLine("KT",cur,deltaBaseline(prev,cur,0),null,fmtFn);
+  el.innerHTML=deltaLine("KT",cur,deltaBaseline(prev),null,fmtFn);
 }
 
 /* ─── Tổng hợp ─── */
@@ -3479,7 +3486,7 @@ function renderCost(rows){
   var perK = A.r? A.cost/(A.r/1000):0;
   setWithTitle("m-co-perk", usageCompact(perK), money(perK)+" / 1.000 lượt gọi · "+usdReference(perK));
   var prevA=shiftedAgg(-rangeLenDays()), sameA=shiftedAgg(-365);
-  renderDelta("d-co-total", A.cost, prevA.cost, sameA.cost, false, moneyCompact, 0.88, 0.57);
+  renderDelta("d-co-total", A.cost, prevA.cost, sameA.cost, false, moneyCompact);
   var budget=budgetInsight(A,rows), concentration=concentrationInsight(rows);
   renderCardInsight("m-co-total",[budget,concentration]);
   renderCardInsight("m-co-budget",[budget]);

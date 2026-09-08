@@ -35,7 +35,18 @@
       `node --check` sạch, bộ kiểm 30/30.
 - [x] 2.4 Hiển thị card User hoạt động theo dạng `active/total · rate%` khi có dữ liệu hợp lệ — **ĐO 04/09:** `app.js:3115-3116` hiện phần trăm + `<b>N/M</b> tài khoản đã dùng`
 - [x] 2.5 Đổi cột `Success Rate` thành `Tỷ lệ thành công` — **ĐO 04/09:** `Success Rate` 0 kết quả trong `web/`
-- [ ] 2.6 Kiểm tra insight/delta không đưa baseline giả trở lại
+- [x] 2.6 Kiểm tra insight/delta không đưa baseline giả trở lại
+      → **KIỂM 08/09: mã KHÔNG bịa baseline — nhưng TRÔNG NHƯ CÓ, và đã dọn.**
+      `deltaBaseline()` bỏ qua hoàn toàn tham số hệ số: không có kỳ gốc thật thì trả `0` và
+      `deltaLine` hiện "chưa có dữ liệu". Đúng như mục này yêu cầu.
+      **Nhưng ba thứ chết vẫn nằm đó:** lời gọi ở tab Chi phí vẫn truyền `0.88, 0.57`;
+      `renderDelta` vẫn nhận `mockPrev`/`mockSame`; `deltaLine` vẫn còn nhánh vẽ dấu `≈`
+      cho baseline giả. Ai đọc dòng `renderDelta(..., 0.88, 0.57)` đều có quyền kết luận
+      dashboard đang bịa kỳ gốc ở mức 88%/57%. Đó chính là đường để nó quay lại.
+      Đã bỏ hẳn cả ba, và ghim bằng `tests/no-fake-baseline.test.js` (6 phép kiểm), trong đó
+      có một **phép kiểm ngược** chứng minh nó thật sự đỏ khi hệ số được thêm lại.
+      Bản đầu của phép kiểm dùng ranh giới từ quanh "mock" — **bỏ sót đúng thứ cần bắt**,
+      vì `mockFactor` có ký tự từ ngay sau. Đã sửa và ghi lý do trong chính file kiểm
 - [x] 2.7 Đổi heatmap theo giờ thành ma trận Agent × 7 ngày gần nhất theo request
 - [x] 2.8 Thay dữ liệu demo tháng 7 bằng dữ liệu Excel thật của đủ 4 tuần
 
