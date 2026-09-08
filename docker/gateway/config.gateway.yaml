@@ -114,9 +114,35 @@ router_settings:
   #
   # host/port viet cung: day la ten service va cong BEN TRONG mang compose,
   # khong doi theo may. Chi mat khau lay tu bien moi truong.
+  #
   redis_host: redis
   redis_port: 6379
   redis_password: os.environ/REDIS_PASSWORD
+
+  # --- NOI QUA SENTINEL 07/09/2026 ----------------------------------------
+  #
+  # Ba dong tren VAN PHAI GIU du dia chi master khong con lay tu chung nua:
+  # Router chi dung Redis khi co `redis_url` HOAC (`redis_host` va `redis_port`)
+  # -- router.py:565. Bo di thi no chay bang bo nho trong, IM LANG.
+  #
+  # Dia chi master thi hoi Sentinel, khai bang BIEN MOI TRUONG o
+  # docker-compose.yml khoi `x-litellm`:
+  #     REDIS_SENTINEL_NODES  -> _redis.py:394
+  #     REDIS_SERVICE_NAME    -> _redis.py:408
+  # (khai `sentinel_nodes` thang o day thi Router canh bao "not a valid
+  #  argument" roi BO QUA -- da do.)
+  #
+  # PHU THUOC MOT BAN VA TRONG FORK. `litellm_tuan_test` co
+  # _SENTINEL_IGNORED_CONNECTION_ARGS trong litellm/_redis.py, loai `host`/`port`
+  # ra khoi sentinel_kwargs. Thieu ban va do thi `redis_host` o tren se bi copy
+  # sang sentinel_kwargs va LiteLLM CHET luc khoi dong:
+  #     TypeError: Redis.__init__() got multiple values for argument 'host'
+  # Merge upstream ma mat ban va thi loi nay quay lai -- kiem bang cach grep
+  # _SENTINEL_IGNORED_CONNECTION_ARGS trong image.
+  #
+  # DA NGHIEM THU bang failover that, ca hai chieu: 6 giay va 7 giay tu luc
+  # `docker kill` toi luc co master moi; ngay sau do 10/10 luot goi tra 200 va
+  # LiteLLM ghi rpm/tpm vao master MOI ma khong khoi dong lai.
 
   # Chia request theo han muc CON LAI cua tung tuyen. Mien phi, khong can bang
   # dieu khien tra tien.

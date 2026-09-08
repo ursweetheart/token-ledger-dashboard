@@ -1,0 +1,43 @@
+# BAN MAU cau hinh Redis PRIMARY. KHONG phai file Redis doc truc tiep.
+#
+# entrypoint.sh thay __REDIS_PASSWORD__ roi ghi ra /data/redis.conf tren volume.
+# Xem entrypoint.sh de biet vi sao phai vong qua mot buoc sinh file.
+
+# ---------------------------------------------------------------------------
+# VI SAO LA FILE CHU KHONG PHAI CO DONG LENH
+#
+# Truoc 07/09/2026 ca hai Redis chay hoan toan bang co `--...` trong
+# docker-compose.yml. Voi Sentinel thi cach do HONG IM LANG:
+#
+#   Sentinel thang mot ban sao len master
+#     -> gui REPLICAOF NO ONE
+#     -> Redis muon GHI LAI trang thai moi vao file cau hinh cua chinh no
+#     -> KHONG CO FILE NAO de ghi
+#     -> trang thai chi nam trong bo nho
+#   container dung lai (restart: unless-stopped, reboot, compose up)
+#     -> co dong lenh ap lai tu dau, ket qua thang cap bi xoa sach
+#
+# DA DO 07/09/2026 tren token-ledger-redis-replica, khong phai suy luan:
+#   vai tro ban dau       role:slave
+#   sau REPLICAOF NO ONE  role:master   <- thang cap co tac dung
+#   sau docker restart    role:slave    <- BI XOA SACH
+# ---------------------------------------------------------------------------
+
+requirepass __REDIS_PASSWORD__
+
+# masterauth TREN CA PRIMARY, khong chi tren ban sao.
+#
+# Sau mot lan chuyen vai, vai tro DAO NGUOC: primary cu tro thanh ban sao va can
+# masterauth de noi vao master moi. Truoc 07/09 `redis` KHONG co dong nay -- do
+# bang `CONFIG GET masterauth`, tra ve RONG. Do la loi chi lo ra o lan failover
+# THU NHAT, tuc dung luc khong ai muon gap bat ngo.
+masterauth __REDIS_PASSWORD__
+
+appendonly yes
+
+maxmemory 256mb
+
+# KHONG dung allkeys-lru: het bo nho ma am tham xoa bot dem han muc thi Gateway
+# cho di qua nhieu request hon han muc that ma khong bao gi. noeviction lam Redis
+# BAO LOI - hong on ao van hon hong im lang.
+maxmemory-policy noeviction

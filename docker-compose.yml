@@ -46,6 +46,30 @@ x-logging: &logging
 
 # Hai instance LiteLLM giong het nhau, tru ten container va cong mo ra ngoai.
 # Giong het la CO Y: "stateless" nghia la roi vao may nao cung ra cung ket qua.
+# Ba sentinel giong het nhau tru ten container va volume giu cau hinh rieng cua
+# tung cai. Moi cai PHAI co volume rieng: Sentinel tu viet lai file cau hinh cua
+# no, dung chung mot volume la ba tien trinh giam len nhau.
+x-sentinel: &sentinel
+  image: redis:7-alpine
+  profiles: ["gateway"]
+  restart: unless-stopped
+  entrypoint: ["sh", "/sentinel-entrypoint.sh"]
+  environment:
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
+    SENTINEL_CONF_TEMPLATE: /sentinel.conf.template
+    SENTINEL_CONF_PATH: /data/sentinel.conf
+  healthcheck:
+    test: ["CMD-SHELL", "redis-cli -p 26379 ping | grep -q PONG"]
+    interval: 5s
+    timeout: 3s
+    retries: 20
+    start_period: 5s
+  depends_on:
+    redis:
+      condition: service_healthy
+    redis-replica:
+      condition: service_healthy
+
 x-litellm: &litellm
   build:
     # Fork nam NGANG HANG du an, khong long ben trong (repo long repo thi
@@ -76,6 +100,13 @@ x-litellm: &litellm
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
+    # Dia chi master hoi Sentinel, khong ghim. REDIS_HOST o tren van phai giu:
+    # Router chi dung Redis khi co redis_host+redis_port (router.py:565), va
+    # ban va trong fork loai `host`/`port` ra khoi sentinel_kwargs nen no khong
+    # con gay "multiple values for argument 'host'" nua.
+    # Xem litellm/_redis.py: _SENTINEL_IGNORED_CONNECTION_ARGS.
+    REDIS_SENTINEL_NODES: '[["sentinel-1", 26379], ["sentinel-2", 26379], ["sentinel-3", 26379]]'
+    REDIS_SERVICE_NAME: gateway-redis
   healthcheck:
     test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://127.0.0.1:4000/health/liveliness\", timeout=3).status == 200 else 1)"]
     interval: 10s
@@ -90,6 +121,15 @@ x-litellm: &litellm
       condition: service_healthy
     gateway-db-init:
       condition: service_completed_successfully
+    # Tu 07/09/2026 LiteLLM hoi Sentinel xem master hien la ai, thay vi tro thang
+    # vao `redis`. Nen phai doi sentinel khoe da, khong thi lan khoi dong dau no
+    # khong tra ra duoc dia chi master nao.
+    sentinel-1:
+      condition: service_healthy
+    sentinel-2:
+      condition: service_healthy
+    sentinel-3:
+      condition: service_healthy
 
 services:
   postgres:
@@ -335,25 +375,33 @@ services:
     container_name: token-ledger-redis
     profiles: ["gateway"]
     restart: unless-stopped
-    command:
-      - redis-server
-      - --requirepass
-      - ${REDIS_PASSWORD:-redis_local}
-      - --appendonly
-      - "yes"
-      - --maxmemory
-      - 256mb
-      # KHONG dung allkeys-lru: het bo nho ma am tham xoa bot dem han muc thi
-      # Gateway cho di qua nhieu request hon han muc that ma khong bao gi.
-      # noeviction lam Redis BAO LOI - hong on ao van hon hong im lang.
-      - --maxmemory-policy
-      - noeviction
+    # Cau hinh chuyen tu CO DONG LENH sang FILE ngay 07/09/2026. Cac tuy chon cu
+    # (requirepass, appendonly, maxmemory, maxmemory-policy) nay nam trong
+    # docker/gateway/redis/redis.conf.template, kem ly do.
+    #
+    # Tom tat ly do: Sentinel doi vai bang cach bao Redis ghi lai file cau hinh
+    # cua chinh no. Khong co file thi ket qua thang cap chi nam trong bo nho va
+    # bi xoa o lan restart ke tiep -- da do 07/09, xem template.
+    entrypoint: ["sh", "/redis-entrypoint.sh"]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
+      REDIS_CONF_TEMPLATE: /redis.conf.template
+      # File that nam tren volume `redisdata` -> ghi duoc va ben qua restart.
+      REDIS_CONF_PATH: /data/redis.conf
     ports:
       - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    # IP TINH: Sentinel giam sat bang dia chi nay. Dung ten service thi luc
+    # container chet, DNS Docker mat ten do va sentinel roi vao +tilt thay vi
+    # chuyen vai. Xem khoi `networks:` cuoi file.
+    networks:
+      default:
+        ipv4_address: 172.20.250.10
     volumes:
       - redisdata:/data
+      # Ban mau va entrypoint gan `:ro` duoc: chung KHONG phai thu Sentinel ghi
+      # lai. Thu do la /data/redis.conf, nam tren volume o dong tren.
+      - ./docker/gateway/redis/redis.conf.template:/redis.conf.template:ro
+      - ./docker/gateway/redis/entrypoint.sh:/redis-entrypoint.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
@@ -361,34 +409,45 @@ services:
       retries: 20
       start_period: 5s
 
-  # Ban sao chi-doc. Ke hoach GD5 dong 13: "Redis 1 primary + 1 replica".
-  # NOI RO GIOI HAN: chua co Sentinel. Primary chet thi replica KHONG tu len
-  # thay - phai doi tay. No giu ban sao du lieu, khong tu phuc hoi dich vu.
+  # Ban sao. Ke hoach GD5 dong 13: "Redis 1 primary + 1 replica".
+  #
+  # TU 07/09/2026 DA CO SENTINEL: primary chet thi ban sao TU len thay, khong
+  # can nguoi. Do duoc ca hai chieu: 6 giay va 7 giay tu luc `docker kill` toi
+  # luc sentinel tra ve dia chi master moi, va LiteLLM tu di theo (10/10 luot
+  # 200 ngay sau do, khong khoi dong lai instance nao).
+  #
+  # NOI RO DIEU NAY KHONG BAO VE: ca ba sentinel chay tren CUNG MOT MAY voi ca
+  # hai Redis. May chet la chet het. Thu duy nhat duoc bao ve la kich ban "tien
+  # trinh Redis hong vinh vien trong khi may chu con song".
+  #
+  # Va noi ro muc nghiem trong cua van de goc la THAP: do 07/09, tat han Redis
+  # thi Gateway VAN phuc vu (9/10 luot 200, p50 0,87s), vi moi thu Redis giu deu
+  # co TTL <= 60 giay va tu dung lai tu luu luong binh thuong. Sentinel dung o
+  # day de dong mot muc GD5 con no, khong phai de va mot lo hong nguy hiem.
   redis-replica:
     logging: *logging
     image: redis:7-alpine
     container_name: token-ledger-redis-replica
     profiles: ["gateway"]
     restart: unless-stopped
-    command:
-      - redis-server
-      - --replicaof
-      - redis
-      - "6379"
-      - --masterauth
-      - ${REDIS_PASSWORD:-redis_local}
-      - --requirepass
-      - ${REDIS_PASSWORD:-redis_local}
-      - --replica-read-only
-      - "yes"
-      - --appendonly
-      - "yes"
-      - --maxmemory-policy
-      - noeviction
+    # Cung ly do voi `redis` o tren: chuyen sang file cau hinh 07/09/2026.
+    #
+    # RIENG BAN SAO thi day KHONG chi la chuyen gon gang ma la DIEU KIEN de
+    # Sentinel co nghia. Truoc do co `--replicaof redis 6379` ghi cung o day, va
+    # da do duoc: thang no len master roi restart container thi no TUT VE LAM
+    # BAN SAO cua master cu. Moi lan failover deu bi xoa nhu vay.
+    entrypoint: ["sh", "/redis-entrypoint.sh"]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
+      REDIS_CONF_TEMPLATE: /redis.conf.template
+      REDIS_CONF_PATH: /data/redis.conf
+    networks:
+      default:
+        ipv4_address: 172.20.250.11
     volumes:
       - redisreplicadata:/data
+      - ./docker/gateway/redis/redis-replica.conf.template:/redis.conf.template:ro
+      - ./docker/gateway/redis/entrypoint.sh:/redis-entrypoint.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
@@ -398,6 +457,42 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  # --- Sentinel: ba tien trinh, quorum 2 --------------------------------------
+  #
+  # BA chu khong phai MOT. Sentinel quyet dinh thang cap bang quorum; mot sentinel
+  # thi khong co quorum, no chi la mot diem chet moi. Ba la so le nho nhat cho
+  # phep mat mot ma van quyet duoc. Chi tiet o config sentinel.conf.template.
+  #
+  # NOI RO DIEU NAY KHONG BAO VE: ca ba chay tren CUNG MOT MAY voi ca hai Redis.
+  # May chet la chet het. Cai duoc bao ve la kich ban "tien trinh Redis hong vinh
+  # vien trong khi may chu con song" -- va CHI kich ban do.
+  sentinel-1:
+    logging: *logging
+    <<: *sentinel
+    container_name: token-ledger-sentinel-1
+    volumes:
+      - sentinel1data:/data
+      - ./docker/gateway/redis/sentinel.conf.template:/sentinel.conf.template:ro
+      - ./docker/gateway/redis/entrypoint-sentinel.sh:/sentinel-entrypoint.sh:ro
+
+  sentinel-2:
+    logging: *logging
+    <<: *sentinel
+    container_name: token-ledger-sentinel-2
+    volumes:
+      - sentinel2data:/data
+      - ./docker/gateway/redis/sentinel.conf.template:/sentinel.conf.template:ro
+      - ./docker/gateway/redis/entrypoint-sentinel.sh:/sentinel-entrypoint.sh:ro
+
+  sentinel-3:
+    logging: *logging
+    <<: *sentinel
+    container_name: token-ledger-sentinel-3
+    volumes:
+      - sentinel3data:/data
+      - ./docker/gateway/redis/sentinel.conf.template:/sentinel.conf.template:ro
+      - ./docker/gateway/redis/entrypoint-sentinel.sh:/sentinel-entrypoint.sh:ro
 
   litellm-1:
     logging: *logging
@@ -441,8 +536,32 @@ services:
       litellm-2:
         condition: service_healthy
 
+# Khai ro dai mang de gan duoc IP TINH cho hai Redis.
+#
+# VI SAO CAN: Sentinel giam sat master bang dia chi. Neu dia chi la TEN service,
+# thi luc container do chet, DNS cua Docker khong con phan giai duoc ten nua ->
+# sentinel bao "Failed to resolve hostname 'redis'" lien tuc roi vao +tilt (che
+# do tu khoa khi nghi ngo bat thuong), va o tilt thi no KHONG chuyen vai.
+# Do duoc 07/09/2026: giet redis xong, sentinel thay s_down nhung dung im.
+#
+# Dai giu NGUYEN 172.20.0.0/16 nhu Docker da tu cap, va TEN mang khong doi
+# (token-ledger-dashboard_default) -- rang buoc `external` trong compose cua DMS
+# van tro dung.
+#
+# Hai IP dat o .250.x, xa vung Docker tu cap (bat dau tu .0.2), de khong dung do.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
 volumes:
   pgdata:
   pgadmin:
   redisdata:
   redisreplicadata:
+  # Moi sentinel mot volume rieng: no tu viet lai file cau hinh cua chinh no,
+  # dung chung la ba tien trinh giam len nhau.
+  sentinel1data:
+  sentinel2data:
+  sentinel3data:
