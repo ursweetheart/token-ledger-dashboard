@@ -7,7 +7,11 @@
 - [x] 1.1 Bổ sung `userId` tùy chọn cho usage row và `loginRequired` cho metadata agent — **ĐO 04/09:** `userId` đã có trong `web/`; `loginRequired` **không còn đối tượng** — panel nhập tay đã bị bỏ (`index.html:399`, `app.js:529`)
 - [ ] 1.2 Tách bộ lọc username khỏi trường nhóm user `ug` và giữ adapter đọc state/localStorage cũ
 - [x] 1.3 Bổ sung metadata phòng ban `id`, `parentId`, `level` với fallback danh sách phẳng
-- [ ] 1.4 Tạo helper xác định dữ liệu hỗ trợ phân rã user và trạng thái unavailable
+- [x] 1.4 Tạo helper xác định dữ liệu hỗ trợ phân rã user và trạng thái unavailable
+      → **LÀM 08/09.** `rowHasUserIdentity(r)` + `userScopeGap()`.
+      Helper **dùng lại `userFilterLabel`** chứ không viết lại phép nhận biết: hàm đó đã
+      biết trả `""` khi nhãn **trùng tên agent** — tức chỗ đó không có danh tính người nào,
+      chỉ có tên agent. Viết lại ở chỗ thứ hai là tạo cơ hội cho hai chỗ lệch nhau
 - [x] 1.5 Loại phòng ban `Đang trong quá trình thử nghiệm` khỏi seed, state cũ và mọi bộ lọc
 
 ## 2. Period Comparison and Overview
@@ -50,10 +54,23 @@
 ## 4. Global User Filter and Manual Entry
 
 - [ ] 4.1 Điền dropdown User từ danh mục tài khoản thực và dùng id ổn định làm value
-- [ ] 4.2 Làm dropdown User phụ thuộc phòng ban và agent đang chọn
+- [x] 4.2 Làm dropdown User phụ thuộc phòng ban và agent đang chọn
+      → **ĐÃ CÓ SẴN, không phải làm.** Đo 08/09: `filterAccounts()` lọc tài khoản theo
+      phòng ban (kèm **đơn vị con** qua `unitDescendants`) và theo agent; dropdown dựng từ
+      chính nó, có tạm gỡ bộ lọc user ra để danh sách không tự thu về một tên
 - [ ] 4.3 Áp user filter đồng bộ lên KPI, chart, table và cảnh báo có dữ liệu user-level
 - [x] 4.4 Bổ sung trường User vào bảng nhập tay, bắt buộc với agent cần đăng nhập — **KHÔNG CÒN ĐỐI TƯỢNG:** luồng nhập tay đã bị bỏ khi dashboard chuyển sang chỉ đọc database (`index.html:399`, `app.js:529`)
-- [ ] 4.5 Cảnh báo rõ các bản ghi tổng hợp không thể quy về user
+- [x] 4.5 Cảnh báo rõ các bản ghi tổng hợp không thể quy về user
+      → **LÀM 08/09.** Khối cảnh báo ngay dưới thanh lọc, chỉ hiện khi đang lọc user **và**
+      thực sự có phần bị loại. Nói bằng con số cụ thể — số dòng, số request, số token, và
+      thuộc agent nào — chứ không nói “một số dòng bị bỏ”, vì người đọc không biết là 3 hay
+      3.000.
+      **Vì sao cần:** bộ lọc user vốn đã loại các dòng này (`r.ug !== f.user`), nhưng loại
+      **im lặng**. Người xem thấy agent về 0 và tưởng nó không hoạt động trong kỳ, trong khi
+      thật ra nguồn không ghi được người dùng. Câu chữ nói thẳng “không phải vì chúng bằng
+      không”.
+      Có phép kiểm riêng cho việc `userScopeGap()` **khôi phục lại** `filters.user` sau khi
+      tạm gỡ — quên trả lại thì mọi renderer chạy sau đó mất bộ lọc mà không ai báo
 
 ## 5. Department-Agent Matrix and Drilldown
 

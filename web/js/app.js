@@ -3862,6 +3862,53 @@ function fillSelect(id, opts, val, allLabel){
     };
   }
 }
+/* ─── Dòng nào quy được về một người dùng ─── */
+/* Dùng lại `userFilterLabel`: nó đã biết trả "" khi nhãn TRÙNG TÊN AGENT — tức
+   chỗ đó không có danh tính người nào, chỉ có tên agent. Viết lại phép nhận
+   biết ở đây là tạo cơ hội cho hai chỗ lệch nhau. */
+function rowHasUserIdentity(r){
+  return !!userFilterLabel({ a: r && r.a, ug: r && r.ug });
+}
+
+/* Phần bị bộ lọc user LOẠI vì nguồn không ghi được người dùng.
+   Áp mọi bộ lọc khác TRỪ user (cùng thủ thuật renderFilters đang dùng cho ô
+   User), rồi đếm phần không có danh tính. */
+function userScopeGap(){
+  if(!state.filters.user) return null;
+  var giu = state.filters.user;
+  state.filters.user = "";
+  var trongPhamVi;
+  try { trongPhamVi = scopedRows(); } finally { state.filters.user = giu; }
+  var thieu = trongPhamVi.filter(function(r){ return !rowHasUserIdentity(r); });
+  if(!thieu.length) return null;
+  var a = aggregate(thieu);
+  var agents = distinct(thieu.map(function(r){ return r.a; }).filter(Boolean));
+  return { rows: thieu.length, requests: a.r, tokens: a.tokens, agents: agents };
+}
+
+function renderUserScopeNote(){
+  var box = document.getElementById("user-scope-note");
+  var txt = document.getElementById("user-scope-text");
+  if(!box || !txt) return;
+  var g = userScopeGap();
+  if(!g){ box.hidden = true; txt.textContent = ""; return; }
+  box.hidden = false;
+  /* Nói bằng con số, không nói chung chung. "Một số dòng bị bỏ" thì người đọc
+     không biết là 3 dòng hay 3.000. */
+  txt.innerHTML = "Đang lọc theo user <b>" + esc(state.filters.user) + "</b>. "
+    + "<b>" + fmt(g.rows) + " dòng</b> (" + fmt(g.requests) + " request, "
+    + fmtTok(g.tokens) + ") bị bỏ ra ngoài vì nguồn <b>không ghi được người dùng</b> — "
+    + "không phải vì chúng bằng không. "
+    + (g.agents.length
+        ? "Thuộc " + (g.agents.length === 1
+            ? "agent " + esc(g.agents[0])
+            : g.agents.length + " agent: " + esc(g.agents.slice(0,3).join(", "))
+              + (g.agents.length > 3 ? "…" : ""))
+          + ". "
+        : "")
+    + "Bỏ lọc user để thấy lại phần này.";
+}
+
 function renderFilters(){
   var rows=allDayRows();
   var deptNames = buildDepartmentFilterOptions(rows);
@@ -3957,6 +4004,7 @@ function renderAll(){
   renderRange();
   renderStatus();
   renderFilters();
+  renderUserScopeNote();
   renderPricing();
   var rows = scopedRows();
   // Phân bổ lại số liệu tài khoản theo kỳ + bộ lọc hiện tại TRƯỚC mọi renderer,
