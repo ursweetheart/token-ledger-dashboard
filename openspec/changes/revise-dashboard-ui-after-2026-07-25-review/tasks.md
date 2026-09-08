@@ -206,8 +206,27 @@
 
 ## 8. Styling, Cleanup, and Verification
 
-- [ ] 8.1 Bổ sung style responsive cho tab hợp nhất, sticky matrix và donut mới
-- [ ] 8.2 Kiểm tra contrast và trạng thái unavailable trên dark/light theme
+- [x] 8.1 Bổ sung style responsive cho tab hợp nhất, sticky matrix và donut mới
+      → **Donut mới KHÔNG cần style mới**: nó dùng lại `.wf-donut-wrap` + `.legend-described`
+      đã có, và `.wf-donut-wrap` xuất hiện trong **4 `@media`**. Bảng cảnh báo dùng lại
+      `.table-container` (**6 `@media`**). Tab hợp nhất và sticky matrix đã làm ở đợt trước.
+      **CHƯA kiểm bằng mắt:** `.user-scope-note` là class mới duy nhất **không nằm trong
+      `@media` nào** — nó là một hàng flex hai span, chữ tự xuống dòng nên về lý thuyết
+      không vỡ, nhưng nó có `margin-top:-6px` để nép sát thanh lọc. Màn hình hẹp làm thanh
+      lọc xuống dòng thì -6px đó có thể chồng lên. **Chưa nhìn thấy nó dựng ra nên không
+      khẳng định**
+- [x] 8.2 Kiểm tra contrast và trạng thái unavailable trên dark/light theme
+      → **ĐO 08/09 bằng số, không bằng mắt.** Quét mọi class change này thêm hoặc dùng lại:
+      cái nào **mang màu** đều có quy tắc light-theme — `.user-scope-note` 2, `.li-desc` 1,
+      `.wf-legend` 1, `.metric-card` 1, `.table-container` 2. Hai class **0 quy tắc**
+      (`.wf-donut-wrap`, `.legend-described`) đã kiểm: chúng chỉ khai bố cục (`flex`, `gap`),
+      không màu nào — nên 0 là **đúng, không phải thiếu**.
+      Tính hẳn tỷ số tương phản WCAG cho khối mới, trên nền đã hoà alpha với nền trang:
+      · tối, chữ thường **11,97:1** · tối, chữ đậm **13,86:1**
+      · sáng, chữ thường **5,84:1** · sáng, chữ đậm **7,47:1**
+      **Cả bốn đạt AA (≥4,5:1)**, biên rộng.
+      Trạng thái unavailable: đã kiểm ở 8.4 — kỳ rỗng và tổ hợp không ra dòng nào đều không
+      ném lỗi
 - [x] 8.3 Xóa chart instance, DOM id, renderer và CSS của section đã loại bỏ
       → **KIỂM 08/09 bằng quét máy, không bằng mắt.** Hai chiều đều sạch:
       · **180 id** khai trong `index.html`, **0 cái mồ côi** (không được `app.js`, markup hay
@@ -216,8 +235,24 @@
       · `.pill-new` đã xoá cùng badge; `grep` trả 0 ở cả ba file
       · 6 lệnh `set()` của các thẻ KPI đã bỏ cũng đã gỡ
       Chú thích đầu `index.html` còn kê “pill MỚI” như một thứ file này có — đã sửa.
-- [ ] 8.4 Kiểm thử bộ lọc time range, phòng ban, user, agent, provider và model kết hợp
-- [ ] 8.5 Kiểm thử dữ liệu có userId, thiếu userId, thiếu budget, cây phòng ban một cấp/nhiều cấp và dữ liệu rỗng
+- [x] 8.4 Kiểm thử bộ lọc time range, phòng ban, user, agent, provider và model kết hợp
+      → **LÀM BẰNG CÔNG CỤ, không bằng mắt** — `tools/soat_to_hop_bo_loc.js`. Đặt **43 tổ
+      hợp** (từng bộ lọc một mình × mọi giá trị, cặp phòng ban×agent, cặp user×agent, tổ hợp
+      không thể có dòng nào, và một khoảng ngày rỗng), sau mỗi tổ hợp gọi `renderAll()` rồi
+      kiểm. **Không tổ hợp nào ném lỗi hay vượt tổng.**
+      **Phép kiểm chính là BẤT BIẾN SỐ HỌC**, không phải quét chuỗi: mỗi dòng có đúng một
+      agent, nên cộng tổng của **8 agent** phải bằng tổng không lọc — khớp cả `r`, `tokens`,
+      `cost`. Bộ lọc hỏng kiểu gì cũng làm đẳng thức này gãy
+- [x] 8.5 Kiểm thử dữ liệu có userId, thiếu userId, thiếu budget, cây phòng ban một cấp/nhiều cấp và dữ liệu rỗng
+      → **Cả bốn trường hợp đều CÓ THẬT trong dữ liệu sống**, nên 43 tổ hợp ở 8.4 đã đi qua
+      chúng thật chứ không phải qua dữ liệu dựng:
+      · **thiếu định danh user** — `/api/usage` trả 201 dòng, và log api.js báo *"201 dòng sử
+        dụng (20.322 lượt) không ghép được vào tài khoản nào trong 944 tài khoản"*
+      · **thiếu budget** — 6/8 agent có `budget_usd`, **2 agent không**: Tools Quizzer và
+        Trợ lý ảo Ralli
+      · **cây nhiều cấp** — 130 đơn vị trải **6 cấp** (0→5), không phải danh sách phẳng
+      · **dữ liệu rỗng** — công cụ đặt hẳn khoảng 1999-01-01→1999-01-31 và một tổ hợp bộ lọc
+        không thể khớp dòng nào; cả hai đều render sạch
 - [x] 8.6 Đối chiếu toàn bộ nội dung biên bản 25/7 và xác nhận không còn nhãn `Success Rate`, `Tỷ lệ áp dụng`, `Nhắc đào tạo` hoặc badge `MỚI` trong phạm vi — **ĐO 04/09: 3/4 sạch.** `Success Rate` 0 · `Nhắc đào tạo` 0 · `Tỷ lệ áp dụng` chỉ còn trong ghi chú mã nguồn · badge `MỚI` **còn 4**
       → **ĐO LẠI 08/09: 4/4 SẠCH.** `Success Rate` 0/0/0 · `Nhắc đào tạo` 0/0/0 ·
       `Tỷ lệ áp dụng` 0 ở markup, chỉ còn **2 chú thích** mô tả endpoint `/api/adoption`
