@@ -13,8 +13,22 @@
 ## 2. Period Comparison and Overview
 
 - [x] 2.1 Chuẩn hóa delta thành nhãn rõ kỳ trước/cùng kỳ, viết tắt KT/CK và giá trị nền — **THAY THẾ** bởi change `unify-dept-user-workspace-and-agent-matrix`
-- [ ] 2.2 Giữ thứ tự hàng xu hướng Chi phí → Token → Request → Tỷ lệ thành công — **ĐO 04/09: CHƯA.** Thứ tự hiện tại là Mức độ sử dụng → Request → Token (`index.html:568,573,578`), và không có hàng Tỷ lệ thành công
-- [ ] 2.3 Đổi biểu đồ Top đơn vị theo chi phí thành Top đơn vị theo request — **ĐO 04/09: CHƯA.** `index.html:598` vẫn là “Top đơn vị theo mức độ sử dụng (VNĐ)”, tức vẫn theo tiền
+- [x] 2.2 Giữ thứ tự hàng xu hướng Chi phí → Token → Request → Tỷ lệ thành công — **ĐO 04/09: CHƯA.** Thứ tự hiện tại là Mức độ sử dụng → Request → Token (`index.html:568,573,578`), và không có hàng Tỷ lệ thành công
+      → **LÀM 08/09.** Đảo Request↔Token, thêm hàng thứ tư `c-ov-success-trend` và chuỗi
+      `success` vào `trendSeries()`, thêm nhánh `percent` cho tick và tooltip của
+      `mkOverviewLine`, điền `ov-success-total`.
+      **Chỗ phải cẩn thận:** `aggregate()` trả `er = 0` khi `r = 0`, nên `100-er` cho ra
+      **100%** — một ngày không ai gọi sẽ trông thành một ngày hoàn hảo. Đã trả `null` cho
+      ngày không có request (Chart.js vẽ thành chỗ đứt) và hiện “Chưa có request nào” thay
+      cho “100%” ở ô tổng. Bộ kiểm 30/30.
+- [x] 2.3 Đổi biểu đồ Top đơn vị theo chi phí thành Top đơn vị theo request — **ĐO 04/09: CHƯA.** `index.html:598` vẫn là “Top đơn vị theo mức độ sử dụng (VNĐ)”, tức vẫn theo tiền
+      → **LÀM 08/09.** Tiêu đề đổi thành “Top đơn vị theo request”; xếp hạng, lọc và giá trị
+      vẽ đều chuyển từ `g.cost` sang `g.r`; bỏ `money:true`. Đổi luôn id canvas
+      `c-ov-unit-cost` → `c-ov-unit-req` vì tên cũ nói sai về thứ nó vẽ (2 chỗ, không dính CSS).
+      Lý do đổi đã ghi vào mã: tiền của một phòng ban là số **suy ra** — 28,2% tiền trên
+      dashboard nhân từ `ref_price` chứ không từ hoá đơn, và phần suy ra dồn vào ít phòng ban,
+      nên thứ hạng theo tiền đổi theo chỗ hoá đơn về sớm hay muộn. Request đếm trực tiếp.
+      `node --check` sạch, bộ kiểm 30/30.
 - [x] 2.4 Hiển thị card User hoạt động theo dạng `active/total · rate%` khi có dữ liệu hợp lệ — **ĐO 04/09:** `app.js:3115-3116` hiện phần trăm + `<b>N/M</b> tài khoản đã dùng`
 - [x] 2.5 Đổi cột `Success Rate` thành `Tỷ lệ thành công` — **ĐO 04/09:** `Success Rate` 0 kết quả trong `web/`
 - [ ] 2.6 Kiểm tra insight/delta không đưa baseline giả trở lại
@@ -72,12 +86,31 @@
 > bây giờ sẽ **xoá đi bốn phép đo có thật**. Nhóm này cần một quyết định phạm vi trước khi
 > đụng vào, không phải cần người gõ phím.
 
-- [ ] 7.1 Tinh gọn dải KPI còn Tỷ lệ thành công
-- [ ] 7.2 Loại tổng request, p95/p99 và KPI 4xx/5xx/429 suy diễn
+- [x] 7.1 Tinh gọn dải KPI còn Tỷ lệ thành công
+      → **LÀM 08/09.** Dải KPI tab Hiệu năng từ 7 thẻ còn **1**. Mô tả thẻ giữ lại được
+      viết rõ mẫu số: “tổng request CÓ ĐO ĐƯỢC mã trả về” — agent không qua Google thì
+      không ai biết nó lỗi bao nhiêu, đưa vào mẫu số là ngầm khai chúng đều thành công
+- [x] 7.2 Loại tổng request, p95/p99 và KPI 4xx/5xx/429 suy diễn
+      → **LÀM 08/09.** Bỏ 6 thẻ: `m-pf-req`, `m-pf-4xx`, `m-pf-5xx`, `m-pf-429`,
+      `m-pf-p95`, `m-pf-p99`, kèm 6 lệnh `set()` tương ứng trong `app.js`.
+      **Phát hiện khi làm:** hai thẻ p95/p99 ghi nhãn “mốc mà 95%/99% lượt gọi nhanh hơn”
+      nhưng số đưa vào là `A.lat`/`A.lat99` — **bình quân có trọng số theo lượt gọi, không
+      phải phân vị**. Nhãn hứa nhiều hơn thứ đo được, và sai theo kiểu không ai phát hiện
+      vì con số vẫn trông hợp lý. Đã ghi lý do vào chú thích ngay chỗ xoá.
+      Ba tỷ lệ mã lỗi vẫn còn ở biểu đồ tròn ngay dưới, nơi có chú giải kèm mẫu số
 - [ ] 7.3 Đổi biểu đồ tỷ lệ lỗi theo agent thành donut
 - [ ] 7.4 Thêm chú giải 429 là vượt RPM/TPM/quota và chỉ hiển thị tỷ lệ khi có dữ liệu thật
-- [ ] 7.5 Đổi nhãn còn lại sang tiếng Việt và bỏ mọi badge `MỚI` — **ĐO 04/09: CHƯA.** Còn 4 badge ở `index.html:1154,1159,1164,1188`, tất cả trong tab Hiệu năng
-- [ ] 7.6 Cập nhật bảng hiệu năng để không trình bày percentile hoặc số lỗi không có nguồn
+- [x] 7.5 Đổi nhãn còn lại sang tiếng Việt và bỏ mọi badge `MỚI` — **ĐO 04/09: CHƯA.** Còn 4 badge ở `index.html:1154,1159,1164,1188`, tất cả trong tab Hiệu năng
+      → **LÀM 08/09.** Cả 4 badge đã bỏ: 3 cái đi theo các thẻ KPI bị xoá ở 7.2, cái thứ tư
+      ở tiêu đề biểu đồ tròn. **Xoá luôn quy tắc CSS `.pill-new`** vì không còn ai dùng —
+      `grep pill-new` nay trả 0 ở cả `index.html`, `app.js` và `dashboard.css`.
+      Sửa thêm hai chỗ ghi “Tỉ lệ thành công” thành “Tỷ lệ thành công” cho khớp spec
+- [x] 7.6 Cập nhật bảng hiệu năng để không trình bày percentile hoặc số lỗi không có nguồn
+      → **LÀM 08/09.** Bỏ hai cột “Thời gian phản hồi” và “Trường hợp chậm nhất” — cùng lỗi
+      nhãn-hứa-phân-vị-mà-đưa-trung-bình như 7.2. Sửa `emptyRow(7)` → `emptyRow(5)` cho khớp;
+      kiểm lại header 5 cột = 5 ô `<td>` = `emptyRow(5)`.
+      Số lỗi không có nguồn đã được xử lý từ trước: agent không đo được mã trả về hiện “—”
+      chứ không hiện 0%
 
 ## 8. Styling, Cleanup, and Verification
 

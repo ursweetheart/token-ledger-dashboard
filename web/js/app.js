@@ -1567,6 +1567,10 @@ function renderOverview(rows){
   set("ov-cost-total",moneyCompact(A.cost));
   set("ov-token-total",fmtTok(A.tokens));
   set("ov-request-total",fmtCompactNum(A.r)+" request");
+  /* Không request nào thì KHÔNG có tỷ lệ để mà hiện. `aggregate()` trả `er = 0`
+     khi `r = 0`, nên "100-er" sẽ ra 100% - một kỳ không ai gọi trông thành một kỳ
+     hoàn hảo. Cùng lý do với chuỗi `success` trong trendSeries(). */
+  set("ov-success-total",A.r?fmtDecimal(100-A.er,2)+"% thành công":"Chưa có request nào");
   set("ov-success-value",(100-A.er).toFixed(1)+"%");
 
   renderOverviewDetail(rows,active);
@@ -1766,20 +1770,28 @@ function chartsOverview(rows){
   mkOverviewLine("c-ov-cost-trend",tl.labels,tl.cost,"money","#38bdf8");
   mkOverviewLine("c-ov-token-trend",tl.labels,tl.tokens,"tokens","#84cc16");
   mkOverviewLine("c-ov-request-trend",tl.labels,tl.requests,"number","#a78bfa");
+  mkOverviewLine("c-ov-success-trend",tl.labels,tl.success,"percent","#22c55e");
   mkDonut("c-ov-success",["Trả kết quả tốt","Lỗi"],[Math.max(0,100-A.er),Math.max(0,A.er)],null,function(v){return v.toFixed(1)+"%";},["#22c55e","#ef4444"]);
   var byAgent=groupAgg(rows,function(r){return r.a;}).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;}).slice(0,8);
   mkDonut("c-ov-agent-share",byAgent.map(function(g){return g.key;}),byAgent.map(function(g){return g.cost;}),"lg-ov-agent-share",moneyCompact);
-  var byUnit=groupAgg(rows.filter(function(r){return r.d&&r.d!=="—";}),function(r){return r.d;}).filter(function(g){return g.cost>0;}).sort(function(a,b){return b.cost-a.cost;}).slice(0,8);
-  mkBar("c-ov-unit-cost",byUnit.map(function(g){return g.key;}),byUnit.map(function(g){return g.cost;}),{horizontal:true,money:true,colors:"#22c55e"});
+  /* THEO REQUEST, không theo tiền (biên bản 25/07, mục 2.3). Lý do đổi: tiền của
+     một phòng ban là số SUY RA — 28,2% tiền trên dashboard nhân từ `ref_price` chứ
+     không từ hoá đơn, và phần suy ra dồn vào ít phòng ban. Xếp hạng đơn vị bằng một
+     đại lượng suy ra thì thứ hạng đổi theo chỗ hoá đơn về sớm hay muộn. Request thì
+     đếm được trực tiếp, không phụ thuộc hoá đơn. */
+  var byUnit=groupAgg(rows.filter(function(r){return r.d&&r.d!=="—";}),function(r){return r.d;}).filter(function(g){return g.r>0;}).sort(function(a,b){return b.r-a.r;}).slice(0,8);
+  mkBar("c-ov-unit-req",byUnit.map(function(g){return g.key;}),byUnit.map(function(g){return g.r;}),{horizontal:true,colors:"#a78bfa"});
   buildOverviewWeekHeatmap();
 }
 function mkOverviewLine(id,labels,data,kind,color){
-  var tick=kind==="money"?function(v){return moneyCompact(v);}:kind==="tokens"?function(v){return fmtTokShort(v);}:function(v){return fmt(v);};
+  var tick=kind==="money"?function(v){return moneyCompact(v);}:kind==="tokens"?function(v){return fmtTokShort(v);}:
+    kind==="percent"?function(v){return fmtDecimal(v,0)+"%";}:function(v){return fmt(v);};
   chart(id,{
     type:"line",
     data:{labels:labels,datasets:[{data:data,borderColor:color,backgroundColor:color+"22",fill:true,tension:.34,borderWidth:2,pointRadius:data.length<=8?3:1.5,pointBackgroundColor:color}]},
     options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){
-      return kind==="money"?money(c.parsed.y):kind==="tokens"?fmtTokFull(c.parsed.y):fmt(c.parsed.y)+" request";
+      return kind==="money"?money(c.parsed.y):kind==="tokens"?fmtTokFull(c.parsed.y):
+        kind==="percent"?fmtDecimal(c.parsed.y,2)+"% thành công":fmt(c.parsed.y)+" request";
     }}}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:7}},y:{beginAtZero:true,grid:{color:gridColor()},ticks:{callback:tick,maxTicksLimit:5}}}}
   });
 }
@@ -1822,7 +1834,12 @@ function trendSeries(){
   return {
     dates:dates,labels:dates.map(dayLabel),data:costData,cost:costData,
     tokens:aggs.map(function(a){return a.tokens;}),
-    requests:aggs.map(function(a){return a.r;})
+    requests:aggs.map(function(a){return a.r;}),
+    /* NULL chứ không phải 100 cho ngày không có request nào. `aggregate()` trả
+       `er = 0` khi `r = 0`, nên 100-er sẽ ra 100% - một ngày không ai gọi trông
+       thành một ngày hoàn hảo. Chart.js vẽ `null` thành chỗ đứt, đúng nghĩa
+       "không đo được". */
+    success:aggs.map(function(a){return a.r?+(100-a.er).toFixed(2):null;})
   };
 }
 
@@ -3537,17 +3554,11 @@ function renderPerformance(rows){
   // tổng tỷ lệ lỗi theo hệ số cố định. Không có dữ liệu mã trả về thì nói thẳng
   // là chưa có, chứ không suy ra một con số trông có vẻ hợp lý.
   var chuaCo = "<span class='metric-na'>Chưa có dữ liệu</span>";
-  set("m-pf-4xx", A.codeAvailable?fmtDecimal(pct(A.e4,A.eKnown),1)+"%":chuaCo);
-  set("m-pf-5xx", A.codeAvailable?fmtDecimal(pct(A.e5,A.eKnown),1)+"%":chuaCo);
-  set("m-pf-429", A.codeAvailable?fmtDecimal(pct(A.e429,A.eKnown),1)+"%":chuaCo);
   // Mẫu số là eKnown chứ không phải tổng lượt gọi. Ralli không đi qua Google
   // nên không ai biết nó lỗi bao nhiêu; đưa nó vào mẫu số là ngầm khai rằng
   // 7.924 lượt đó đều thành công.
   set("m-pf-success", A.codeAvailable
     ? fmtDecimal(pct(A.eKnown-A.e4-A.e5-A.e429, A.eKnown),1)+"%" : chuaCo);
-  set("m-pf-p95", A.latAvailable?fmtDecimal(A.lat,1):chuaCo);
-  set("m-pf-p99", A.lat99Available?fmtDecimal(A.lat99,1):chuaCo);
-  setWithTitle("m-pf-req", fmtCompactNum(A.r), fmt(A.r)+" lượt gọi");
   var byAgent = groupAgg(rows, function(r){return r.a;}).filter(function(g){return g.r>0;}).sort(function(a,b){return b.cost-a.cost;});
   set("pf-tbody", byAgent.map(function(g){
     var model = agentModelListHtml(g.models);
@@ -3557,10 +3568,8 @@ function renderPerformance(rows){
     var tyLeLoi   = g.codeAvailable ? fmtDecimal(pct(g.e4+g.e5+g.e429, g.eKnown),1)+"%" : "—";
     return "<tr><td>"+esc(g.key)+"</td><td class='agent-model-cell'>"+model+"</td><td class='num'>"+fmt(g.r)+"</td>"+
       "<td class='num'>"+thanhCong+"</td>"+
-      "<td class='num"+(g.codeAvailable&&g.er>2?" text-red":"")+"'>"+tyLeLoi+"</td>"+
-      "<td class='num'>"+(g.latAvailable?fmtDecimal(g.lat,1)+"s":"—")+"</td>"+
-      "<td class='num'>"+(g.lat99Available?fmtDecimal(g.lat99,1)+"s":"—")+"</td></tr>";
-  }).join("") || emptyRow(7));
+      "<td class='num"+(g.codeAvailable&&g.er>2?" text-red":"")+"'>"+tyLeLoi+"</td></tr>";
+  }).join("") || emptyRow(5));
 }
 function chartsPerformance(rows){
   // Chỉ vẽ agent có nguồn đo mã trả về. Vẽ agent chưa đo được thành cột 0%
