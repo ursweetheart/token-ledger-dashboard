@@ -134,8 +134,24 @@
       phải phân vị**. Nhãn hứa nhiều hơn thứ đo được, và sai theo kiểu không ai phát hiện
       vì con số vẫn trông hợp lý. Đã ghi lý do vào chú thích ngay chỗ xoá.
       Ba tỷ lệ mã lỗi vẫn còn ở biểu đồ tròn ngay dưới, nơi có chú giải kèm mẫu số
-- [ ] 7.3 Đổi biểu đồ tỷ lệ lỗi theo agent thành donut
-- [ ] 7.4 Thêm chú giải 429 là vượt RPM/TPM/quota và chỉ hiển thị tỷ lệ khi có dữ liệu thật
+- [x] 7.3 Đổi biểu đồ tỷ lệ lỗi theo agent thành donut
+      → **LÀM 08/09, nhưng KHÔNG đổi thẳng như câu chữ của mục này.** Biểu đồ cũ vẽ `g.er`
+      — **tỷ lệ** lỗi của từng agent. Donut biểu diễn *phần của một tổng*, mà các tỷ lệ độc
+      lập cộng lại không ra gì cả: donut của tỷ lệ là một cái bánh không có nghĩa.
+      Nên vẽ **tỷ trọng**: lát bánh = SỐ lượt lỗi agent đó đóng góp (`e4+e5+e429`), còn tỷ
+      lệ riêng của nó đưa vào chú giải (`descs`) nên không mất thông tin nào.
+      Không lỗi nào đo được thì hiện một lát “Không ghi nhận lỗi nào” — vẽ bánh rỗng hay
+      chia đều các lát là bịa ra một cơ cấu không ai đo được.
+      Design §8 vốn viết “**tỷ trọng** lỗi”, nên đây là bám design chứ không phải đi lệch
+- [x] 7.4 Thêm chú giải 429 là vượt RPM/TPM/quota và chỉ hiển thị tỷ lệ khi có dữ liệu thật
+      → **LÀM 08/09 — và hoá ra là VÁ LẠI thứ chính mục 7.1-7.2 vừa làm hỏng.**
+      Lời giải nghĩa bốn nhóm mã trước đây nằm trên dòng mô tả của bốn thẻ KPI, và chú giải
+      biểu đồ **cố ý bỏ trống để khỏi lặp** — có ghi rõ trong chú thích mã. Bỏ bốn thẻ đó
+      xong thì lời giải nghĩa biến mất theo, người xem còn lại bốn con số không ai giải
+      thích. Đã đưa hẳn vào `descs` của chú giải, chỗ không phụ thuộc thẻ nào.
+      429 nói rõ: **vượt hạn mức RPM/TPM/quota của nhà cung cấp, không phải lỗi mã nguồn**.
+      Vế “chỉ hiển thị khi có dữ liệu thật” đã đúng từ trước: không có `codeAvailable` thì
+      biểu đồ rút còn hai lát thành công/lỗi, không chia bốn lát giả
 - [x] 7.5 Đổi nhãn còn lại sang tiếng Việt và bỏ mọi badge `MỚI` — **ĐO 04/09: CHƯA.** Còn 4 badge ở `index.html:1154,1159,1164,1188`, tất cả trong tab Hiệu năng
       → **LÀM 08/09.** Cả 4 badge đã bỏ: 3 cái đi theo các thẻ KPI bị xoá ở 7.2, cái thứ tư
       ở tiêu đề biểu đồ tròn. **Xoá luôn quy tắc CSS `.pill-new`** vì không còn ai dùng —

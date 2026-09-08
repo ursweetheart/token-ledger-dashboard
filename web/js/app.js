@@ -3656,12 +3656,32 @@ function chartsPerformance(rows){
   var byAgent = groupAgg(rows, function(r){return r.a;})
     .filter(function(g){return g.r>0 && g.codeAvailable;})
     .sort(function(a,b){return b.er-a.er;});
-  mkBar("c-pf-err", byAgent.map(function(g){return g.key;}), byAgent.map(function(g){return +g.er.toFixed(2);}), {horizontal:true, percent:true,
-    colors: byAgent.map(function(g){ return g.er>2?"#ef4444":g.er>1?"#f59e0b":"#667eea"; }) });
+  /* TỶ TRỌNG lỗi, không phải tỷ lệ lỗi. Bản trước vẽ `g.er` (tỷ lệ %) — đổi
+     thẳng sang donut sẽ cộng những con số độc lập lại thành một "tổng" vô nghĩa.
+     Lát bánh = SỐ lỗi agent đó đóng góp; tỷ lệ riêng của nó đưa vào chú giải nên
+     không mất thông tin nào. */
+  var loiCuaAgent = byAgent.map(function(g){ return num(g.e4)+num(g.e5)+num(g.e429); });
+  var tongLoi = loiCuaAgent.reduce(function(s,x){ return s+x; }, 0);
+  if(tongLoi > 0){
+    mkDonut("c-pf-err", byAgent.map(function(g){return g.key;}), loiCuaAgent, "lg-pf-err",
+      function(v){ return fmt(v)+" lượt lỗi"; },
+      byAgent.map(function(g){ return g.er>2?"#ef4444":g.er>1?"#f59e0b":"#667eea"; }),
+      byAgent.map(function(g){
+        return "tỷ lệ lỗi "+fmtDecimal(g.er,2)+"% trên "+fmt(g.r)+" lượt gọi";
+      }));
+  } else {
+    /* Không lỗi nào ĐO ĐƯỢC thì không vẽ cơ cấu lỗi. Vẽ một bánh rỗng hay chia
+       đều các lát là bịa ra một cơ cấu mà không ai đo được. */
+    mkDonut("c-pf-err", ["Không ghi nhận lỗi nào"], [1], "lg-pf-err",
+      function(){ return "0 lượt lỗi"; }, ["#10b981"],
+      ["trong phạm vi có đo được mã trả về"]);
+  }
   var A = aggregate(rows);
-  /* Nhãn dùng đúng tên của bốn thẻ chỉ số ngay phía trên (Lỗi phía Client / Lỗi phía
-     Provider / Lỗi giới hạn tốc độ request) để người xem đối chiếu được ngay; phần giải nghĩa dài
-     đã nằm ở dòng mô tả của các thẻ đó nên không lặp lại dưới chú giải nữa.
+  /* Lời giải nghĩa nằm Ở ĐÂY chứ không ở đâu khác nữa.
+     Trước 08/09 chúng nằm trên dòng mô tả của bốn thẻ KPI ngay phía trên, và chú
+     giải này cố ý bỏ trống để khỏi lặp. Bốn thẻ đó đã bị bỏ (mục 7.1-7.2), nên
+     lời giải nghĩa biến mất theo — người xem còn lại bốn con số không ai giải
+     thích. Đưa hẳn vào `descs` của chú giải, chỗ không phụ thuộc thẻ nào.
 
      Khi không có dữ liệu mã trả về (Ralli không đi qua Google Cloud), biểu đồ rút
      xuống hai lát: thành công / lỗi. Vẽ đủ bốn lát bằng cách chia tỷ lệ tổng là
@@ -3672,7 +3692,11 @@ function chartsPerformance(rows){
       ["2xx · Thành công","4xx · Lỗi phía Client","5xx · Lỗi phía Provider","429 · Lỗi giới hạn tốc độ request"],
       [pct(A.eKnown-A.e4-A.e5-A.e429, A.eKnown), pct(A.e4,A.eKnown),
        pct(A.e5,A.eKnown), pct(A.e429,A.eKnown)], "lg-pf-code",
-      pctFmt, ["#10b981","#f59e0b","#ef4444","#8b5cf6"]);
+      pctFmt, ["#10b981","#f59e0b","#ef4444","#8b5cf6"],
+      ["yêu cầu được phục vụ xong",
+       "yêu cầu sai định dạng hoặc thiếu quyền — sửa ở phía tích hợp agent",
+       "nhà cung cấp gặp sự cố — cần thử lại có giãn cách",
+       "gọi VƯỢT HẠN MỨC cho phép (RPM / TPM / quota của nhà cung cấp), không phải lỗi mã nguồn — cao thì cân nhắc nâng hạn mức hoặc giãn nhịp gọi"]);
   } else {
     mkDonut("c-pf-code", ["Thành công","Lỗi (chưa rõ mã)"],
       [100-A.er, A.er], "lg-pf-code", pctFmt, ["#10b981","#94a3b8"]);

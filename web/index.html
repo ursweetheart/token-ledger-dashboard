@@ -1212,9 +1212,16 @@
       </div>
     </div>
     <div class="wf-chart">
-      <span class="wf-type">Thanh ngang</span>
-      <div class="wf-title">Tỉ lệ lỗi theo agent (%)</div>
-      <div class="canvas-box"><canvas id="c-pf-err"></canvas></div>
+      <span class="wf-type">Tròn</span>
+      <!-- TỶ TRỌNG, không phải tỷ lệ. Donut biểu diễn phần của MỘT TỔNG, mà
+           tỷ lệ lỗi của từng agent là các số độc lập — cộng chúng lại không ra
+           gì cả. Nên lát bánh = phần lỗi agent đó đóng góp, còn tỷ lệ lỗi
+           riêng của nó nằm ở chú giải bên cạnh. -->
+      <div class="wf-title">Tỷ trọng lỗi theo agent</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-pf-err"></canvas></div>
+        <div class="wf-legend legend-described" id="lg-pf-err"></div>
+      </div>
     </div>
   </div>
 
