@@ -208,7 +208,22 @@
 
 - [ ] 8.1 Bổ sung style responsive cho tab hợp nhất, sticky matrix và donut mới
 - [ ] 8.2 Kiểm tra contrast và trạng thái unavailable trên dark/light theme
-- [ ] 8.3 Xóa chart instance, DOM id, renderer và CSS của section đã loại bỏ
+- [x] 8.3 Xóa chart instance, DOM id, renderer và CSS của section đã loại bỏ
+      → **KIỂM 08/09 bằng quét máy, không bằng mắt.** Hai chiều đều sạch:
+      · **180 id** khai trong `index.html`, **0 cái mồ côi** (không được `app.js`, markup hay
+        CSS tham chiếu)
+      · **0 chart id** trong `app.js` vẽ vào canvas không tồn tại
+      · `.pill-new` đã xoá cùng badge; `grep` trả 0 ở cả ba file
+      · 6 lệnh `set()` của các thẻ KPI đã bỏ cũng đã gỡ
+      Chú thích đầu `index.html` còn kê “pill MỚI” như một thứ file này có — đã sửa.
 - [ ] 8.4 Kiểm thử bộ lọc time range, phòng ban, user, agent, provider và model kết hợp
 - [ ] 8.5 Kiểm thử dữ liệu có userId, thiếu userId, thiếu budget, cây phòng ban một cấp/nhiều cấp và dữ liệu rỗng
-- [ ] 8.6 Đối chiếu toàn bộ nội dung biên bản 25/7 và xác nhận không còn nhãn `Success Rate`, `Tỷ lệ áp dụng`, `Nhắc đào tạo` hoặc badge `MỚI` trong phạm vi — **ĐO 04/09: 3/4 sạch.** `Success Rate` 0 · `Nhắc đào tạo` 0 · `Tỷ lệ áp dụng` chỉ còn trong ghi chú mã nguồn · badge `MỚI` **còn 4**
+- [x] 8.6 Đối chiếu toàn bộ nội dung biên bản 25/7 và xác nhận không còn nhãn `Success Rate`, `Tỷ lệ áp dụng`, `Nhắc đào tạo` hoặc badge `MỚI` trong phạm vi — **ĐO 04/09: 3/4 sạch.** `Success Rate` 0 · `Nhắc đào tạo` 0 · `Tỷ lệ áp dụng` chỉ còn trong ghi chú mã nguồn · badge `MỚI` **còn 4**
+      → **ĐO LẠI 08/09: 4/4 SẠCH.** `Success Rate` 0/0/0 · `Nhắc đào tạo` 0/0/0 ·
+      `Tỷ lệ áp dụng` 0 ở markup, chỉ còn **2 chú thích** mô tả endpoint `/api/adoption`
+      (đó là tên của API, không phải nhãn hiển thị) · badge `MỚI` **0** ở markup, chỗ duy
+      nhất còn lại là chú thích đầu file và đã sửa.
+      **Một chỗ lệch nhẹ so với proposal, không sửa:** proposal viết đổi “Tỷ lệ áp dụng”
+      thành **“Tài khoản hoạt động”**, thực tế nhãn đang là **“Tài khoản đang dùng (%)”**.
+      Đồng nghĩa, và đổi một nhãn người dùng đang quen chỉ vì khác từ là churn — nêu ra để
+      anh Tuấn quyết nếu muốn khớp đúng chữ
