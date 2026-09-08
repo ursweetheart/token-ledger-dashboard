@@ -74,7 +74,22 @@ x-litellm: &litellm
   build:
     # Fork nam NGANG HANG du an, khong long ben trong (repo long repo thi
     # `git clean -xfd` xoa ca fork). Doi cho fork di la compose bao loi ngay.
-    # Ban da do: commit f005afa146, litellm 1.99.0.
+    #
+    # PHAI LA NHANH CO BAN VA SENTINEL. Nen ghi ro vi day la phu thuoc cheo giua
+    # hai repo, va no hong theo kieu kho doan: lay nham nhanh thi LiteLLM CHET
+    # ngay luc khoi dong voi
+    #     TypeError: Redis.__init__() got multiple values for argument 'host'
+    #
+    #     repo   git@github.com:ursweetheart/litellm_rang_dong.git
+    #     nhanh  Tuan-develop        <- CO ban va, dung nhanh nay
+    #     commit e3490555c5          "fix(redis): stop passing the configured
+    #                                 host into Sentinel connections"
+    #
+    #     nhanh  litellm_internal_staging  <- KHONG co ban va (f005afa146).
+    #                                 Dung nhanh nay thi Gateway khong len duoc.
+    #
+    # Kiem nhanh: grep _SENTINEL_IGNORED_CONNECTION_ARGS trong litellm/_redis.py.
+    # Ban goc da do: litellm 1.99.0 tai f005afa146.
     context: ../litellm_tuan_test
   image: litellm_tuan_test:gateway
   profiles: ["gateway"]
