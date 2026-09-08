@@ -74,3 +74,36 @@ test("KHÔNG để sót bộ lọc user sau khi tạm gỡ nó ra", () => {
   s.userScopeGap();
   assert.equal(s.state.filters.user, "an", "phải khôi phục bộ lọc");
 });
+
+/* ─── Nhãn hiển thị trùng nhau ─── */
+/* Đo 08/09 trên database thật: 938 tài khoản `kind='real'` chỉ có 890 nhãn khác
+   nhau. 41 nhãn bị trùng, phủ 89 tài khoản; nặng nhất 6 tài khoản một nhãn. Nên
+   đây không phải trường hợp lý thuyết. */
+function loadCount(accounts) {
+  const helper = appSource.match(/function userFilterLabel\(u\)\{[\s\S]*?\n\}/);
+  const counter = appSource.match(/function userLabelAccountCount\(label\)\{[\s\S]*?\n\}/);
+  assert.ok(helper && counter, "hai hàm phải tồn tại");
+  const sandbox = { console, String, Boolean, USER_ACCOUNTS: accounts };
+  vm.createContext(sandbox);
+  vm.runInContext(helper[0] + "\n" + counter[0], sandbox);
+  return sandbox.userLabelAccountCount;
+}
+
+test("đếm đúng số tài khoản dùng chung một nhãn", () => {
+  const count = loadCount([
+    { a: "DMS", ug: "Nguyễn Trang" },
+    { a: "Sale", ug: "Nguyễn Trang" },
+    { a: "DMS", ug: "Trần B" }
+  ]);
+  assert.equal(count("Nguyễn Trang"), 2);
+  assert.equal(count("Trần B"), 1);
+});
+
+test("nhãn rỗng không đếm, và tài khoản không có danh tính cũng không", () => {
+  const count = loadCount([
+    { a: "Ralli", ug: "Ralli" },
+    { a: "DMS", ug: "" }
+  ]);
+  assert.equal(count(""), 0);
+  assert.equal(count("Ralli"), 0, "nhãn trùng tên agent không được tính là một người");
+});

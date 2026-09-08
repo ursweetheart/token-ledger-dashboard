@@ -3917,27 +3917,62 @@ function userScopeGap(){
   return { rows: thieu.length, requests: a.r, tokens: a.tokens, agents: agents };
 }
 
+/* Bao nhiêu TÀI KHOẢN cùng chung một nhãn hiển thị.
+   Đo 08/09 trên dữ liệu thật: 938 tài khoản `kind='real'` nhưng chỉ 890 nhãn khác
+   nhau — 41 nhãn bị trùng, phủ 89 tài khoản, nặng nhất là "Nguyễn Trang" với 6.
+   Tức cứ khoảng 10 lần chọn một tên thì có 1 lần đang xem số của nhiều người gộp.
+
+   VÌ SAO KHÔNG SỬA BẰNG "ID ỔN ĐỊNH" như mục 4.1 đề nghị: dòng usage KHÔNG mang
+   `userId`, chỉ mang nhãn (`r.ug`). Không có khoá để ghép thì id ở dropdown cũng
+   không tách được usage của hai người trùng tên — nó chỉ tạo cảm giác chính xác
+   mà dữ liệu không đỡ nổi. Thứ làm được là NÓI RA. */
+function userLabelAccountCount(label){
+  if(!label) return 0;
+  var n = 0;
+  (USER_ACCOUNTS || []).forEach(function(u){
+    if(userFilterLabel(u) === label) n++;
+  });
+  return n;
+}
+
 function renderUserScopeNote(){
   var box = document.getElementById("user-scope-note");
   var txt = document.getElementById("user-scope-text");
   if(!box || !txt) return;
+  var chon = state.filters.user;
+  var notes = [];
+
+  if(chon){
+    var soTk = userLabelAccountCount(chon);
+    if(soTk > 1){
+      notes.push("Nhãn <b>" + esc(chon) + "</b> ứng với <b>" + soTk
+        + " tài khoản khác nhau</b> — số đang xem là của cả " + soTk
+        + " người gộp lại, không phải một người. Nguồn không ghi định danh người dùng"
+        + " trên từng dòng nên không tách ra được.");
+    }
+  }
+
   var g = userScopeGap();
-  if(!g){ box.hidden = true; txt.textContent = ""; return; }
+  if(g){
+    /* Nói bằng con số, không nói chung chung. "Một số dòng bị bỏ" thì người đọc
+       không biết là 3 dòng hay 3.000. */
+    notes.push("<b>" + fmt(g.rows) + " dòng</b> (" + fmt(g.requests) + " request, "
+      + fmtTok(g.tokens) + ") bị bỏ ra ngoài vì nguồn <b>không ghi được người dùng</b> — "
+      + "không phải vì chúng bằng không. "
+      + (g.agents.length
+          ? "Thuộc " + (g.agents.length === 1
+              ? "agent " + esc(g.agents[0])
+              : g.agents.length + " agent: " + esc(g.agents.slice(0,3).join(", "))
+                + (g.agents.length > 3 ? "…" : ""))
+            + ". "
+          : "")
+      + "Bỏ lọc user để thấy lại phần này.");
+  }
+
+  if(!notes.length){ box.hidden = true; txt.innerHTML = ""; return; }
   box.hidden = false;
-  /* Nói bằng con số, không nói chung chung. "Một số dòng bị bỏ" thì người đọc
-     không biết là 3 dòng hay 3.000. */
-  txt.innerHTML = "Đang lọc theo user <b>" + esc(state.filters.user) + "</b>. "
-    + "<b>" + fmt(g.rows) + " dòng</b> (" + fmt(g.requests) + " request, "
-    + fmtTok(g.tokens) + ") bị bỏ ra ngoài vì nguồn <b>không ghi được người dùng</b> — "
-    + "không phải vì chúng bằng không. "
-    + (g.agents.length
-        ? "Thuộc " + (g.agents.length === 1
-            ? "agent " + esc(g.agents[0])
-            : g.agents.length + " agent: " + esc(g.agents.slice(0,3).join(", "))
-              + (g.agents.length > 3 ? "…" : ""))
-          + ". "
-        : "")
-    + "Bỏ lọc user để thấy lại phần này.";
+  txt.innerHTML = (chon ? "Đang lọc theo user <b>" + esc(chon) + "</b>. " : "")
+    + notes.join(" ");
 }
 
 function renderFilters(){

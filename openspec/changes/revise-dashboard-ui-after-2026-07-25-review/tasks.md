@@ -5,7 +5,16 @@
 ## 1. Data Contract and Compatibility
 
 - [x] 1.1 Bổ sung `userId` tùy chọn cho usage row và `loginRequired` cho metadata agent — **ĐO 04/09:** `userId` đã có trong `web/`; `loginRequired` **không còn đối tượng** — panel nhập tay đã bị bỏ (`index.html:399`, `app.js:529`)
-- [ ] 1.2 Tách bộ lọc username khỏi trường nhóm user `ug` và giữ adapter đọc state/localStorage cũ
+- [x] 1.2 Tách bộ lọc username khỏi trường nhóm user `ug` và giữ adapter đọc state/localStorage cũ
+      → **ĐÃ TÁCH TỪ TRƯỚC, đo 08/09.** `state.filters` là
+      `{dept, user, provider, model, agent}` — **không còn khoá `ug` nào**. Trường `ug` trên
+      dòng dữ liệu đã bị đổi công dụng: nó mang **nhãn user thật**
+      (`ug: displayUser || a.username`), không còn là nhóm user, và bộ lọc so thẳng với nó.
+      Adapter đọc state cũ cũng đã có: `loadState()` chỉ nhận khoá trong `PREF_KEYS`, mọi
+      khoá lạ trong cache cũ bị bỏ.
+      **Còn sót về TÊN GỌI:** trường vẫn tên `ug` dù không còn nghĩa "user group". Không đổi
+      trong change này vì nó là hợp đồng dữ liệu do `api.js` sinh ra — đổi tên phải sửa cả
+      hai phía, không cân với lợi ích
 - [x] 1.3 Bổ sung metadata phòng ban `id`, `parentId`, `level` với fallback danh sách phẳng
 - [x] 1.4 Tạo helper xác định dữ liệu hỗ trợ phân rã user và trạng thái unavailable
       → **LÀM 08/09.** `rowHasUserIdentity(r)` + `userScopeGap()`.
@@ -64,12 +73,32 @@
 
 ## 4. Global User Filter and Manual Entry
 
-- [ ] 4.1 Điền dropdown User từ danh mục tài khoản thực và dùng id ổn định làm value
+- [x] 4.1 Điền dropdown User từ danh mục tài khoản thực và dùng id ổn định làm value
+      → **Vế đầu ĐÃ CÓ; vế "id ổn định" KHÔNG LÀM ĐƯỢC, và đã đo để chứng minh.**
+      Dropdown dựng từ `filterAccounts()` tức danh mục tài khoản thật từ database — vế đầu
+      xong từ trước.
+      **Vì sao id ổn định không giải quyết được vấn đề nó nhắm tới:** dòng usage KHÔNG mang
+      `userId`, chỉ mang nhãn (`r.ug`) — chú thích ở `app.js` cũng ghi "không nguồn nào ghi
+      userId". Không có khoá để ghép thì id ở dropdown cũng không tách được usage của hai
+      người trùng tên; nó chỉ tạo cảm giác chính xác mà dữ liệu không đỡ nổi.
+      **Và trùng tên là chuyện có thật, không phải lý thuyết** — đo trên database 08/09:
+      938 tài khoản `kind='real'` nhưng chỉ **890 nhãn** khác nhau; **41 nhãn trùng, phủ 89
+      tài khoản**, nặng nhất "Nguyễn Trang" = **6 tài khoản**. Tức cứ ~10 lần chọn một tên
+      thì 1 lần đang xem số của nhiều người gộp lại.
+      **Thứ làm được là NÓI RA:** `userLabelAccountCount()` + cảnh báo "Nhãn X ứng với N tài
+      khoản khác nhau — số đang xem là của cả N người gộp lại". Có phép kiểm riêng
 - [x] 4.2 Làm dropdown User phụ thuộc phòng ban và agent đang chọn
       → **ĐÃ CÓ SẴN, không phải làm.** Đo 08/09: `filterAccounts()` lọc tài khoản theo
       phòng ban (kèm **đơn vị con** qua `unitDescendants`) và theo agent; dropdown dựng từ
       chính nó, có tạm gỡ bộ lọc user ra để danh sách không tự thu về một tên
-- [ ] 4.3 Áp user filter đồng bộ lên KPI, chart, table và cảnh báo có dữ liệu user-level
+- [x] 4.3 Áp user filter đồng bộ lên KPI, chart, table và cảnh báo có dữ liệu user-level
+      → **ĐẠT bằng kiến trúc, không phải bằng cách kiểm từng chỗ.** `scopedRows()` =
+      `applyFilters(scopeBase())` là **điểm nghẽn duy nhất**, và `renderAll()` lấy đúng một
+      `rows` rồi truyền cho toàn bộ renderer (Tổng quan, Phòng ban, Agents, Providers,
+      Models, Users, Chi phí, Hiệu năng, biểu đồ). Không có đường nào để một chỗ lệch khỏi
+      bộ lọc.
+      Vế "cảnh báo có dữ liệu user-level" chính là khối cảnh báo ở mục 4.5, nay gánh thêm
+      cảnh báo nhãn trùng của 4.1
 - [x] 4.4 Bổ sung trường User vào bảng nhập tay, bắt buộc với agent cần đăng nhập — **KHÔNG CÒN ĐỐI TƯỢNG:** luồng nhập tay đã bị bỏ khi dashboard chuyển sang chỉ đọc database (`index.html:399`, `app.js:529`)
 - [x] 4.5 Cảnh báo rõ các bản ghi tổng hợp không thể quy về user
       → **LÀM 08/09.** Khối cảnh báo ngay dưới thanh lọc, chỉ hiện khi đang lọc user **và**
