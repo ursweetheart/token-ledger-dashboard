@@ -1,0 +1,70 @@
+# Instance LiteLLM DUNG RIENG DE DO TAI. File nay TACH HAN khoi
+# docker-compose.yml de mot lan sua nham o day khong the cham vao luong chinh.
+#
+# Chay:
+#   docker compose -f docker-compose.yml -f docker-compose.bench.yml \
+#     --profile bench up -d litellm-bench
+# Don:
+#   docker compose -f docker-compose.yml -f docker-compose.bench.yml \
+#     --profile bench down litellm-bench
+#   rồi DROP DATABASE litellm_bench
+#
+# Nhung dieu KHONG lam, va vi sao:
+#   - KHONG them vao `litellm_pool` cua nginx. Bench di THANG cong 4003, khong
+#     qua gateway-lb. Ban tai vao LB se lam nhieu chinh phep do ma ta muon do.
+#   - KHONG dung profile `gateway`. Profile rieng `bench` de `--profile gateway`
+#     khong bao gio vo tinh keo no len.
+#   - KHONG khai REDIS_HOST. Thieu bien do thi LiteLLM khong noi Redis, nen bo
+#     dem rpm/tpm cua litellm-1/2 khong bi bench dung vao.
+
+services:
+  litellm-bench:
+    image: litellm_tuan_test:gateway
+    container_name: token-ledger-litellm-bench
+    profiles: ["bench"]
+    restart: "no"
+    entrypoint: ["sh", "/gateway-entrypoint.sh"]
+    command: ["--config=/app/config.yaml", "--port", "4000"]
+    volumes:
+      - ./docker/gateway/config.bench.yaml:/app/config.yaml:ro
+      - ./docker/gateway/entrypoint.sh:/gateway-entrypoint.sh:ro
+    environment:
+      # Database RIENG. Day la lop cach ly quan trong nhat: so that nam o
+      # database `litellm`, bench ghi vao `litellm_bench`.
+      DATABASE_URL: "postgresql://${GATEWAY_PGUSER:-llmproxy}:${GATEWAY_PGPASSWORD:-llmproxy_local}@postgres:5432/litellm_bench"
+      STORE_MODEL_IN_DB: "False"
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-}
+      # entrypoint.sh doi bien nay khac rong. Gia tri co y sai - xem chu thich
+      # trong config.bench.yaml muc 4.
+      KEY_GOOGLE_AI_STU: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
+    # GIOI HAN BO NHO - co y, khong phai cho chat che.
+    #
+    # Docker VM co 8,17 GB va KHONG container nao bi gioi han (`mem=0`). Neu de
+    # nguyen vay ma day toi luc het bo nho, OOM killer se tu chon nan nhan - va
+    # no co the chon POSTGRES chu khong phai instance bench. Postgres co WAL nen
+    # khong hong du lieu, nhung do la kieu hong minh khong dieu khien duoc.
+    #
+    # Dat 1,5 GB thi bench cham tran o mot diem VOI TOI DUOC, chet MOT MINH, va
+    # bai do LAP LAI DUOC. De 8 GB thi moi lan sap mot kieu, khong hoc duoc gi.
+    # Luc binh thuong no dung ~1,15 GB, nen 1,5 GB la co cho tho chu khong bop.
+    #
+    # DO DUOC 07/09/2026, 120 mau trong luc tai nang: bo nho DUNG YEN o
+    # 1,00-1,12 GiB, CPU ghim 100-137%. No KHONG phinh theo so ket noi -- hang
+    # doi nam o tang socket, khong nam trong bo nho ung dung. He qua: khong the
+    # lam no OOM bang cach tang dong thoi, du day toi 8.000 ket noi.
+    # Muon dung lai mot ca sap that thi ha bien duoi day xuong duoi ~1,1 GiB.
+    mem_limit: ${BENCH_MEM_LIMIT:-1500m}
+    ports:
+      - "127.0.0.1:${LITELLM_BENCH_PORT:-4003}:4000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://127.0.0.1:4000/health/liveliness\", timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      # Lan dau phai chay `prisma migrate deploy` tren database rong -> lau.
+      start_period: 120s
+    depends_on:
+      postgres:
+        condition: service_healthy

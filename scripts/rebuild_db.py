@@ -118,6 +118,16 @@ STEPS = [
     # mat, khong loi nao bao. Bo nap tu do lai tu dau vi moc nap doc chinh
     # fact_call: bang rong -> doc toan bo so.
     ("Gateway ledger",   "db/load_gateway.py",      []),
+    # So cua NHA CUNG CAP - y kien thu hai ve cung mot luu luong, KHONG phai
+    # nguon thu nam. `usage_resolved` khong doc no.
+    #
+    # PHAI co mat o day, cung ly le voi hai buoc tren: buoc 1 (`--rebuild`) xoa
+    # sach schema, nen thieu dong nay thi `fact_provider_daily` rong sau moi lan
+    # cap nhat - va phep doi chieu se lang le bao "chua kiem duoc" mai mai.
+    #
+    # `--tuy-chon`: khong phai ngay nao cung co lan keo nha cung cap, va thieu
+    # no KHONG phai loi. Nhung bo nap se noi to rang no thieu, kem hau qua.
+    ("Provider ledger",  "db/load_provider.py",     ["--tuy-chon"]),
     ("Usage rollup",     "db/build_usage_daily.py", []),
     # PHAI co mat, cung ly le voi buoc Gateway o tren: buoc 1 (`--rebuild`) xoa
     # sach schema, nen thieu dong nay thi moi lan cap nhat dashboard la bang

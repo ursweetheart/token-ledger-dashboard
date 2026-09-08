@@ -33,16 +33,21 @@ Quy tắc này tồn tại để câu hỏi "file mới để đâu" có câu tr
 
 ### Requirement: Mã nguồn tách khỏi dữ liệu chạy
 
-Thư mục chứa mã SHALL không chứa dữ liệu do chương trình sinh ra khi chạy. Database
-SQLite SHALL nằm trong `var/`, tách khỏi `db/` — nơi chỉ còn giữ schema và module nạp.
+Thư mục chứa mã SHALL không chứa dữ liệu do chương trình sinh ra khi chạy. Dữ liệu chạy
+của database SHALL nằm ngoài cây mã nguồn: với PostgreSQL là volume Docker `pgdata` do
+`docker-compose.yml` khai báo, với SQLite (chỉ dùng để đối chiếu bằng tay) là `var/`.
 
-Ranh giới này phân biệt hai thứ có hậu quả khác hẳn nhau khi mất: `data/` là dữ liệu
-thô kéo về, mất là mất vĩnh viễn vì cửa sổ lưu giữ ở nguồn trượt nhanh; `var/` dựng lại
-được hoàn toàn từ `data/`.
+Ranh giới này phân biệt hai thứ có hậu quả khác hẳn nhau khi mất: `data/` là dữ liệu thô
+kéo về, mất là mất vĩnh viễn vì cửa sổ lưu giữ ở nguồn trượt nhanh; dữ liệu chạy của
+database dựng lại được hoàn toàn từ `data/` bằng `scripts/rebuild_db.py`.
+
+Sau khi PostgreSQL thành mặc định, `var/` KHÔNG còn chứa database của dự án. Nó vẫn là nơi
+duy nhất được phép chứa database SQLite nếu ai đó dựng một bản để đối chiếu.
 
 #### Scenario: Xoá dữ liệu chạy là thao tác an toàn
 
-- **WHEN** xoá toàn bộ `var/` rồi chạy lại lệnh dựng database
+- **WHEN** xoá sạch dữ liệu chạy của database — `docker compose down -v` với PostgreSQL —
+  rồi chạy lại lệnh dựng database
 - **THEN** database được dựng lại đầy đủ từ `data/`
 - **AND** không mã nguồn nào bị mất
 
@@ -51,6 +56,12 @@ thô kéo về, mất là mất vĩnh viễn vì cửa sổ lưu giữ ở ngu�
 - **WHEN** liệt kê `db/`
 - **THEN** chỉ thấy file `.sql` và `.py`
 - **AND** không thấy file `.sqlite` nào
+
+#### Scenario: Thư mục dữ liệu chạy không còn database mặc định
+
+- **WHEN** liệt kê `var/` sau khi đã chuyển sang PostgreSQL
+- **THEN** không thấy `token_ledger.sqlite`
+- **AND** đường ống vẫn dựng lại được database đầy đủ mà không cần file đó
 
 ### Requirement: Thư mục kiểm thử phân biệt theo nghĩa vụ
 
@@ -61,18 +72,20 @@ trong `tools/`.
 Đường ống sản xuất MUST NOT gọi vào `tests/` hay `tools/`. Script nào được
 `update_dashboard.py` gọi thì SHALL nằm trong `scripts/`.
 
+Đường ống sản xuất cũng MUST NOT ghi vào `web/`. Frontend là mã nguồn, không phải đích đến
+của dữ liệu — xem capability `single-source-dashboard-data`.
+
 #### Scenario: Đường ống không gọi ra ngoài thư mục sản xuất
 
 - **WHEN** đọc toàn bộ lời gọi lệnh trong `scripts/update_dashboard.py`
 - **THEN** mọi script được gọi đều nằm trong `scripts/` hoặc `db/`
 - **AND** không lời gọi nào trỏ tới `tests/` hoặc `tools/`
 
-#### Scenario: Bước vá dữ liệu dự phòng vẫn chạy đúng
+#### Scenario: Đường ống không ghi vào thư mục frontend
 
-- **WHEN** chạy bước cuối của đường ống sau khi hai script sản xuất đã chuyển sang
-  `scripts/`
-- **THEN** nó sinh được file dữ liệu trung gian và vá thành công vào `web/js/app.js`
-- **AND** ảnh chụp gốc `app.js.bak` từ 02/08 không bị ghi đè
+- **WHEN** chạy trọn đường ống rồi kiểm `git status` trên `web/`
+- **THEN** không file nào trong `web/` bị đường ống sửa
+- **AND** `web/js/app.js` giữ nguyên như trong git
 
 #### Scenario: File biên dịch không bị git theo dõi
 

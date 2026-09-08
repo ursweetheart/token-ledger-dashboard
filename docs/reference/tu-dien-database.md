@@ -446,6 +446,42 @@ Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Comp
 
 ---
 
+## `fact_provider_daily` — **Sổ của NHÀ CUNG CẤP.** Ý kiến thứ hai, KHÔNG phải nguồn thứ năm
+
+5 dòng · Khoá chính `(day, provider_project, raw_model)` · migration 011, 04/09/2026
+
+### ⚠ `usage_resolved` KHÔNG đọc bảng này, và không bao giờ được đọc
+
+Bảng này trả lời câu **"ngày A, nhà cung cấp nói họ đã phục vụ bao nhiêu lượt và bao nhiêu token?"** — một câu khác hẳn *"sổ của ta ghi bao nhiêu"*. Cùng những lượt gọi đó **đã nằm trong `fact_call` rồi**, nên cộng bảng này vào tổng lưu lượng là **đếm đôi**. Nếu về sau có ai muốn "gộp thêm nguồn provider cho đầy đủ" — đó chính là nhầm lẫn mà dòng này sinh ra để chặn.
+
+Chỉ đúng **một** chỗ được đọc nó: nhóm I của `scripts/audit_db.py`.
+
+### Vì sao cần một bảng riêng thay vì dùng `fact_monitoring`
+
+Đường nạp monitoring quy project về agent qua `dim_agent.gcp_project_id`. Nhưng project mà Gateway gọi tới **không thuộc agent nào** — nó là điểm quan sát của chính Gateway. Nhét nó vào `dim_agent` để đường ống chạy được sẽ tạo ra một "agent" không tồn tại, và agent giả đó sẽ hiện lên dashboard. Nên `provider_project` ở đây là **`TEXT` trần, KHÔNG có khoá ngoại** tới `dim_agent`.
+
+| # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
+|---|---|---|---|---|---|
+| 1 | `day` | `date` | ngày (giờ VN) | 26/08 → 01/09/2026 | `2026-08-31` |
+| 2 | `provider_project` | `text` | mã project bên nhà cung cấp | 1 project · **không FK** — xem trên | `project-e62bad30-a591-407b-ba7` |
+| 3 | `raw_model` | `text` | tên model **nguyên gốc** họ báo | Nằm trong khoá chính **thay cho `model_id`**, vì `model_id` có thể NULL mà cột NULL thì không làm khoá chính được | `gemini-3.5-flash-lite` |
+| 4 | `model_id` | `integer` | model đã chuẩn hoá | **NULL khi chưa ánh xạ được** — để rỗng chứ không gán bừa | `12` |
+| 5 | `requests` | `bigint` | số lượt **họ** nói họ đã phục vụ | NULL = không đo được, **khác hẳn 0** | `41` |
+| 6 | `input_tokens` | `bigint` | token vào theo số của họ | Lấy từ nhánh **quota**, không phải metric `generate_content_usage_*` (metric đó **không tồn tại**) | `47613` |
+| 7 | `output_tokens` | `bigint` | token ra theo số của họ | | `3922` |
+| 8 | `pulled_account` | `text` | tài khoản Google dùng để kéo | Giữ lại vì **hai tài khoản cho ra hai thế giới khác nhau**, và sau này không ai nhớ project nào thuộc tài khoản nào | `dinhthinhan1811971@gmail.com` |
+| 9 | `pulled_at` | `timestamp` | thời điểm kéo | | `2026-09-04 23:41` |
+
+### Ba cái bẫy khi đọc số của nhà cung cấp — cả ba đều **đo được**, không phải phòng xa
+
+1. **Tem thời gian là CUỐI ô, không phải đầu ô.** Nên số ở `00:00` thuộc về **ngày hôm trước**. Bộ nạp lùi một giây rồi mới cắt ngày.
+2. **Metric hạn mức trả về HAI chuỗi y hệt nhau**, tách theo nhãn `limit_name` (`PerDay` / `PerMinute`). Cộng cả hai là **nhân đôi** — đây chính là lỗi đã sinh ra con số "lệch 2,19 lần" hoàn toàn giả trong lần đo đầu. Bộ nạp lấy nhánh `PerDay` **và so với nhánh `PerMinute`**, lệch thì dừng, không lặng lẽ chọn một bên.
+3. **`api_request_count` đếm MỌI phương thức API**, còn metric quota chỉ đếm `GenerateContent` theo model. Ngày chạy thật hai phép đo trùng khít (31/08: 41 = 41); ngày thử nghiệm thì lệch (29/08: 3 vs 20). Lệch ở đây là **lưu ý, không phải hỏng**.
+
+Ghi chú: `*_limit` là hạn mức theo `ALIGN_MAX`, **không phải số đếm** — đừng cộng.
+
+---
+
 ## `fact_usage_hourly` — **Lưu lượng theo GIỜ.** Cùng năm chiều khoá như bảng ngày
 
 3.327 dòng · Khoá chính `(hour, agent_id, model_id, account_id, source)` · migration 008, 03/09/2026

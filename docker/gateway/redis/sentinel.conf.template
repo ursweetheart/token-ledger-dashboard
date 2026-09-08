@@ -1,0 +1,59 @@
+# BAN MAU cau hinh Redis Sentinel. entrypoint-sentinel.sh thay
+# __REDIS_PASSWORD__ roi ghi ra /data/sentinel.conf tren volume.
+#
+# SENTINEL TU VIET LAI FILE NAY. Moi lan phat hien master doi, no ghi lai dong
+# `sentinel monitor` va them cac dong `sentinel known-*`. Nen file that BAT BUOC
+# nam tren volume ghi duoc, y het ly do cua redis.conf.template.
+
+port 26379
+
+# Bind moi giao dien BEN TRONG mang compose. Cong 26379 KHONG duoc mo ra host
+# trong docker-compose.yml, nen no khong ra ngoai may.
+bind 0.0.0.0
+protected-mode no
+
+# GIAM SAT BANG IP TINH, KHONG BANG TEN SERVICE.
+#
+# Da di duong ten service truoc va no HONG, do 07/09/2026:
+#
+#   1. Sentinel mac dinh chi nhan IP. Dua ten vao -> "FATAL CONFIG FILE ERROR
+#      ... Can't resolve instance hostname", ba sentinel crash-loop.
+#   2. Bat `resolve-hostnames yes` thi khoi dong duoc, nhung khi giet master
+#      thi DNS cua Docker MAT LUON ten do (container khong con). Sentinel bao
+#      "Failed to resolve hostname 'redis'" lien tuc roi vao `+tilt` -- che do
+#      tu khoa khi nghi ngo bat thuong. O tilt no KHONG chuyen vai.
+#      Ket qua do duoc: flags=s_down,master ma khong he thang cap.
+#
+# Nen hai Redis duoc gan IP TINH trong docker-compose.yml (khoi `networks:` cuoi
+# file), va sentinel giam sat thang IP do. IP tinh thi khong bien mat cung
+# container, nen khong con phu thuoc DNS.
+#
+#   172.20.250.10 = redis (primary ban dau)
+#   172.20.250.11 = redis-replica
+#
+# QUORUM = 2, khong phai 1.
+#
+# Quorum la so sentinel phai CUNG DONG Y rang master da chet thi moi duoc thang
+# cap. Dat 1 thi mot sentinel bi loi mang thoang qua co the tu y thang cap ->
+# hai Redis cung nhan ghi (split-brain), moi instance LiteLLM dem vao mot cai,
+# va han muc bi dem sai theo cach khong phep kiem nao hien co phat hien duoc.
+# Do la trang thai TE HON han truoc khi co Sentinel.
+#
+# 3 sentinel / quorum 2: mat mot cai van quyet duoc, khong cai nao tu quyet duoc.
+sentinel monitor gateway-redis 172.20.250.10 6379 2
+
+# BAT BUOC vi Redis dang bat requirepass. Thieu dong nay thi sentinel KHONG giam
+# sat noi Redis - va no hong IM LANG: tien trinh van len, log van sach,
+# `SENTINEL masters` van tra ve, chi la khong bao gio thang cap duoc.
+sentinel auth-pass gateway-redis __REDIS_PASSWORD__
+
+# Bao lau khong tra loi thi coi la chet. 5 giay: du dai de khong bat nham mot
+# lan GC, du ngan de khong bat nguoi dung cho lau.
+sentinel down-after-milliseconds gateway-redis 5000
+
+# Bao lau moi cho phep thu failover lai neu lan truoc chua xong.
+sentinel failover-timeout gateway-redis 10000
+
+# So ban sao duoc dong bo lai CUNG LUC sau khi thang cap. Dat 1 vi ta chi co
+# mot ban sao; dat cao hon khong mua them gi.
+sentinel parallel-syncs gateway-redis 1

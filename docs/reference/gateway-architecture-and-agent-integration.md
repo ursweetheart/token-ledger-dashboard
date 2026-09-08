@@ -191,6 +191,44 @@ Ba chỗ, thiếu chỗ nào cũng hỏng im lặng:
 > trước**. Thiếu `"3.5 flash lite"` thì `guess_model("gemini/gemini-3.5-flash-lite")` trả về
 > `gemini-3.5-flash` — model khác, đơn giá khác, và **vẫn báo là tìm thấy**.
 
+### Bước 7 — Bốn điều đã đo được ở tuyến đầu, đừng đo lại từ đầu
+
+Rút từ phép đo thật ngày 31/08 khi đưa `dms-feedback` qua Gateway. Bốn điều này đã tốn công
+mới biết; lặp lại tuyến thứ hai mà không nhớ chúng là mất công y hệt.
+
+**① Virtual Key phải cấp MỚI, không sửa được khoá cũ.** LiteLLM chỉ lưu **hash**, không lưu
+chuỗi `sk-…`. Một khoá đã cấp mà thiếu `metadata.tags` thì sửa metadata **là ngõ cụt** — sửa
+xong vẫn không ai gọi được vì không ai còn biết khoá là gì. Ở DMS đã phải cấp khoá mới
+`dms-feedback-tagged` và **giữ nguyên khoá cũ** làm hồ sơ phép đo. Hệ quả cho mai: cấp khoá
+xong phải **chép ngay chuỗi `sk-…` ra chỗ an toàn**, không có lần thứ hai.
+
+**② Tag nằm ở `metadata` của khoá, không phải trường `tags` cấp cao.** Đã truy tới nơi:
+`litellm_pre_call_utils.py:1942` đọc `user_api_key_dict.metadata`. Trường `tags` trong
+response của `/key/generate` là thứ khác và đang `null`; bảng `LiteLLM_VerificationToken`
+**không có cột `tags`**. Khai nhầm chỗ thì im lặng không có tác dụng.
+
+**③ Thiếu tag KHÔNG hỏng hẳn — nó hỏng lác đác.** Đo 8 lượt gọi không mang tag:
+**7/8 thành công, 1/8 trượt** vì rơi vào tuyến sai. Tức **12,5%**. Đây là kiểu hỏng tệ nhất:
+chạy thử vài lượt thấy 200 hết rồi kết luận "xong", trong khi thực tế cứ tám lượt lại sai một.
+**Đừng lấy "gọi thử thấy chạy" làm bằng chứng tag đã đúng.**
+
+**④ Sổ KHÔNG chứng minh được tag lọc đúng.** Cột `tags` và `routing_decision` trong
+`LiteLLM_SpendLogs` đều **rỗng**. Muốn chứng minh phải dùng **phép kiểm âm**: dựng một tuyến
+mồi cùng `model_name`, mang `tags: ["khong-ai-dung"]` và `api_key` cố ý sai, rồi đếm **số lượt
+chạm** tuyến mồi trong log — chứ **không** đếm số lượt thành công. Lý do: `num_retries: 3` sẽ
+thử lại qua tuyến đúng và **che mất** lỗi định tuyến, nên "10/10 thành công" là con số nói dối.
+Đo đúng cách cho ba dấu vết: 10/10 HTTP 200 · đúng 10 dòng SpendLogs mới · `attempted_retries
+= 0` cả 10 dòng · **0 lần chạm tuyến mồi**. Xong nhớ **gỡ tuyến mồi** và triển khai lại.
+
+> **Ràng buộc model cho tuyến kế tiếp.** Gateway đang phục vụ ba bí danh, nhưng
+> `rules.GATEWAY_MODELS` **cố ý** chỉ khai hai (`gemini/gemini-3.6-flash`,
+> `gemini/gemini-3.5-flash-lite`). Bí danh `gemini-flash-preview` trỏ tới
+> `gemini/gemini-3-flash-preview` — `guess_model` sẽ suy nó thành `gemini-3-flash`, tức **gộp
+> bản preview vào bản chính thức khi đơn giá hai bản chưa ai kiểm**, nên nó bị để ngoài có chủ
+> ý và lưu lượng rơi vào bộ đếm `model_chua_khai` (`db/load_gateway.py:337`) — được đếm và in
+> ra, không mất. **Nên agent đem ra thử phải dùng `gemini-flash` hoặc `gemini-flash-lite`.**
+> Muốn dùng `gemini-flash-preview` thì phải chốt đơn giá bản preview trước, đó là việc riêng.
+
 ---
 
 ## 4. Một request đi qua những bước nào
@@ -519,9 +557,32 @@ cập nhật dashboard sẽ xoá sạch dữ liệu Gateway và không nạp l�
 xoá sạch như mọi bảng khác — thiếu nó trong `STEPS` thì bảng theo giờ biến mất sau mỗi lần cập
 nhật, và không lỗi nào báo: nó chỉ là một bảng rỗng.
 
-**`scripts/refresh_gateway.py` CHƯA gọi hai bước mới.** Nó vẫn chỉ chạy `load_gateway.py` +
-`build_usage_daily.py`, nên sau khi refresh thì bảng theo giờ và phân vị Gateway **cũ đi một
-nhịp**. Chưa sửa vì nằm ngoài phạm vi change này — ghi lại để không ai tưởng nó đã đủ.
+**`scripts/refresh_gateway.py` nay chạy đủ BỐN bước** (sửa 03/09/2026 chiều):
+
+```
+   1  load_gateway            fact_call
+   2  build_usage_daily       fact_usage_daily
+   3  build_usage_hourly      fact_usage_hourly
+   4  build_performance --chi-gateway   fact_latency_daily, phan gateway
+```
+
+Trước đó nó chỉ chạy hai bước đầu — nó **không sai lúc viết** (31/08, commit `44997a8`, khi
+đường dẫn Gateway đúng là hai bước), nhưng migration 008 sáng 03/09 thêm hai bảng dẫn xuất nữa
+mà không ai cập nhật nó theo. Hệ quả trong khoảng đó: `/api/usage-hourly` và `/api/performance`
+phục vụ **số cũ** sau mỗi lần refresh, **im lặng**.
+
+**Bước 4 dùng `--chi-gateway`, không dùng chế độ đầy đủ.** Chế độ đầy đủ đọc
+`latency-daily.csv` — một file **cào tay** — và `SystemExit` nếu file vắng mặt. Một script chạy
+`--every 120` mà phụ thuộc file phải cào tay là quả bom hẹn giờ. Chế độ chỉ-Gateway đọc duy
+nhất `fact_call.duration_ms`, và nó tự đếm **mọi nguồn** trong `fact_latency_daily` trước/sau
+rồi dừng hẳn nếu nguồn khác bị đụng — `DELETE ... WHERE source='gateway'` mà quên `WHERE` là
+mất 339 dòng `monitoring`, mà chúng chỉ dựng lại được **nếu CSV còn**.
+
+**Và `audit_db.py` nay canh chính khoảng trống này:** phép kiểm
+`Gateway derived tables are as fresh as fact_call` so **mốc thời gian** của `fact_call` với hai
+bảng dẫn xuất — bắt được **sớm hơn** phép so tổng, vì nó lệch ngay ở lượt gọi đầu tiên của một
+ngày mới. Nó so trên **đúng bộ lọc riêng của từng bảng** (hai bảng dùng hai bộ lọc khác nhau),
+không so `MAX` thô.
 
 **Và khi thêm cột mới vào `fact_call`, phải chạy `load_gateway.py --full`.** `DO UPDATE` chỉ ghi
 đè những dòng bộ nạp **đọc tới**, mà mốc nạp (`watermark`) chỉ lùi 1 giờ. Đo 03/09: chạy trần nạp

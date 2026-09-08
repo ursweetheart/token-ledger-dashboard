@@ -76,6 +76,12 @@ INSERT INTO dim_model_alias (source, raw_name, model_id) VALUES
   ('monitoring', 'gemini-3-flash', 5),
   ('monitoring', 'gemini-3.1-flash-lite', 7),
   ('monitoring', 'gemini-3.5-flash', 8),
+  -- Hai dong duoi them 04/09/2026. Monitoring cua project ma Gateway goi toi
+  -- bao TEN TRAN ('gemini-3.5-flash-lite'), trong khi nguon 'gateway' bao ten
+  -- co tien to nha cung cap ('gemini/gemini-3.5-flash-lite'). Cung mot model,
+  -- hai khong gian ten - dung cai ma bang bi danh sinh ra de xu ly.
+  ('monitoring', 'gemini-3.5-flash-lite', 12),
+  ('monitoring', 'gemini-3.6-flash', 11),
   ('monitoring', 'gemini-embedding-1.0', 9),
   ('monitoring', 'gemini-embedding-2', 10),
   ('gateway', 'gemini/gemini-3.6-flash', 11),

@@ -1,0 +1,25 @@
+# BAN MAU cau hinh Redis BAN SAO. Xem redis.conf.template de biet vi sao dung
+# file thay vi co dong lenh, va vi sao phai vong qua entrypoint.sh de sinh ra.
+
+requirepass __REDIS_PASSWORD__
+masterauth __REDIS_PASSWORD__
+
+# Dong nay CHI DUNG CHO LAN KHOI DONG DAU TIEN.
+#
+# Ke tu khi co Sentinel, day khong con la su that co dinh nua ma la trang thai
+# BIEN DOI: Sentinel se ghi de dong nay (hoac xoa han bang REPLICAOF NO ONE) moi
+# lan doi vai. Do la ly do file nay duoc sinh ra MOT LAN roi thoi -- entrypoint.sh
+# khong ghi de neu /data/redis.conf da ton tai. Sinh lai moi lan khoi dong la tai
+# lap dung cai loi ma ca change nay sinh ra de sua.
+replicaof redis 6379
+
+# Sau khi Sentinel thang no len master, chinh Sentinel se doi dong nay thanh `no`.
+# Neu no van con `yes` sau khi thang cap thi master moi TU CHOI moi lenh ghi:
+# failover thanh cong ve hinh thuc, hong ve thuc chat. Muc 6.1 cua tasks.md kiem
+# dung cho nay.
+replica-read-only yes
+
+appendonly yes
+
+maxmemory 256mb
+maxmemory-policy noeviction

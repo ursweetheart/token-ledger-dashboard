@@ -1,10 +1,11 @@
-# Nhật ký 03/09/2026 — ba change đóng trong một ngày
+# Nhật ký 03/09/2026 — bốn change đóng trong một ngày
 
 Tên file giữ hậu tố `-sang` vì phiên sáng viết trước; phiên chiều nối vào từ mục 10.
 
 **Sáng:** `fill-the-declared-fields-and-log-by-the-hour` (59/59) và
 `answer-what-each-agent-did-on-a-day` (48/48).
-**Chiều:** `extend-the-checks-to-gateway-data` (40/40).
+**Chiều:** `extend-the-checks-to-gateway-data` (40/40) và
+`refresh-every-table-the-gateway-touches` (27/27).
 
 Tiếp theo `soat-stt6-tich-hop-03-09.md`. Đọc nhanh: mục 1, mục 4, mục 7.
 
@@ -410,3 +411,96 @@ Soát bind IP trước khi push thì phát hiện `docker-compose.yml` đang bin
 Commit `9ef9626` của phiên này đưa `docker-compose.yml` vào mà không soát bind IP; nó chỉ nên mang phần `logging`. Đã sửa ở commit `622b52b`.
 
 Nếu đẩy lên với `127.0.0.1` thì dashboard chỉ mở được **trên chính máy chủ** — và hỏng im lặng: container vẫn `healthy`, `docker ps` vẫn đẹp, chỉ là không ai trong mạng nội bộ gọi tới được.
+
+---
+
+# 16. Một khoản nợ có NGÀY SINH cụ thể
+
+Change `refresh-every-table-the-gateway-touches`, **27/27 việc**.
+
+Soát việc "còn treo" sau phiên chiều thì lộ ra: `scripts/refresh_gateway.py` chạy **2 bước**
+trong khi đường dẫn Gateway nay đi qua **4**.
+
+```
+   rebuild_db.py         10 buoc   day du
+   update_dashboard.py   goi rebuild_db.py    ->  KHONG dinh
+   refresh_gateway.py     2 buoc               ->  hut 2 bang dan xuat
+```
+
+**Nó không sai lúc viết.** `refresh_gateway.py` ra đời **31/08** (commit `44997a8`), khi đường
+dẫn Gateway đúng là hai bước. Migration 008 **sáng 03/09** thêm hai bảng dẫn xuất nữa —
+`fact_usage_hourly` và phần gateway của `fact_latency_daily` — mà không ai cập nhật nó theo.
+
+Đây là loại nợ đáng ghi nhất: **nó có ngày sinh, và nó sinh ra từ chính việc mình vừa làm.**
+
+## 17. Cách sửa hiển nhiên là cách sửa sai
+
+Thêm hai bước vào `STEPS`. Đo ra thì chỉ **một** trong hai an toàn:
+
+```
+   db/build_usage_hourly.py   921 ms   doc DATABASE      -> them thang
+   db/build_performance.py    394 ms   doc FILE CAO TAY  -> KHONG duoc them nguyen ban
+```
+
+`build_performance.py:100` **dừng hẳn** nếu thiếu `latency-daily.csv` — đo hôm đó file ấy **cũ
+4 ngày**. Thêm nó vào script chạy `--every 120` là đặt quả bom hẹn giờ ở nơi không ai nhìn.
+
+**May là không cần đến nó.** Đếm bốn chỗ nhắc `LATENCY_CSV`: dòng 44 (hằng số) và 100/102/108
+— **cả ba trong `load_latency()`**. `load_gateway_latency()` nhắc **0 lần**.
+
+Nên: `build_usage_hourly` vào thẳng; `build_performance` nhận cờ `--chi-gateway` chỉ làm hai
+việc — `DELETE ... WHERE source='gateway'` rồi gọi lại **chính** `load_gateway_latency()`.
+
+Chứng minh bằng cách đổi tên tạm CSV:
+
+```
+   che do day du   rc=1   (dung han, thong bao ro)
+   --chi-gateway   rc=0   (chay sach)
+```
+
+## 18. Chỗ nguy hiểm nhất, và vì sao đếm một nguồn là chưa đủ
+
+`fact_latency_daily`: **monitoring 339 · gateway 1**. Quên `WHERE` là mất 339 dòng monitoring
+— mà chúng **chỉ dựng lại được nếu CSV còn**, tức phục hồi phụ thuộc đúng cái file vừa tránh
+phụ thuộc.
+
+**Chỉ đếm gateway thì một lệnh `DELETE` mất `WHERE` VẪN cho kết quả "đúng"** — gateway vẫn ra
+1 dòng sau khi nạp lại. Nên `chi_gateway()` tự đếm **mọi nguồn** trước/sau và `rollback` nếu
+nguồn khác đổi.
+
+## 19. Phép kiểm bắt sớm hơn phép so tổng
+
+`Hourly totals match daily totals` **bắt được** khoảng trống này, nhưng bắt **muộn** — chỉ khi
+tổng đã lệch. Mốc **thời gian** lệch sớm hơn: ngay ở lượt gọi đầu tiên của một ngày mới.
+
+Thêm `Gateway derived tables are as fresh as fact_call`. Hai tinh tế:
+
+- **So trên tập dòng mà tầng tổng hợp NHẬN**, không so `MAX` thô — nếu ngày mới nhất chỉ có
+  lượt hỏng thì `MAX` thô lệch **hợp lệ**, và ta vừa thêm một báo động giả.
+- **Hai bảng dùng hai bộ lọc KHÁC NHAU**, không dùng chung một câu:
+  `build_usage_hourly` lọc `outcome='success' · model_id IS NOT NULL · cache_hit IS NOT TRUE`;
+  `load_gateway_latency` lọc `duration_ms IS NOT NULL · cache_hit IS NOT TRUE` (**không** lọc
+  `outcome` — có chủ ý).
+
+**Cảnh báo cho người sửa sau:** đo 03/09, cả `MAX` thô lẫn `MAX` đã lọc đều ra `2026-08-31`
+(3 lượt hỏng lúc 02:27, thành công kéo tới 10:17). **Số liệu hôm đó KHÔNG phân biệt được hai
+cách cài.** Phải đọc bộ lọc, không dựa vào phép chạy thử.
+
+Nghiệm thu bằng **tái tạo**: xoá 5 dòng gateway khỏi `fact_usage_hourly` → phép kiểm **HỎNG**
+đúng chỗ, kèm cách chữa. Chạy `refresh_gateway.py` → `0 -> 5`, xanh trở lại.
+
+## 20. Nghiệm thu
+
+```
+   chu ky refresh   0,89 s -> 1,54 s   (uoc luong ~1,8 s, do that THAP HON)
+   refresh 4/4 buoc · bao cao du BON bang (truoc chi hai)
+   audit_db.py      73 kiem · 66 dat · 7 luu y · 0 hong   (moc 72 · 65 · 7 · 0)
+   check_api.py     31 · 31 · 0 · 0                        khong doi
+   rebuild_db.py    10 buoc                                khong doi mot chu
+   fact_latency_daily  monitoring 339 · gateway 1          khong doi
+   chay hai lan     so khong doi
+   moc 1.1          KHOP het
+```
+
+Dòng tóm tắt của `refresh_gateway.py` nay in **bốn** bảng thay vì hai — và chính nó làm việc
+chữa ở mục 19 nhìn thấy được: `fact_usage_hourly 0 -> 5`.

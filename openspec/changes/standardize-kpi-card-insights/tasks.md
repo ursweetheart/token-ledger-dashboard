@@ -1,3 +1,17 @@
+> **RÀ SOÁT 04/09/2026 — đọc trước khi làm bất kỳ ô nào.** Change này soạn 22/07/2026,
+> trước khi dashboard chuyển sang chỉ đọc database. Ba điều đã đo lại:
+>
+> - **Số thẻ đã trôi 9 → 8.** Tab Tổng quan hiện có 8 thẻ (`index.html:505-554`), không
+>   phải 9 như mọi ô trong file này viết. Đếm lại trước khi trích dẫn con số đó.
+> - **Nửa ô 1.3 đã xong, nửa còn lại là lỗi đang sống.** Số giả đã gỡ — `deltaBaseline()`
+>   trả `mock:false` ở cả hai nhánh và tham số `mockFactor` không còn được dùng. Nhưng
+>   `app.js:1095` trả về `{v:0}` khi thiếu kỳ nền, tức **gộp “chưa có kỳ trước” vào “kỳ
+>   trước bằng 0”** — đúng thứ ô 1.3 dặn phải phân biệt.
+> - **Vế latency của ô 5.4 đã xong.** `app.js:3548` hiện `A.latAvailable ? ... : chuaCo`,
+>   không còn in `0.0 s`. Nhưng ô 2.2 (“ngừng hiển thị p95 khi nguồn không hỗ trợ”) nay
+>   **cần xét lại**: migration 010 (03/09) dựng `latency_resolved`, p95 Gateway tính chính
+>   xác từ `duration_ms` thô, nên gỡ p95 bây giờ là gỡ một phép đo có thật.
+
 ## 1. Insight Data Model
 
 - [ ] 1.1 Tạo cấu trúc view-model chung cho value, unit, comparison, direction, semantic status, driver, freshness và definition
