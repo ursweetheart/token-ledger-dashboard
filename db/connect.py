@@ -80,8 +80,21 @@ DEFAULT_DSN = os.environ.get("TOKEN_LEDGER_DSN") or (
 # VÌ SAO KHÔNG GỘP VÀO `token_ledger_v2` (chốt 31/08/2026): LiteLLM tự chạy
 # migration bằng Prisma. Gộp nghĩa là mỗi lần nâng phiên bản nó có quyền ALTER
 # ngay trong database chứa dữ liệu dashboard. Cái giá phải trả là PostgreSQL
-# không cho JOIN xuyên database - `postgres_fdw` và `dblink` đều CHƯA cài - nên
-# db/load_gateway.py mở HAI kết nối và ánh xạ ở tầng Python.
+# không cho JOIN xuyên database, nên db/load_gateway.py mở HAI kết nối và ánh xạ
+# ở tầng Python.
+#
+# `postgres_fdw` và `dblink` CHƯA CÀI - nhưng CÓ SẴN trong ảnh postgres, đo
+# 09/09/2026 (fdw 1.1, dblink 1.2; `pg_cron` thì không có). Câu cũ ở đây chỉ ghi
+# "chưa cài", dễ đọc thành "không có".
+#
+# Đường fdw đã được ĐO LÀ CHẠY ĐƯỢC rồi VẪN LOẠI - đọc xuyên database qua vai
+# `gateway_readonly` được, vai đó chặn ghi thật, và fdw còn đẩy điều kiện lọc
+# xuống nguồn. Lý lẽ loại nằm ở
+# openspec/changes/let-the-gateway-ledger-arrive-by-itself/design.md; tóm lại:
+# nó buộc viết lại bằng SQL toàn bộ tri thức đang nằm trong load_gateway.py, bảng
+# ngoại lệch schema thì `count(*)` VẪN chạy sạch nên phép kiểm dễ báo xanh sai, và
+# nó không giải được vấn đề thật (là "không ai chạy", chứ không phải "chép chậm").
+# Đừng đề xuất lại từ đầu - bắt đầu từ số đo trong design.md ấy.
 #
 # Vai `gateway_readonly` chỉ SELECT được đúng một bảng `LiteLLM_SpendLogs`, và
 # mang `default_transaction_read_only = on`. Xem docker/read-only-gateway.sql.

@@ -105,7 +105,65 @@ def dem(dsn: str) -> tuple[int, int, int, int, int]:
         cn.close()
 
 
-def mot_luot(dsn: str, im_lang: bool) -> int:
+def ghi_nhip_tim(dsn: str, so_dong: int, nhip: int) -> None:
+    """Ghi dau moc "luot lam moi nay da chay xong" vao `ref_load_run`.
+
+    VI SAO CAN, va vi sao khong the suy ra tu du lieu (do 09/09/2026)
+    ----------------------------------------------------------------
+    Nhin vao `fact_call` thi HAI trang thai duoi day trong Y HET NHAU:
+
+        dong gateway moi nhat cach day 3 tieng, vi KHONG AI GOI
+        dong gateway moi nhat cach day 3 tieng, vi DUONG NAP DA CHET
+
+    Cai thu nhat binh thuong, cai thu hai la su co. Khong con so nao trong
+    `token_ledger_v2` tach duoc chung, vi ca hai deu la "khong co dong moi".
+    Nhip tim gia di theo DONG HO, nen no tach duoc: nhip tim tuoi + khong co
+    dong moi = khong ai goi; nhip tim cu = duong nap chet.
+
+    CHI GOI KHI CA BON BUOC DA XONG. Ghi som mot buoc la noi doi: nhip tim se
+    tuoi trong khi so dang thieu du lieu.
+
+    KHONG DUOC LAM CHET CA LUOT LAM MOI. Nhip tim la thu de CHAN DOAN; hong noi
+    nay khong duoc keo do viec nap du lieu that. Nhung cung KHONG duoc nuot lang:
+    nhip tim khong ghi duoc ma khong ai biet thi phep kiem do tre se doc mot moc
+    cu va bao dong gia.
+
+    `nhip` la so giay giua hai luot cua CHINH tien trinh nay (0 = chay mot lan roi
+    thoat). Ghi no vao so chu khong de moi ben doc tu doan: nguong cua phep kiem
+    do tre suy TU nhip, va neu moi tien trinh doc mot bien moi truong rieng thi hai
+    ben lech nhau -> bao dong gia. Xem migration 012, cot `every_seconds`.
+    """
+    try:
+        cn, _ = connect.open_db(dsn)
+    except Exception as e:                        # noqa: BLE001
+        print(f"  CANH BAO: khong mo duoc ket noi de ghi nhip tim: {type(e).__name__}")
+        return
+    try:
+        with cn.cursor() as cur:
+            # `now() AT TIME ZONE 'Asia/Ho_Chi_Minh'` -- dong ho cua DATABASE, gio
+            # VN. KHONG dung datetime.now() cua Python: container nay chay UTC
+            # (do 09/09/2026) con `fact_call.ts_local` la gio VN, nen lay dong ho
+            # container se lech DUNG 7 GIO va mot nhip tim vua ghi se trong nhu
+            # da chet 7 tieng.
+            cur.execute("""
+                INSERT INTO ref_load_run (source, last_success_at, rows_after,
+                                          written_by, every_seconds)
+                VALUES ('gateway', now() AT TIME ZONE 'Asia/Ho_Chi_Minh', %s,
+                        'scripts/refresh_gateway.py', %s)
+                ON CONFLICT (source) DO UPDATE
+                   SET last_success_at = EXCLUDED.last_success_at,
+                       rows_after      = EXCLUDED.rows_after,
+                       written_by      = EXCLUDED.written_by,
+                       every_seconds   = EXCLUDED.every_seconds""",
+                        (so_dong, nhip or None))
+        cn.commit()
+    except Exception as e:                        # noqa: BLE001
+        print(f"  CANH BAO: khong ghi duoc nhip tim: {type(e).__name__}: {e}")
+    finally:
+        cn.close()
+
+
+def mot_luot(dsn: str, im_lang: bool, nhip: int = 0) -> int:
     truoc = dem(dsn)
     for nhan, duong_dan, them in STEPS:
         # encoding PHAI dat tuong minh: mac dinh cua subprocess la codepage cua
@@ -125,6 +183,7 @@ def mot_luot(dsn: str, im_lang: bool) -> int:
                     print(luong.rstrip())
             return r.returncode
     sau = dem(dsn)
+    ghi_nhip_tim(dsn, sau[0], nhip)
 
     print(f"  fact_call gateway  {truoc[0]:>6} -> {sau[0]:<6} (+{sau[0] - truoc[0]})"
           f"  | token {truoc[1]:,} -> {sau[1]:,}")
@@ -144,14 +203,14 @@ def main() -> int:
     args = p.parse_args()
 
     if not args.every:
-        return mot_luot(args.db, args.quiet)
+        return mot_luot(args.db, args.quiet, 0)
 
     print(f"Looping every {args.every}s. Ctrl-C to stop.")
     while True:
         # Bat CA loi cua dem(): database co the dang khoi dong lai, va mot vong
         # lap chet vi mot luot hong la mat luon co che tu dong.
         try:
-            ma = mot_luot(args.db, True)
+            ma = mot_luot(args.db, True, args.every)
         except Exception as exc:
             print(f"  ERROR: {type(exc).__name__}: "
                   f"{str(exc).strip().splitlines()[0]}")

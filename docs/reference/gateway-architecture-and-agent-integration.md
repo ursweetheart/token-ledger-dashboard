@@ -531,6 +531,89 @@ trông y hệt "chưa có lưu lượng".
 `scripts/rebuild_db.py` đã có bước `load_gateway.py` ở vị trí **6/9**. **Bỏ bước đó thì mỗi lần
 cập nhật dashboard sẽ xoá sạch dữ liệu Gateway và không nạp lại** — không lỗi nào báo.
 
+### Nay có dịch vụ tự làm mới — đổi 09/09/2026
+
+Câu "một lệnh" ở trên **nay là đường dự phòng**, không còn là đường chính. Dịch vụ
+`ledger-refresh` (profile `refresh`) chạy đúng lệnh ấy theo nhịp:
+
+```bash
+   docker compose --profile refresh up -d      # nhip mac dinh 120 giay
+```
+
+**Vì sao thêm.** Đo 09/09/2026, trước khi có dịch vụ này:
+
+```
+   LiteLLM_SpendLogs                 444 dong, moi nhat 08/09 23:55
+   fact_call WHERE source='gateway'   41 dong, moi nhat 31/08 10:17
+   -> tre 8 ngay 13 gio 38 phut, va KHONG mot dau hieu nao bao la dang tre
+```
+
+Nghiệm thu đầu-cuối: gọi một lượt thật qua Gateway, **không chạy lệnh nào**, dòng vào
+`fact_call` sau **73 giây**.
+
+**Nhịp 120 giây, ngưỡng 7 phút.** Một chu kỳ đo được **2.348 ms** trên 444 dòng nguồn
+(09/09/2026) — 2% của 120 giây. Con số 0,9 giây ghi ở trên là của 31/08 khi đường nạp mới
+có hai bước; 1,8 giây là của 03/09 với 41 dòng. **Đo lại khi số dòng tăng đáng kể**, đừng
+chép con số cũ. Đổi nhịp bằng `REFRESH_EVERY_SECONDS` trong `.env`; ngưỡng của phép kiểm
+tự suy theo (`3 × nhịp + 60s`), không phải sửa hai chỗ.
+
+**KHÔNG chạy `refresh_gateway.py` bằng tay trong lúc dịch vụ đang chạy.**
+`build_usage_daily.py` **xoá sạch `fact_usage_daily` rồi dựng lại**, nên hai lượt chồng
+nhau là nguy hiểm. Chế độ `--every` ngủ giữa hai lượt của **cùng một** tiến trình nên tự nó
+không chồng; rủi ro nằm ở việc chạy tay song song. Muốn chạy tay thì
+`docker stop token-ledger-refresh` trước.
+
+**SỬA MÃ PYTHON THÌ PHẢI `--build`.** `docker/api.Dockerfile` và `docker/tools.Dockerfile`
+**COPY** mã nguồn vào ảnh, không mount. `docker compose up -d <dịch vụ>` khởi động lại
+container nhưng giữ **ảnh cũ** — thay đổi không tới container, và triệu chứng là "code mới
+không có tác dụng", im lặng, không lỗi nào. Đã vấp hai lần ngày 09/09. Kiểm bằng:
+
+```bash
+   docker exec token-ledger-api grep -c ref_load_run /app/backend/store.py
+```
+
+### Biết được số đang cũ — nhịp tim, thêm 09/09/2026
+
+Nhìn vào `fact_call` thì **hai** trạng thái dưới đây trông y hệt nhau:
+
+```
+   dong gateway moi nhat cach day 3 tieng, vi KHONG AI GOI        <- binh thuong
+   dong gateway moi nhat cach day 3 tieng, vi DUONG NAP DA CHET   <- su co
+```
+
+Bảng `ref_load_run` (migration 012) giữ dấu mốc lượt làm mới thành công gần nhất, nên nó
+già đi theo **đồng hồ** kể cả khi không ai gọi — tách được hai trạng thái ấy. `/api/health`
+phát `gateway_stale` (hoặc `gateway_refresh_never_ran`) ở mức `high`.
+
+Nhịp tim ghi **chỉ khi cả bốn bước xong**; ghi sớm một bước là nói dối. Hai bên đều dùng
+`now() AT TIME ZONE 'Asia/Ho_Chi_Minh'` — đồng hồ của **database**, không của container:
+container chạy UTC, lấy đồng hồ container thì tuổi nhịp tim lệch đúng 7 giờ.
+
+### Đã đo và loại: đọc xuyên database bằng `postgres_fdw`
+
+Hướng "bỏ hẳn bước chép, cho dashboard đọc thẳng sổ Gateway" **đã được đo trên máy thật**
+09/09/2026 (trong database dùng-rồi-bỏ, đã `DROP`), và **chạy được**:
+
+| Điều kiểm | Kết quả |
+|---|---|
+| `postgres_fdw` có trong ảnh postgres | **có** (1.1), `dblink` cũng có; `pg_cron` **không** |
+| Đọc xuyên database qua vai `gateway_readonly` | **được**, đủ 444 dòng |
+| Vai chỉ-đọc chặn ghi | **có** — `INSERT`/`DELETE` đều `cannot execute ... in a read-only transaction` |
+| Đẩy điều kiện lọc xuống nguồn | **có** — `Remote SQL` mang cả lọc ngày lẫn lọc `status` |
+| Tra tag ra agent bằng SQL | **được**, khớp ngữ nghĩa Python (0 / 1 / nhiều tag) |
+| Chi phí trên 444 dòng | 2,4 ms so với 0,9 ms bảng cục bộ |
+
+**Vẫn loại**, ba lý do: (1) phải viết lại bằng SQL toàn bộ tri thức đang nằm trong
+`db/load_gateway.py` — `cache_hit` là TEXT ghi chuỗi `'None'`, `request_duration_ms = 0`
+phải thành NULL, đọc `completion_tokens_details` chứ không phải `prompt_tokens_details`
+(đọc nhầm vẫn ra số, chỉ là số của chiều ngược lại); (2) bảng ngoại là **ảnh chụp** cấu
+trúc, Prisma đổi schema là lệch — và `count(*)` trên bảng ngoại đã lệch **vẫn chạy sạch**,
+nên phép kiểm kiểu "truy vấn được là ổn" sẽ báo xanh trong khi cấu trúc đã sai; (3) nó
+**giải sai bài toán** — vấn đề không phải "chép chậm" mà là "không ai chạy", và fdw vẫn
+phải dựng lại ba bảng dẫn xuất nên vẫn cần một thứ chạy định kỳ.
+
+Ghi lại đầy đủ vì hướng này sẽ được đề xuất lại; lần sau bắt đầu từ số đo, đừng từ đầu.
+
 ### Hai nhánh mới, thêm 03/09/2026 (migration 008)
 
 ```

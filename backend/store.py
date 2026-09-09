@@ -573,6 +573,48 @@ def health(cn) -> dict:
     estimated = one("SELECT COUNT(*) FROM usage_resolved WHERE token_estimated = 1")
     conflicts = one("SELECT COUNT(*) FROM account WHERE unit_conflict = 1")
 
+    # NHỊP TIM CỦA ĐƯỜNG NẠP GATEWAY.
+    #
+    # Không suy ra được từ `fact_call`: dòng gateway mới nhất cách đây 3 tiếng có
+    # thể là "không ai gọi" (bình thường) hoặc "đường nạp đã chết" (sự cố), và hai
+    # trạng thái ấy trông y hệt nhau nếu chỉ nhìn dữ liệu. `ref_load_run` giữ dấu
+    # mốc theo ĐỒNG HỒ nên tách được chúng. Xem migration 012.
+    #
+    # `now() AT TIME ZONE 'Asia/Ho_Chi_Minh'` — cùng hệ quy chiếu với bên ghi
+    # (scripts/refresh_gateway.py). Lấy đồng hồ của DATABASE, không lấy của tiến
+    # trình: hai bên lệch múi giờ thì tuổi nhịp tim sai đúng 7 giờ.
+    # BỌC try/except, và ROLLBACK trong except — cả hai đều bắt buộc.
+    #
+    # ĐO 09/09/2026: chạy backend này trên một database CHƯA có migration 012 thì
+    # `/api/health` trả **HTTP 500**, không phải một cảnh báo. Đó là kết cục tệ
+    # nhất có thể: `/api/health` chính là chỗ báo có gì sai, nên nó sập kéo theo
+    # MỌI cảnh báo khác — độ phủ người dùng, token ước tính, xung đột đơn vị đều
+    # biến mất cùng lúc. Ồn ào là đúng; im lặng là sai; nhưng "sập cả trang" thì
+    # che mất nhiều thứ hơn nó nói ra.
+    #
+    # `rollback()` vì psycopg2 KHÔNG chạy autocommit ở đây: một câu lỗi làm HỎNG
+    # CẢ GIAO DỊCH, và mọi câu sau đó sẽ ném "current transaction is aborted".
+    # Hôm nay câu này là câu CUỐI trước `return` nên chưa kéo ai chết theo — nhưng
+    # ai thêm một truy vấn phía dưới sẽ dính, và triệu chứng sẽ không hề trỏ về
+    # đây. Rollback trên một kết nối chỉ-đọc thì vô hại.
+    #
+    # `None` = KHÔNG đọc được (thiếu bảng, thiếu quyền). `[]` = đọc được nhưng
+    # chưa có dòng nào. Hai chuyện khác nhau, và chúng cho hai cảnh báo khác nhau.
+    try:
+        heartbeat = _rows(cn, """
+            SELECT last_success_at,
+                   EXTRACT(EPOCH FROM (now() AT TIME ZONE 'Asia/Ho_Chi_Minh'
+                                       - last_success_at))::bigint AS age,
+                   every_seconds
+              FROM ref_load_run WHERE source = 'gateway'""")
+        heartbeat_error = None
+    except Exception as e:                        # noqa: BLE001
+        try:
+            cn.rollback()
+        except Exception:                         # noqa: BLE001
+            pass
+        heartbeat, heartbeat_error = None, type(e).__name__
+
     warnings = []
     if total:
         pct = 100.0 * attributed / float(total)
@@ -620,6 +662,43 @@ def health(cn) -> dict:
             "code": "missing_tokens", "level": "low", "value": missing_tokens,
             "message": f"{missing_tokens} dòng có số lượt nhưng không có token —"
                        f" model embedding, Cloud Monitoring không đo token cho chúng."})
+    # Ngưỡng suy TỪ nhịp làm mới, và nhịp lấy từ `ref_load_run.every_seconds` —
+    # nhịp mà tiến trình làm mới THỰC SỰ đang chạy, do chính nó ghi vào. KHÔNG đọc
+    # biến môi trường: mỗi tiến trình sẽ thấy một giá trị khác, và API thì không có
+    # cách nào biết dịch vụ làm mới đang chạy nhịp nào. Cùng công thức với
+    # `scripts/audit_db.py` (3 × nhịp + 60s biên) — xem `doc_nhip()` ở đó.
+    #
+    # `every_seconds` là NULL nếu lượt làm mới cuối chạy một lần rồi thoát (không
+    # phải chế độ vòng lặp). Khi đó không có nhịp nào để suy, nên lấy mặc định.
+    refresh_interval = int(heartbeat[0]["every_seconds"] or 120) if heartbeat else 120
+    stale_threshold = 3 * refresh_interval + 60
+    if heartbeat_error:
+        warnings.append({
+            "code": "gateway_heartbeat_unreadable", "level": "high", "value": 0,
+            "message": f"Không đọc được nhịp tim của đường nạp Gateway"
+                       f" ({heartbeat_error}) — bảng `ref_load_run` thiếu hoặc không có"
+                       f" quyền đọc. Database có thể chưa chạy migration 012."
+                       f" Hệ quả: KHÔNG biết được số của Gateway đang mới hay cũ."})
+    elif not heartbeat:
+        warnings.append({
+            "code": "gateway_refresh_never_ran", "level": "high", "value": 0,
+            "message": "Đường nạp sổ Gateway CHƯA từng chạy thành công lần nào."
+                       " Số của Gateway trên màn hình có thể thiếu, và phần thiếu"
+                       " KHÔNG nhìn ra được — một bảng số cũ trông y hệt một bảng"
+                       " số đầy đủ."})
+    elif int(heartbeat[0]["age"] or 0) > stale_threshold:
+        age_s = int(heartbeat[0]["age"])
+        warnings.append({
+            "code": "gateway_stale", "level": "high", "value": age_s,
+            # Nêu CẢ GIÂY, không chỉ phút. `age_s // 60` làm tròn XUỐNG, nên
+            # 430 giây in ra "7 phút" trong khi ngưỡng cũng in "7 phút" — người
+            # đọc sẽ tưởng nó chưa quá ngưỡng, đúng lúc nó vừa quá.
+            "message": f"Sổ Gateway chưa được làm mới trong {age_s // 60} phút"
+                       f" {age_s % 60} giây (ngưỡng {stale_threshold} giây)."
+                       f" Đường nạp có thể đã dừng —"
+                       f" số của Gateway đang CŨ, còn số của các nguồn khác thì"
+                       f" không. Lần cuối làm mới thành công:"
+                       f" {heartbeat[0]['last_success_at']}."})
     if conflicts:
         warnings.append({
             "code": "unit_conflict", "level": "low", "value": conflicts,
