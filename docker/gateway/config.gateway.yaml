@@ -10,25 +10,60 @@ model_list:
   # Tuyen dang co khoa. Ke hoach yeu cau 8 tuyen / 8 project; hom nay moi co
   # khoa Google AI Studio, nen chi khai nhung tuyen GOI DUOC THAT.
   #
-  # KHONG khai gemini-2.5-flash: 26/08 Google tra 404 "no longer available to
-  # new users. Please update your code to use models/gemini-3.6-flash" -- du no
-  # dang la model nang nhat he thong (401.227.817 token = 46,2%).
+  # KHONG khai gemini-2.5-flash NHU MOT DEPLOYMENT: 26/08 Google tra 404 "no
+  # longer available to new users. Please update your code to use
+  # models/gemini-3.6-flash" -- du no dang la model nang nhat he thong
+  # (401.227.817 token = 46,2%).
+  #
+  # Nhung CAI TEN do VAN duoc mo, qua `model_group_alias` o router_settings: agent
+  # goi `gemini-2.5-flash` thi roi vao nhom `gemini-flash`. Ten cu song, model that
+  # thi khong bao gio duoc goi. Hai chuyen khac nhau, dung lan.
   # KHONG khai gemini-2.0-flash: da rut khoi API (9,5% luu luong cu).
   # -------------------------------------------------------------------------
   - model_name: gemini-flash
     litellm_params:
       model: gemini/gemini-3.6-flash
       api_key: os.environ/KEY_GOOGLE_AI_STU
-      # Han muc GD5 dong 14. Dat theo tung tuyen, Router tru dan tren Redis nen
-      # hai instance dung CHUNG mot bo dem -- khong phai moi may mot bo.
-      rpm: 60
+      # Tag cua agent Phan Loai Du Lieu CRM (code `crm-feedback` trong dim_agent).
+      # BAT BUOC, khong phai tuy chon: db/load_gateway.py:238 `resolve_agent()` nhan
+      # ra agent bang cach doi chieu request_tags voi `code` cua agent. Khoa khong
+      # mang tag thi dong ghi so KHONG gan duoc vao agent nao.
+      #
+      # MOT TAG MOT TUYEN. Dung nhet nhieu tag agent vao cung mot tuyen du
+      # `tag_filtering_match_any` mac dinh True (router.py:431) cho phep khop:
+      # router.py:3292 tron MOI tag cua deployment vao metadata, nen moi dong so di
+      # qua tuyen do se mang CA HAI tag dinh danh, va load_gateway.py:238
+      # `resolve_agent()` gap hai tag thi khong phan giai duoc -- dong bi dem vao
+      # `bo_nhieu_tag` chu khong gan duoc agent nao. Da kiem 08/09 bang cach doc ma
+      # nguon sau khi thay dong so mang tag `crm-feedback` du goi bang master key
+      # KHONG co tag: tag trong so den tu TUYEN, khong tu khoa.
+      #
+      # He qua khi agent thu hai cung can `gemini/gemini-3.6-flash`: no phai co
+      # TUYEN RIENG mang tag rieng, tuc la bo dem rpm thu hai. Con dung chung mot
+      # khoa Google thi phai CHIA 15 (vi du 7 va 8); khi moi agent mot project rieng
+      # thi moi project co 15 rieng nen de 15 moi tuyen la dung.
+      tags: ["crm-feedback"]
+      # 15 chu KHONG phai 60. Ke hoach GD5 dong 14 ghi 60, nhung han muc THAT cua
+      # Google free tier la 15/phut/model/project (quota
+      # GenerateRequestsPerMinutePerProjectPerModel-FreeTier). De 60 thi Router
+      # tuong con quota va cu day request vao 429.
+      #
+      # Dat theo tung tuyen, Router tru dan tren Redis nen hai instance dung CHUNG
+      # mot bo dem -- khong phai moi may mot bo.
+      #
+      # CANH BAO khi them tuyen: bo dem khoa theo `{id_deployment}:{ten_model_that}`
+      # (lowest_tpm_rpm_v2.py:77), tuc la MOI DEPLOYMENT MOT BO DEM RIENG. Hai
+      # deployment tro cung mot model that + cung mot khoa se cho di 15+15=30 trong
+      # khi Google chi cho 15. Muon them mot ten goi khac thi dung
+      # `model_group_alias` o router_settings, DUNG khai them deployment.
+      rpm: 15
       tpm: 1000000
 
   - model_name: gemini-flash-preview
     litellm_params:
       model: gemini/gemini-3-flash-preview
       api_key: os.environ/KEY_GOOGLE_AI_STU
-      rpm: 60
+      rpm: 15
       tpm: 1000000
 
   # Model Google chi sang khi tu choi gemini-2.5-flash-lite (404, do 29/08 bang
@@ -37,7 +72,7 @@ model_list:
     litellm_params:
       model: gemini/gemini-3.5-flash-lite
       api_key: os.environ/KEY_GOOGLE_AI_STU
-      rpm: 60
+      rpm: 15
       tpm: 1000000
       # Truc chon KHOA PROJECT khi len 8 tuyen. Virtual key mang tag nao thi
       # request cua no chi roi vao deployment mang dung tag do -- nho vay hoa don
@@ -71,6 +106,52 @@ general_settings:
   # khoa nay khong mua them gi cho viec ghi.
   forward_client_headers_to_llm_api: false
 
+  # Bao lau mot khoa da tra thanh cong con duoc dung lai ma khong hoi database.
+  # Mac dinh 60 giay (constants.py:1632, do truoc khi doi: TTL=56 tren Redis) --
+  # qua ngan, chi cuoi duoc mot phut Postgres chet.
+  #
+  # 300 giay: du de di qua mot lan khoi dong lai Postgres (do 08/09: 7,3 giay tu
+  # `docker start` toi `healthy`) va mot doan bao tri ngan.
+  #
+  # DANH DOI phai biet: trong 300 giay do, mot khoa BI XOA THANG TRONG DATABASE
+  # van goi duoc. Neu thu hoi khoa qua API cua proxy thi khong sao -- no day thong
+  # bao huy qua pubsub cua chinh coordination_redis (auth_checks.py:2513), moi
+  # instance bo cache ngay. Chi thao tac SQL tay moi phai cho het TTL.
+  user_api_key_cache_ttl: 300
+
+  # --- REDIS DUNG CHUNG CHO PROXY 08/09/2026 ------------------------------
+  #
+  # Khoi nay la DIEU KIEN BAT BUOC de `litellm_settings.enable_redis_auth_cache`
+  # co tac dung. Do duoc 08/09: bat mot minh khoa do thi KHONG co gi xay ra, va
+  # khong co ca mot dong log nao noi la khong xay ra.
+  #
+  # Ly do o proxy_server.py: khoa `enable_redis_auth_cache` chi duoc doc trong
+  # `_init_cache` (dong 4534) va `_init_coordination_redis` (dong 4500).
+  # `_init_cache` chi chay khi co khoi `litellm_settings.cache` -- ma ta CO Y
+  # khong bat cache cau tra loi (xem ghi chu o litellm_settings). Con
+  # `_init_coordination_redis` chay vo dieu kien luc nap cau hinh (dong 4841).
+  # Nen day la duong duy nhat con lai.
+  #
+  # KIEM CHUNG BANG HANH VI, KHONG BANG LOG: sau mot luot goi virtual key,
+  # `redis-cli dbsize` phai moc them khoa cache khoa. Truoc khi co khoi nay,
+  # dbsize chi len 4 va toan bo la rpm/tpm cua Router.
+  #
+  # DI QUA SENTINEL, khong tro thang vao IP tinh: mat master thi khoi nay theo
+  # master moi y het Router. Sentinel khong dat requirepass rieng nen khong can
+  # `sentinel_password`; `password` duoi day la mat khau cua chinh Redis.
+  #
+  # PHAM VI ANH HUONG da soat: ngoai cache khoa, `redis_usage_cache` con duoc bo
+  # gioi han request song song dung (proxy/utils.py:680) -- truoc day moi instance
+  # dem rieng, gio dem chung, tuc la DUNG hon. Kiem 08/09: ca hai virtual key
+  # deu khong dat tpm/rpm/max_parallel_requests/max_budget, nen hom nay bo gioi
+  # han khong co gi de thi hanh. Cac cho khac (SSO, MCP, health dung chung,
+  # dong bo cau hinh qua pubsub) deu la tinh nang ta khong dung.
+  # KHONG cho nao doi duong ghi tien -- tien van di vao Postgres qua trinh ghi lo.
+  coordination_redis:
+    sentinel_nodes: [["sentinel-1", 26379], ["sentinel-2", 26379], ["sentinel-3", 26379]]
+    service_name: gateway-redis
+    password: os.environ/REDIS_PASSWORD
+
 litellm_settings:
   drop_params: true
 
@@ -81,6 +162,36 @@ litellm_settings:
   # Thieu khoa nay = ghi thang cau hoi nguoi dung vao database dang chua 927
   # email nhan vien that.
   turn_off_message_logging: true
+
+  # [BAT 4/4] Cache khoa ao dat tren Redis thay vi bo nho rieng tung tien trinh.
+  #
+  # DO DUOC 08/09/2026 bang dien tap giet Postgres (4 luot, tat tu 15s toi 150s):
+  #   - Postgres chet -> virtual key tra 503 no_db_connection; master key van 200
+  #     vi no so sanh trong bo nho, khong can database. Moi agent that deu dung
+  #     virtual key, nen thuc te la dung han toan bo luu luong that.
+  #   - Cache la CUA TUNG INSTANCE: ba luot goi lien tiep cung mot khoa cho ket
+  #     qua `503 200 503`, vi nginx chia vong cho litellm-1/litellm-2 ma moi cai
+  #     giu mot cache rieng. Hong mot nua, kho chan doan hon hong han.
+  #   - `/health/liveliness` VAN tra 200 suot thoi gian do, ma healthcheck o
+  #     docker-compose.yml:126 dung dung duong nay -> Docker bao ca hai instance
+  #     `healthy` trong khi moi agent nhan 503.
+  #
+  # Khoa nay dua cache do len Redis dung chung (proxy_server.py:4001): het canh
+  # hai instance lech nhau, va mot khoa da tra thanh cong mot lan thi song qua
+  # duoc dot Postgres chet.
+  #
+  # KHONG mat phi. Co che giay phep co that -- 214 cho trong litellm/proxy dung
+  # `premium_user`, ke ca trong chinh ma xac thuc -- nhung khong cho nao chan
+  # duong nay. Cung khong sinh them luot goi nha cung cap.
+  #
+  # Ket noi Redis lay qua litellm._redis tu bien moi truong, TUC LA DI QUA
+  # SENTINEL y het Router, khong phai mot ket noi thang toi IP tinh.
+  #
+  # KHONG duoc dung `general_settings.allow_requests_on_db_unavailable` thay cho
+  # khoa nay. Doc auth_exception_handler.py:97: khi database chet no cho BAT KY
+  # chuoi bearer nao di qua duoi danh nghia mot INTERNAL_USER vo danh. Tien van
+  # tieu ma khong quy duoc cho khoa nao -- dung thu ca du an nay sinh ra de chong.
+  enable_redis_auth_cache: true
 
   # --- Cache tra loi: CHUA BAT, co chu y ---------------------------------
   # Ke hoach GD2 dong 8 co muc "cache" tren Redis. Nhung cache lam doi y nghia
@@ -146,6 +257,19 @@ router_settings:
 
   # Chia request theo han muc CON LAI cua tung tuyen. Mien phi, khong can bang
   # dieu khien tra tien.
+  # BI DANH NHOM. Ten ben trai la ten AGENT DANG GOI, ten ben phai la nhom that.
+  #
+  # `gemini-2.5-flash` la model agent crm-feedback dung (1.888 luot, 22,6 trieu
+  # token, 06/07 -> 29/08) va Google DA RUT no: 404 "no longer available to new
+  # users ... use models/gemini-3.6-flash". Bi danh nay cho agent goi nguyen ten cu
+  # ma khong phai sua mot dong code nao.
+  #
+  # DUNG BI DANH chu khong khai them deployment: khai them deployment tro cung
+  # `gemini/gemini-3.6-flash` se sinh bo dem rpm thu hai (xem canh bao o model_list),
+  # cho di gap doi han muc Google that su cho.
+  model_group_alias:
+    gemini-2.5-flash: gemini-flash
+
   routing_strategy: usage-based-routing-v2
 
   num_retries: 3
