@@ -24,41 +24,15 @@ model_list:
     litellm_params:
       model: gemini/gemini-3.6-flash
       api_key: os.environ/KEY_GOOGLE_AI_STU
-      # Tag cua agent Phan Loai Du Lieu CRM (code `crm-feedback` trong dim_agent).
-      # BAT BUOC, khong phai tuy chon: db/load_gateway.py:238 `resolve_agent()` nhan
-      # ra agent bang cach doi chieu request_tags voi `code` cua agent. Khoa khong
-      # mang tag thi dong ghi so KHONG gan duoc vao agent nao.
+      # KHONG mang tag dinh danh nao. Ngay 08/09 tuyen nay tung mang
+      # `tags: ["crm-feedback"]`, vi luc do CRM duoc dinh di qua day bang bi danh.
+      # Nay CRM co tuyen rieng, nen giu tag o day la BAY: `router.py:3292` tron tag
+      # cua TUYEN vao metadata, nen BAT KY ai goi `gemini-flash` -- ke ca master key
+      # khong co tag -- deu bi dong dau `crm-feedback` va quy sai vao agent 7.
+      # Da thay chinh co che do hom nay: ba luot goi bang master key vao
+      # `gemini-flash-lite` deu bi dong dau `dms-feedback`.
       #
-      # MOT TAG MOT TUYEN. Dung nhet nhieu tag agent vao cung mot tuyen du
-      # `tag_filtering_match_any` mac dinh True (router.py:431) cho phep khop:
-      # router.py:3292 tron MOI tag cua deployment vao metadata, nen moi dong so di
-      # qua tuyen do se mang CA HAI tag dinh danh, va load_gateway.py:238
-      # `resolve_agent()` gap hai tag thi khong phan giai duoc -- dong bi dem vao
-      # `bo_nhieu_tag` chu khong gan duoc agent nao. Da kiem 08/09 bang cach doc ma
-      # nguon sau khi thay dong so mang tag `crm-feedback` du goi bang master key
-      # KHONG co tag: tag trong so den tu TUYEN, khong tu khoa.
-      #
-      # He qua khi agent thu hai cung can `gemini/gemini-3.6-flash`: no phai co
-      # TUYEN RIENG mang tag rieng, tuc la bo dem rpm thu hai. Con dung chung mot
-      # khoa Google thi phai CHIA 15 (vi du 7 va 8); khi moi agent mot project rieng
-      # thi moi project co 15 rieng nen de 15 moi tuyen la dung.
-      tags: ["crm-feedback"]
-      # 15 chu KHONG phai 60. Ke hoach GD5 dong 14 ghi 60, nhung han muc THAT cua
-      # Google free tier la 15/phut/model/project (quota
-      # GenerateRequestsPerMinutePerProjectPerModel-FreeTier). De 60 thi Router
-      # tuong con quota va cu day request vao 429.
-      #
-      # Dat theo tung tuyen, Router tru dan tren Redis nen hai instance dung CHUNG
-      # mot bo dem -- khong phai moi may mot bo.
-      #
-      # CANH BAO khi them tuyen: bo dem khoa theo `{id_deployment}:{ten_model_that}`
-      # (lowest_tpm_rpm_v2.py:77), tuc la MOI DEPLOYMENT MOT BO DEM RIENG. Hai
-      # deployment tro cung mot model that + cung mot khoa se cho di 15+15=30 trong
-      # khi Google chi cho 15. Muon them mot ten goi khac thi dung
-      # `model_group_alias` o router_settings, DUNG khai them deployment.
-      rpm: 15
-      tpm: 1000000
-
+      # Tuyen nay hom nay KHONG agent nao dung. De trong tag la dung.
   - model_name: gemini-flash-preview
     litellm_params:
       model: gemini/gemini-3-flash-preview
@@ -81,6 +55,58 @@ model_list:
       #
       # KHONG co tac dung neu thieu `enable_tag_filtering: true` o router_settings.
       tags: ["dms-feedback"]
+
+  # -------------------------------------------------------------------------
+  # Tuyen cua agent Phan Loai Du Lieu CRM (`crm-feedback`, agent 7).
+  #
+  # TEN NHOM LA TEN CRM DANG GOI. `src/config.py` cua CRM co
+  # `MODEL_NAME = os.getenv("GEMINI_MODEL") or "gemini-2.5-flash"`, va do trong so:
+  # 1.888 luot / 22,6 trieu token tren DUNG mot model nay, 06/07 -> 29/08. Khai
+  # dung ten do thi CRM khong phai sua mot dong code nao.
+  #
+  # DI QUA VERTEX EXPRESS MODE, KHONG QUA vertex_ai/
+  # Do 09/09/2026: `vertex_llm_base.py:703` chi nhan API key khi
+  # custom_llm_provider == "gemini"; nhanh `vertex_ai` di duong OAuth/service
+  # account. Ta co API key (`AQ.`, 53 ky tu, tao trong Cloud Console) chu khong co
+  # service account JSON, nen `model: vertex_ai/...` SE KHONG CHAY.
+  #
+  # Duong duoi day da do, co doi chung:
+  #     ?key=            -> 200
+  #     header x-goog-api-key (cai LiteLLM gui) -> 200
+  #     header + khoa SAI -> 401   <- auth that su duoc kiem, khong phai endpoint mo
+  #     gemini-2.5-flash -> CO
+  #     mot ten model bia ra -> KHONG ("Publisher model ... not found")
+  #
+  # Nho di duoc Vertex ma gemini-2.5-flash CON DUNG DUOC: Google rut model nay
+  # khoi "new users" o Google AI Studio, nhung Vertex thi khac. Nghia la KHONG
+  # phai thay model, va khong phai chiu chenh gia 1,59 lan cua gemini-3.6-flash.
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/KEY_BENCH_CRM_TEST
+
+      # PHAI ket thuc o `/publishers/google`. `_check_custom_proxy` noi thanh
+      # `{api_base}/models/{model}:{endpoint}` -- thieu doan `/publishers/google`
+      # thi URL ra `.../v1/models/...` va Google tra 404.
+      api_base: https://aiplatform.googleapis.com/v1/publishers/google
+
+      # KHONG khai vertex_project / vertex_location: duong express tu suy project
+      # tu khoa, va tu chon region. Thong bao loi cua doi chung cho thay no chon
+      # `asia-southeast1`, khong phai `us-central1`.
+
+      # Han muc GIU 15 du Vertex tra tien cho cao hon -- chot 09/09: giu dieu kien
+      # sat production nhat. He qua phai biet: CRM tu gioi han ~7,3 luot/phut
+      # (7,5s + jitter, con so tac gia khuyen nghi) nen no o DUOI NUA tran nay va
+      # SE KHONG BAO GIO sinh 429 trong van hanh binh thuong. Nhanh xu ly 429 cua
+      # CRM vi the chua duoc kiem chung -- xem change
+      # prove-the-crm-path-survives-refusal-and-outage.
+      rpm: 15
+      tpm: 1000000
+
+      # DUNG MOT tag dinh danh. `router.py:3292` tron MOI tag cua tuyen vao
+      # metadata, nen hai tag dinh danh se lam `load_gateway.py:238` gap hai ket
+      # qua va khong phan giai duoc agent nao -- dong roi vao `bo_nhieu_tag`.
+      tags: ["crm-feedback"]
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
@@ -257,18 +283,31 @@ router_settings:
 
   # Chia request theo han muc CON LAI cua tung tuyen. Mien phi, khong can bang
   # dieu khien tra tien.
-  # BI DANH NHOM. Ten ben trai la ten AGENT DANG GOI, ten ben phai la nhom that.
+  # BI DANH NHOM DA BI XOA 09/09/2026 -- va day la SUA LOI, khong phai don dep.
   #
-  # `gemini-2.5-flash` la model agent crm-feedback dung (1.888 luot, 22,6 trieu
-  # token, 06/07 -> 29/08) va Google DA RUT no: 404 "no longer available to new
-  # users ... use models/gemini-3.6-flash". Bi danh nay cho agent goi nguyen ten cu
-  # ma khong phai sua mot dong code nao.
+  # Ngay 08/09 o day co `model_group_alias: {gemini-2.5-flash: gemini-flash}` de CRM
+  # goi ten cu ma khong phai sua code. Nay CRM co TUYEN THAT mang dung ten do
+  # (Vertex express, xem model_list), nen bi danh tro thanh NGUY HIEM:
   #
-  # DUNG BI DANH chu khong khai them deployment: khai them deployment tro cung
-  # `gemini/gemini-3.6-flash` se sinh bo dem rpm thu hai (xem canh bao o model_list),
-  # cho di gap doi han muc Google that su cho.
-  model_group_alias:
-    gemini-2.5-flash: gemini-flash
+  #     router.py:11011 giai bi danh TRUOC khi tra model group that, va GHI DE
+  #     `model`. Nen tuyen that se KHONG BAO GIO duoc goi toi.
+  #
+  # DA CHUNG MINH BANG PHEP DO, khong phai chi doc code. Thu tren tuyen da co:
+  # them bi danh tam `gemini-flash-lite -> gemini-flash` trong khi `gemini-flash-lite`
+  # dang la tuyen that tro `gemini/gemini-3.5-flash-lite`, roi goi `gemini-flash-lite`:
+  #
+  #     HTTP 200
+  #     model_group = gemini-flash-lite        <- TRONG NHU DUNG
+  #     model       = gemini/gemini-3.6-flash  <- bi danh da thang tuyen that
+  #
+  # Xoa bi danh tam, goi lai -> model = gemini/gemini-3.5-flash-lite. Ca hai chieu
+  # deu do duoc.
+  #
+  # Diem dang nho nhat: cot `model_group` van ghi dung ten NGUOI GOI YEU CAU, nen ai
+  # chi xem cot do se KHONG THAY GI BAT THUONG. Chi cot `model` lo ra. Dung lop hong
+  # im lang cua du an nay.
+  #
+  # Muon cho mot agent goi bang ten cu thi khai TUYEN THAT mang ten do, dung bi danh.
 
   routing_strategy: usage-based-routing-v2
 

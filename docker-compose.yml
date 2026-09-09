@@ -112,6 +112,10 @@ x-litellm: &litellm
     LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
     LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-}
     KEY_GOOGLE_AI_STU: ${KEY_GOOGLE_AI_STU:-}
+    # Khoa cua project CRM rieng, dung o che do Vertex express. Khong co gia tri
+    # mac dinh: thieu thi entrypoint dung han, giong ba khoa tren. Tuyen dung no la
+    # `gemini-2.5-flash` trong docker/gateway/config.gateway.yaml.
+    KEY_BENCH_CRM_TEST: ${KEY_BENCH_CRM_TEST:-}
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}

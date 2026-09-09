@@ -48,6 +48,7 @@ moi duong Gateway tren database dang co (~0,8 giay). Hai viec khac nhau.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import time
@@ -105,7 +106,48 @@ def dem(dsn: str) -> tuple[int, int, int, int, int]:
         cn.close()
 
 
-def ghi_nhip_tim(dsn: str, so_dong: int, nhip: int) -> None:
+# Nhung BO DEM khong duoc nuot du luot chay THANH CONG.
+#
+# VI SAO CAN, do 09/09/2026
+# -------------------------
+# `db/rules.py` co mot quyet dinh co y: tuyen nao chua khai thi de luu luong cua
+# no roi vao muc "khong noi duoc model", vi o do no "duoc DEM va IN RA, khong bien
+# mat im lang". Nhung o che do vong lap, `mot_luot()` chay bo nap voi
+# `capture_output=True` va CHI in lai khi buoc do THAT BAI -- nen o luot chay
+# THANH CONG, dong dem do bi nem vao thung.
+#
+# DA HONG THAT: dua agent `crm-feedback` qua Gateway, tuyen khai
+# `gemini/gemini-2.5-flash` ma ten do chua co trong `rules.GATEWAY_MODELS`. Bo nap
+# in `model not declared 3` -- dung nhu thiet ke -- nhung dich vu nay nuot mat.
+# Ket qua: luot goi 200, dong vao `fact_call` binh thuong, `audit_db.py` nhom J van
+# DAT (no kiem "dong co vao so hay khong", ma dong DA vao), va dashboard hien 0
+# cho CRM. Chi phat hien ra khi mo tay `/api/usage` len xem.
+#
+# CHI in khi con so KHAC 0. In ca luc bang 0 thi moi 120 giay lai them mot dong vo
+# nghia, va nguoi doc se hoc cach bo qua no -- dung cai hong ma doan nay di sua.
+COUNTERS_NEVER_SWALLOWED = (
+    re.compile(r"model not declared (\d+)"),
+    re.compile(r"identity unresolvable (\d+)"),
+)
+
+
+def print_counters_worth_attention(step_label: str, output: str | None) -> None:
+    """In lai nhung dong dem cho biet du lieu den ma khong noi duoc vao chieu nao.
+
+    Chi goi khi dau ra DA bi capture (che do vong lap). O che do chay tay,
+    `capture_output=False` nen dau ra da ra thang console -- in lai la in doi.
+    """
+    if not output:
+        return
+    for line in output.splitlines():
+        for pattern in COUNTERS_NEVER_SWALLOWED:
+            m = pattern.search(line)
+            if m and int(m.group(1)) > 0:
+                print(f"  CHU Y [{step_label}]: {line.strip()}")
+                break
+
+
+def write_heartbeat(dsn: str, row_count: int, interval: int) -> None:
     """Ghi dau moc "luot lam moi nay da chay xong" vao `ref_load_run`.
 
     VI SAO CAN, va vi sao khong the suy ra tu du lieu (do 09/09/2026)
@@ -128,7 +170,7 @@ def ghi_nhip_tim(dsn: str, so_dong: int, nhip: int) -> None:
     nhip tim khong ghi duoc ma khong ai biet thi phep kiem do tre se doc mot moc
     cu va bao dong gia.
 
-    `nhip` la so giay giua hai luot cua CHINH tien trinh nay (0 = chay mot lan roi
+    `interval` la so giay giua hai luot cua CHINH tien trinh nay (0 = chay mot lan roi
     thoat). Ghi no vao so chu khong de moi ben doc tu doan: nguong cua phep kiem
     do tre suy TU nhip, va neu moi tien trinh doc mot bien moi truong rieng thi hai
     ben lech nhau -> bao dong gia. Xem migration 012, cot `every_seconds`.
@@ -155,7 +197,7 @@ def ghi_nhip_tim(dsn: str, so_dong: int, nhip: int) -> None:
                        rows_after      = EXCLUDED.rows_after,
                        written_by      = EXCLUDED.written_by,
                        every_seconds   = EXCLUDED.every_seconds""",
-                        (so_dong, nhip or None))
+                        (row_count, interval or None))
         cn.commit()
     except Exception as e:                        # noqa: BLE001
         print(f"  CANH BAO: khong ghi duoc nhip tim: {type(e).__name__}: {e}")
@@ -163,7 +205,7 @@ def ghi_nhip_tim(dsn: str, so_dong: int, nhip: int) -> None:
         cn.close()
 
 
-def mot_luot(dsn: str, im_lang: bool, nhip: int = 0) -> int:
+def mot_luot(dsn: str, im_lang: bool, interval: int = 0) -> int:
     truoc = dem(dsn)
     for nhan, duong_dan, them in STEPS:
         # encoding PHAI dat tuong minh: mac dinh cua subprocess la codepage cua
@@ -182,8 +224,12 @@ def mot_luot(dsn: str, im_lang: bool, nhip: int = 0) -> int:
                 if im_lang and luong:
                     print(luong.rstrip())
             return r.returncode
+        # Buoc nay THANH CONG. Nhung dau ra van co the chua bo dem canh bao, va o
+        # che do vong lap dau ra dang bi capture -- khong in lai la nuot mat.
+        if im_lang:
+            print_counters_worth_attention(nhan, r.stdout)
     sau = dem(dsn)
-    ghi_nhip_tim(dsn, sau[0], nhip)
+    write_heartbeat(dsn, sau[0], interval)
 
     print(f"  fact_call gateway  {truoc[0]:>6} -> {sau[0]:<6} (+{sau[0] - truoc[0]})"
           f"  | token {truoc[1]:,} -> {sau[1]:,}")
