@@ -28,6 +28,7 @@ dòng trỏ vào unit_id không tồn tại" là HONG.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -1345,6 +1346,45 @@ def group_i_provider_reconciliation(a: Audit) -> None:
                          for ngay, m in sorted(khong_do.items())))
 
 
+# Nhip mac dinh, chi dung khi KHONG doc duoc nhip that. Xem `read_refresh_interval()`.
+DEFAULT_INTERVAL_SECONDS = 120
+
+
+def read_refresh_interval(cn) -> tuple[int, int, str]:
+    """Tra (interval_seconds, stale_threshold, nguon_cua_con_so).
+
+    NGUONG = 3 x nhip + 60 giay bien. Ba chu ky de mot lan lam moi hong khong lam
+    do ngay; bien 60 giay cho thoi gian chinh mot chu ky chay (do 09/09/2026:
+    2.348 ms tren 444 dong nguon, nhung no tang theo so dong).
+
+    NHIP DOC TU `ref_load_run.every_seconds` TRUOC, bien moi truong chi la duong
+    lui. Vi sao thu tu do quan trong: bien moi truong thi MOI TIEN TRINH THAY MOT
+    GIA TRI KHAC. Dat REFRESH_EVERY_SECONDS=300 trong `.env` thi dich vu chay
+    300s, nhung nguoi chay `python scripts/audit_db.py` trong mot shell khong co
+    bien do se lay 120 -> nguong 420s thay vi 960s -> BAO DONG GIA moi lan chay.
+    `every_seconds` la nhip ma tien trinh THUC SU dang chay, nen khong lech duoc.
+
+    Duong lui dung `or` chu khong `os.environ.get(k, mac_dinh)`: bien dat thanh
+    CHUOI RONG cung phai roi ve mac dinh -- cung quy uoc voi db/connect.py.
+    `int("")` nem ValueError.
+
+    Bang co the chua ton tai (database dung truoc migration 012), nen bat
+    Exception: thieu nhip tim KHONG duoc lam ca luot audit chet.
+    """
+    try:
+        r = connect.query_one(
+            cn, "SELECT every_seconds FROM ref_load_run WHERE source = 'gateway'")
+    except Exception:                             # noqa: BLE001
+        r = None
+    if r and r[0]:
+        interval = int(r[0])
+        source = "ref_load_run.every_seconds"
+    else:
+        interval = int(os.environ.get("REFRESH_EVERY_SECONDS") or DEFAULT_INTERVAL_SECONDS)
+        source = "bien moi truong / mac dinh"
+    return interval, 3 * interval + 60, source
+
+
 def group_j_gateway_row_accounting(a: Audit) -> None:
     """Mọi dòng sổ nguồn phải VÀO ĐƯỢC `fact_call`, hoặc bị bỏ CÓ TÊN.
 
@@ -1384,6 +1424,7 @@ def group_j_gateway_row_accounting(a: Audit) -> None:
     """
     NHAN = "Every source row is either loaded or dropped for a named reason"
 
+    interval_seconds, stale_threshold, interval_source = read_refresh_interval(a.cn)
     ma_agent = [r[0] for r in connect.query(a.cn, "SELECT code FROM dim_agent")]
     da_nap = {r[0] for r in connect.query(a.cn, """
         SELECT call_id FROM fact_call WHERE source = 'gateway'""")}
@@ -1417,7 +1458,15 @@ def group_j_gateway_row_accounting(a: Audit) -> None:
                       FROM jsonb_array_elements_text(
                              CASE WHEN jsonb_typeof(request_tags) = 'array'
                                   THEN request_tags ELSE '[]'::jsonb END) AS t
-                     WHERE t = ANY(%s)) AS so_tag
+                     WHERE t = ANY(%s)) AS so_tag,
+                   -- Tuoi cua dong, tinh bang giay. `startTime` la `timestamp
+                   -- without time zone` va database chay o UTC (da chung minh o
+                   -- db/load_gateway.py muc MUI GIO), nen phai ep `now()` ve UTC
+                   -- truoc khi tru -- khong thi lech 7 gio va MOI dong trong nhu
+                   -- vua moi ghi. Do 09/09/2026: dong vua goi ra 60 giay, dong
+                   -- cach do 3 tieng ra 10.748 giay.
+                   EXTRACT(EPOCH FROM (now() AT TIME ZONE 'UTC'
+                                       - "startTime"))::bigint AS tuoi_giay
               FROM "LiteLLM_SpendLogs"
              WHERE status IS NOT NULL
              ORDER BY "startTime" """, (r"%\_cache\_hit%", ma_agent))
@@ -1425,7 +1474,9 @@ def group_j_gateway_row_accounting(a: Audit) -> None:
         gw.close()
 
     nen_nap, bo_khong_tag, bo_nhieu_tag, bo_ban_sao = [], [], [], []
-    for rid, ngay, tok, ban_sao, so_tag in nguon:
+    age_by_id = {}
+    for rid, ngay, tok, ban_sao, so_tag, age in nguon:
+        age_by_id[rid] = int(age)
         if ban_sao:
             bo_ban_sao.append((rid, ngay, int(tok)))
         elif so_tag == 1:
@@ -1436,14 +1487,40 @@ def group_j_gateway_row_accounting(a: Audit) -> None:
             bo_nhieu_tag.append((rid, ngay, int(tok)))
 
     # HỎNG: dòng lẽ ra nạp được mà không có trong `fact_call`. Không lý do nào.
-    mat = [x for x in nen_nap if x[0] not in da_nap]
+    #
+    # NHƯNG PHẢI TRỪ ĐI NHỮNG DÒNG CHƯA ĐẾN LƯỢT (thêm 09/09/2026)
+    # ------------------------------------------------------------
+    # Đường làm mới chạy theo nhịp, nên giữa hai lượt LUÔN có dòng vừa ghi mà
+    # chưa kịp nạp. Dòng ấy KHÔNG mất - nó đang trên đường.
+    #
+    # Đo được 09/09/2026, trước khi có đoạn này: gọi một lượt thật rồi chạy audit
+    # sau 12 giây -> `[ FAIL ] 1 dong nap duoc nhung VANG trong fact_call`, trong
+    # khi hệ thống chạy hoàn hảo và nhịp làm mới là 120 giây. Với dịch vụ chạy
+    # liên tục thì tình trạng ấy gần như THƯỜNG TRỰC, và chính docstring trên đã
+    # nói: *một phép kiểm đỏ vĩnh viễn là một phép kiểm bị bỏ qua*.
+    #
+    # Đây KHÔNG phải nới lỏng phép kiểm. Phép kiểm cũ đo sai thứ: nó gọi "mất"
+    # một dòng chưa hề có cơ hội được nạp. Chia hai mới là đo đúng - và dung sai
+    # có TRẦN, suy từ nhịp, nên một dòng mất thật vẫn HỎNG sau vài phút.
+    not_loaded = [x for x in nen_nap if x[0] not in da_nap]
+    in_flight = [x for x in not_loaded if age_by_id[x[0]] <= stale_threshold]
+    mat = [x for x in not_loaded if age_by_id[x[0]] > stale_threshold]
+
+    # ĐỘ TRỄ = tuổi của dòng NẠP ĐƯỢC cũ nhất chưa vào sổ. Không đo bằng hiệu hai
+    # mốc `max()`: mốc mới nhất của sổ nguồn có thể là một dòng BỊ BỎ CÓ TÊN
+    # (không tag định danh, hoặc bản sao cache-hit), và so với nó thì phép kiểm
+    # báo hỏng oan mãi mãi. Chỉ so trên `nen_nap` - đúng tập dòng mà bộ nạp nhận.
+    lag_seconds = max((age_by_id[x[0]] for x in not_loaded), default=0)
     # Và chiều ngược lại cũng phải kiểm: dòng có trong `fact_call` mà sổ nguồn
     # không còn - nghĩa là ta đang giữ một bản ghi không ai xác nhận được nữa.
     thua = sorted(da_nap - {x[0] for x in nen_nap})
 
     loi = []
     if mat:
-        loi.append(f"{len(mat)} dong nap duoc nhung VANG trong fact_call: "
+        loi.append(f"{len(mat)} dong nap duoc, qua nguong {stale_threshold}s"
+                   f" (= 3 x nhip {interval_seconds}s + 60s bien, nhip doc tu"
+                   f" {interval_source}),"
+                   f" ma VANG trong fact_call: "
                    + ", ".join(f"{r[0][:24]} ({r[1]}, {r[2]} token)"
                                for r in mat[:5])
                    + (f" ... +{len(mat) - 5}" if len(mat) > 5 else ""))
@@ -1452,8 +1529,27 @@ def group_j_gateway_row_accounting(a: Audit) -> None:
                    + ", ".join(t[:24] for t in thua[:5])
                    + (f" ... +{len(thua) - 5}" if len(thua) > 5 else ""))
 
-    a.check_tren(len(nguon), not loi, f"{NHAN} ({len(da_nap)} dong da nap)",
+    a.check_tren(len(nguon), not loi,
+                 f"{NHAN} ({len(da_nap)} dong da nap, tre {lag_seconds}s"
+                 f"/nguong {stale_threshold}s)",
                  " · ".join(loi))
+
+    # Dòng đang trên đường: hiện ra kèm SỐ, nhưng không phải hỏng. Im lặng ở đây
+    # thì không ai phân biệt được "đường làm mới đang chạy, hơi trễ" với "đường
+    # làm mới đã chết mà chưa quá ngưỡng".
+    if in_flight:
+        tok = sum(x[2] for x in in_flight)
+        # `lag_seconds` la tuoi cua dong cu nhat trong CA `not_loaded` - ke ca dong da
+        # MAT. Dung no o day thi thong bao TU MAU THUAN: co mot dong mat 500s va
+        # mot dong dang bay 30s thi no in "cu nhat 500s <= nguong 420s", sai ngay
+        # tren mat chu. Phai lay tuoi cu nhat CUA CHINH nhom dang bay.
+        oldest_in_flight = max(age_by_id[x[0]] for x in in_flight)
+        a.note(WARN, f"Source rows still in flight"
+                     f" ({len(in_flight)} dong, {tok:,} token,"
+                     f" cu nhat {oldest_in_flight}s <= nguong {stale_threshold}s)",
+               ", ".join(f"{r[0][:24]} ({r[1]}, {age_by_id[r[0]]}s)"
+                         for r in in_flight[:6])
+               + (f" ... +{len(in_flight) - 6}" if len(in_flight) > 6 else ""))
 
     # Phần bị bỏ CÓ LÝ DO: không phải hỏng, nhưng phải hiện ra kèm token. Đếm số
     # dòng thôi là mời người đọc tự điền "chắc chẳng đáng bao nhiêu".

@@ -48,6 +48,7 @@ moi duong Gateway tren database dang co (~0,8 giay). Hai viec khac nhau.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import time
@@ -105,7 +106,106 @@ def dem(dsn: str) -> tuple[int, int, int, int, int]:
         cn.close()
 
 
-def mot_luot(dsn: str, im_lang: bool) -> int:
+# Nhung BO DEM khong duoc nuot du luot chay THANH CONG.
+#
+# VI SAO CAN, do 09/09/2026
+# -------------------------
+# `db/rules.py` co mot quyet dinh co y: tuyen nao chua khai thi de luu luong cua
+# no roi vao muc "khong noi duoc model", vi o do no "duoc DEM va IN RA, khong bien
+# mat im lang". Nhung o che do vong lap, `mot_luot()` chay bo nap voi
+# `capture_output=True` va CHI in lai khi buoc do THAT BAI -- nen o luot chay
+# THANH CONG, dong dem do bi nem vao thung.
+#
+# DA HONG THAT: dua agent `crm-feedback` qua Gateway, tuyen khai
+# `gemini/gemini-2.5-flash` ma ten do chua co trong `rules.GATEWAY_MODELS`. Bo nap
+# in `model not declared 3` -- dung nhu thiet ke -- nhung dich vu nay nuot mat.
+# Ket qua: luot goi 200, dong vao `fact_call` binh thuong, `audit_db.py` nhom J van
+# DAT (no kiem "dong co vao so hay khong", ma dong DA vao), va dashboard hien 0
+# cho CRM. Chi phat hien ra khi mo tay `/api/usage` len xem.
+#
+# CHI in khi con so KHAC 0. In ca luc bang 0 thi moi 120 giay lai them mot dong vo
+# nghia, va nguoi doc se hoc cach bo qua no -- dung cai hong ma doan nay di sua.
+COUNTERS_NEVER_SWALLOWED = (
+    re.compile(r"model not declared (\d+)"),
+    re.compile(r"identity unresolvable (\d+)"),
+)
+
+
+def print_counters_worth_attention(step_label: str, output: str | None) -> None:
+    """In lai nhung dong dem cho biet du lieu den ma khong noi duoc vao chieu nao.
+
+    Chi goi khi dau ra DA bi capture (che do vong lap). O che do chay tay,
+    `capture_output=False` nen dau ra da ra thang console -- in lai la in doi.
+    """
+    if not output:
+        return
+    for line in output.splitlines():
+        for pattern in COUNTERS_NEVER_SWALLOWED:
+            m = pattern.search(line)
+            if m and int(m.group(1)) > 0:
+                print(f"  CHU Y [{step_label}]: {line.strip()}")
+                break
+
+
+def write_heartbeat(dsn: str, row_count: int, interval: int) -> None:
+    """Ghi dau moc "luot lam moi nay da chay xong" vao `ref_load_run`.
+
+    VI SAO CAN, va vi sao khong the suy ra tu du lieu (do 09/09/2026)
+    ----------------------------------------------------------------
+    Nhin vao `fact_call` thi HAI trang thai duoi day trong Y HET NHAU:
+
+        dong gateway moi nhat cach day 3 tieng, vi KHONG AI GOI
+        dong gateway moi nhat cach day 3 tieng, vi DUONG NAP DA CHET
+
+    Cai thu nhat binh thuong, cai thu hai la su co. Khong con so nao trong
+    `token_ledger_v2` tach duoc chung, vi ca hai deu la "khong co dong moi".
+    Nhip tim gia di theo DONG HO, nen no tach duoc: nhip tim tuoi + khong co
+    dong moi = khong ai goi; nhip tim cu = duong nap chet.
+
+    CHI GOI KHI CA BON BUOC DA XONG. Ghi som mot buoc la noi doi: nhip tim se
+    tuoi trong khi so dang thieu du lieu.
+
+    KHONG DUOC LAM CHET CA LUOT LAM MOI. Nhip tim la thu de CHAN DOAN; hong noi
+    nay khong duoc keo do viec nap du lieu that. Nhung cung KHONG duoc nuot lang:
+    nhip tim khong ghi duoc ma khong ai biet thi phep kiem do tre se doc mot moc
+    cu va bao dong gia.
+
+    `interval` la so giay giua hai luot cua CHINH tien trinh nay (0 = chay mot lan roi
+    thoat). Ghi no vao so chu khong de moi ben doc tu doan: nguong cua phep kiem
+    do tre suy TU nhip, va neu moi tien trinh doc mot bien moi truong rieng thi hai
+    ben lech nhau -> bao dong gia. Xem migration 012, cot `every_seconds`.
+    """
+    try:
+        cn, _ = connect.open_db(dsn)
+    except Exception as e:                        # noqa: BLE001
+        print(f"  CANH BAO: khong mo duoc ket noi de ghi nhip tim: {type(e).__name__}")
+        return
+    try:
+        with cn.cursor() as cur:
+            # `now() AT TIME ZONE 'Asia/Ho_Chi_Minh'` -- dong ho cua DATABASE, gio
+            # VN. KHONG dung datetime.now() cua Python: container nay chay UTC
+            # (do 09/09/2026) con `fact_call.ts_local` la gio VN, nen lay dong ho
+            # container se lech DUNG 7 GIO va mot nhip tim vua ghi se trong nhu
+            # da chet 7 tieng.
+            cur.execute("""
+                INSERT INTO ref_load_run (source, last_success_at, rows_after,
+                                          written_by, every_seconds)
+                VALUES ('gateway', now() AT TIME ZONE 'Asia/Ho_Chi_Minh', %s,
+                        'scripts/refresh_gateway.py', %s)
+                ON CONFLICT (source) DO UPDATE
+                   SET last_success_at = EXCLUDED.last_success_at,
+                       rows_after      = EXCLUDED.rows_after,
+                       written_by      = EXCLUDED.written_by,
+                       every_seconds   = EXCLUDED.every_seconds""",
+                        (row_count, interval or None))
+        cn.commit()
+    except Exception as e:                        # noqa: BLE001
+        print(f"  CANH BAO: khong ghi duoc nhip tim: {type(e).__name__}: {e}")
+    finally:
+        cn.close()
+
+
+def mot_luot(dsn: str, im_lang: bool, interval: int = 0) -> int:
     truoc = dem(dsn)
     for nhan, duong_dan, them in STEPS:
         # encoding PHAI dat tuong minh: mac dinh cua subprocess la codepage cua
@@ -124,7 +224,12 @@ def mot_luot(dsn: str, im_lang: bool) -> int:
                 if im_lang and luong:
                     print(luong.rstrip())
             return r.returncode
+        # Buoc nay THANH CONG. Nhung dau ra van co the chua bo dem canh bao, va o
+        # che do vong lap dau ra dang bi capture -- khong in lai la nuot mat.
+        if im_lang:
+            print_counters_worth_attention(nhan, r.stdout)
     sau = dem(dsn)
+    write_heartbeat(dsn, sau[0], interval)
 
     print(f"  fact_call gateway  {truoc[0]:>6} -> {sau[0]:<6} (+{sau[0] - truoc[0]})"
           f"  | token {truoc[1]:,} -> {sau[1]:,}")
@@ -144,14 +249,14 @@ def main() -> int:
     args = p.parse_args()
 
     if not args.every:
-        return mot_luot(args.db, args.quiet)
+        return mot_luot(args.db, args.quiet, 0)
 
     print(f"Looping every {args.every}s. Ctrl-C to stop.")
     while True:
         # Bat CA loi cua dem(): database co the dang khoi dong lai, va mot vong
         # lap chet vi mot luot hong la mat luon co che tu dong.
         try:
-            ma = mot_luot(args.db, True)
+            ma = mot_luot(args.db, True, args.every)
         except Exception as exc:
             print(f"  ERROR: {type(exc).__name__}: "
                   f"{str(exc).strip().splitlines()[0]}")

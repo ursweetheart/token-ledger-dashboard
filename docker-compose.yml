@@ -112,6 +112,10 @@ x-litellm: &litellm
     LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
     LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-}
     KEY_GOOGLE_AI_STU: ${KEY_GOOGLE_AI_STU:-}
+    # Khoa cua project CRM rieng, dung o che do Vertex express. Khong co gia tri
+    # mac dinh: thieu thi entrypoint dung han, giong ba khoa tren. Tuyen dung no la
+    # `gemini-2.5-flash` trong docker/gateway/config.gateway.yaml.
+    KEY_BENCH_CRM_TEST: ${KEY_BENCH_CRM_TEST:-}
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
@@ -122,6 +126,19 @@ x-litellm: &litellm
     # Xem litellm/_redis.py: _SENTINEL_IGNORED_CONNECTION_ARGS.
     REDIS_SENTINEL_NODES: '[["sentinel-1", 26379], ["sentinel-2", 26379], ["sentinel-3", 26379]]'
     REDIS_SERVICE_NAME: gateway-redis
+    # Muc log INFO, them 08/09/2026. KHONG phai de cho vui.
+    #
+    # Hom nay bat `enable_redis_auth_cache: true` va KHONG CO GI XAY RA: khoa do
+    # chi duoc doc trong hai ham, ca hai deu khong chay voi cau hinh cu. LiteLLM
+    # co log dung cho do (proxy_server.py:4006 va 4013, ca nhanh bat va nhanh
+    # khong bat) nhung chung o muc INFO, nen o muc mac dinh ta khong thay gi ca
+    # va tuong la da xong. Chi khi bat INFO moi doc duoc.
+    #
+    # Gia phai tra do duoc: 207 dong co noi dung tren mot phien do dai (34 dong
+    # trong so do la healthcheck). Log da xoay vong 10m x 3 o `x-logging`.
+    # Da kiem 08/09: INFO KHONG in khoa ao, master key, mat khau Redis, header
+    # Authorization, hay noi dung prompt -- dem bang grep tren 3.860 dong log.
+    LITELLM_LOG: INFO
   healthcheck:
     test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(\"http://127.0.0.1:4000/health/liveliness\", timeout=3).status == 200 else 1)"]
     interval: 10s
@@ -309,6 +326,55 @@ services:
       # and losing an old pull directory is permanent.
       - ${DATA_DIR:-./data}:/app/data
       - ${GCLOUD_CONFIG:-~/.config/gcloud}:/root/.config/gcloud
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ==========================================================================
+  # LAM MOI SO GATEWAY -- profile "refresh". Khong goi profile thi khong chay.
+  #
+  # VI SAO CO DICH VU NAY (do 09/09/2026)
+  # So Gateway tu ghi ngay (~4 giay), nhung so dashboard chi doi khi CO NGUOI
+  # chay `scripts/refresh_gateway.py`. Do duoc truoc khi them dich vu nay:
+  #
+  #     LiteLLM_SpendLogs                 444 dong, moi nhat 08/09 23:55
+  #     fact_call WHERE source='gateway'   41 dong, moi nhat 31/08 10:17
+  #     -> tre 8 ngay 13 gio 38 phut, va KHONG co dau hieu nao bao la dang tre
+  #
+  # Script da co san che do `--every`; cai thieu la khong ai chay no.
+  # ==========================================================================
+  ledger-refresh:
+    logging: *logging
+    # Dung lai HET image cua `tools`, khong them Dockerfile moi. `tools` la image
+    # CO QUYEN GHI (vai admin), dung vai cua no la dung phan cong da co: `api`
+    # chi-doc, `tools` ghi duoc. Xem chu thich o docker/tools.Dockerfile.
+    build:
+      context: .
+      dockerfile: docker/tools.Dockerfile
+    image: token-ledger-tools:local
+    container_name: token-ledger-refresh
+    profiles: ["refresh"]
+    restart: unless-stopped
+    # `sys.executable` duoc dung ben trong script de goi bon buoc, nen chi can
+    # dung trinh thong dich cua image -- khong phu thuoc `python` co ton tai.
+    command: ["python3", "scripts/refresh_gateway.py", "--every", "${REFRESH_EVERY_SECONDS:-120}"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # PHAI khai CA HAI chuoi ket noi TUONG MINH. db/connect.py dung `PG_HOST`
+      # mac dinh `localhost`; trong container thi `localhost` la CHINH container
+      # nay, khong phai may postgres. Trieu chung se la "khong ket noi duoc" --
+      # keu ngay, nhung khong duoc trong vao mac dinh.
+      TOKEN_LEDGER_DSN: "postgresql://${PGUSER:-token}:${PGPASSWORD:-token_local}@postgres:5432/${PGDATABASE:-token_ledger_v2}"
+      # Vai CHI-DOC cho so Gateway. KHONG dung `llmproxy` (chu so huu, ghi duoc):
+      # so goc la bang chung. Vai nay do `gateway-readonly-init` tao ra o profile
+      # "gateway"; no ton tai san trong volume pgdata nen khong khai depends_on
+      # sang profile khac -- lam vay se keo ca profile "gateway" theo.
+      GATEWAY_DSN: "postgresql://${GATEWAY_READONLY_USER:-gateway_readonly}:${GATEWAY_READONLY_PASSWORD:-gateway_readonly_local}@postgres:5432/${GATEWAY_PGDATABASE:-litellm}"
+    # CO Y KHONG DAT healthcheck. Healthcheck kieu "tien trinh con song" chinh la
+    # phep do sai ma change nay di sua: mot vong lap con chay ma khong lam moi
+    # duoc lan nao van qua duoc phep do do -- dung lop "song ma hong" da gap o
+    # /health/liveliness cua Gateway. Phep do dung la DO KET QUA: so co tuoi
+    # khong, va no nam o phep kiem do tre trong scripts/audit_db.py.
     depends_on:
       postgres:
         condition: service_healthy

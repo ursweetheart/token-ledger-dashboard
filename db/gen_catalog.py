@@ -75,6 +75,31 @@ OUT = ROOT / "db" / "02_catalog.sql"
 #     has_google_source  có số liệu của Google để đối chiếu hay không
 # Gộp hai chuyện vào một phép suy là lý do cột này từng sai. Ralli lấy số từ dữ
 # liệu cào về từ chính app (fact_call).
+#
+# AGENT 7 (crm-feedback): `crm-500509` LÀ PROJECT CỦA THỜI TRƯỚC GATEWAY
+# ----------------------------------------------------------------------
+# Quyết định ngày 10/09/2026 (anh Tuấn chọn): GIỮ `crm-500509`, kèm ghi chú này.
+#
+# Từ khi agent 7 đi qua Gateway, tiền của nó KHÔNG còn rời khỏi `crm-500509`
+# nữa — nó rời khỏi project riêng của CRM (project number `60854134008`, id
+# dạng chuỗi thì CHƯA BIẾT, xem task 1.1 của change
+# `route-the-crm-agent-through-the-gateway`). Nên với dữ liệu SAU ngày chuyển,
+# giá trị ở đây không còn trỏ tới nơi phát sinh chi phí.
+#
+# Vì sao vẫn giữ, chứ không để NULL hay điền project mới:
+#   - cột này là khoá JOIN của đường nạp monitoring và hoá đơn Google
+#     (`db/connect.py:375` → `agent_lookup`, và `db/load_monitoring.py:118`).
+#     Đổi giá trị thì MỌI dòng monitoring/hoá đơn CŨ của agent 7 mất đường quy
+#     về agent — mất dữ liệu lịch sử, mà lịch sử ấy có thật.
+#   - để NULL thì `agent_lookup` bỏ hẳn agent 7 (`WHERE gcp_project_id IS NOT
+#     NULL`), hỏng y như trên.
+#   - điền project mới bằng một chuỗi ĐOÁN thì tệ hơn cả hai: nó trông đúng.
+#
+# Cách đọc cho người sau: cột này trả lời "hoá đơn Google CŨ của agent này nằm
+# ở project nào", KHÔNG trả lời "hôm nay tiền của nó ra từ đâu". Với đường
+# Gateway, câu sau được trả lời bởi sổ Gateway (`fact_call` → `virtual_key_id`
+# / tag `crm-feedback`), không phải bởi cột này. Số cũ và số mới KHÔNG nối
+# liền — đã ghi ở mục 9 của `docs/reference/dua-crm-qua-gateway-10-09.md`.
 AGENTS = [
     (1, "contact-center", "Chatbot Contact Center", "pro-tuner-454203-v3", False, "2025-03-19", True, True),
     (2, "sale-agent", "Sale Agent", "tranquil-post-471401-c1", False, "2025-09-07", True, True),

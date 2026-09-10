@@ -37,9 +37,34 @@ MODEL_ID = {name: i for i, name, _ in MODELS}
 # `gemini-3-flash` - gộp bản preview vào bản chính thức, mà đơn giá hai bản thì
 # chưa ai kiểm. Thà để lưu lượng của nó rơi vào mục "không nối được model" của bộ
 # nạp - ở đó nó được ĐẾM và IN RA - còn hơn khớp nhầm trong im lặng.
+# TRI THUC CUU TU MOT FILE SINH RA (09/09/2026). `db/02_catalog.sql` la file do
+# `gen_catalog.py` SINH, nhung ngay 04/09 co nguoi go tay bon dong chu thich vao
+# no; chay lai gen_catalog la mat sach. Chuyen no ve day -- nguon su that -- de
+# lan sau sinh lai khong xoa mat:
+#
+#     Monitoring cua project ma Gateway goi toi bao TEN TRAN
+#     ('gemini-3.5-flash-lite'), trong khi nguon 'gateway' bao ten CO TIEN TO nha
+#     cung cap ('gemini/gemini-3.5-flash-lite'). Cung mot model, hai khong gian
+#     ten -- dung cai ma bang bi danh sinh ra de xu ly.
+#
+# Bai hoc kem theo: dung go tay vao `db/02_catalog.sql`. Muon ghi chu gi thi ghi
+# vao day hoac vao chinh gen_catalog.py.
 GATEWAY_MODELS = [
     "gemini/gemini-3.6-flash",
     "gemini/gemini-3.5-flash-lite",
+    # Them 09/09/2026, khi dua agent `crm-feedback` qua Gateway. Tuyen cua no khai
+    # `model: gemini/gemini-2.5-flash` (Vertex express mode) vi do la model
+    # production CRM dang dung -- 1.888 luot / 22,6 trieu token, 06/07 -> 29/08.
+    #
+    # THIEU DONG NAY THI HONG NHU SAU, da do truoc khi them: luot goi 200, dong vao
+    # `fact_call` binh thuong, nhung `model_id` la NULL nen `fact_usage_daily` KHONG
+    # co dong nao, va dashboard hien 0 cho CRM. `audit_db.py` nhom J van DAT vi no
+    # kiem "moi dong nguon co vao so hay bi bo co ly do", ma dong nay DA vao so.
+    #
+    # Bo nap CO dem va CO in: `model not declared 3`. Nhung dich vu `ledger-refresh`
+    # chay bo nap voi `capture_output=True` o che do vong lap, nen dong do bi NUOT
+    # khi luot chay thanh cong -- xem ghi chu o scripts/refresh_gateway.py.
+    "gemini/gemini-2.5-flash",
 ]
 
 # Thứ tự QUAN TRỌNG: mẫu dài hơn phải đứng trước. '2.5 flash lite' phải được thử

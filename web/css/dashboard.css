@@ -2344,8 +2344,17 @@ body.light-theme .user-status-disabled {
 
 /* ─── Comparison badge (CK/KT) ────────────────────────────────
    Two lines per card: previous period first, same-period-last-year second.
-   Colour comes from the metric's declared polarity in metrics_registry.js,
-   never from the sign of the number. */
+
+   SỬA GHI CHÚ 10/09/2026 — bản cũ nói ngược với mã đang chạy, và còn dẫn tới một
+   file không tồn tại:
+     - `metrics_registry.js` KHÔNG có trong repo (`find . -name metrics_registry*`
+       chỉ trả về chính dòng ghi chú này). Đi tra cứu nó là mất thời gian.
+     - màu của `.delta-line` lấy từ DẤU của số, không từ polarity: xem
+       `deltaLine()` trong `web/js/app.js`, nhánh `up ? d-green : d-red`.
+   Hai trục tách rời, và đây là trục THỨ NHẤT:
+     ① chiều biến động → `.delta-line.d-green / .d-red / .d-neutral`  (dấu của số)
+     ② đánh giá ngưỡng → `.metric-card.kpi-warning / .kpi-critical`   (polarity)
+   Xem `OVERVIEW_KPI_SEMANTICS` trong app.js. */
 .delta-badge {
     display: flex;
     flex-direction: column;
@@ -2648,6 +2657,162 @@ body.light-theme .delta-base-val {
     color: #8aa0be;
     font-size: 10.5px;
     line-height: 1.35;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TRỤC ĐÁNH GIÁ của 8 thẻ Tổng quan — `kpi-warning` / `kpi-critical`
+   Tách hẳn khỏi trục chiều biến động (`.delta-line.d-green/.d-red`).
+   Xem `OVERVIEW_KPI_SEMANTICS` và `kpiStatus()` trong web/js/app.js.
+
+   MỘT CHỖ CỐ TÌNH LÀM KHÁC Ô 4.2 CỦA CHANGE.
+   Ô 4.2 dặn áp status class cho "value, icon/mũi tên, dòng insight và viền/tint".
+   Mũi tên ▲▼ ở đây thuộc trục CHIỀU BIẾN ĐỘNG, nên tô nó theo status sẽ gộp lại
+   đúng hai trục mà chính proposal của change yêu cầu tách ("Tách màu delta khỏi
+   đánh giá tốt/xấu của KPI"). Nên "icon" được hiểu là icon CỦA STATUS — cái
+   `.kpi-flag` dưới đây — còn mũi tên delta giữ nguyên màu theo dấu của số.
+   Ví dụ đọc được ngay: tỷ lệ lỗi giảm từ 4% xuống 3,5% thì mũi tên ĐỎ (giảm) mà
+   thẻ vẫn CẢNH BÁO (3,5% ≥ ngưỡng critical 3%). Hai tín hiệu, hai chuyện, cả hai
+   đúng.
+   ═══════════════════════════════════════════════════════════════════════ */
+.metric-card.kpi-warning {
+    border-left-color: #ffff00;
+    background: rgba(255, 255, 0, .05);
+}
+
+.metric-card.kpi-critical {
+    border-left-color: #ff0000;
+    background: rgba(255, 0, 0, .06);
+}
+
+/* Dải màu bên trái của lưới 8 thẻ do `::before` vẽ và nó ĐÈ lên border-left,
+   nên status phải ghi vào cùng chỗ đó, không thì viền cảnh báo vô hình. */
+.overview-kpis .metric-card.kpi-warning::before {
+    background: #ffff00;
+}
+
+.overview-kpis .metric-card.kpi-critical::before {
+    background: #ff0000;
+}
+
+.overview-kpis .metric-card.kpi-warning .metric-value {
+    color: #fde047;
+}
+
+.overview-kpis .metric-card.kpi-critical .metric-value {
+    color: #fca5a5;
+}
+
+/* TÍN HIỆU KHÔNG DỰA RIÊNG VÀO MÀU (ô 4.4) — nhãn có CHỮ và có icon, nên người
+   không phân biệt được màu vẫn đọc được mức độ. */
+.kpi-flag {
+    display: inline-block;
+    margin-right: 5px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .4px;
+    vertical-align: 1px;
+}
+
+.kpi-flag-warning {
+    color: #422006;
+    background: #ffff00;
+}
+
+/* KHÔNG dùng ▲▼ ở đây. Hai hình đó thuộc trục CHIỀU BIẾN ĐỘNG của `.delta-line`
+   nằm ngay phía trên trong cùng một thẻ. Bản đầu đặt `▲` cho mức cảnh báo, và
+   nhìn thật trên màn hình thì thẻ AI Agent hiện `▼ 13% KT` rồi ngay dưới là
+   `▲ CẦN THEO DÕI` — hai tam giác ngược chiều, hai nghĩa khác hẳn, dính đúng
+   cái nhầm mà cả khối ghi chú ở trên viết ra để tránh. Dấu ⚠ và ■ không chỉ
+   hướng nên không lẫn được. */
+.kpi-flag-warning::before {
+    content: "⚠ ";
+}
+
+.kpi-flag-critical {
+    color: #ffffff;
+    background: #ff0000;
+}
+
+.kpi-flag-critical::before {
+    content: "■ ";
+}
+
+/* ─── Tooltip 12px (ô 3.3) ───────────────────────────────────────────────
+   Thuộc tính `title` của HTML KHÔNG đặt được cỡ chữ — trình duyệt tự vẽ. Nên để
+   thoả "tooltip 12px" phải có khối riêng. `title` vẫn giữ song song vì nó là
+   đường đọc duy nhất cho trình đọc màn hình và khi người dùng phóng to chữ. */
+.metric-card.has-kpi-tip {
+    position: relative;
+}
+
+/* Vẽ XUỐNG DƯỚI thẻ, không phải lên trên. Bản đầu dùng `bottom: calc(100% - 6px)`
+   tức đẩy tooltip lên phía trên thẻ; đo thật trên màn hình thì hàng thẻ đầu nằm
+   sát thanh tab, nên tooltip trồi lên đè vào thanh đó và bị chìm phía sau, chữ
+   mờ đọc không ra. Phía dưới thẻ luôn còn chỗ (biểu đồ, hàng thẻ kế), và
+   `z-index` đủ cao để nằm trên chúng. */
+.kpi-tip {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    top: calc(100% - 6px);
+    z-index: 200;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: #0b1220;
+    color: #cbd5e1;
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-line;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .12s;
+    pointer-events: none;
+}
+
+.metric-card.has-kpi-tip:hover .kpi-tip,
+.metric-card.has-kpi-tip:focus-within .kpi-tip {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* `overflow: hidden` của thẻ Tổng quan sẽ cắt mất tooltip. Chỉ mở khoá lúc hover
+   để dải màu `::before` vẫn bị bo góc như cũ ở trạng thái thường. */
+.overview-kpis .metric-card.has-kpi-tip:hover,
+.overview-kpis .metric-card.has-kpi-tip:focus-within {
+    overflow: visible;
+}
+
+/* NÂNG CẢ THẺ, không chỉ nâng tooltip. Đặt `z-index` cho riêng `.kpi-tip` là
+   chưa đủ và đo thật đã chứng minh: nửa dưới tooltip bị khối biểu đồ
+   `.wf-chart` phía dưới đè lên. Lý do là thẻ cha `position: relative` nhưng
+   `z-index: auto`, nên nó KHÔNG tạo ngữ cảnh xếp lớp riêng; tooltip vẫn xếp
+   chung một mặt phẳng với mọi khối đứng sau nó trong DOM.
+   Cho thẻ đang rê chuột một `z-index` thật thì cả thẻ lẫn tooltip cùng nổi lên
+   trên phần nội dung phía dưới. Chỉ áp lúc :hover/:focus-within nên trạng thái
+   thường không đổi một chút nào. */
+.metric-card.has-kpi-tip:hover,
+.metric-card.has-kpi-tip:focus-within {
+    z-index: 300;
+}
+
+/* ─── Hierarchy typography của workbook (ô 4.3) ──────────────────────────
+   value ≥ 24px · label ≥ 12px · tooltip 12px.
+   Sàn của `clamp` trước đây là 21px, thấp hơn mức 24px của workbook trên màn
+   hình hẹp; nay nâng sàn và GIỮ trần 30px để màn rộng không bị thu nhỏ lại. */
+.overview-kpis .metric-value {
+    font-size: clamp(24px, 1.65vw, 30px);
+}
+
+.overview-kpis .metric-label {
+    font-size: 12px;
+    /* 12px × line-height 1,35 × 3 dòng ≈ 49px. Sàn cũ 44px là tính cho chữ 11px,
+       nên nhãn dài nhất ("Mức độ sử dụng trung bình của User") sẽ vượt sàn và
+       đẩy giá trị của riêng thẻ đó xuống, làm lệch hàng 8 thẻ. */
+    min-height: 50px;
 }
 
 .overview-trend-grid,
@@ -3263,6 +3428,82 @@ body.light-theme .metric-label {
 body.light-theme .overview-kpi-insight {
     color: #526782;
     border-top-color: #e2e8f0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Ô 4.4 — MÀU EXCEL PHẢI ĐỌC ĐƯỢC Ở CẢ HAI THEME
+
+   Bảng chuẩn hoá Excel dùng ba màu RGB thuần: `#00ff00`, `#ff0000`, `#ffff00`.
+   Trên nền tối chúng đọc được. Trên nền trắng thì KHÔNG:
+     #ffff00 vàng thuần trên #ffffff  → gần như vô hình
+     #00ff00 xanh thuần trên #ffffff  → tương phản rất thấp
+   `.delta-line` đã có override từ trước (#15803d / #dc2626). Ba chỗ dưới đây thì
+   CHƯA có, nên viền cảnh báo của thẻ biến mất khi bật theme sáng — thẻ đang
+   CẢNH BÁO trông y hệt thẻ bình thường.
+
+   Giữ đúng Ý NGHĨA màu (vàng = theo dõi, đỏ = cảnh báo), chỉ hạ độ sáng để đạt
+   tương phản. Và mọi mức độ đều còn `.kpi-flag` mang CHỮ + icon, nên không chỗ
+   nào phụ thuộc riêng vào màu.
+   ═══════════════════════════════════════════════════════════════════════ */
+body.light-theme .metric-card.kpi-warning {
+    border-left-color: #a16207;
+    background: rgba(161, 98, 7, .06);
+}
+
+body.light-theme .metric-card.kpi-critical {
+    border-left-color: #b91c1c;
+    background: rgba(185, 28, 28, .06);
+}
+
+body.light-theme .overview-kpis .metric-card.kpi-warning::before {
+    background: #a16207;
+}
+
+body.light-theme .overview-kpis .metric-card.kpi-critical::before {
+    background: #b91c1c;
+}
+
+body.light-theme .overview-kpis .metric-card.kpi-warning .metric-value {
+    color: #854d0e;
+}
+
+body.light-theme .overview-kpis .metric-card.kpi-critical .metric-value {
+    color: #b91c1c;
+}
+
+body.light-theme .kpi-flag-warning {
+    color: #ffffff;
+    background: #a16207;
+}
+
+body.light-theme .kpi-flag-critical {
+    color: #ffffff;
+    background: #b91c1c;
+}
+
+/* Viền mức độ của thẻ tab Chi phí (`.insight-*`) dùng cùng ba màu Excel và cũng
+   chưa từng có override sáng. Nhãn chữ của chúng đã có (xem
+   `body.light-theme .insight-warning .metric-insight .insight-status`), chỉ thiếu
+   phần viền. */
+body.light-theme .metric-card.insight-warning {
+    border-left-color: #a16207;
+    box-shadow: inset 3px 0 0 rgba(161, 98, 7, .22);
+}
+
+body.light-theme .metric-card.insight-critical {
+    border-left-color: #b91c1c;
+    box-shadow: inset 3px 0 0 rgba(185, 28, 28, .2);
+}
+
+body.light-theme .metric-card.insight-normal {
+    border-left-color: #15803d;
+}
+
+/* Tooltip giữ nền tối ở cả hai theme (kiểu tooltip quen thuộc), nhưng trên theme
+   sáng phải có viền rõ hơn để không lẫn vào bóng thẻ. */
+body.light-theme .kpi-tip {
+    border-color: #0f172a;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .28);
 }
 
 body.light-theme .success-legend,

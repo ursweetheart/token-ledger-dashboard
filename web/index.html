@@ -11,7 +11,7 @@
 <style>
   /* ═══════════════════════════════════════════════════════════════
      Bổ sung phần dashboard.css chưa có: thanh filter, khối chart,
-     heatmap, pill MỚI, panel bảng giá + bảng nhập liệu (data-driven).
+     heatmap, panel bảng giá + bảng nhập liệu (data-driven).
      Mọi màu/spacing kế thừa token dashboard.css.
      ═══════════════════════════════════════════════════════════════ */
 
@@ -34,6 +34,19 @@
   .load-note.warn{
     background:rgba(245,158,11,.08); border-color:rgba(245,158,11,.35); color:#fcd34d;
   }
+  /* Cùng hình dạng với .load-note.warn, đặt ngay dưới thanh lọc. Tách class
+     riêng vì hai khối nói hai chuyện khác nhau và có thể cùng hiện một lúc. */
+  .user-scope-note{
+    display:flex; align-items:flex-start; gap:8px;
+    background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.35);
+    color:#fcd34d; font-size:12px; padding:8px 14px; border-radius:8px;
+    margin:-6px 0 16px; line-height:1.55;
+  }
+  .user-scope-note b{ color:#fde68a; }
+  body.light-theme .user-scope-note{
+    background:rgba(217,119,6,.10); border-color:rgba(217,119,6,.32); color:#92400e;
+  }
+  body.light-theme .user-scope-note b{ color:#78350f; }
   .load-note.error{
     background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.40); color:#fca5a5;
     font-size:13px; padding:12px 16px;
@@ -116,12 +129,6 @@
 
   .metric-def{ font-size:11px; color:#475569; margin-top:6px; line-height:1.45; }
   .metric-def b{ color:#94a3b8; font-weight:600; }
-
-  .pill-new{
-    display:inline-block; vertical-align:middle; margin-left:8px;
-    background:rgba(102,126,234,.18); color:#a5b4fc;
-    font-size:10px; font-weight:700; letter-spacing:.4px; padding:2px 7px; border-radius:10px;
-  }
 
   /* ─── Chart card (canvas thật) ─── */
   .wf-chart{
@@ -476,6 +483,13 @@
   </div>
 </div>
 
+<!-- Lọc theo user thì những dòng KHÔNG ghi được người dùng bị loại — im lặng thì
+     người xem tưởng agent đó không hoạt động trong kỳ. Khối này do app.js điền và
+     chỉ hiện khi thực sự có phần bị loại. -->
+<div class="user-scope-note" id="user-scope-note" hidden>
+  <span>⚠️</span><span id="user-scope-text"></span>
+</div>
+
 <!-- ═══════════════ TABS ═══════════════ -->
 <div class="tabs">
   <button class="tab active" data-tab="overview">📊 Tổng quan</button>
@@ -570,14 +584,19 @@
       <div class="canvas-box overview-canvas"><canvas id="c-ov-cost-trend"></canvas></div>
     </div>
     <div class="wf-chart">
+      <div class="wf-title">Token theo thời gian (token)</div>
+      <div class="chart-total" id="ov-token-total">—</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-token-trend"></canvas></div>
+    </div>
+    <div class="wf-chart">
       <div class="wf-title">Request theo thời gian (request)</div>
       <div class="chart-total" id="ov-request-total">—</div>
       <div class="canvas-box overview-canvas"><canvas id="c-ov-request-trend"></canvas></div>
     </div>
     <div class="wf-chart">
-      <div class="wf-title">Token theo thời gian (token)</div>
-      <div class="chart-total" id="ov-token-total">—</div>
-      <div class="canvas-box overview-canvas"><canvas id="c-ov-token-trend"></canvas></div>
+      <div class="wf-title">Tỷ lệ thành công theo thời gian (%)</div>
+      <div class="chart-total" id="ov-success-total">—</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-success-trend"></canvas></div>
     </div>
   </div>
 
@@ -595,8 +614,8 @@
       </div>
     </div>
     <div class="wf-chart">
-      <div class="wf-title">Top đơn vị theo mức độ sử dụng (VNĐ)</div>
-      <div class="canvas-box overview-canvas"><canvas id="c-ov-unit-cost"></canvas></div>
+      <div class="wf-title">Top đơn vị theo request</div>
+      <div class="canvas-box overview-canvas"><canvas id="c-ov-unit-req"></canvas></div>
     </div>
     <div class="wf-chart">
       <div class="wf-title">Nhịp sử dụng 7 ngày gần nhất</div>
@@ -1107,6 +1126,26 @@
     </div>
   </div>
 
+  <!-- Cảnh báo agent tiêu vượt mặt bằng (biên bản 25/07, mục 6.4-6.5).
+       KHÁC với biểu đồ ngân sách ngay trên: biểu đồ đó so agent với NGÂN SÁCH đã
+       cấu hình, còn bảng này so agent với NHAU. Một agent chưa cấu hình ngân sách
+       vẫn lọt vào đây được. -->
+  <div class="overview-flow-head">
+    <h3><span class="flow-step">3</span>Agent tiêu vượt mặt bằng</h3>
+  </div>
+
+  <div class="table-container">
+    <p class="subtle" id="co-alert-note" style="margin:0 0 10px">—</p>
+    <table>
+      <thead><tr>
+        <th>Agent</th><th class="num">Chi phí trong kỳ</th>
+        <th class="num">Trung bình agent</th><th class="num">Vượt</th>
+        <th class="num">Lượt gọi</th>
+      </tr></thead>
+      <tbody id="co-alert-body"></tbody>
+    </table>
+  </div>
+
   <!-- ④ BẢNG CHI TIẾT -->
   <div class="overview-flow-head">
     <h3><span class="flow-step">4</span>Bảng chi phí chi tiết</h3>
@@ -1139,41 +1178,22 @@
     <h3><span class="flow-step">1</span>Chất lượng phục vụ trong kỳ</h3>
   </div>
 
+  <!-- Dải KPI rút còn MỘT thẻ (biên bản 25/07, mục 7.1-7.2).
+       Đã bỏ: Tổng lượt request · Lỗi 4xx/5xx/429 · Thời gian phản hồi (p95) ·
+       Trường hợp chậm nhất (p99).
+       Lý do bỏ p95/p99: nhãn nói "mốc mà 95% lượt gọi nhanh hơn", nhưng số đưa vào
+       là `A.lat` — bình quân có trọng số theo lượt gọi, KHÔNG phải phân vị. Một cái
+       tên hứa nhiều hơn thứ đo được thì thà đừng hiện.
+       Lý do bỏ ba tỷ lệ mã lỗi: chúng vẫn còn ở biểu đồ tròn ngay bên dưới, nơi có
+       chú giải kèm mẫu số. Đưa thêm lên dải KPI là lặp lại cùng một con số ở hai
+       chỗ với hai mức ngữ cảnh khác nhau. -->
   <div class="metrics perf-kpi-grid">
-    <div class="metric-card">
-      <div class="metric-label">📨 Tổng lượt request (request)</div>
-      <div class="metric-value" id="m-pf-req">—</div>
-      <div class="metric-def"><b>= Σ request</b> của mọi agent — mẫu số của các tỷ lệ bên cạnh.</div>
-    </div>
     <div class="metric-card ok">
-      <div class="metric-label">✅ Tỉ lệ thành công (%)</div>
+      <div class="metric-label">✅ Tỷ lệ thành công (%)</div>
       <div class="metric-value" id="m-pf-success">—</div>
-      <div class="metric-def"><b>= request thành công ÷ tổng request.</b></div>
-    </div>
-    <div class="metric-card warn">
-      <div class="metric-label">🙋 Lỗi phía Client (%) <span class="pill-new">MỚI</span></div>
-      <div class="metric-value" id="m-pf-4xx">—</div>
-      <div class="metric-def">Nhóm <b>4xx</b> — yêu cầu sai định dạng hoặc thiếu quyền. Sửa ở phía tích hợp agent.</div>
-    </div>
-    <div class="metric-card danger">
-      <div class="metric-label">💥 Lỗi phía Provider (%) <span class="pill-new">MỚI</span></div>
-      <div class="metric-value" id="m-pf-5xx">—</div>
-      <div class="metric-def">Nhóm <b>5xx</b> — nhà cung cấp gặp sự cố. Cần thử lại có giãn cách.</div>
-    </div>
-    <div class="metric-card warn">
-      <div class="metric-label">🚧 Lỗi giới hạn tốc độ request (%) <span class="pill-new">MỚI</span></div>
-      <div class="metric-value" id="m-pf-429">—</div>
-      <div class="metric-def">Mã <b>429</b> — gọi vượt hạn mức cho phép. Cao ⇒ cân nhắc nâng hạn mức.</div>
-    </div>
-    <div class="metric-card ok">
-      <div class="metric-label">⚡ Thời gian phản hồi (giây)</div>
-      <div class="metric-value" id="m-pf-p95">—</div>
-      <div class="metric-def"><b>= mốc mà 95% lượt gọi trả kết quả nhanh hơn</b> (bình quân theo lượt gọi).</div>
-    </div>
-    <div class="metric-card warn">
-      <div class="metric-label">🐢 Trường hợp chậm nhất (giây)</div>
-      <div class="metric-value" id="m-pf-p99">—</div>
-      <div class="metric-def"><b>= mốc mà 99% lượt gọi nhanh hơn.</b> Phần đuôi chậm cần theo dõi.</div>
+      <div class="metric-def"><b>= request thành công ÷ tổng request CÓ ĐO ĐƯỢC mã trả về.</b>
+        Mẫu số không phải mọi lượt gọi: agent không đi qua Google thì không ai biết nó
+        lỗi bao nhiêu, nên đưa vào mẫu số là ngầm khai rằng chúng đều thành công.</div>
     </div>
   </div>
 
@@ -1185,16 +1205,23 @@
   <div class="chart-grid">
     <div class="wf-chart">
       <span class="wf-type">Tròn</span>
-      <div class="wf-title">Kết quả trả về theo mã phản hồi <span class="pill-new">MỚI</span></div>
+      <div class="wf-title">Kết quả trả về theo mã phản hồi</div>
       <div class="wf-donut-wrap">
         <div class="canvas-box"><canvas id="c-pf-code"></canvas></div>
         <div class="wf-legend legend-described" id="lg-pf-code"></div>
       </div>
     </div>
     <div class="wf-chart">
-      <span class="wf-type">Thanh ngang</span>
-      <div class="wf-title">Tỉ lệ lỗi theo agent (%)</div>
-      <div class="canvas-box"><canvas id="c-pf-err"></canvas></div>
+      <span class="wf-type">Tròn</span>
+      <!-- TỶ TRỌNG, không phải tỷ lệ. Donut biểu diễn phần của MỘT TỔNG, mà
+           tỷ lệ lỗi của từng agent là các số độc lập — cộng chúng lại không ra
+           gì cả. Nên lát bánh = phần lỗi agent đó đóng góp, còn tỷ lệ lỗi
+           riêng của nó nằm ở chú giải bên cạnh. -->
+      <div class="wf-title">Tỷ trọng lỗi theo agent</div>
+      <div class="wf-donut-wrap">
+        <div class="canvas-box"><canvas id="c-pf-err"></canvas></div>
+        <div class="wf-legend legend-described" id="lg-pf-err"></div>
+      </div>
     </div>
   </div>
 
@@ -1205,11 +1232,15 @@
 
   <div class="table-container">
     <table>
+      <!-- Bỏ hai cột "Thời gian phản hồi" và "Trường hợp chậm nhất" (biên bản
+           25/07, mục 7.6). Chú thích cũ của chúng nói "mốc mà 95%/99% lượt gọi
+           nhanh hơn", nhưng `app.js` đưa vào `g.lat`/`g.lat99` — bình quân có
+           trọng số theo lượt gọi, KHÔNG phải phân vị. Cột hứa một phân vị mà
+           đưa ra một trung bình thì sai theo kiểu không ai phát hiện được, vì
+           con số vẫn hợp lý. -->
       <thead><tr>
         <th>Agent</th><th>Model</th><th class="num">Lượt gọi</th>
-        <th class="num">Tỉ lệ thành công</th><th class="num">Tỷ lệ lỗi</th>
-        <th class="num" title="Mốc thời gian mà 95% lượt gọi trả kết quả nhanh hơn">Thời gian phản hồi</th>
-        <th class="num" title="Mốc thời gian mà 99% lượt gọi trả kết quả nhanh hơn">Trường hợp chậm nhất</th>
+        <th class="num">Tỷ lệ thành công</th><th class="num">Tỷ lệ lỗi</th>
       </tr></thead>
       <tbody id="pf-tbody"></tbody>
     </table>

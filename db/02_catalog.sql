@@ -31,7 +31,7 @@ INSERT INTO dim_model (model_id, name, family, provider) VALUES
   (11, 'gemini-3.6-flash', 'gemini-3', 'Google'),
   (12, 'gemini-3.5-flash-lite', 'gemini-3', 'Google');
 
--- 46 anh xa. Ba nguon goi ten model theo ba kieu khac nhau:
+-- 49 anh xa. Ba nguon goi ten model theo ba kieu khac nhau:
 --   billing 'gemini-embedding-001'  <->  monitoring 'gemini-embedding-1.0'
 INSERT INTO dim_model_alias (source, raw_name, model_id) VALUES
   ('billing_sku', '07D6-73CA-C859', 5),
@@ -76,24 +76,25 @@ INSERT INTO dim_model_alias (source, raw_name, model_id) VALUES
   ('monitoring', 'gemini-3-flash', 5),
   ('monitoring', 'gemini-3.1-flash-lite', 7),
   ('monitoring', 'gemini-3.5-flash', 8),
-  -- Hai dong duoi them 04/09/2026. Monitoring cua project ma Gateway goi toi
-  -- bao TEN TRAN ('gemini-3.5-flash-lite'), trong khi nguon 'gateway' bao ten
-  -- co tien to nha cung cap ('gemini/gemini-3.5-flash-lite'). Cung mot model,
-  -- hai khong gian ten - dung cai ma bang bi danh sinh ra de xu ly.
   ('monitoring', 'gemini-3.5-flash-lite', 12),
   ('monitoring', 'gemini-3.6-flash', 11),
   ('monitoring', 'gemini-embedding-1.0', 9),
   ('monitoring', 'gemini-embedding-2', 10),
   ('gateway', 'gemini/gemini-3.6-flash', 11),
-  ('gateway', 'gemini/gemini-3.5-flash-lite', 12);
+  ('gateway', 'gemini/gemini-3.5-flash-lite', 12),
+  ('gateway', 'gemini/gemini-2.5-flash', 2);
 
--- 44 bi danh do dac: 13 phep do
+-- 48 bi danh do dac: 17 phep do
 -- monitoring + 31 SKU hoa don. Thay cho viec doan ten bang
 -- regex va LIKE '%token_count'. Nguon: descriptor + Cloud Billing Catalog.
 INSERT INTO dim_metric_alias (source, raw_name, label, measures, kind, metric_kind, value_type) VALUES
   ('monitoring', 'generativelanguage.googleapis.com/generate_content_usage_output_token_count', 'Generate content usage output token count.', 'token', 'output', 'DELTA', 'INT64'),
   ('monitoring', 'generativelanguage.googleapis.com/quota/embed_content_paid_tier_3_requests/limit', 'Current limit on quota metric generativelanguage.googleapis.com/embed_content_paid_tier_3_requests.', 'quota_limit', NULL, 'GAUGE', 'INT64'),
   ('monitoring', 'generativelanguage.googleapis.com/quota/embed_content_paid_tier_3_requests/usage', 'Current usage on quota metric generativelanguage.googleapis.com/embed_content_paid_tier_3_requests.', 'calls', NULL, 'DELTA', 'INT64'),
+  ('monitoring', 'generativelanguage.googleapis.com/quota/generate_content_free_tier_input_token_count/limit', 'Current limit on quota metric generativelanguage.googleapis.com/generate_content_free_tier_input_token_count.', 'quota_limit', NULL, 'GAUGE', 'INT64'),
+  ('monitoring', 'generativelanguage.googleapis.com/quota/generate_content_free_tier_input_token_count/usage', 'Current usage on quota metric generativelanguage.googleapis.com/generate_content_free_tier_input_token_count.', 'token', 'input', 'DELTA', 'INT64'),
+  ('monitoring', 'generativelanguage.googleapis.com/quota/generate_content_free_tier_requests/limit', 'Current limit on quota metric generativelanguage.googleapis.com/generate_content_free_tier_requests.', 'quota_limit', NULL, 'GAUGE', 'INT64'),
+  ('monitoring', 'generativelanguage.googleapis.com/quota/generate_content_free_tier_requests/usage', 'Current usage on quota metric generativelanguage.googleapis.com/generate_content_free_tier_requests.', 'calls', NULL, 'DELTA', 'INT64'),
   ('monitoring', 'generativelanguage.googleapis.com/quota/generate_content_paid_tier_3_input_token_count/limit', 'Current limit on quota metric generativelanguage.googleapis.com/generate_content_paid_tier_3_input_token_count.', 'quota_limit', NULL, 'GAUGE', 'INT64'),
   ('monitoring', 'generativelanguage.googleapis.com/quota/generate_content_paid_tier_3_input_token_count/usage', 'Current usage on quota metric generativelanguage.googleapis.com/generate_content_paid_tier_3_input_token_count.', 'token', 'input', 'DELTA', 'INT64'),
   ('monitoring', 'generativelanguage.googleapis.com/quota/generate_content_paid_tier_3_requests/limit', 'Current limit on quota metric generativelanguage.googleapis.com/generate_content_paid_tier_3_requests.', 'quota_limit', NULL, 'GAUGE', 'INT64'),
