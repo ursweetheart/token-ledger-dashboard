@@ -1,6 +1,11 @@
 ## 1. Xin thông tin từ bên ngoài — chặn mọi việc sau
 
-- [ ] 1.1 Lấy project Google mới (project riêng cho CRM, dùng credit của người dùng) và **service account JSON** của nó. Ghi lại project id
+- [x] 1.1 **Xong 10/09 — project id là `crm-test-508114`, và service account JSON đã có.**
+      Anh Tuấn tạo project và tải service account về. File nằm ở `D:\RangDonk\CRM-Classification-Pipeline\sa-key.json`, service account là `vertex-express@crm-test-508114.iam.gserviceaccount.com`, quyền **Vertex AI User**. Đã kiểm bằng máy: JSON hợp lệ, đủ 6 trường bắt buộc, khoá riêng đúng định dạng. **Không in giá trị khoá ra bất kỳ đâu.**
+      **ĐÃ NGHIỆM THU BẰNG MỘT LƯỢT GỌI THẬT**, qua đúng hàm `init_llm_client()` của CRM: in ra `>>> Using Google Vertex AI client...`, `vertexai=True`, `project=crm-test-508114`, trả về **200** và JSON hợp lệ. Nghĩa là nhánh Vertex của CRM **hết rơi ngược về AI Studio**.
+      **HAI ĐIỀU PHẢI GHI KÈM, KHÔNG ĐƯỢC BỎ:**
+      · `crm-test-508114` là **project THỬ**, anh Tuấn tạo để chạy thông luồng trên máy local, **không phải** project số `60854134008` ghi trong nhật ký cũ. Anh Tuấn đã chốt: hoá đơn lệch không sao vì đang chạy local. Nhưng khi nào đưa lên chạy thật thì **phải xem lại ô này**, và `dim_agent.gcp_project_id` của agent 7 vẫn giữ `crm-500509` (xem ô 8.3) nên hiện có **ba** project id khác nhau trong cùng câu chuyện. Ai đọc sau phải biết đủ ba.
+      · Trước khi có file, mã **âm thầm** rơi về AI Studio: điều kiện là `use_vertex and sa_key_path.exists()`, mà `.env.example` đặt sẵn `USE_VERTEX=True`, nên người đọc cấu hình tưởng đang chạy Vertex trong khi thật ra không. Không có cảnh báo nào. Đã báo lại nhóm CRM ở mục 7
 - [x] 1.2 **Không còn chặn gì — nhưng phép đo cũ vẫn đúng, chỉ là đo sai đường.** Hai lý do 403 dưới đây là của `generativelanguage.googleapis.com` (AI Studio). Tuyến thật của CRM đi `aiplatform.googleapis.com` (Vertex express) và **không bị chặn** — xem 1.3. Nên **không cần bật** Gemini API trên project, và không cần gỡ giới hạn API của khoá; để nguyên còn hẹp hơn. Việc còn lại thuộc 1.1 (ghi project id), không thuộc task này. **SỬA MỘT CHỖ GHI SAI (10/09) — khoá này là VERTEX EXPRESS, không phải AI Studio.**
       Bản trước của chính ô này ghi `KEY_BENCH_CRM_TEST` là "khoá AI Studio". Sai, và cái sai đó
       đã đẻ ra một kết luận sai to hơn ở ô 7.6 ("không có khoá nào ở đây gọi được model"). Đo lại

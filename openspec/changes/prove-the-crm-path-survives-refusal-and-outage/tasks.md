@@ -1,7 +1,9 @@
 ## 0. Chặn — phải xong trước
 
 - [ ] 0.1 Change `route-the-crm-agent-through-the-gateway` đã apply xong. Không có đường thông thì không có gì để ép hỏng
-- [ ] 0.2 Chốt **trần chi tiêu** cho batch cỡ production. Đây là credit của người dùng, không phải tiền công ty — phải hỏi, không tự quyết
+- [x] 0.2 **ĐÃ CHỐT (anh Tuấn, 10/09): khoảng 50 lượt, đủ cho mục 1 tới 3.** Mục 4 (batch cỡ production, ~502 lượt) và mục 5 (so độ trễ hai đường) **NẰM NGOÀI** trần này và phải hỏi lại trước khi chạy.
+      Đã dùng tới giờ: **2 lượt · 120 token · 0 đồng đáng kể** (phép thử công cụ ở ô 1.5). Còn lại khoảng 48 lượt.
+      Ghi thêm cho lần sau: chi phí thật của change này không nằm ở token mà ở **thời gian**. Đo được ở ô 1.5 là **~12 giây một lượt** cho một câu nhắc 31 token. Một batch 502 lượt chạy tuần tự sẽ mất hơn một tiếng rưỡi, chưa tính giãn nhịp — nên trần chi tiêu của mục 4 phải là trần THỜI GIAN chứ không chỉ trần tiền
 - [ ] 0.3 **Đo trước** xem `num_retries: 3` của Gateway có che 429 khỏi CRM hay không. Nếu Gateway tự xoay xong thì CRM không bao giờ thấy 429, và cả nhóm 2 sẽ đo một thứ khác. MUST NOT giả định
 - [x] 0.4 **Đã xác nhận bằng đo, 10/09 — tuyến CRM KHÔNG có fallback.** Lộ ra khi làm task 4.1 của change trước. Cấu hình chỉ khai đúng một dòng fallback, và nó **không** thuộc tuyến CRM:
 
@@ -14,11 +16,18 @@
 
 ## 1. Harness thành công cụ dùng lại được
 
-- [ ] 1.1 Đặt trong `tools/`, **không** trong `db/` hay `scripts/` — hai chỗ đó là đường nạp dữ liệu thật
-- [ ] 1.2 Nhận tham số: agent nào, khoá nào, model nào, bao nhiêu lượt, đường nào (gateway / trực tiếp). MUST NOT nhét CRM vào code
-- [ ] 1.3 Ghi ra từng lượt: mốc thời gian bắt đầu, mã trả về, độ trễ, token vào/ra, `request_id`. Đủ để tính lại mọi con số sau này mà không phải chạy lại
-- [ ] 1.4 MUST NOT tải/ghi SharePoint, MUST NOT gửi email, MUST NOT ghi Excel
-- [ ] 1.5 Chạy thử với 2 lượt để bắt lỗi công cụ trước khi tin số nó in ra
+- [x] 1.1 **Xong** — `tools/do_duong_llm.py`. Không nằm trong `db/` hay `scripts/`
+- [x] 1.2 **Xong, và đã kiểm bằng máy chứ không bằng mắt.** Sáu thứ đều là tham số: `--agent`, `--khoa-bien`, `--model`, `--so-luot`, `--duong` (`gateway` | `truc-tiep`), `--base-url`. Không có chuỗi `crm` nào trong phần logic; nó chỉ xuất hiện ở ví dụ trong docstring.
+      **Khoá nhận bằng TÊN BIẾN, không nhận giá trị** (`--khoa-bien`). Truyền khoá thẳng vào dòng lệnh sẽ để lại dấu ở ba chỗ không xoá được: lịch sử shell, danh sách tiến trình mà mọi user trên máy đọc được, và nhật ký lệnh nếu ai bật
+- [x] 1.3 **Xong, ghi JSONL mỗi lượt một dòng.** Kiểm bằng máy trên sổ đo thật: đủ cả 6 trường task này đòi — `bat_dau_utc` (ISO, có múi giờ), `ma_tra_ve`, `do_tre_ms`, `token_vao`, `token_ra`, `request_id`.
+      Ghi thêm 10 trường nữa để không phải gọi lại: `token_suy_nghi`, `token_tong`, `noi_dung`, `cau_nhac`, `duong`, `model`, `agent`, `so_thu_tu`, `header_id`, `url`. **`noi_dung` là trường quan trọng nhất trong nhóm thêm** — có nó mới so được kết quả hai đường trên cùng đầu vào (ô 7.6 của change trước) mà không phải trả tiền gọi lần nữa.
+      **Khoá KHÔNG lọt vào sổ**: đường trực tiếp bắt buộc để khoá trong query string, nên `url` được cắt bỏ phần sau dấu `?` trước khi ghi. Đã kiểm bằng máy: không có chuỗi `key=` nào trong file
+- [x] 1.4 **Xong, và bảo đảm bằng cấu trúc chứ không bằng lời hứa.** File không `import` bất kỳ module nào của agent, chỉ dùng thư viện chuẩn. Không có đường nào dẫn tới SharePoint, email, Excel hay database.
+      **Đây không phải lo hão.** Trong lúc làm việc này tôi đã hai lần vô tình chạy đúng `src/pipeline.py` của CRM, vì entrypoint của image `crm-classifier:test` là `python src/pipeline.py` nên tham số truyền vào bị nối thêm vào sau chứ không thay thế. Nó chỉ dừng lại vì thiếu cấu hình SharePoint. Có `.env` đầy đủ thì nó đã tải file thật, ghi ngược lên SharePoint (`pipeline.py:743`, `:849`) và gửi email. Muốn chạy thứ gì trong image đó phải có `--entrypoint python`
+- [x] 1.5 **Xong — 2 lượt, cả hai 200, và phép thử này bắt được một lỗi thật.**
+      Lỗi bắt được: tên biến môi trường chứa khoá **không phải** `KEY_BENCH_CRM_TEST` như ghi trong nhật ký cũ, mà là `KEY_BENCH_CRM_TEST_GG_AIA_STU`. Chạy thẳng batch lớn sẽ hỏng toàn bộ ở lượt đầu.
+      Số đo, hai lượt giống hệt nhau ở nhiệt độ 0: `31` token vào · `8` ra · `21` suy nghĩ · `60` tổng; độ trễ `11.911` và `11.971` ms.
+      **Phép kiểm cộng token trong công cụ ĐẠT**: `31 + 8 + 21 = 60`, khớp đúng con số Google báo. Đây là bằng chứng thứ tư cho thấy token suy nghĩ là **ngăn thứ ba** nằm ngoài vào và ra — và ở lượt này nó chiếm **21/60, tức 35%** tổng token. Công cụ ghi bốn con số TÁCH NHAU, và sẽ kêu nếu ba số con không cộng ra số tổng
 
 ## 2. Ép 429 và xem CRM lùi lịch nhánh nào
 
