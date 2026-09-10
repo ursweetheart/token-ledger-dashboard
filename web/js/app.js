@@ -51,6 +51,54 @@ var INSIGHT_THRESHOLDS = {
   adoptionCritical:30,
   inactivityDays:30
 };
+
+/* ─── Ma trận semantics của 8 thẻ KPI Tổng quan ───────────────────────────
+   TÁM thẻ, không phải chín. Mọi ô trong change `standardize-kpi-card-insights`
+   viết "chín KPI card"; đếm lại trên `index.html` (khối `.overview-kpis`) chỉ có
+   8. Con số 9 là của bản dựng 22/07, trước khi một thẻ bị gộp.
+
+   HAI TRỤC TÁCH RỜI — đây là điều change này yêu cầu và là chỗ dễ trộn nhất:
+
+     ① CHIỀU BIẾN ĐỘNG (`delta`)  tăng = xanh, giảm = đỏ, ~0 = trung tính.
+        Thuần hình học, KHÔNG hỏi tốt hay xấu. Nằm ở `deltaLine()`.
+     ② ĐÁNH GIÁ (`status`)        normal / warning / critical, do NGƯỠNG quyết
+        định, hiện ở viền + tint thẻ và ở nhãn dòng insight.
+
+   Trộn hai trục là lý do bảng màu cũ đọc sai: tỷ lệ lỗi GIẢM thì mũi tên đỏ
+   (giảm) trong khi thẻ đang ổn (xanh). Hai tín hiệu đó nói hai chuyện khác nhau
+   và cả hai đều đúng — nên chúng phải nằm ở hai chỗ khác nhau trên thẻ.
+
+   `polarity` KHÔNG tô màu delta. Nó chỉ để viết câu và để chọn ngưỡng:
+     up-good  tăng là điều mong muốn (agent hoạt động, user hoạt động)
+     up-bad   tăng là điều phải để ý (tỷ lệ lỗi, tiền)
+     neutral  không có chiều nào tốt hơn (số phòng ban, số request, token)
+
+   `threshold` để `null` nghĩa là CHƯA CÓ NGƯỠNG THẬT cho thẻ đó — không phải
+   quên. Bịa một ngưỡng để lấp ô cho đủ ma trận là dựng cảnh báo giả, đúng loại
+   lỗi mà ô 1.3 vừa gỡ ở baseline. */
+var OVERVIEW_KPI_SEMANTICS = [
+  { id:"agents",   valueId:"m-ov-agents",   deltaId:"d-ov-agents",   insightId:"i-ov-agents",
+    unit:"agent",        polarity:"up-good", threshold:"agent-inactivity" },
+  { id:"units",    valueId:"m-ov-units",    deltaId:"d-ov-units",    insightId:"i-ov-units",
+    unit:"phòng ban",    polarity:"neutral", threshold:null },
+  { id:"users",    valueId:"m-ov-users",    deltaId:"d-ov-users",    insightId:"i-ov-users",
+    unit:"user",         polarity:"up-good", threshold:"adoption" },
+  { id:"requests", valueId:"m-ov-requests", deltaId:"d-ov-requests", insightId:"i-ov-requests",
+    unit:"request",      polarity:"neutral", threshold:null },
+  { id:"tokens",   valueId:"m-ov-tokens",   deltaId:"d-ov-tokens",   insightId:"i-ov-tokens",
+    unit:"token",        polarity:"neutral", threshold:null },
+  { id:"cost",     valueId:"m-ov-cost",     deltaId:"d-ov-cost",     insightId:"i-ov-cost",
+    unit:"VNĐ",          polarity:"up-bad",  threshold:"concentration" },
+  { id:"costuser", valueId:"m-ov-costuser", deltaId:"d-ov-costuser", insightId:"i-ov-costuser",
+    unit:"VNĐ/user",     polarity:"up-bad",  threshold:null },
+  { id:"error",    valueId:"m-ov-error",    deltaId:"d-ov-error",    insightId:"i-ov-error",
+    unit:"%",            polarity:"up-bad",  threshold:"error-rate" }
+];
+function overviewSemantics(id){
+  for(var i=0;i<OVERVIEW_KPI_SEMANTICS.length;i++)
+    if(OVERVIEW_KPI_SEMANTICS[i].id===id) return OVERVIEW_KPI_SEMANTICS[i];
+  return null;
+}
 /* SÁU DÒNG "Đơn vị sử dụng <agent>" ĐÃ RỜI DANH SÁCH NÀY (30/08/2026).
 
    Chúng là hàng kỹ thuật của sáu project Google Cloud Console - loại agent
@@ -1098,15 +1146,51 @@ var DELTA_BASIS = {
    quyền kết luận dashboard đang bịa kỳ gốc ở mức 88%/57%. Đã bỏ hẳn tham số và
    nhánh chết: giờ không còn chỗ nào để baseline giả quay lại mà không phải thêm
    mã mới. */
+/* `has` TÁCH KHỎI `v` — ĐÂY LÀ SỬA LỖI ĐANG SỐNG, không phải dọn dẹp.
+
+   Bản trước trả `{v: realBase>0 ? realBase : 0}`, tức ép CẢ HAI trạng thái khác
+   nhau về cùng một giá trị `0`:
+       không có kỳ so sánh   (realBase == null)  -> v = 0
+       kỳ so sánh CÓ và bằng 0 (realBase === 0)  -> v = 0
+   rồi `deltaLine` in `b.v<=0` thành "chưa có dữ liệu". Hệ quả đo được trên thẻ
+   Tỷ lệ lỗi: kỳ trước KHÔNG có lỗi (0%) là một phép đo THẬT và là tin tốt, nhưng
+   màn hình nói "chưa có dữ liệu" — đúng thứ ô 1.3 dặn phải phân biệt. Cùng lỗi
+   ấy đánh vào mọi thẻ mà kỳ trước có thể bằng 0 một cách hợp lệ (request, token,
+   tiền của một agent mới bật).
+
+   Nay `v` giữ nguyên số thật (kể cả 0) và `has` nói riêng "có kỳ so sánh hay
+   không". Ba trạng thái, ba câu khác nhau. */
 function deltaBaseline(realBase){
-  return { v: (realBase != null && realBase > 0) ? realBase : 0 };
+  var ok = realBase != null && isFinite(realBase) && realBase >= 0;
+  return { v: ok ? Number(realBase) : null, has: ok };
 }
 function deltaLine(basisKey, cur, b, betterUp, fmtFn){
   var basis=DELTA_BASIS[basisKey]||DELTA_BASIS.KT, period=basis.label();
   var tip="so với "+basis.full+(period?" ("+period+")":"");
-  if(b.v==null || b.v<=0){
-    return "<div class='delta-line d-dim' title='"+esc(tip+": chưa có dữ liệu")+"'>– <span class='delta-basis'>"+
-      basis.abbr+"</span> chưa có dữ liệu</div>";
+  // ① Không có kỳ so sánh. Không phải "bằng 0" — là không đo được.
+  if(!b.has){
+    return "<div class='delta-line d-dim' title='"+esc(tip+": chưa có kỳ so sánh")+"'>– <span class='delta-basis'>"+
+      basis.abbr+"</span> chưa có kỳ so sánh</div>";
+  }
+  // ② Kỳ so sánh CÓ và bằng 0. Phần trăm thay đổi không định nghĩa được (chia
+  //    cho 0), nên nói bằng chữ chứ không bịa ra một con số %.
+  if(b.v===0){
+    /* Số 0 của kỳ nền cũng phải đi qua `fmtFn` như mọi giá trị nền khác. Bản đầu
+       viết thẳng chuỗi "0", nên thẻ Tỷ lệ lỗi hiện "KT · 0" trong khi mọi nhánh
+       còn lại của chính thẻ đó hiện "KT · 2,5%" — cùng một ô, hai đơn vị. Thẻ tiền
+       thì mất luôn chữ "đ". Phép soát bắt được vì nó so nhánh này với nhánh
+       thường trên cùng một `fmtFn`. */
+    var baseZero = fmtFn ? fmtFn(0) : "0";
+    if(!(cur>0)){
+      return "<div class='delta-line d-neutral' title='"+esc(tip+": "+baseZero+" → "+baseZero+", không đổi")+
+        "'>→ không đổi <span class='delta-basis'>"+basis.abbr+"</span> <span class='delta-base-val'>"+
+        esc(baseZero)+"</span></div>";
+    }
+    var newText = fmtFn ? fmtFn(cur) : String(cur);
+    return "<div class='delta-line d-green' title='"+esc(tip+": "+baseZero+" → "+newText+
+      " (kỳ trước bằng 0 nên không có tỷ lệ phần trăm để so)")+
+      "'>▲ mới <span class='delta-basis'>"+basis.abbr+"</span> <span class='delta-base-val'>"+
+      esc(baseZero)+"</span></div>";
   }
   var diff=cur-b.v, p=diff/b.v*100, flat=Math.abs(p)<0.5, up=diff>0;
   // Màu biểu thị trực tiếp hướng biến động theo quy ước dashboard:
@@ -1130,10 +1214,11 @@ function renderDelta(id, cur, prev, same, betterUp, fmtFn){
   var pb=deltaBaseline(prev), sb=deltaBaseline(same);
   el.innerHTML = deltaLine("KT", cur, pb, betterUp, fmtFn) + deltaLine("CK", cur, sb, betterUp, fmtFn);
 }
-function renderSingleDelta(id, cur, prev, fmtFn){
-  var el=document.getElementById(id); if(!el) return;
-  el.innerHTML=deltaLine("KT",cur,deltaBaseline(prev),null,fmtFn);
-}
+/* `renderSingleDelta` ĐÃ GỠ (10/09/2026). Tám thẻ Tổng quan là toàn bộ chỗ gọi
+   nó, và cả tám nay đi qua `renderKpiCard()`. Giữ lại một hàm không ai gọi ở đây
+   không phải là vô hại: nó là đường vẽ delta KHÔNG đi qua view-model, nên lần
+   sau ai thêm thẻ mà gặp nó trước sẽ dựng lại đúng cái cấu trúc ba-lời-gọi-rời-rạc
+   mà ô 3.2 vừa gộp. Cùng lý do đã gỡ `mockFactor` — xem ghi chú ở `deltaBaseline`. */
 
 /* ─── Tổng hợp ─── */
 /* `costEst` / `costInv` — TIỀN NÀY TỪ ĐÂU RA (thêm 20/08/2026)
@@ -1457,6 +1542,127 @@ function renderCardInsight(valueId, candidates){
   card.classList.add("insight-"+chosen.severity);
 }
 
+/* ─── View-model dùng chung cho thẻ KPI ───────────────────────────────────
+   Một chỗ duy nhất mô tả một thẻ, để phần vẽ không phải biết thẻ nào là thẻ nào.
+   Tám trường của ô 1.1, ánh xạ thẳng sang cấu trúc dưới đây:
+
+     value / display   số thật, và chuỗi đã format để hiện
+     unit              đơn vị (đã nằm trong ngoặc ở nhãn thẻ, nên chỉ dùng cho tooltip)
+     comparison        {basis, current, baseline} — ĐÚNG MỘT phép so mỗi thẻ (ô 3.2)
+     direction         suy ra từ comparison, không tự khai: up | down | flat | none
+     status            normal | warning | critical | none   (trục ĐÁNH GIÁ, ô 1.2)
+     driver            ĐÚNG MỘT contributor mỗi thẻ (ô 2.3 + ô 3.2)
+     freshness         độ mới của dữ liệu đứng sau con số
+     definition        công thức, cùng các giá trị thành phần cho tooltip
+
+   `direction` được TÍNH, không được truyền vào: nếu để người gọi khai thì sẽ có
+   ngày mũi tên và con số nói ngược nhau mà không ai phát hiện. */
+function kpiView(o){
+  var cmp=o.comparison||null, dir="none";
+  if(cmp && cmp.baseline && cmp.baseline.has){
+    if(cmp.baseline.v===0) dir = (cmp.current>0) ? "up" : "flat";
+    else {
+      var p=(cmp.current-cmp.baseline.v)/cmp.baseline.v*100;
+      dir = Math.abs(p)<0.5 ? "flat" : (p>0 ? "up" : "down");
+    }
+  }
+  return {
+    id:o.id||"", valueId:o.valueId, deltaId:o.deltaId||"", insightId:o.insightId||"",
+    value:o.value, display:o.display!=null?o.display:String(o.value),
+    unit:o.unit||"", formatter:o.formatter||null,
+    comparison:cmp, direction:dir,
+    status:o.status||"none", driver:o.driver||"", freshness:o.freshness||"",
+    definition:o.definition||"", components:o.components||[],
+    valueTitle:o.valueTitle||""
+  };
+}
+/* Câu giải thích cho tooltip 12px (ô 3.3): công thức, giá trị thành phần, kỳ so
+   sánh. Gom vào một hàm để tám thẻ không viết tám kiểu. */
+function kpiTipText(v){
+  var parts=[];
+  if(v.definition) parts.push(v.definition);
+  if(v.components && v.components.length){
+    parts.push(v.components.map(function(c){ return c.label+": "+c.value; }).join(" · "));
+  }
+  if(v.comparison && v.comparison.baseline){
+    var basis=DELTA_BASIS[v.comparison.basis]||DELTA_BASIS.KT, period=basis.label();
+    var b=v.comparison.baseline;
+    var baseText = b.has ? (v.formatter?v.formatter(b.v):String(b.v)) : "chưa có";
+    parts.push("So với "+basis.full+(period?" ("+period+")":"")+": "+baseText);
+  }
+  if(v.freshness) parts.push("Dữ liệu: "+v.freshness);
+  return parts.join("\n");
+}
+/* Vẽ một thẻ từ view-model. Cố ý KHÔNG tạo/sửa phần tử nào: mọi chỗ nó ghi vào
+   đều đã có sẵn trong `index.html` (value, delta-badge, insight) cộng đúng một
+   khối tooltip. Trục ĐÁNH GIÁ đi vào class của thẻ và của giá trị; trục CHIỀU
+   BIẾN ĐỘNG do `deltaLine()` lo và không bị hàm này can thiệp. */
+function renderKpiCard(v){
+  var value=document.getElementById(v.valueId); if(!value) return;
+  value.innerHTML = v.display;
+  var card=value.closest(".metric-card");
+
+  if(v.deltaId && v.comparison){
+    var el=document.getElementById(v.deltaId);
+    if(el) el.innerHTML=deltaLine(v.comparison.basis||"KT", v.comparison.current,
+                                  v.comparison.baseline, null, v.formatter);
+  }
+
+  if(v.insightId){
+    var ins=document.getElementById(v.insightId);
+    if(ins){
+      var text = v.driver || "—";
+      ins.innerHTML = (v.status==="warning"||v.status==="critical")
+        ? "<span class='kpi-flag kpi-flag-"+v.status+"'>"+
+          (v.status==="critical"?"CẢNH BÁO":"CẦN THEO DÕI")+"</span>"+text
+        : text;
+      ins.className="overview-kpi-insight kpi-status-"+v.status;
+    }
+  }
+
+  if(card){
+    card.classList.remove("kpi-normal","kpi-warning","kpi-critical");
+    if(v.status!=="none") card.classList.add("kpi-"+v.status);
+    var tip=kpiTipText(v);
+    if(tip){
+      var box=card.querySelector(".kpi-tip");
+      if(!box){ box=document.createElement("div"); box.className="kpi-tip"; card.appendChild(box); }
+      box.textContent=tip;
+      card.classList.add("has-kpi-tip");
+    }
+  }
+  // Tooltip gốc của hệ điều hành vẫn giữ: nó là đường đọc duy nhất khi người
+  // dùng phóng to chữ hoặc dùng trình đọc màn hình.
+  if(v.valueTitle) value.setAttribute("title", v.valueTitle);
+}
+/* Đánh giá theo ngưỡng, tra bằng `threshold` khai trong OVERVIEW_KPI_SEMANTICS.
+   Trả "none" khi thẻ đó chưa có ngưỡng thật — xem ghi chú ở ma trận. */
+function kpiStatus(name, ctx){
+  if(!name) return "none";
+  if(name==="error-rate"){
+    if(!ctx.codeAvailable) return "none";
+    return ctx.er>=INSIGHT_THRESHOLDS.errorCritical ? "critical"
+         : ctx.er>=INSIGHT_THRESHOLDS.errorWarning  ? "warning" : "normal";
+  }
+  if(name==="concentration"){
+    if(ctx.share==null) return "none";
+    return ctx.share>=INSIGHT_THRESHOLDS.concentrationCritical ? "critical"
+         : ctx.share>=INSIGHT_THRESHOLDS.concentrationWarning  ? "warning" : "normal";
+  }
+  if(name==="agent-inactivity"){
+    if(!(ctx.created>0)) return "none";
+    var idleShare=pct(Math.max(0,ctx.created-ctx.active),ctx.created);
+    return idleShare>=50 ? "critical" : (ctx.created-ctx.active)>0 ? "warning" : "normal";
+  }
+  if(name==="adoption"){
+    if(!(ctx.provisioned>0)) return "none";
+    var rate=pct(ctx.activeUsers,ctx.provisioned);
+    return rate<=INSIGHT_THRESHOLDS.adoptionCritical ? "critical"
+         : rate<=INSIGHT_THRESHOLDS.adoptionWarning  ? "warning" : "normal";
+  }
+  return "none";
+}
+
 /* ═══════════════ CHART HELPERS ═══════════════ */
 var charts = {};
 function chart(id, cfg){
@@ -1602,48 +1808,156 @@ function renderOverview(rows){
   var topUnit=byUnit.slice().sort(function(a,b){return b.cost-a.cost;})[0];
   var topError=active.slice().sort(function(a,b){return b.er-a.er;})[0];
 
-  /* Scorecard dùng chung một format số: nghìn / triệu / tỷ viết bằng chữ,
-     đơn vị nằm trong ngoặc ở tên thẻ nên giá trị không lặp lại đơn vị. */
-  set("m-ov-agents",active.length+"/"+created);
-  set("m-ov-units",fmtCompactNum(byUnit.length));
-  set("m-ov-users",fmtCompactNum(activeUsers));
-  setWithTitle("m-ov-requests",fmtCompactNum(A.r),fmt(A.r)+" request");
-  setWithTitle("m-ov-tokens",fmtCompactNum(A.tokens),fmtTokFull(A.tokens));
-  /* Thẻ tiền nói độ tin CỦA KỲ ĐANG CHỌN, không của toàn bộ dữ liệu. Tỷ lệ suy ra
+  /* ─── TÁM THẺ KPI TỔNG QUAN, VẼ QUA MỘT RENDERER DUY NHẤT ───────────────
+     Trước đây mỗi thẻ là ba lời gọi rời nhau (`set` giá trị, `renderSingleDelta`,
+     `set` insight) nằm ở ba khối cách xa nhau. Hệ quả không phải chỉ dài dòng:
+     thẻ tiền từng đặt insight HAI LẦN — dòng "top agent chiếm x%" rồi bị dòng
+     "suy từ bảng giá" ghi đè ngay dưới — nên khối trên là mã chết mà đọc thì
+     tưởng đang chạy. Gộp về `renderKpiCard(kpiView(...))` làm chuyện đó không
+     lặp lại được: mỗi thẻ đúng MỘT phép so và MỘT driver (ô 3.2).
+
+     Format số dùng chung: nghìn / triệu / tỷ viết bằng chữ; đơn vị đã nằm trong
+     ngoặc ở tên thẻ nên giá trị không lặp lại đơn vị.
+
+     Thẻ tiền nói độ tin CỦA KỲ ĐANG CHỌN, không của toàn bộ dữ liệu. Tỷ lệ suy ra
      lệch rất mạnh theo ngày - 22/228 ngày có hơn một nửa là suy ra, ngày mới nhất
      luôn 100% - nên một con số trung bình cả kỳ sẽ nói dối về chính kỳ đang xem.
      Đúng cái bẫy đã mắc 17/08: tính tỷ lệ trên 224 ngày trong khi thẻ chỉ hiện kỳ
      được chọn, báo 28% cạnh một con số mà tỷ lệ thật là 32%. `A` ở đây là
-     aggregate() của CHÍNH tập dòng đang hiện, nên không lệch được. */
-  setWithTitle("m-ov-cost",
-    (costIsMarked(A.cost, A.costEst) ? "≈ " : "") + usageCompact(A.cost),
-    money(A.cost) + " · " + costProvenanceTitle(A.cost, A));
-  setWithTitle("m-ov-costuser",usageCompact(costPerUser),money(costPerUser)+" / user hoạt động");
-  set("m-ov-error",A.er.toFixed(1).replace(".",","));
+     aggregate() của CHÍNH tập dòng đang hiện, nên không lệch được.
 
-  renderSingleDelta("d-ov-agents",active.length,prevActive.length,fmt);
-  renderSingleDelta("d-ov-units",byUnit.length,prevUnits.length,fmt);
-  renderSingleDelta("d-ov-users",activeUsers,0,fmt);
-  renderSingleDelta("d-ov-requests",A.r,prevA.r,fmtCompactNum);
-  renderSingleDelta("d-ov-tokens",A.tokens,prevA.tokens,fmtCompactNum);
-  renderSingleDelta("d-ov-cost",A.cost,prevA.cost,moneyCompact);
-  renderSingleDelta("d-ov-costuser",costPerUser,0,moneyCompact);
-  renderSingleDelta("d-ov-error",A.er,prevA.er,function(v){return v.toFixed(1)+"%";});
+     HAI THẺ TRUYỀN `null` LÀM KỲ GỐC, KHÔNG PHẢI `0`.
+     `users` và `costuser` trước đây truyền số `0`. Khi `deltaBaseline` còn ép
+     null và 0 về cùng một chỗ thì hai cách viết cho ra cùng một màn hình, nên
+     không ai thấy. Sau khi tách `has` (xem ghi chú ở `deltaBaseline`), truyền `0`
+     sẽ thành lời khẳng định "kỳ trước bằng 0" — câu mà dữ liệu KHÔNG nói.
+     Vì sao không tính được: `u.active` do `applyRealAccountUsage()` đặt và hàm đó
+     GHI ĐÈ `USER_ACCOUNTS` toàn cục, nên gọi lại với `prevRows` sẽ phá số của kỳ
+     đang xem; còn `aggregate(prevRows).u` thì vô dụng vì `api.js` đặt `u: 0` cho
+     MỌI dòng ở đường database. */
+  var freshness = state.dayOrder.length ? state.dayOrder[state.dayOrder.length-1] : "";
+  var idleAgents = Math.max(0, created-active.length);
+  var provisioned = accounts.length;
 
-  set("i-ov-agents",Math.max(0,created-active.length)+" agent chưa hoạt động trong kỳ.");
-  set("i-ov-units",topUnit?esc(topUnit.key)+" dẫn đầu, chiếm "+pct(topUnit.cost,A.cost).toFixed(0)+"% mức sử dụng.":"Chưa có phòng ban phát sinh sử dụng.");
-  set("i-ov-users",fmt(activeUsers)+" đang dùng · "+fmt(inactiveUsers)+" tài khoản không hoạt động.");
-  set("i-ov-requests",topRequest?esc(topRequest.key)+" chiếm "+pct(topRequest.r,A.r).toFixed(0)+"% request.":"Chưa có request trong kỳ.");
-  set("i-ov-tokens",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.tokens,A.tokens).toFixed(0)+"% token.":"Chưa có token trong kỳ.");
-  set("i-ov-cost",topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.cost,A.cost).toFixed(0)+"% tổng mức sử dụng.":"Chưa phát sinh mức sử dụng.");
-  set("i-ov-costuser","Bình quân trên "+fmt(activeUsers)+" user hoạt động.");
-  /* Nói thẳng phần suy ra ra màn hình, không chỉ giấu trong tooltip: đây là thẻ
-     tiền chính, và người đọc báo cáo hiếm khi trỏ chuột. */
-  if(A.costEst>0)
-    set("i-ov-cost", "Trong đó " + moneyCompact(A.costEst) + " ("
-      + (A.cost>0 ? (100*A.costEst/A.cost).toFixed(0) : "100")
-      + "%) suy từ bảng giá vì chưa có hoá đơn.");
-  set("i-ov-error",topError&&topError.er>0?esc(topError.key)+" cao nhất: "+topError.er.toFixed(1)+"%.":"Không ghi nhận lỗi.");
+  renderKpiCard(kpiView({
+    id:"agents", valueId:"m-ov-agents", deltaId:"d-ov-agents", insightId:"i-ov-agents",
+    value:active.length, display:active.length+"/"+created, unit:"agent", formatter:fmt,
+    definition:"= agent có ≥1 request ÷ tổng agent đã tạo.",
+    components:[{label:"Có request",value:fmt(active.length)},{label:"Đã tạo",value:fmt(created)}],
+    comparison:{basis:"KT", current:active.length, baseline:deltaBaseline(prevActive.length)},
+    status:kpiStatus("agent-inactivity",{created:created,active:active.length}),
+    driver:idleAgents+" agent chưa hoạt động trong kỳ.", freshness:freshness
+  }));
+
+  renderKpiCard(kpiView({
+    id:"units", valueId:"m-ov-units", deltaId:"d-ov-units", insightId:"i-ov-units",
+    value:byUnit.length, display:fmtCompactNum(byUnit.length), unit:"phòng ban", formatter:fmt,
+    definition:"= số lượng phòng ban có phát sinh request.",
+    comparison:{basis:"KT", current:byUnit.length, baseline:deltaBaseline(prevUnits.length)},
+    status:"none",
+    driver:topUnit?esc(topUnit.key)+" dẫn đầu, chiếm "+pct(topUnit.cost,A.cost).toFixed(0)+"% mức sử dụng."
+                  :"Chưa có phòng ban phát sinh sử dụng.",
+    freshness:freshness
+  }));
+
+  renderKpiCard(kpiView({
+    id:"users", valueId:"m-ov-users", deltaId:"d-ov-users", insightId:"i-ov-users",
+    value:activeUsers, display:fmtCompactNum(activeUsers), unit:"user", formatter:fmt,
+    definition:"= tài khoản có ≥1 request trong kỳ.",
+    components:[{label:"Hoạt động",value:fmt(activeUsers)},{label:"Không hoạt động",value:fmt(inactiveUsers)}],
+    comparison:{basis:"KT", current:activeUsers, baseline:deltaBaseline(null)},
+    status:kpiStatus("adoption",{activeUsers:activeUsers, provisioned:provisioned}),
+    driver:fmt(activeUsers)+" đang dùng · "+fmt(inactiveUsers)+" tài khoản không hoạt động.",
+    freshness:freshness
+  }));
+
+  renderKpiCard(kpiView({
+    id:"requests", valueId:"m-ov-requests", deltaId:"d-ov-requests", insightId:"i-ov-requests",
+    value:A.r, display:fmtCompactNum(A.r), unit:"request", formatter:fmtCompactNum,
+    valueTitle:fmt(A.r)+" request",
+    definition:"= Σ lượt gọi của mọi agent trong kỳ.",
+    comparison:{basis:"KT", current:A.r, baseline:deltaBaseline(prevA.r)},
+    status:"none",
+    driver:topRequest?esc(topRequest.key)+" chiếm "+pct(topRequest.r,A.r).toFixed(0)+"% request."
+                     :"Chưa có request trong kỳ.",
+    freshness:freshness
+  }));
+
+  renderKpiCard(kpiView({
+    id:"tokens", valueId:"m-ov-tokens", deltaId:"d-ov-tokens", insightId:"i-ov-tokens",
+    value:A.tokens, display:fmtCompactNum(A.tokens), unit:"token", formatter:fmtCompactNum,
+    valueTitle:fmtTokFull(A.tokens),
+    /* Công thức nói ĐÚNG thứ `aggregate()` làm: ti + to + cached. `cached` chỉ
+       được api.js chuyển tiếp khi nó là SKU nằm NGOÀI input (nguồn hoá đơn), nên
+       cộng ở đây không đếm hai lần. Token `thinking` KHÔNG có trong tổng và đó là
+       cố ý — xem ô 2.1 trong tasks.md. */
+    definition:"= Σ token vào + token ra + token cache (SKU riêng của hoá đơn).",
+    components:[{label:"Vào",value:fmtCompactNum(A.ti)},{label:"Ra",value:fmtCompactNum(A.to)},
+                {label:"Cache",value:fmtCompactNum(A.cached)}],
+    comparison:{basis:"KT", current:A.tokens, baseline:deltaBaseline(prevA.tokens)},
+    status:"none",
+    driver:topAgent?esc(topAgent.key)+" chiếm "+pct(topAgent.tokens,A.tokens).toFixed(0)+"% token."
+                   :"Chưa có token trong kỳ.",
+    freshness:freshness
+  }));
+
+  /* Thẻ tiền: MỘT driver, chọn theo thứ tự quan trọng. Phần suy ra nói thẳng ra
+     màn hình chứ không chỉ nằm trong tooltip — đây là thẻ tiền chính và người đọc
+     báo cáo hiếm khi trỏ chuột. Khi không có phần suy ra thì driver là contributor
+     lớn nhất. `status` vẫn tính theo mức tập trung dù driver hiện câu nào. */
+  var costShare = topAgent ? pct(topAgent.cost,A.cost) : null;
+  renderKpiCard(kpiView({
+    id:"cost", valueId:"m-ov-cost", deltaId:"d-ov-cost", insightId:"i-ov-cost",
+    value:A.cost, display:(costIsMarked(A.cost, A.costEst) ? "≈ " : "") + usageCompact(A.cost),
+    unit:"VNĐ", formatter:moneyCompact,
+    valueTitle:money(A.cost) + " · " + costProvenanceTitle(A.cost, A),
+    definition:"= Σ (token × đơn giá), quy đổi theo tỷ giá cấu hình.",
+    comparison:{basis:"KT", current:A.cost, baseline:deltaBaseline(prevA.cost)},
+    status:kpiStatus("concentration",{share:costShare}),
+    driver:(A.costEst>0)
+      ? "Trong đó "+moneyCompact(A.costEst)+" ("+(A.cost>0?(100*A.costEst/A.cost).toFixed(0):"100")
+        +"%) suy từ bảng giá vì chưa có hoá đơn."
+      : (topAgent?esc(topAgent.key)+" chiếm "+costShare.toFixed(0)+"% tổng mức sử dụng."
+                 :"Chưa phát sinh mức sử dụng."),
+    freshness:freshness
+  }));
+
+  renderKpiCard(kpiView({
+    id:"costuser", valueId:"m-ov-costuser", deltaId:"d-ov-costuser", insightId:"i-ov-costuser",
+    value:costPerUser, display:usageCompact(costPerUser), unit:"VNĐ/user", formatter:moneyCompact,
+    valueTitle:money(costPerUser)+" / user hoạt động",
+    definition:"= tổng mức độ sử dụng ÷ số user hoạt động.",
+    components:[{label:"Tổng",value:moneyCompact(A.cost)},{label:"User hoạt động",value:fmt(activeUsers)}],
+    comparison:{basis:"KT", current:costPerUser, baseline:deltaBaseline(null)},
+    status:"none",
+    driver:"Bình quân trên "+fmt(activeUsers)+" user hoạt động.", freshness:freshness
+  }));
+
+  /* KHÔNG BIẾT MÃ TRẢ VỀ THÌ KHÔNG CÓ TỶ LỆ LỖI ĐỂ HIỆN.
+     `aggregate()` trả `er = 0` khi không có dòng nào biết mã, nên in thẳng sẽ ra
+     "0,0" — một kỳ KHÔNG ĐO ĐƯỢC trông thành một kỳ hoàn hảo. Cùng loại lỗi mà
+     ô 5.4 bắt ở latency (`0.0 s`), và bảng Hiệu năng đã xử đúng bằng
+     `A.codeAvailable` từ trước; thẻ này thì chưa. Nay dùng cùng một cái cổng. */
+  renderKpiCard(kpiView({
+    id:"error", valueId:"m-ov-error", deltaId:"d-ov-error", insightId:"i-ov-error",
+    value:A.er,
+    display:A.codeAvailable ? A.er.toFixed(1).replace(".",",")
+                            : "<span class='metric-na'>Chưa có dữ liệu</span>",
+    unit:"%", formatter:function(v){return v.toFixed(1)+"%";},
+    definition:"= request lỗi ÷ tổng request (bình quân theo request).",
+    components:A.codeAvailable
+      ? [{label:"Biết mã trả về",value:fmt(A.eKnown)+" lượt"},
+         {label:"4xx",value:fmt(A.e4)},{label:"5xx",value:fmt(A.e5)},{label:"429",value:fmt(A.e429)}]
+      : [{label:"Biết mã trả về",value:"0 lượt — không nguồn nào ghi mã"}],
+    comparison:A.codeAvailable
+      ? {basis:"KT", current:A.er, baseline:deltaBaseline(prevA.codeAvailable?prevA.er:null)}
+      : {basis:"KT", current:A.er, baseline:deltaBaseline(null)},
+    status:kpiStatus("error-rate",{er:A.er, codeAvailable:A.codeAvailable}),
+    driver:!A.codeAvailable ? "Không nguồn nào của kỳ này ghi mã trả về."
+      : (topError&&topError.er>0 ? esc(topError.key)+" cao nhất: "+topError.er.toFixed(1)+"%."
+                                 : "Không ghi nhận lỗi."),
+    freshness:freshness
+  }));
 
   set("ov-cost-total",moneyCompact(A.cost));
   set("ov-token-total",fmtTok(A.tokens));
