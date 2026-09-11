@@ -1343,17 +1343,38 @@ function configuredBudgetSummary(rows){
     costs[config.agent]=(costs[config.agent]||0)+cost(row);
     matchedRows.push(row);
   });
+  /* Agent CÓ hoạt động trong kỳ TRƯỚC khi lọc. Dùng để tách hai chuyện mà một
+     thanh 0% không tách được: "bị bộ lọc loại ra" và "có ngân sách mà không tiêu
+     gì". Cùng cách làm với `userScopeGap()` — tính lại từ phạm vi chưa lọc, không
+     đoán. */
+  var coTruocLoc={};
+  scopeBase().forEach(function(row){
+    var config=agentBudgetConfig(row.a);
+    if(config) coTruocLoc[config.agent]=true;
+  });
   var months=budgetMonthsInRange();
-  var agents=AGENT_MONTHLY_BUDGETS.map(function(config){
+  var agents=[], biLoc=[];
+  AGENT_MONTHLY_BUDGETS.forEach(function(config){
+    /* Sau khi lọc không còn dòng nào, mà trước khi lọc thì CÓ: agent này bị bộ
+       lọc loại. Vẽ nó thành 0% là phát biểu "agent này không tiêu gì trong kỳ",
+       một câu SAI. Bỏ ra khỏi biểu đồ và nói rõ đã bỏ ai — im lặng thì người xem
+       đọc thành agent nhàn rỗi, đúng cái bẫy mà `user-scope-note` đã dựng rào. */
+    if(!(config.agent in costs) && coTruocLoc[config.agent]){ biLoc.push(config.agent); return; }
     var spend=costs[config.agent]||0, budget=config.usd*months;
-    return {agent:config.agent,cost:spend,budget:budget,rate:pct(spend,budget)};
+    agents.push({agent:config.agent,cost:spend,budget:budget,rate:pct(spend,budget)});
   });
   return {
     cost:agents.reduce(function(sum,item){return sum+item.cost;},0),
-    budget:MONTHLY_BUDGET*months,
+    /* Mẫu số đi theo tử số. Trước đây luôn là `MONTHLY_BUDGET*months`, tức ngân
+       sách của MỌI agent, nên lọc còn một agent thì tử số co lại mà mẫu số không,
+       và thẻ "% ngân sách" tụt xuống một con số vô nghĩa. Không lọc thì hai cách
+       tính cho ra y hệt nhau, vì `MONTHLY_BUDGET` chính là tổng các `usd` này
+       (xem dòng gán ở cuối file). */
+    budget:agents.reduce(function(sum,item){return sum+item.budget;},0),
     months:months,
     agents:agents,
-    rows:matchedRows
+    rows:matchedRows,
+    biLoc:biLoc
   };
 }
 /* ─── Cảnh báo agent tiêu vượt mặt bằng ─── */
@@ -2834,8 +2855,38 @@ function chartsAgents(rows){
   }
   mkDonut("c-ag-usage", labels, values, "lg-ag-usage", fmt);
 }
+/* Nói rõ agent nào đã bị bộ lọc loại khỏi biểu đồ ngân sách. Không có dòng này
+   thì biểu đồ thiếu thanh mà không ai biết vì sao thiếu. */
+function renderBudgetScopeNote(tomTat){
+  var box=document.getElementById("co-budget-scope-note");
+  var txt=document.getElementById("co-budget-scope-text");
+  if(!box||!txt) return;
+  var bo=tomTat.biLoc||[];
+  if(!bo.length){ box.hidden=true; txt.innerHTML=""; return; }
+  txt.innerHTML="Bộ lọc đang bỏ <b>"+fmt(bo.length)+"</b> agent có ngân sách ra ngoài: "
+    +bo.map(function(t){return "<b>"+esc(t)+"</b>";}).join(", ")
+    +". Chúng <b>không</b> hiện thành thanh 0% — thiếu thanh ở đây nghĩa là ngoài phạm vi lọc, "
+    +"không phải không tiêu gì. Mốc phần trăm cũng chỉ tính trên "
+    +fmt(tomTat.agents.length)+" agent còn lại.";
+  box.hidden=false;
+}
+
 function renderAgentBudgetChart(rows){
-  var items=configuredBudgetSummary(rows).agents;
+  var tomTat=configuredBudgetSummary(rows);
+  var items=tomTat.agents;
+  renderBudgetScopeNote(tomTat);
+  if(!items.length){
+    /* Lọc chặt tới mức không còn agent có ngân sách nào. Huỷ chart chứ không để
+       lại canvas của lần vẽ trước — số cũ nằm dưới bộ lọc mới là số sai. */
+    emptyChart("c-co-agent-budget", null, "");
+    var box=document.getElementById("co-budget-scope-note");
+    var txt=document.getElementById("co-budget-scope-text");
+    if(box&&txt){
+      txt.innerHTML="Không agent nào có ngân sách nằm trong phạm vi đang lọc, nên biểu đồ này trống.";
+      box.hidden=false;
+    }
+    return;
+  }
   var labels=items.map(function(item){return item.agent;});
   var rates=items.map(function(item){return +item.rate.toFixed(2);});
   var spentColors=items.map(function(item){

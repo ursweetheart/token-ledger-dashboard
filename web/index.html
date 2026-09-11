@@ -43,6 +43,11 @@
     margin:-6px 0 16px; line-height:1.55;
   }
   .user-scope-note b{ color:#fde68a; }
+  /* `display:flex` ở trên là style của tác giả, nên nó THẮNG luật `[hidden]{display:none}`
+     của trình duyệt — không có dòng này thì đặt `el.hidden = true` chẳng giấu được gì, và
+     khối cảnh báo rỗng vẫn chiếm chỗ. Đo 11/09/2026: `#user-scope-note` đang hidden mà
+     vẫn cao 36,6px, tức dashboard lâu nay hiện một dải cảnh báo TRỐNG dưới thanh lọc. */
+  .user-scope-note[hidden]{ display:none !important; }
   body.light-theme .user-scope-note{
     background:rgba(217,119,6,.10); border-color:rgba(217,119,6,.32); color:#92400e;
   }
@@ -152,6 +157,9 @@
   .agent-budget-chart{ grid-column:1 / -1; }
   .agent-budget-chart .canvas-box{ height:300px; }
   .agent-budget-chart .canvas-box canvas{ max-height:300px; }
+  /* Cùng bộ màu với `.user-scope-note` — cùng một loại thông báo "phần bị bỏ ra
+     ngoài", nên không đặt màu riêng. Chỉ thu nhỏ vì nó nằm trong thẻ biểu đồ. */
+  .budget-scope-note{ margin:2px 0 12px; font-size:11px; padding:7px 11px; }
 
   /* Donut + legend cạnh nhau */
   .wf-donut-wrap{ display:flex; align-items:center; gap:18px; width:100%; }
@@ -1122,6 +1130,13 @@
       <span class="wf-type">Thanh ngang</span>
       <div class="wf-title">Mức sử dụng ngân sách theo agent (%)</div>
       <div class="wf-q">Một thanh = phần trăm ngân sách đã dùng · các đường dọc = mốc cảnh báo.</div>
+      <!-- Danh sách thanh dựng từ BẢNG NGÂN SÁCH, không dựng từ dữ liệu, nên agent
+           bị bộ lọc loại vẫn có chỗ và trước 11/09/2026 hiện thành 0%. Người xem đọc
+           thành "agent này không tiêu gì". app.js điền khối này và chỉ hiện khi
+           thực sự có agent bị bỏ ra. -->
+      <div class="user-scope-note budget-scope-note" id="co-budget-scope-note" hidden>
+        <span>⚠️</span><span id="co-budget-scope-text"></span>
+      </div>
       <div class="canvas-box"><canvas id="c-co-agent-budget"></canvas></div>
     </div>
   </div>
