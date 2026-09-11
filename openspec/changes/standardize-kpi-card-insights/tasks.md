@@ -199,7 +199,50 @@
       thẻ token: `120,6 triệu / ▼ 46% KT 222,8 triệu / Trợ Lý Ảo Hợp Đồng chiếm 11% token` →
       `35,8 triệu / ▼ 59% KT 86,4 triệu / Sale Agent chiếm 100% token`. Cả ba phần đổi cùng
       nhau, không phần nào kẹt lại giá trị cũ.
-- [ ] 5.3 Kiểm tra trực quan ~~chín~~ **tám** card ở dark/light theme và các kích thước màn hình hiện được hỗ trợ
+- [x] 5.3 Kiểm tra trực quan ~~chín~~ **tám** card ở dark/light theme và các kích thước màn hình hiện được hỗ trợ
+      → **XONG NỐT NỬA CÒN LẠI 12/09.** Đo trên Chrome thật, dựng `uvicorn` + `http.server` cục
+      bộ. Cửa sổ đang phóng to nên Chrome **bỏ qua** lệnh đổi kích thước; thay bằng **iframe có
+      chiều rộng cố định**, vì media query nghe theo chiều rộng iframe chứ không theo cửa sổ.
+      Cách này kiểm đúng các mốc `@media` chứ không chỉ kiểm chữ có vừa hay không.
+
+      | bề rộng | số cột | rộng thẻ | trang tràn ngang | chữ vượt viền thẻ |
+      |---|---|---|---|---|
+      | 1920 | 8 | 188px | không | không |
+      | 1380 | 4 | 328px | không | không |
+      | 1024 | 4 | 239px | không | không |
+      | 900 | 4 | 208px | không | không |
+      | 680 | 1 | 634px | không | không |
+      | 520 | 1 | 494px | không | không |
+      | 400 | 1 | 374px | không | không |
+      | 400 + theme sáng | 1 | 374px | không | không |
+
+      Đủ 8 thẻ ở mọi bề rộng, không thẻ nào rơi mất.
+      **Phương pháp iframe đã được đối chứng bằng cửa sổ thật.** Anh Tuấn thu nhỏ cửa sổ Chrome
+      xuống còn **1205px** rồi bảo đo lại. Đo cửa sổ thật, rồi đo một iframe rộng đúng 1205px
+      **bên trong chính cửa sổ đó**, hai bên ra y hệt nhau:
+
+      | cách đo | viewport | số cột | rộng thẻ | tràn ngang | vượt viền |
+      |---|---|---|---|---|---|
+      | cửa sổ Chrome thật | 1205 | 4 | 284px | không | không |
+      | iframe trong cửa sổ đó | 1205 | 4 | 284px | không | không |
+
+      Trùng tới từng pixel, nên bảng bảy bề rộng ở trên đọc được như số đo thật chứ không phải
+      số mô phỏng. Lần này theme **sáng**, nên cặp theme × bề rộng cũng đã phủ ở hai đầu.
+      **Một điều về công cụ, ghi để lần sau không mất thời gian:** lệnh đổi kích thước cửa sổ
+      báo thành công và `outerWidth` đổi thật (còn 1000), nhưng `innerWidth` **đứng yên ở 1205**.
+      Khung cửa sổ đổi mà viewport của trang thì không. Nên muốn quét nhiều bề rộng thì dùng
+      iframe, đừng dùng lệnh resize.
+      **Và kết quả ngược hẳn với lo ngại ghi trong ô này.** Ô này đoán bề rộng hẹp là *"chỗ dễ
+      vỡ nhất"* sau khi nâng cỡ chữ. Đo ra thì **thẻ chật nhất nằm ở màn hình RỘNG nhất**: 188px
+      ở bố cục 8 cột, trong khi 400px cho thẻ rộng 374px vì lưới đã rơi về 1 cột. Bề rộng hẹp an
+      toàn hơn, không nguy hiểm hơn.
+      **Một trần đã đo, ghi lại vì nó là thứ sẽ vỡ trước:** ở thẻ 188px, dòng giá trị còn dư 10
+      tới 14px. Nó vượt viền thẻ khi chuỗi đạt khoảng 15 ký tự, ví dụ `999.999,9 nghìn` cần
+      195px so với 184px chỗ trống. Chuỗi đó **không xảy ra được** vì `fmtCompactNum` đổi đơn vị
+      ở mốc nghìn/triệu/tỷ, nên giá trị thật dừng ở khoảng 11 tới 13 ký tự. Ai bỏ bước đổi đơn
+      vị đó thì đây là chỗ vỡ đầu tiên.
+      **Chưa kiểm:** các tab khác ngoài Tổng quan ở bề rộng hẹp. Ô này nói về tám thẻ nên nằm
+      ngoài phạm vi, nhưng bảng và biểu đồ là chỗ hay tràn ngang, đáng soi riêng.
       → **Xong một nửa, ghi rõ nửa nào.** Hai theme đã xem trên Chrome thật và đạt — chính lần
       xem đó bắt được hai lỗi tooltip (ô 3.3) và lỗi icon (ô 4.4) mà 63 phép kiểm tự động không
       bắt được.

@@ -126,7 +126,28 @@
 ## 6. Cost UI and Alerts
 
 - [x] 6.1 Chuyển biểu đồ chi phí theo agent từ bar sang donut
-- [ ] 6.2 Bổ sung bộ chọn agent cho biểu đồ thực tế so với ngân sách
+- [x] 6.2 ~~Bổ sung bộ chọn agent cho biểu đồ thực tế so với ngân sách~~
+      → **KHÔNG THÊM BỘ CHỌN. Việc này đã xong bằng bộ lọc agent toàn cục có sẵn**, và thêm một
+      bộ chọn riêng cho biểu đồ là dựng hai nguồn sự thật cho cùng một câu hỏi *"đang xem agent
+      nào"*.
+      Ô này viết 25/07, trước khi `applyFilters()` xử lý `f.agent` và trước khi biểu đồ có ghi
+      chú nói rõ ai bị bỏ ra. Hai thứ đó nay đã có.
+      **Đo trên Chrome thật 12/09**, dựng `uvicorn` + `http.server` cục bộ rồi đọc thẳng
+      `Chart.getChart("c-co-agent-budget")`:
+
+      | bộ lọc agent | số thanh | ghi chú phạm vi |
+      |---|---|---|
+      | Tất cả agent | 6 | ẩn |
+      | Sale Agent | 1 | *"Bộ lọc đang bỏ 5 agent có ngân sách ra ngoài: …"* |
+      | Phân Loại Dữ Liệu CRM | 1 | *"… bỏ 5 agent …"*, đúng 5 tên còn lại |
+
+      Sáu thanh là **trần thật**, không phải con số hôm nay: `ref_budget` có 6 agent đặt ngân
+      sách USD. Agent 4 chưa đặt, agent 8 chỉ đặt hạn mức token nên không lên biểu đồ phần trăm
+      tiền. Sáu thanh ngang đọc hết được trong một màn hình, nên bộ chọn cũng không giúp gì cho
+      việc đọc.
+      **Chỗ duy nhất bộ lọc toàn cục không làm được** là chọn *vài* agent cùng lúc, vì nó là
+      chọn-một. Với trần 6 thanh thì "tất cả" đã là cái nhìn đầy đủ rồi, nên chưa có nhu cầu
+      thật. Ngày nào số agent có ngân sách vượt quá mức đọc được thì mở lại ô này.
 - [x] 6.3 Hiển thị trạng thái chưa cấu hình thay vì tự chia ngân sách toàn cục cho agent — **ĐÃ XONG 17/08** ở change `serve-dashboard-from-database-only`: hạn mức chỉ đến từ `ref_budget` qua `/api/catalog`, ba trạng thái (có USD / chỉ có token / chưa đặt), không suy 0. Xem `app.js:20-31`
 - [x] 6.4 Tính cảnh báo agent có chi phí cao hơn 30% trung bình agent hoạt động
       → **LÀM 08/09.** `agentCostOutliers(rows)`: mẫu là agent có **CẢ** chi phí lẫn request
