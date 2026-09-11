@@ -22,6 +22,7 @@ Mục tiêu tuần này theo anh Tuấn: **thông luồng Agent CRM**, **kiểm 
 | 7 | Ba việc trước khi lên server (gateway fall back) | `docs/decisions/che-do-hong-cua-gateway-2026-09-10.md` | chỉ cần trước khi lên server | — |
 | 8 | Chín việc bàn giao nhóm CRM | `docs/reference/dua-crm-qua-gateway-10-09.md` mục 7 | cần gặp nhóm CRM | luồng CRM |
 | 9 | Đo tải và độ trễ đường CRM | hoãn có chủ ý 10/09 | cần trần thời gian, không phải trần tiền | luồng CRM |
+| 10 | `no-fake-baseline.test.js` đang hỏng, khoá hợp đồng cũ | không thuộc change nào | không | dashboard |
 
 Tiến độ change:
 
@@ -248,3 +249,44 @@ backlog bằng `grep "\[ \]"` trên cả `docs/` sẽ đọc ra hơn 100 việc 
 
 Ô 4.1 nên làm sớm dù nhỏ: tên cột hiện tại **mời người ta cộng sai**, và anh Tuấn đã định cộng
 nó vào output đúng một lần rồi.
+
+---
+
+## 10. Một test đang hỏng, và nó không thuộc change nào — thêm 11/09
+
+Chạy bộ test thì ra:
+
+```
+   node --test tests/*.test.js     50 phep kiem, 49 dat, 1 HONG
+   pytest tests/                   11 dat, 2 subtest dat, 0 hong
+```
+
+Phép kiểm hỏng là `tests/no-fake-baseline.test.js:29`, tên
+*"không có kỳ gốc thật thì trả 0, không dựng bằng hệ số"*.
+
+```
+   Expected values to be strictly equal:   null !== 0
+```
+
+**Không phải lỗi mới. Test đang khoá hợp đồng CŨ.** Ô 1.3 của
+`standardize-kpi-card-insights` cố ý đổi `deltaBaseline`: trước đây nó ép **cả hai** trạng thái
+*"không có kỳ so sánh"* và *"kỳ trước đo được 0"* về cùng giá trị `0`, nên màn hình nói *"chưa
+có dữ liệu"* cho một phép đo thật và là tin tốt. Nay `app.js:1163` trả
+`{v: null, has: false}` khi không có kỳ nền, và `{v: 0, has: true}` khi kỳ nền thật sự bằng 0.
+
+Ba trong bốn dòng khẳng định của test vì thế sai theo thiết kế mới:
+
+| dòng | test đòi | code trả | đúng theo hợp đồng mới |
+|---|---|---|---|
+| `deltaBaseline(null).v` | `0` | `null` | `null`, và `has = false` |
+| `deltaBaseline(0).v` | `0` | `0` | `0`, và `has = true` |
+| `deltaBaseline(-5).v` | `0` | `null` | `null` |
+| `deltaBaseline(undefined).v` | `0` | `null` | `null` |
+
+**Việc cần làm:** sửa test cho khớp hợp đồng mới, và kiểm cả `has` chứ không chỉ `v` — vì `has`
+mới là thứ tách được hai trạng thái mà ô 1.3 sinh ra để tách. Mục đích gốc của file test vẫn
+còn nguyên giá trị và vẫn đang được hai phép kiểm còn lại canh: không ai nhét lại hệ số
+`0,88 / 0,57` để dựng kỳ nền giả.
+
+**Đáng lưu ý về quy trình:** ô 1.3 được đánh dấu xong mà bộ test không được chạy lại. Một thay
+đổi hợp đồng có chủ ý đã để lại một phép kiểm đỏ trong repo, và không ô task nào ghi nhận.
