@@ -51,8 +51,37 @@
 
 ## 2. Metric Accuracy
 
-- [ ] 2.1 Đồng bộ công thức và định nghĩa tổng token, bảo đảm cached/thinking token không bị bỏ sót hoặc cộng trùng
-      → **ĐỌC XONG NHƯNG MỞ LẠI, CHƯA DÁM ĐÓNG.**
+- [x] 2.1 Đồng bộ công thức và định nghĩa tổng token, bảo đảm cached/thinking token không bị bỏ sót hoặc cộng trùng
+      → **ĐÓNG 11/09 BẰNG CON SỐ. Hoá đơn KHÔNG tách token suy nghĩ, và dashboard đã cộng nó
+      rồi. Không thiếu token, không phải sửa công thức.** Nhật ký đầy đủ:
+      `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`. Bốn bằng chứng, không bằng lập luận:
+      **①** `dim_metric_alias` khai 31 SKU hoá đơn, cả 31 đều có dòng thật. Trong 9 SKU
+      `kind = output` có **2** SKU mang chữ `non-thinking`, và **0** SKU mang chữ `thinking`
+      trơn. Cũng 0 SKU nhắc tới suy nghĩ mà `kind` khác `output`. Hoá đơn phủ **240 ngày** —
+      Google tính tiền phần suy nghĩ thành dòng riêng thì đã phải thấy SKU riêng.
+      **②** Hai SKU output của `gemini 2.5 flash` chính là hai nhãn bật/tắt, đo chứ không đọc
+      tên (`911A-8880-A243` có `kind = output` mà tên lại ghi *"short **input** text"*). Lấy các
+      cặp ngày × project mà monitoring không có lượt nào bật suy nghĩ: **56 cặp, cả 56 có
+      `911A = 0`**, tổng đúng 0. Nên `911A` = token ra của lượt BẬT, `6EDB` = lượt TẮT. Cả hai
+      cùng `kind = 'output'`, và đường hoá đơn cộng theo `kind` chứ không theo `sku_id`, nên
+      phần suy nghĩ **đã vào** `to`.
+      **③** Đơn giá hai SKU output bằng nhau, `2,499976` và `2,499946` USD trên 1 triệu token,
+      tức 2,50 — đúng con số LiteLLM dùng hôm 10/09 khi tính tiền suy nghĩ theo giá token ra.
+      `non-thinking` không phải bậc giá rẻ hơn, chỉ là ngăn ghi sổ.
+      **④** Sổ Gateway cho bằng chứng trực tiếp `reasoning ⊂ completion`: 46 dòng có
+      `reasoning_tokens`, tổng 9.554 trên `completion_tokens` 9.968, và **0 dòng** có reasoning
+      vượt completion.
+      **Và một cái bẫy nguy hiểm hơn cả câu hỏi gốc, tìm được trong cùng lượt đo:** cột
+      `thinking_tokens` ở `store.py:469` **không phải** token suy nghĩ. `thinking_enabled` là
+      NHÃN trên metric, nên phép cộng đó trả về *token ra của lượt có bật suy nghĩ*: **47.913.327
+      trên tổng 52.560.360 token ra, tức 91,2%**. Cộng cột này vào output là đếm hai lần 91%
+      token ra. Cột nên đổi tên. Muốn hiện token suy nghĩ thì lấy `reasoning_tokens` của sổ
+      Gateway, thêm cột vào `fact_call`, trình bày kiểu **trong đó** chứ không **cộng thêm**.
+      **Việc riêng phải mở, KHÔNG thuộc ô này:** monitoring phủ thiếu theo project. Nhánh bật
+      suy nghĩ lệch 62% tới 151% so với hoá đơn tuỳ project, còn nhánh tắt suy nghĩ ngồi yên ở
+      99,1% và 100,4%. `gemini-3-flash` luôn bật suy nghĩ mà chỉ lệch 101,0%, nên 22% lệch ở
+      `gemini-2.5-flash` **không phải** phần suy nghĩ. Xem mục 9 của nhật ký.
+      → Ghi chú cũ, giữ lại làm vết: **ĐỌC XONG NHƯNG MỞ LẠI, CHƯA DÁM ĐÓNG.**
       Phần `cached`: **đúng, không phải sửa.** `aggregate()` cộng `ti + to + cached`, và
       `api.js:350` chỉ chuyển tiếp `cached` khi `token_source === "billing"` (lúc đó nó là SKU
       nằm NGOÀI input). Nguồn `app` thì cache là tập con của input nên bị ép về 0. Không sót,
@@ -66,6 +95,21 @@
       **Câu chưa trả lời được:** hoá đơn có tách pool thứ ba đó ra không. Nếu có thì tổng token
       đang thiếu đúng phần đó — cùng loại lỗi cache hồi 15/08 làm rơi 26% token. Phải đối chiếu
       `fact_billing_daily` với usage metadata rồi mới kết luận. **Không đóng ô này bằng suy luận.**
+
+      **TRẢ LỜI ĐƯỢC MỘT NỬA, đo 10/09 — nửa Gateway. Vẫn chưa đóng ô này.**
+      Đo ba lượt qua Gateway trên `gemini-2.5-flash`. Ở tầng này **không có pool thứ ba**:
+      `completion_tokens_details` trả `reasoning 22 + text 1`, và `completion_tokens = 23`, tức
+      suy nghĩ **nằm trong** output. Sổ `LiteLLM_SpendLogs` cũng vậy: `total = prompt + completion`,
+      lệch `0` trên cả 3 dòng. Và Gateway **tính tiền** phần suy nghĩ theo giá token ra — kiểm bằng
+      số học, khớp tới 8 chữ số thập phân, 2/2 dòng (`6 vào + 23 ra → 0,00005930`).
+      **Hệ quả cho công thức:** với các dòng nguồn **gateway**, `ti + to` đã bao gồm token suy nghĩ,
+      nên dashboard **không thiếu** phần đó. Đây là điều ngược với lo ngại ban đầu, và nó **thu hẹp**
+      chỗ có thể sai chứ không xoá hẳn.
+      **Nửa còn thiếu, và đừng đọc thành đã xong:** phép đo trên là `spend` do **LiteLLM tự tính từ
+      bảng giá của nó**, KHÔNG phải hoá đơn Google. Câu hỏi gốc của ô này là về `fact_billing_daily`,
+      tức số của Google. Hai nguồn khác nhau, và cả dự án này tồn tại vì chúng từng lệch nhau.
+      Phép đối chiếu `fact_billing_daily` với usage metadata **vẫn phải làm**.
+      Chi tiết đầy đủ ở ô 2.9 của change `prove-the-crm-path-survives-refusal-and-outage`.
 - [x] 2.2 ~~Xác minh ý nghĩa trường latency và ngừng hiển thị p95 khi nguồn không hỗ trợ p95 tổng hợp chính xác~~
       → **CỐ Ý KHÔNG LÀM VẾ SAU. Làm theo nguyên văn là XOÁ MỘT PHÉP ĐO ĐANG ĐÚNG.**
       Ô này soạn 22/07, khi p95 còn là số bịa ở tầng hiển thị. Migration 010 (03/09) đã dựng
