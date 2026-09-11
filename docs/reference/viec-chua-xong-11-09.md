@@ -32,7 +32,7 @@ Tiến độ change:
    route-the-crm-agent-through-the-gateway        54/55
    standardize-kpi-card-insights                  16/17
    revise-dashboard-ui-after-2026-07-25-review    52/53
-   settle-what-the-bill-does-with-thinking-tokens 14/17
+   settle-what-the-bill-does-with-thinking-tokens XONG 12/09, cho archive
 ```
 
 ---
