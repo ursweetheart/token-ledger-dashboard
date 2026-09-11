@@ -112,10 +112,22 @@ x-litellm: &litellm
     LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
     LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-}
     KEY_GOOGLE_AI_STU: ${KEY_GOOGLE_AI_STU:-}
-    # Khoa cua project CRM rieng, dung o che do Vertex express. Khong co gia tri
-    # mac dinh: thieu thi entrypoint dung han, giong ba khoa tren. Tuyen dung no la
+    # Khoa cua project CRM rieng, dung o che do Vertex express. Tuyen dung no la
     # `gemini-2.5-flash` trong docker/gateway/config.gateway.yaml.
-    KEY_BENCH_CRM_TEST: ${KEY_BENCH_CRM_TEST:-}
+    #
+    # TEN BIEN DOI 10/09/2026: `KEY_BENCH_CRM_TEST` -> `KEY_BENCH_CRM_TEST_GG_AIA_STU`,
+    # theo dung ten dang co trong .env. Truoc do ba cho dung ten cu trong khi .env
+    # da doi, nen `:-` bien khoa thieu thanh chuoi rong va tuyen CRM CHET IM LANG:
+    # container len binh thuong, /health/liveliness tra 200, chi hong khi co nguoi
+    # goi that (HTTP 500 "Missing Gemini API key").
+    #
+    # Hau to `_GG_AIA_STU` GAY HIEU NHAM: day KHONG phai khoa AI Studio. Do bang
+    # tien to thi no la `AQ.`, tuc Vertex express -- dung loai tuyen nay can.
+    #
+    # Chu thich cu o day ghi "thieu thi entrypoint dung han". Cau do SAI luc viet:
+    # vong kiem trong docker/gateway/entrypoint.sh khong he co bien nay. Nay da
+    # them vao that, nen cau tren moi dung.
+    KEY_BENCH_CRM_TEST_GG_AIA_STU: ${KEY_BENCH_CRM_TEST_GG_AIA_STU:-}
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}

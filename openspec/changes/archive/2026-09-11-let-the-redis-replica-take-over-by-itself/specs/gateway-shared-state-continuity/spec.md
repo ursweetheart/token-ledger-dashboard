@@ -4,8 +4,8 @@
 
 ### Requirement: Trạng thái dùng chung phải sống sót khi một Redis chết
 
-Khi tiến trình Redis đang giữ vai master dừng hoạt động mà máy chủ vẫn sống, hệ thống
-SHALL tự chuyển vai sang bản sao **không cần người can thiệp**, và các instance LiteLLM
+Hệ thống SHALL tự chuyển vai sang bản sao **không cần người can thiệp** khi tiến trình
+Redis đang giữ vai master dừng hoạt động mà máy chủ vẫn sống, và các instance LiteLLM
 SHALL tự đi theo địa chỉ master mới mà không phải khởi động lại.
 
 Lý do: `docker-compose.yml:365` đang ghi nhận giới hạn *"Primary chết thì replica KHÔNG tự

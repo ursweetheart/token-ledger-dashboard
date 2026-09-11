@@ -1,0 +1,24 @@
+Nap tu postgresql://gateway_readonly:***@127.0.0.1:5432/litellm
+  moc nap: TOAN BO (da lui lai 1:00:00)
+  doc 47 dong tu so | dung duoc 41 | chen moi 0 | ghi de 41
+  bo: khong co tag 6 | nhieu tag 0
+  nap luot HONG 3 | model chua khai 0 | hong truoc khi chot tuyen 2
+  end_user rong 9 | danh tinh khong noi duoc 13
+  cached_tokens NULL 41 | cost_usd NULL 3 | duration_ms NULL 3
+  di bang KHOA TONG 7/41 | trung cache 0 | mang bi danh 2
+  ma loi cua luot hong trong so: (khong co ma)=3, 401=1, 403=1
+  doi chieu ca so: nguon 47 dong/45,961 token | dich 41 dong/45,201 token
+  bo qua tren ca so: 6 dong, 760 token
+  billing 1012 | monitoring 606 | app 371 | gateway 1
+  theo nguon: {'gateway': 1, 'monitoring': 606, 'app': 371, 'billing': 1012}
+  tien billing $307.360850 | token app 112,775,370
+  app lech 2,385 token giua total va prompt+completion - do chinh app ghi vay, da doi chieu tu bang nguon
+[  ok  ] Khoa ngoai (23 quan he)
+           11/1276 dong co luot ma KHONG co token - SUM(total_tokens) bo qua chung khong bao. Model: ['gemini-embedding-1.0', 'gemini-embedding-2'] (Monitoring khong co phep do token cho embedding)
+[  ok  ] Do tre: p50<=p95<=p99 va p95 nam trong o cua no
+           95 ngay co do tre / 128 ngay co so luot
+           (a) nguoi that 107,125,668 = 11.7% | (b) tai khoan dich vu 793,613,395 = 86.6% | (c) KHONG quy duoc 15,230,908 = 1.7% (hoa don Google chi bao muc project)
+[  ok  ] Khong dong nao co duration_ms = 0
+           4 tai khoan - da chon theo quy tac tat dinh, xem cot unit_conflict
+[  ok  ] Ty le ap dung khong vuot 100%
+42 phep kiem | 38 dat | 4 luu y | 0 hong

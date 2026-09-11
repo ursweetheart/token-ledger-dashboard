@@ -63,15 +63,34 @@ thật. Lúc đó bẫy ba trị mới có hiệu lực:
 Hai cái bẫy này **ngược nhau**: ở nguồn thì `IS NOT TRUE` không chạy được, ở đích thì nó là
 cách duy nhất đúng. Viết nhầm đầu nào cũng hỏng, và cả hai đều hỏng **im lặng ở mức số liệu**.
 
-## ③ Lượt trúng cache: LƯU vào `fact_call`, KHÔNG cộng vào số liệu sử dụng
+## ③ Lượt trúng cache: BỎ ngay ở tầng nạp — sửa 11/09/2026 sau khi đo thật
 
-Đúng hình dạng quyết định đã chốt cho lượt hỏng ở change trước, và vì cùng một lý do: sổ phải
-đầy đủ, còn phép tổng hợp thì phải lọc tường minh.
+**Bản đầu của mục này viết ngược.** Nguyên văn: *"fact_call GIU luot trung cache"*, và
+*"Không lọc ở tầng nạp"*, lập luận theo hình dạng quyết định đã chốt cho lượt hỏng ở change
+trước. Lập luận đó đúng với lượt hỏng nhưng **sai với lượt trúng cache**, vì hai thứ khác nhau
+ở một điểm quyết định: lượt hỏng là một dòng mới, còn lượt trúng cache là **bản sao** của dòng
+đã có.
+
+Phép đo ngày 11/09 (mục 9 của `docs/reference/cot-bi-bo-qua-01-09.md`): LiteLLM ghi dòng trúng
+cache mang chính `request_id` của dòng gốc cộng hậu tố `_cache_hit<epoch>`, và **lặp lại nguyên
+token** của dòng gốc — đo được 17 vào + 3 ra ở cả hai dòng, trong khi nhà cung cấp chỉ phục vụ
+một lượt. Giữ nó trong `fact_call` là cộng đôi token THẬT, đúng cái lỗi mà bẫy 7 của
+`db/load_gateway.py` dựng ra để chặn.
 
 ```
-   fact_call          GIU luot trung cache   -> con tra cuu duoc, con dem duoc ty le trung
-   fact_usage_daily   BO luot trung cache    -> vi nha cung cap KHONG tinh tien luot do
+   fact_call          BO luot trung cache    -> vi no LAP LAI token cua dong goc
+   fact_usage_daily   khong bao gio thay no  -> da bi bo tu tang nap
 ```
+
+**Giá phải trả, và phải nói rõ:** bỏ ở tầng nạp thì `fact_call` **không** đếm được tỷ lệ trúng
+cache. Bản đầu nêu đúng cái lợi đó. Nhưng cái lợi ấy không đáng đổi lấy một con số token sai,
+và nếu sau này cần tỷ lệ trúng cache thì lấy từ sổ gốc `LiteLLM_SpendLogs`, hoặc nạp dòng đó
+vào với token ép về 0 — cả hai đều là việc của một change khác, không phải của change này.
+
+**Điều kiện bắt buộc đi kèm.** Dòng bị bỏ PHẢI được đếm vào vế "bị bỏ qua" của phép đối chiếu
+toàn sổ. Trước 11/09 nó không được đếm, nên chỉ cần một dòng trúng cache trong sổ là bộ nạp báo
+`MISMATCH` rồi dừng hẳn trước bước tổng hợp. Đã sửa cùng ngày; xem `db/load_gateway.py` chỗ
+`HAU_TO_CACHE`.
 
 ### Lỗ rò CHƯA chứng minh được bằng dữ liệu đang có
 
@@ -90,8 +109,13 @@ Nên change này phải **tự tạo ra bằng chứng**: bật cache rồi gọ
 chính khoá ảo của DMS**, để dòng trúng cache mang tag `dms-feedback` và đi hết đường nạp. Đó là
 việc 6, và việc 4.2 phụ thuộc vào nó.
 
-**Không lọc ở tầng nạp.** Lượt trúng cache là một lượt gọi có thật, agent có nhận được câu trả
-lời. Bỏ nó khỏi `fact_call` là làm sổ nói dối về số lượt.
+~~**Không lọc ở tầng nạp.** Lượt trúng cache là một lượt gọi có thật, agent có nhận được câu trả
+lời. Bỏ nó khỏi `fact_call` là làm sổ nói dối về số lượt.~~
+
+**GẠCH BỎ 11/09/2026.** Câu trên đúng ở vế "một lượt gọi có thật", nhưng kết luận thì sai. Dòng
+trúng cache mà LiteLLM ghi KHÔNG phải một bản ghi độc lập — nó chép lại token của dòng gốc. Nạp
+nó vào là sổ nói dối về số TOKEN, mà token mới là thứ cả dự án này tồn tại để đếm cho đúng. Xem
+mục ③ đã viết lại ở trên.
 
 ## ④ `virtual_key_id`: cột nguồn TRỘN HAI LOẠI GIÁ TRỊ
 

@@ -134,6 +134,11 @@ VN_OFFSET = timedelta(hours=7)
 SOURCE = "gateway"
 
 # Chỉ cột cần dùng, và bóc JSON ngay trong PostgreSQL - xem mục TỐC ĐỘ.
+# Hậu tố LiteLLM gắn vào `request_id` của dòng trúng cache. Đặt tên MỘT chỗ vì nó
+# được dùng ở hai nơi phải khớp nhau tuyệt đối: chỗ bỏ dòng (vòng lặp nạp) và chỗ
+# đếm dòng đã bỏ (phép đối chiếu toàn sổ). Hai chỗ lệch nhau là bộ nạp dừng.
+HAU_TO_CACHE = "_cache_hit"
+
 BASE_SQL = """
     SELECT request_id,
            "startTime",
@@ -309,7 +314,7 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         # cảnh báo cuối hàm này), bản sao sẽ theo cửa đó mà vào, và không phép
         # kiểm nào hiện có bắt được: tổng token vẫn "khớp sổ nguồn", chỉ có điều
         # sổ nguồn tự nó đã đếm đôi.
-        if "_cache_hit" in call_id:
+        if HAU_TO_CACHE in call_id:
             bo("bo_ban_sao_cache", call_id, total_tokens)
             continue
 
@@ -671,17 +676,35 @@ def main() -> int:
     # Số dòng bị bỏ phải đếm trên CẢ SỔ, không phải trên cửa sổ vừa đọc: lần
     # chạy tăng dần chỉ đọc vài dòng, còn `src_rows`/`dst_rows` là số của cả sổ.
     # Lấy `bo_qua` của cửa sổ mà so với tổng thì lần nào cũng báo lệch giả.
+    # PHẢI đếm CẢ HAI lý do bỏ, theo ĐÚNG thứ tự vòng lặp trên: bản sao cache bị
+    # bỏ TRƯỚC (bẫy 7), rồi mới tới chuyện tag định danh.
+    #
+    # Trước 11/09/2026 câu này chỉ đếm vế tag. Hệ quả đo được hôm đó: bật cache,
+    # gọi 3 lượt, sinh 2 dòng `_cache_hit` MANG ĐỦ một tag định danh. Chúng bị bỏ
+    # ở dòng 312 nên không vào `fact_call`, mà cũng không lọt vào vế "bỏ qua" này
+    # vì có đúng 1 tag. Phép đối chiếu thiếu 2 dòng/40 token, báo MISMATCH, rồi
+    # DỪNG HẲN trước bước tổng hợp. Tức là: CHỈ CẦN MỘT dòng trúng cache trong sổ
+    # là cả đường nạp đứng, và đứng mãi cho tới khi ai đó gỡ dòng đó ra.
+    #
+    # Dùng `strpos` chứ KHÔNG dùng `LIKE '%_cache_hit%'`: trong LIKE thì `_` là ký
+    # tự đại diện khớp một ký tự bất kỳ, nên mẫu đó còn khớp cả `Xcache_hit`.
+    # `strpos` so nguyên văn, đúng thứ `"_cache_hit" in call_id` ở dòng 312 làm.
     gw_cur.execute(
-        'SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)'
+        'SELECT COUNT(*), COALESCE(SUM(total_tokens), 0),'
+        '       COUNT(*) FILTER (WHERE strpos(request_id, %s) > 0),'
+        '       COALESCE(SUM(total_tokens)'
+        '                FILTER (WHERE strpos(request_id, %s) > 0), 0)'
         '  FROM "LiteLLM_SpendLogs" WHERE status IS NOT NULL'
-        '   AND (SELECT COUNT(*)'
-        '          FROM jsonb_array_elements_text('
-        "                 COALESCE(request_tags, '[]'::jsonb)) AS t"
-        '         WHERE t = ANY(%s)) <> 1',
-        (list(agent_by_code),))
-    bo_qua_ca_so, token_bo_qua = gw_cur.fetchone()
-    log.info("  skipped across the ledger: %d rows, %d tokens",
-             bo_qua_ca_so, token_bo_qua)
+        '   AND (strpos(request_id, %s) > 0'
+        '        OR (SELECT COUNT(*)'
+        '              FROM jsonb_array_elements_text('
+        "                     COALESCE(request_tags, '[]'::jsonb)) AS t"
+        '             WHERE t = ANY(%s)) <> 1)',
+        (HAU_TO_CACHE, HAU_TO_CACHE, HAU_TO_CACHE, list(agent_by_code)))
+    bo_qua_ca_so, token_bo_qua, bo_cache_ca_so, token_bo_cache = gw_cur.fetchone()
+    log.info("  skipped across the ledger: %d rows, %d tokens"
+             " (of which cache-hit duplicates: %d rows, %d tokens)",
+             bo_qua_ca_so, token_bo_qua, bo_cache_ca_so, token_bo_cache)
 
     # Đối chiếu HAI chiều, không chỉ số dòng. Số dòng khớp mà token lệch nghĩa là
     # ánh xạ cột hỏng - đúng loại lỗi mà phép đếm dòng không thấy.

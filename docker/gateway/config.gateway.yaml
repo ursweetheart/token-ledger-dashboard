@@ -83,7 +83,25 @@ model_list:
   - model_name: gemini-2.5-flash
     litellm_params:
       model: gemini/gemini-2.5-flash
-      api_key: os.environ/KEY_BENCH_CRM_TEST
+      api_key: os.environ/KEY_BENCH_CRM_TEST_GG_AIA_STU
+
+      # TAT SUY NGHI cho tuyen CRM -- them 10/09/2026, do bang phep do chu khong
+      # phai suy doan. `gemini-2.5-flash` bat suy nghi MAC DINH, va token suy nghi
+      # nam TRONG `completion_tokens`, tuc no an chung ngan sach `max_output_tokens`
+      # voi cau tra loi VA bi tinh tien theo gia token RA (dat gap ~8 lan token vao).
+      #
+      # Do duoc tren du lieu that, lo 5 ban ghi, cau nhac production day du:
+      #     token ra 8.178 / tran 8.192  ->  suy nghi 7.860 (96%), chu 318 (4%)
+      #     gui 5 ban ghi, nhan ve 1, KHONG bao loi
+      # JSON bi cat cut, `json_repair` va lai duoc 1 object, va thanh cong nen
+      # khong ghi log. Lo production la 25 ban ghi chu khong phai 5.
+      #
+      # Day la tac vu trich xuat theo danh sach tag DONG, khong phai bai toan can
+      # suy luan sau, nen tat suy nghi khong lam giam chat luong.
+      #
+      # PHAI dung dung `reasoning_effort`. Da thu `thinking: {type: disabled}` va
+      # no bi `drop_params: true` BO IM LANG -- so token y het luc khong khai.
+      reasoning_effort: "disable"
 
       # PHAI ket thuc o `/publishers/google`. `_check_custom_proxy` noi thanh
       # `{api_base}/models/{model}:{endpoint}` -- thieu doan `/publishers/google`

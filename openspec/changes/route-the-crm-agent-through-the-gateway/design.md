@@ -289,3 +289,85 @@ change này.
   quyết định liệu production có đụng trần 15 rpm hay không.
 - `dim_agent.gcp_project_id` của agent 7: ghi lại thành project mới, hay giữ `crm-500509` và
   ghi chú? Chưa quyết.
+
+
+## Cách chạy ô 7.6 — soạn 11/09/2026
+
+### Lý do chặn cũ đã hết, và nó chưa bao giờ cần sửa mã
+
+Ghi chú trong ô 7.6 nói phải sửa `src/llm.py` của repo CRM để trỏ nhánh cũ sang Vertex. Đọc lại
+mã thì không phải: `init_llm_client()` chọn nhánh **chỉ bằng biến môi trường**.
+
+```
+   GEMINI_BACKEND = gateway ? ───── có ──> NHÁNH MỚI, đi Gateway
+            │ không
+   USE_VERTEX=True VÀ có sa-key.json ? ── có ──> NHÁNH CŨ, đi Vertex
+            │ không
+                             NHÁNH CŨ, đi AI Studio
+```
+
+`USE_VERTEX` mặc định đã là `True`, và `sa-key.json` **đã có trong repo CRM từ 10/09**. Nên
+nhánh cũ hiện đi thẳng Vertex. Không phải sửa dòng nào.
+
+Một lo ngại khác cũng đã tự hết: ngày 08/09 có bí danh đẩy `gemini-2.5-flash` sang
+`gemini-3.6-flash`, nhưng bí danh đó **đã gỡ** và CRM nay có tuyến thật mang đúng tên. Hai nhánh
+chạy **cùng một model trên cùng một nền Vertex**, chỉ khác kiểu xác thực.
+
+### Khác biệt còn lại LỚN HƠN thứ ô này định đo
+
+Tuyến CRM mang `reasoning_effort: "disable"` (thêm 10/09). Nhánh cũ thì không ai tắt nghĩ. Nên
+hai nhánh khác nhau ở **hai** biến, không phải một.
+
+Nhìn theo hướng khác thì đây là cơ hội. Chú thích trong `config.gateway.yaml` viết *"tắt suy
+nghĩ không làm giảm chất lượng"*. Câu đó là **lập luận, chưa từng đo**. Ô 7.6 là phép đo duy
+nhất đang có kế hoạch mà kiểm được nó.
+
+```
+                    NGHĨ BẬT          NGHĨ TẮT
+   nhánh cũ           A0          [cần sửa mã CRM, không làm]
+   nhánh gateway      C                  B
+
+   A0 với C  ->  tách riêng ảnh hưởng của ĐƯỜNG ĐI
+   C  với B  ->  tách riêng ảnh hưởng của CHUYỆN NGHĨ
+```
+
+Ô C chạy được **chỉ sau khi** nâng `max_output_tokens` trong repo CRM: đi gateway mà bật nghĩ
+chính là cấu hình đã hỏng ngày 10/09 (phần nghĩ ăn 96% hạn mức, gửi 5 nhận 1). Tuyến gateway
+KHÔNG nâng đè được, vì `max_tokens` do client gửi thì thắng.
+
+### Thứ tự chạy, và điều kiện dừng sớm
+
+```
+   Bước 1  CỘT MỐC: nhánh cũ chạy HAI LẦN cùng một đầu vào
+           -> tỷ lệ model tự mâu thuẫn với chính nó
+           thiếu bước này thì mọi so sánh sau đều không đọc được
+
+   Bước 2  A0 với B
+              │
+      lệch TRONG mức cột mốc ──> XONG, không cần ô C, không cần sửa mã ai
+      lệch VƯỢT mức cột mốc  ──> cần ô C, tức cần việc bàn giao CRM trước
+```
+
+### Ba luật của phép đo
+
+1. **Cột mốc là bắt buộc.** `temperature = 0` không bảo đảm hai lượt giống nhau. Nhánh cũ tự
+   lệch 3% mà hai nhánh lệch 2% thì kết luận đúng là *"không thấy khác biệt"*.
+2. **Cửa chặn số bản ghi.** Lượt gọi nào trả về thiếu bản ghi thì bỏ cả lô, không đem so.
+   Thiếu do cắt cụt trông y hệt thiếu do model đổi ý.
+3. **Chỉ so ô do LLM điền.** Ô do tầng từ khoá chốt thì hai nhánh giống nhau theo cấu tạo; đem
+   vào chỉ làm loãng con số.
+
+### Một điểm không hiển nhiên
+
+Cùng đặt `max_output_tokens = 8192` nhưng con số đó **nghĩa khác nhau ở hai nhánh**. Đi thẳng
+Vertex thì phần nghĩ nằm ở ngăn riêng (`thoughts_token_count`), nên 8192 là 8192 dành cho câu
+trả lời. Qua Gateway thì phần nghĩ nằm chung ngăn với câu trả lời.
+
+Nhờ vậy A0 và B — dù một bên nghĩ một bên không — **đều có đủ 8192 cho câu trả lời**, nên so
+được sòng phẳng. Chỉ ô C mới vướng.
+
+### Hai chỗ phải nhớ khi đọc số
+
+- Nhánh cũ đi thẳng Google nên **lượt gọi của nó không vào sổ Gateway**.
+- Phải chạy bằng `--entrypoint python`; thiếu là container chạy pipeline thật, tải SharePoint
+  và gửi email.
