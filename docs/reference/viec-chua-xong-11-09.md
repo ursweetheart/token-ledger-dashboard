@@ -15,7 +15,7 @@ Mục tiêu tuần này theo anh Tuấn: **thông luồng Agent CRM**, **kiểm 
 |---|---|---|---|---|
 | 1 | Ô 7.6 — so kết quả phân loại hai nhánh CRM | change `route-the-crm-agent-through-the-gateway` | **cần anh Tuấn cho sửa repo CRM** | luồng CRM |
 | ~~2~~ | ~~Ô 4.4 — `fact_usage_daily` trộn hai múi giờ~~ **XONG 11/09**, đổi thành phép kiểm | change `settle-what-the-bill-does...` | — | dashboard |
-| 2b | Ô 4.5 — `usage_resolved` ghép tiền Pacific với token VN trên cùng một dòng | change `settle-what-the-bill-does...` | không | dashboard |
+| ~~2b~~ | ~~Ô 4.5 — tiền Pacific ghép token VN~~ **ĐỂ NGUYÊN 12/09**; đường đúng là xin Gimasys bật BigQuery export | change `settle-what-the-bill-does...` | — | — |
 | ~~3~~ | ~~Ô 4.1 — đổi tên cột `thinking_tokens`~~ **XONG 12/09** → `output_tokens_thinking_on` | change `settle-what-the-bill-does...` | — | dashboard |
 | ~~3b~~ | ~~Ô 4.6 — lý do gỡ thẻ "Token suy luận"~~ **XONG 12/09**, sửa lý do, không dựng lại thẻ | change `settle-what-the-bill-does...` | — | dashboard |
 | ~~4~~ | ~~Ô 4.3 — lưu `reasoning_tokens`~~ **KHÔNG LÀM 12/09**, token suy luận và token ra là một biến | change `settle-what-the-bill-does...` | — | dashboard |

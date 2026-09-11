@@ -170,7 +170,47 @@ Nhật ký đo: `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
       liệu, và chỉ đỏ khi quan hệ múi giờ thật sự đổi. Bỏ ngày đầu và ngày cuối của monitoring vì
       cửa sổ lưu giữ trượt làm hai ngày biên luôn khuyết.
       `audit_db.py`: **79 phép kiểm, 69 đạt, 10 lưu ý, 0 hỏng.**
-- [ ] 4.5 **Chỗ duy nhất múi giờ còn lẫn trên MỘT DÒNG, sinh ra từ 4.4.** `usage_resolved` lấy
+- [x] 4.5 **ĐỂ NGUYÊN, chốt bởi anh Tuấn 12/09.** Lý lẽ của anh Tuấn, và nó đúng: hoá đơn chỉ
+      có **tổng theo ngày**, mà một ngày Pacific vắt qua **hai** ngày Việt Nam, nên không có
+      cách nào chia tổng đó ra cho đúng.
+
+      ```
+         ngay Pacific D  =  VN 14:00 ngay D  ->  VN 13:59 ngay D+1
+                            |<-- 10 gio -->|<------ 14 gio ------>|
+                             thuoc VN ngay D      thuoc VN ngay D+1
+      ```
+
+      **Đo 12/09 cho thấy không có phép dịch chung nào đúng.** Tỷ lệ lưu lượng rơi vào nửa
+      trước 14:00, tức phần thuộc về ngày Việt Nam sau:
+
+      | project | phần trước 14:00 |
+      |---|---|
+      | `crm-500509` | 99,8% |
+      | `ai-chatbot-contract` | 71,8% |
+      | `tranquil-post-471401-c1` | 68,0% |
+      | `feedback-dms-tiep-thi` | 67,1% |
+      | `tools-quizz` | 55,7% |
+      | `pro-tuner-454203-v3` | 54,2% |
+      | `multimodal-invoice` | 32,0% |
+
+      Từ 32% tới 99,8%. Dịch cứng một ngày thì đúng với agent này và sai với agent kia.
+      **Một ngoại lệ đáng nhớ:** CRM ở 99,8% vì nó là pipeline theo lịch, lưu lượng dồn vào một
+      khung giờ hẹp nằm gọn trong một ngày Pacific. Với riêng CRM thì dịch một ngày gần như
+      chính xác, và đó chính là lý do nó khớp 40/40 ngày ở ô 4.4. Web service chạy cả ngày thì
+      không.
+
+      **Ba đường, chọn đường thứ ba:**
+      ① Mượn hình dạng giờ của monitoring để chia tiền — làm được, nhưng ra **số ước tính**, và
+      monitoring chỉ phủ từ 24/04 với cửa sổ trượt nên ngày cũ không có hình dạng để mượn.
+      ② Xin **BigQuery billing export**, bản có dấu thời gian từng bản ghi. Đây là đường đúng, và
+      nó bị chặn ở **quyền** chứ không ở code: tài khoản mua qua đại lý Gimasys. Việc phải làm là
+      nhờ Gimasys bật, không phải sửa gì trong repo này.
+      ③ **Để nguyên.** Tổng cả kỳ đúng tuyệt đối, chỉ chuỗi theo ngày của riêng nguồn hoá đơn là
+      lệch, và chuyện đó đã ghi từ 14/08 và nay có phép kiểm canh.
+
+      Lý do chọn ③: cả dự án này tồn tại để tách số ĐO khỏi số SUY RA. Thêm một phép chia ước
+      tính vào cột tiền là đi ngược chính nó.
+      → Nguyên văn ô lúc mở, giữ làm vết: **Chỗ duy nhất múi giờ còn lẫn trên MỘT DÒNG, sinh ra từ 4.4.** `usage_resolved` lấy
       `total_tokens` theo thứ tự gateway → billing → monitoring → app, nhưng `cost_usd` theo thứ
       tự **billing → gateway**. Nên một dòng có cả hai thì **token là cửa sổ giờ VN còn tiền là
       cửa sổ giờ Pacific** — hai khoảng 24 giờ lệch nhau 14 tới 15 giờ, nằm cạnh nhau trên cùng
