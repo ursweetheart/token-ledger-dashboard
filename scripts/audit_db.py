@@ -1365,6 +1365,37 @@ def _hoa_don_cung_mui_gio_voi_cong_to(a: Audit) -> None:
         quy ve Pacific      397      356 (90%)          0,20%
         de nguyen gio VN    365       13 ( 4%)         81,3%
 
+    GIỜ BIÊN LÀ ĐO ĐƯỢC, KHÔNG PHẢI ĐOÁN
+    ------------------------------------
+    Quét cả 24 giờ biên khả dĩ (12/09/2026), giờ 14 thắng áp đảo và không mập mờ:
+
+        gio bien   trung khit / cap   lech
+            14        358 / 401       0,24%
+            13        173 / 395       9,27%
+            15        167 / 396      13,73%
+            12        148 / 395      16,93%
+
+    VN là UTC+7, biên ngày ở VN 14:00 nghĩa là ngày hoá đơn bắt đầu lúc **UTC−7**.
+
+    Tên *"Pacific"* thì là SUY RA, từ hai chỗ khớp nhau: UTC−7 trong tháng 4 tới 8
+    đúng là PDT, và file hoá đơn là bản xuất tay từ **Google Cloud Console** (xem
+    `scripts/merge_billing.py` docstring - BigQuery export bị chặn ở quyền), mà
+    Console báo cáo theo giờ Thái Bình Dương.
+
+    CHỖ CHƯA ĐO ĐƯỢC, VÀ PHÉP KIỂM NÀY SẼ TỰ HỎI VÀO THÁNG 11
+    ---------------------------------------------------------
+    Dữ liệu token của monitoring chỉ có từ 24/04/2026, tức **toàn mùa PDT**: 0 dòng
+    trước 08/03. Nên chưa phân biệt được hai khả năng cho ra cùng kết quả mùa hè:
+
+        America/Los_Angeles   UTC-7 mua he, UTC-8 mua dong  -> bien doi sang VN 15:00
+        mot do lech CO DINH   UTC-7 quanh nam               -> bien van o VN 14:00
+
+    Truy vấn dưới dùng `America/Los_Angeles`, nên nó CHỌN khả năng thứ nhất. Nếu
+    thật ra là độ lệch cố định thì phép kiểm sẽ **đỏ vào tháng 11** - và đó là kết
+    cục đúng, không phải phiền toái: nó hỏi hộ ta một câu chưa ai trả lời được, vào
+    đúng lúc dữ liệu trả lời được. Ai thấy nó đỏ tháng 11 thì thử lại biên VN 14:00
+    trước khi nghi dữ liệu.
+
     KHÔNG ĐẶT NGƯỠNG, SO HAI GIẢ THUYẾT
     -----------------------------------
     Cùng kỷ luật với phần trên: ta ĐÃ BIẾT đáp án là 0,20%, nên đặt ngưỡng bây giờ
