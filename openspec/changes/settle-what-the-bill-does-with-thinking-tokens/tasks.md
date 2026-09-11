@@ -100,10 +100,38 @@ Nhật ký đo: `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
       `completion_tokens_details.reasoning_tokens` chỉ để suy ra **cờ** boolean, con số thì bỏ.
       Muốn hiện token suy nghĩ trên dashboard thì thêm một cột vào `fact_call`, và trình bày
       kiểu **trong đó** chứ không **cộng thêm** — nó là tập con của token ra.
-- [ ] 4.4 **Việc thật sinh ra từ 4.2, và nó ở trong bảng của dashboard chứ không ở câu SQL của
-      tôi.** `fact_usage_daily.day` nhận dòng từ bốn bộ nạp: `load_billing()` ghi ngày
-      **US/Pacific**, còn `load_monitoring()`, `load_app()`, `load_gateway()` ghi ngày **Việt
-      Nam**. Bốn nguồn, một cột, một nguồn khác múi giờ. Nên mọi biểu đồ theo ngày có trộn tiền
-      hoá đơn đều **lệch một ngày** ở vế hoá đơn: tổng cả kỳ đúng, ngày lẻ sai.
-      **Phải quy bằng `America/Los_Angeles`, KHÔNG bù một hằng số.** Lệch là 14 giờ trong PDT
-      nhưng 15 giờ trong PST, nên bù cứng `−1 ngày` hay `−14 giờ` sẽ sai bốn tháng mỗi năm.
+- [x] 4.4 **ĐÃ ĐỌC KỸ RỒI QUYẾT ĐỊNH KHÔNG SỬA CỘT `day`. Thay bằng một phép kiểm thường trực.**
+      **Đính chính trước đã: đây KHÔNG phải phát hiện mới, và tôi đã viết sai chỗ đó.** Docstring
+      của `db/build_usage_daily.py` mục (a) đã ghi và **chốt từ 14/08**: *"`day` của nguồn
+      'billing' là ngày theo giờ Mỹ, nhưng ta COI LÀ giờ Việt Nam. Tổng cả kỳ vẫn đúng tuyệt đối;
+      chỉ CHUỖI THEO NGÀY của riêng nguồn billing là lệch tới 15 giờ."* Tôi đã báo một hạn chế
+      có chủ ý thành một lỗ hổng chưa ai biết.
+      **Vì sao không sửa được cho đúng:** hoá đơn chỉ có **ngày**, không có giờ. Một ngày Pacific
+      trải trên hai ngày VN (10 giờ ngày này, 14 giờ ngày kia), nên không có cách nào chia tổng
+      ngày của hoá đơn về hai ngày VN. Dịch cả ngày thì đúng cho 14/24 lưu lượng và **phá mất**
+      tính chất *"tổng cả kỳ đúng tuyệt đối"* ở hai đầu kỳ. Đổi một hạn chế đã biết lấy một sai
+      số mới không đo được là lỗ.
+      **Và ba nguồn KHÔNG cộng vào nhau theo ngày**, nên không có chuyện đếm đôi: `usage_resolved`
+      chọn một nguồn cho token theo thứ tự gateway → billing → monitoring → app.
+      **Việc đã làm thay:** thêm phép kiểm `_hoa_don_cung_mui_gio_voi_cong_to` vào nhóm I của
+      `scripts/audit_db.py`. Nó quy monitoring về ngày Pacific bằng `AT TIME ZONE` hai lần rồi so
+      với hoá đơn. Đo 11/09:
+
+      | giả thuyết | cặp | trùng khít | lệch / token |
+      |---|---|---|---|
+      | quy về Pacific | 397 | 356 (90%) | **0,20%** |
+      | để nguyên giờ VN | 365 | 13 (4%) | **81,3%** |
+
+      **Không đặt ngưỡng**, đúng kỷ luật nhóm I: đã biết đáp án là 0,20% thì đặt ngưỡng bây giờ
+      là chọn số vừa khít với đáp án. Phép kiểm hỏi một câu nhị phân — quy về Pacific có lệch ít
+      hơn để nguyên giờ VN không. Hôm nay chênh 313 lần nên câu hỏi dư sức sống sót dao động dữ
+      liệu, và chỉ đỏ khi quan hệ múi giờ thật sự đổi. Bỏ ngày đầu và ngày cuối của monitoring vì
+      cửa sổ lưu giữ trượt làm hai ngày biên luôn khuyết.
+      `audit_db.py`: **79 phép kiểm, 69 đạt, 10 lưu ý, 0 hỏng.**
+- [ ] 4.5 **Chỗ duy nhất múi giờ còn lẫn trên MỘT DÒNG, sinh ra từ 4.4.** `usage_resolved` lấy
+      `total_tokens` theo thứ tự gateway → billing → monitoring → app, nhưng `cost_usd` theo thứ
+      tự **billing → gateway**. Nên một dòng có cả hai thì **token là cửa sổ giờ VN còn tiền là
+      cửa sổ giờ Pacific** — hai khoảng 24 giờ lệch nhau 14 tới 15 giờ, nằm cạnh nhau trên cùng
+      một dòng và trông hoàn toàn khớp. Nằm trong hạn chế đã chốt 14/08 nên không phải lỗi mới,
+      nhưng đáng gọi tên riêng vì nó không lộ ra như một chuỗi bị dịch. Ảnh hưởng: chỉ số nào
+      chia tiền cho token theo NGÀY. Tổng cả kỳ không ảnh hưởng.

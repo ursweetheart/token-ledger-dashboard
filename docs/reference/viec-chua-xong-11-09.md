@@ -14,7 +14,8 @@ Mục tiêu tuần này theo anh Tuấn: **thông luồng Agent CRM**, **kiểm 
 | # | việc | thuộc | chặn bởi | mục tiêu tuần |
 |---|---|---|---|---|
 | 1 | Ô 7.6 — so kết quả phân loại hai nhánh CRM | change `route-the-crm-agent-through-the-gateway` | **cần anh Tuấn cho sửa repo CRM** | luồng CRM |
-| 2 | Ô 4.4 — `fact_usage_daily` trộn hai múi giờ | change `settle-what-the-bill-does...` | không | dashboard |
+| ~~2~~ | ~~Ô 4.4 — `fact_usage_daily` trộn hai múi giờ~~ **XONG 11/09**, đổi thành phép kiểm | change `settle-what-the-bill-does...` | — | dashboard |
+| 2b | Ô 4.5 — `usage_resolved` ghép tiền Pacific với token VN trên cùng một dòng | change `settle-what-the-bill-does...` | không | dashboard |
 | 3 | Ô 4.1 — đổi tên cột `thinking_tokens` | change `settle-what-the-bill-does...` | không | dashboard |
 | 4 | Ô 4.3 — lưu `reasoning_tokens` để hiện được token suy nghĩ | change `settle-what-the-bill-does...` | không | dashboard |
 | 5 | Ô 6.2 — bộ chọn agent cho biểu đồ ngân sách | change `revise-dashboard-ui...` | không | dashboard |
@@ -56,8 +57,14 @@ nhánh — `system_instruction`, một lượt `user`, `temperature: 0.0`, `max_
 
 ### 2.2 Ô 4.4 — `fact_usage_daily` trộn ngày Pacific với ngày Việt Nam
 
-Việc nặng nhất trong danh sách này, vì nó **đang sai trên dashboard thật** chứ không phải một
-câu hỏi mở.
+> **XONG 11/09, và mục này viết sai một chỗ quan trọng.** Đây **không** phải lỗ hổng chưa ai
+> biết. Docstring `db/build_usage_daily.py` mục (a) đã ghi và chốt từ **14/08**. Quyết định
+> cuối: **không sửa cột `day`** — hoá đơn chỉ có ngày, không có giờ, nên mọi phép quy đều là
+> dịch cả ngày và chỉ đúng cho 14/24 lưu lượng, lại phá mất tính chất *tổng cả kỳ đúng tuyệt
+> đối*. Thay bằng một phép kiểm thường trực trong `scripts/audit_db.py` nhóm I: quy monitoring
+> về ngày Pacific rồi so với hoá đơn, lệch **0,20%** so với **81,3%** nếu để nguyên giờ VN.
+> Ba nguồn cũng **không** cộng vào nhau theo ngày, `usage_resolved` chọn một nguồn. Chỗ duy
+> nhất múi giờ còn lẫn trên một dòng đã tách thành ô 4.5.
 
 ```
    fact_usage_daily.day
@@ -67,11 +74,14 @@ câu hỏi mở.
      <- load_gateway()      ngay Viet Nam
 ```
 
-Bốn bộ nạp, một cột `day`, một nguồn khác múi giờ. Mọi biểu đồ theo ngày có trộn tiền hoá đơn
-đều **lệch một ngày** ở vế hoá đơn. Tổng cả kỳ đúng, ngày lẻ sai.
+Bốn bộ nạp, một cột `day`, một nguồn khác múi giờ. Chuỗi theo ngày của riêng nguồn billing
+**lệch một ngày**. Tổng cả kỳ đúng, ngày lẻ sai. Đây là mô tả đúng, chỉ có chữ *"phát hiện
+mới"* là sai — xem khối trên.
 
-Phải quy bằng `America/Los_Angeles`, **không** bù một hằng số: lệch 14 giờ trong PDT nhưng 15
-giờ trong PST, nên bù cứng sẽ sai bốn tháng mỗi năm.
+~~Phải quy bằng `America/Los_Angeles`.~~ Quy được cho **monitoring** vì nó có giờ, và phép kiểm
+mới làm đúng thế. **Không** quy được cho hoá đơn vì hoá đơn không có giờ. `AT TIME ZONE` hai
+lần chứ không bù hằng số: lệch 14 giờ trong PDT nhưng 15 giờ trong PST, nên bù cứng sẽ sai bốn
+tháng mỗi năm.
 
 Bằng chứng đầy đủ ở mục 11 của `token-suy-nghi-tren-hoa-don-11-09.md`: xếp monitoring theo ngày
 Pacific thì **238/272 cặp ngày × project trùng khít tới từng con số**, và cả 7 project ra
