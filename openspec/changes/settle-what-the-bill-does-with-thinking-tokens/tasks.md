@@ -74,7 +74,37 @@ Nhật ký đo: `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
 
 ## 4. Ngoài phạm vi ban đầu — hai việc sinh ra từ chính lượt đo này
 
-- [ ] 4.1 Cột `thinking_tokens` ở `store.py:469` **không phải** token suy nghĩ, và tên của nó
+- [x] 4.1 **XONG 12/09. Đổi tên `thinking_tokens` → `output_tokens_thinking_on`, và viết lại
+      docstring.** Ba chỗ dùng tên đó, không hơn: bí danh SQL và khoá dict ở `store.py`, chỗ đọc
+      ở `api.js:199`.
+      **KHÔNG đụng database, KHÔNG chạy lại luồng nạp.** Tra `information_schema` thì không bảng
+      nào có cột `thinking_tokens` — chỉ có `thinking_enabled`, mà cột đó tên đúng. Đây là bí
+      danh tính lúc truy vấn, nên đổi tên là đổi chữ trong câu SQL, dữ liệu không liên quan.
+      Bảng ghi vào docstring để người sau khỏi đo lại:
+
+      | nhãn trên lượt gọi | dòng | token ra |
+      |---|---|---|
+      | bật suy nghĩ | 11.440 | 47.913.327 |
+      | tắt suy nghĩ | 3.589 | 4.647.033 |
+      | không có nhãn | 6 | 0 |
+      | **tổng token ra** | **15.035** | **52.560.360** |
+
+      Cộng khít, không nhóm nào rơi ra ngoài. Cột này là 91,2% token ra và nằm SẴN trong token
+      ra. Cũng ghi rõ `monitoring_tokens` là tổng CẢ vào lẫn ra (496,9 triệu), nên chia cột trên
+      cho nó ra một con số không nghĩa lý gì.
+      **Và sửa một câu SAI trong docstring cũ:** nó viết *"hoá đơn không tách"*. Hoá đơn **có**
+      tách, thành hai SKU output cho `gemini 2.5 flash`, một mang chữ `non-thinking`. Đã bác bỏ
+      bằng phép đo 11/09, xem ô 3.2.
+      Kiểm: gọi thẳng `store.thinking()` trên database thật, 136 dòng, tên cột mới đúng, tổng
+      10.609.201. `node --test` 51/51, `pytest` 11 đạt.
+- [ ] 4.6 **Tiền đề của việc gỡ thẻ "Token suy luận" nay đã SAI.** `app.js:3525` ghi lý do gỡ là
+      *"chưa xác nhận được agent nào thực sự bật suy luận mở rộng, nên con số luôn bằng 0 và chỉ
+      gây hiểu nhầm"*. Số không bằng 0: nó là 47.913.327, tức 91,2% token ra, trên 11.440 dòng.
+      Trường `A.think` vẫn được `aggregate()` tính nên dựng lại thẻ không phải sửa gì thêm.
+      Quyết định dựng lại hay không thuộc về người dùng, không phải việc của change này — nhưng
+      cái lý do ghi trong mã thì phải sửa, vì nó đang nói sai về dữ liệu.
+      → Nguyên văn ô 4.1 lúc mở, giữ làm vết: Cột `thinking_tokens` ở `store.py:469` **không
+      phải** token suy nghĩ, và tên của nó
       mô tả sai thứ nó đo. `thinking_enabled` là NHÃN trên metric, nên phép cộng đó trả về
       *token ra của lượt có bật suy nghĩ*: **47.913.327 trên tổng 52.560.360 token ra, tức
       91,2%**. Cộng cột này vào output là đếm hai lần 91% token ra. Đổi tên, và ghi rõ cách đọc.

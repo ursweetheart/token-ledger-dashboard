@@ -16,7 +16,8 @@ Mục tiêu tuần này theo anh Tuấn: **thông luồng Agent CRM**, **kiểm 
 | 1 | Ô 7.6 — so kết quả phân loại hai nhánh CRM | change `route-the-crm-agent-through-the-gateway` | **cần anh Tuấn cho sửa repo CRM** | luồng CRM |
 | ~~2~~ | ~~Ô 4.4 — `fact_usage_daily` trộn hai múi giờ~~ **XONG 11/09**, đổi thành phép kiểm | change `settle-what-the-bill-does...` | — | dashboard |
 | 2b | Ô 4.5 — `usage_resolved` ghép tiền Pacific với token VN trên cùng một dòng | change `settle-what-the-bill-does...` | không | dashboard |
-| 3 | Ô 4.1 — đổi tên cột `thinking_tokens` | change `settle-what-the-bill-does...` | không | dashboard |
+| ~~3~~ | ~~Ô 4.1 — đổi tên cột `thinking_tokens`~~ **XONG 12/09** → `output_tokens_thinking_on` | change `settle-what-the-bill-does...` | — | dashboard |
+| 3b | Ô 4.6 — lý do gỡ thẻ "Token suy luận" ghi trong mã nay đã sai | change `settle-what-the-bill-does...` | không | dashboard |
 | 4 | Ô 4.3 — lưu `reasoning_tokens` để hiện được token suy nghĩ | change `settle-what-the-bill-does...` | không | dashboard |
 | 5 | Ô 6.2 — bộ chọn agent cho biểu đồ ngân sách | change `revise-dashboard-ui...` | không | dashboard |
 | 6 | Ô 5.3 — xem 8 card ở bề rộng hẹp | change `standardize-kpi-card-insights` | không | dashboard |

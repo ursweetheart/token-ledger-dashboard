@@ -467,16 +467,44 @@ def performance(cn, ph, start: str, end: str) -> dict:
 
 
 def thinking(cn, ph, start: str, end: str) -> list[dict]:
-    """Token có bật chế độ suy luận (thinking), theo day/agent/model.
+    """Token RA của những lượt CÓ BẬT suy nghĩ, theo day/agent/model.
 
-    Chỉ Cloud Monitoring có nhãn này - hoá đơn không tách, app không ghi. Nên
-    đây là con số của RIÊNG nguồn monitoring, không phải của tổng.
+    ĐỌC CHO ĐÚNG TÊN CỘT - ĐÂY LÀ CHỖ ĐÃ GÂY NHẦM MỘT LẦN
+    -----------------------------------------------------
+    `output_tokens_thinking_on` là **token ra**, lọc theo nhãn của lượt gọi. Nó
+    KHÔNG phải *"số token đã dùng để suy nghĩ"*, và cũng KHÔNG phải toàn bộ token
+    ra. Tên cũ là `thinking_tokens`, và cái tên đó mời người đọc cộng nó vào token
+    ra - đúng một lần suýt xảy ra ngày 11/09/2026. Đo cùng ngày:
+
+        luot BAT suy nghi   11.440 dong   47.913.327 token ra
+        luot TAT suy nghi    3.589 dong    4.647.033
+        khong co nhan            6 dong            0
+                                          ----------
+        tong token ra       15.035 dong   52.560.360
+
+    Cột này là **91,2% token ra**, nằm SẴN trong token ra. Cộng thêm là đếm hai lần.
+
+    Muốn biết phần thật sự dùng để suy nghĩ thì phải lấy `reasoning_tokens` của sổ
+    Gateway: monitoring chỉ dán nhãn bật/tắt, không tách số. Xem
+    `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
+
+    `monitoring_tokens` là tổng của CẢ vào lẫn ra (496,9 triệu), không phải mẫu số
+    của riêng token ra. Chia cột trên cho nó ra một con số không có nghĩa gì.
+
+    VÌ SAO CHỈ ĂN METRIC OUTPUT dù `measures = 'token'` phủ cả input: metric input
+    KHÔNG mang nhãn `thinking_enabled` bao giờ - giá trị là NULL - nên nhánh
+    `CASE WHEN ... = 'true'` cho 0 trên mọi dòng input. Đã đo, không phải suy.
+
+    Chỉ Cloud Monitoring có nhãn này, app không ghi. Hoá đơn thì CÓ tách, nhưng
+    tách kiểu khác: hai SKU output riêng cho `gemini 2.5 flash`, một mang chữ
+    `non-thinking` trong tên. Câu cũ ở đây viết *"hoá đơn không tách"* và nó SAI,
+    đã bác bỏ bằng phép đo 11/09.
     """
     r = _rows(cn, f"""
         SELECT substr(CAST(m.ts_local AS TEXT), 1, 10) AS day,
                m.agent_id, m.model_id,
                SUM(CASE WHEN m.thinking_enabled = 'true' THEN m.value ELSE 0 END)
-                   AS thinking_tokens,
+                   AS output_tokens_thinking_on,
                SUM(m.value) AS monitoring_tokens
         FROM monitoring_ai m
         JOIN dim_metric_alias d
@@ -487,7 +515,7 @@ def thinking(cn, ph, start: str, end: str) -> list[dict]:
         GROUP BY 1, 2, 3
         ORDER BY 1, 2, 3""", (start, end))
     for x in r:
-        x["thinking_tokens"] = int(x["thinking_tokens"] or 0)
+        x["output_tokens_thinking_on"] = int(x["output_tokens_thinking_on"] or 0)
         x["monitoring_tokens"] = int(x["monitoring_tokens"] or 0)
     return r
 

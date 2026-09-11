@@ -196,7 +196,7 @@
   function thinkingByKey(thinking) {
     var out = {};
     (thinking.rows || []).forEach(function (x) {
-      out[x.day + "|" + x.agent_id + "|" + x.model_id] = x.thinking_tokens || 0;
+      out[x.day + "|" + x.agent_id + "|" + x.model_id] = x.output_tokens_thinking_on || 0;
     });
     return out;
   }
