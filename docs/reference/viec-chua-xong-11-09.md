@@ -94,7 +94,13 @@ Pacific thì **238/272 cặp ngày × project trùng khít tới từng con số
 là **nhãn trên metric**, không phải metric riêng. Nên cột này đo *token ra của lượt có bật suy
 nghĩ*: **47.913.327 trên tổng 52.560.360 token ra, tức 91,2%**.
 
-Ai đọc tên cột rồi cộng nó vào output sẽ đếm hai lần 91% token ra. Đổi tên, và ghi rõ cách đọc.
+Ai đọc tên cột rồi cộng nó vào output sẽ đếm hai lần 91% token ra.
+
+> **XONG 12/09.** Tên mới là `output_tokens_thinking_on`. Ba chỗ dùng tên cũ, không hơn.
+> **Không đụng database, không chạy lại luồng nạp**: tra `information_schema` thì không bảng
+> nào có cột `thinking_tokens`, đây là bí danh tính lúc truy vấn. Docstring viết lại kèm bảng
+> số, và sửa luôn một câu sai nằm trong đó là *"hoá đơn không tách"*. Mở ô 4.6 cho lý do gỡ
+> thẻ "Token suy luận" ghi ở `app.js:3525`, vì tiền đề *"con số luôn bằng 0"* nay đã sai.
 
 ### 2.4 Ô 4.3 — số token suy nghĩ thật chưa được lưu ở đâu
 
