@@ -26,12 +26,22 @@ function loadBaseline() {
   return sandbox.deltaBaseline;
 }
 
-test("không có kỳ gốc thật thì trả 0, không dựng bằng hệ số", () => {
+/* Hợp đồng đổi ở ô 1.3 của `standardize-kpi-card-insights`: trước đây cả hai
+   trạng thái "không có kỳ so sánh" và "kỳ trước đo được 0" đều bị ép về `v = 0`,
+   nên một phép đo thật hiện lên màn hình thành "chưa có dữ liệu". Nay `has` mới
+   là thứ tách hai trạng thái đó, nên phải kiểm `has` chứ không chỉ kiểm `v`. */
+test("không có kỳ gốc thật thì has=false, không dựng bằng hệ số", () => {
   const deltaBaseline = loadBaseline();
-  assert.equal(deltaBaseline(null).v, 0);
-  assert.equal(deltaBaseline(0).v, 0);
-  assert.equal(deltaBaseline(-5).v, 0);
-  assert.equal(deltaBaseline(undefined).v, 0);
+  /* `{ ...x }` chứ không so thẳng: object do `vm.runInContext` dựng mang
+     `Object.prototype` của sandbox, nên `deepStrictEqual` báo "same structure
+     but are not reference-equal" dù nội dung khớp. Trải phẳng về realm này. */
+  for (const khong_co of [null, undefined, -5]) {
+    assert.deepEqual({ ...deltaBaseline(khong_co) }, { v: null, has: false });
+  }
+});
+
+test("kỳ gốc đo được 0 KHÁC HẲN không có kỳ gốc", () => {
+  assert.deepEqual({ ...loadBaseline()(0) }, { v: 0, has: true });
 });
 
 test("có kỳ gốc thật thì dùng nguyên giá trị đó", () => {

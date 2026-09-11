@@ -22,7 +22,7 @@ Mục tiêu tuần này theo anh Tuấn: **thông luồng Agent CRM**, **kiểm 
 | 7 | Ba việc trước khi lên server (gateway fall back) | `docs/decisions/che-do-hong-cua-gateway-2026-09-10.md` | chỉ cần trước khi lên server | — |
 | 8 | Chín việc bàn giao nhóm CRM | `docs/reference/dua-crm-qua-gateway-10-09.md` mục 7 | cần gặp nhóm CRM | luồng CRM |
 | 9 | Đo tải và độ trễ đường CRM | hoãn có chủ ý 10/09 | cần trần thời gian, không phải trần tiền | luồng CRM |
-| 10 | `no-fake-baseline.test.js` đang hỏng, khoá hợp đồng cũ | không thuộc change nào | không | dashboard |
+| ~~10~~ | ~~`no-fake-baseline.test.js` đang hỏng~~ **XONG 11/09**, xem mục 10 | không thuộc change nào | — | dashboard |
 
 Tiến độ change:
 
@@ -290,3 +290,29 @@ còn nguyên giá trị và vẫn đang được hai phép kiểm còn lại can
 
 **Đáng lưu ý về quy trình:** ô 1.3 được đánh dấu xong mà bộ test không được chạy lại. Một thay
 đổi hợp đồng có chủ ý đã để lại một phép kiểm đỏ trong repo, và không ô task nào ghi nhận.
+
+### Đã sửa cùng ngày — 51/51 xanh
+
+Hai phép kiểm thay cho một, vì hợp đồng mới có **hai** trạng thái chứ không phải một:
+
+```
+   khong co ky goc  (null, undefined, -5)  ->  { v: null, has: false }
+   ky goc do duoc 0                        ->  { v: 0,    has: true  }
+```
+
+Kiểm cả `has` chứ không chỉ `v`, vì `has` mới là thứ ô 1.3 sinh ra để tách hai trạng thái.
+
+**Một cái bẫy gặp khi sửa, ghi lại để lần sau không mất mười phút.** Bản đầu dùng
+`assert.deepEqual(deltaBaseline(x), {...})` và **vẫn đỏ**, với thông báo lạ:
+
+```
+   Values have same structure but are not reference-equal
+```
+
+Nội dung khớp nhưng object do `vm.runInContext` dựng mang `Object.prototype` của **sandbox**,
+không phải của realm chạy test, nên `deepStrictEqual` so prototype rồi trượt. Cách gỡ là trải
+phẳng về realm này: `{ ...deltaBaseline(x) }`. Mọi file test trong `tests/` đều nạp `app.js`
+bằng `vm`, nên cái bẫy này chờ sẵn ở mọi chỗ so cả object thay vì so từng trường.
+
+Hai phép kiểm còn lại của file không đụng tới, và mục đích gốc vẫn nguyên: không ai nhét lại
+hệ số `0,88 / 0,57` để dựng kỳ nền giả.
