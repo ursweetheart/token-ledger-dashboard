@@ -1,0 +1,60 @@
+name: tla-gateway-smoke
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: litellm_smoke
+      POSTGRES_USER: smoke
+      POSTGRES_PASSWORD: ${SMOKE_DB_PASSWORD:?required}
+    volumes:
+      - smoke_pg:/var/lib/postgresql/data
+    networks: [isolated]
+    mem_limit: 512m
+    restart: "no"
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U smoke -d litellm_smoke"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+  gateway:
+    image: tla-gateway-smoke:py313
+    build:
+      context: ../../../litellm_rang_dong
+      dockerfile: ../token-ledger-dashboard/tools/gateway-smoke/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://smoke:${SMOKE_DB_PASSWORD:?required}@db:5432/litellm_smoke
+      LITELLM_MASTER_KEY: ${SMOKE_MASTER_KEY:?required}
+      LITELLM_SALT_KEY: ${SMOKE_SALT_KEY:?required}
+      STORE_MODEL_IN_DB: "False"
+      LITELLM_LOG: WARNING
+      CUSTOM_TIKTOKEN_CACHE_DIR: /opt/tiktoken-cache
+    volumes:
+      - ./config.yaml:/app/smoke.yaml:ro
+    networks: [isolated]
+    mem_limit: 2g
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 90s
+  ingress:
+    image: alpine/socat@sha256:5f275aa1b6e9889c851f61097142ee050fc6ac4615b4ea64ac1f2b0e81ff8d7f
+    command: ["TCP-LISTEN:4000,fork,reuseaddr", "TCP:gateway:4000"]
+    ports: ["127.0.0.1:4100:4000"]
+    networks: [isolated, ingress]
+    mem_limit: 64m
+    restart: "no"
+    depends_on:
+      gateway:
+        condition: service_healthy
+networks:
+  ingress: {}
+  isolated:
+    internal: true
+volumes:
+  smoke_pg:

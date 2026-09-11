@@ -2,6 +2,12 @@
 
 Các báo cáo dưới đây được thực hiện trên môi trường mock cô lập, không gọi Google thật và không sử dụng dữ liệu hợp đồng thật.
 
+## Cập nhật mới nhất
+
+- [Retest fallback 11/09/2026](./FALLBACK-RETEST-REPORT.md): 140 focused tests PASS; fallback 20/20 stage PASS; hồi quy LB 93 request / 93 SpendLogs PASS. Không phải chứng nhận production.
+- Bằng chứng mới: [fallback](./law-fallback-e3cee80a23d0.json), [hồi quy LB](./law-lb-815c700c6af2.json).
+- [Sơ đồ logic Gateway/fallback](./gateway-architecture-diagram.html).
+
 ## Báo cáo chính
 
 - [Kết quả kiểm thử qua Load Balancer](./LB-TEST-REPORT.md)

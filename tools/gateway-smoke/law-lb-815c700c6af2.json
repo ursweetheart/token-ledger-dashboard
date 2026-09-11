@@ -1,0 +1,3377 @@
+{
+  "run_id": "law-lb-815c700c6af2",
+  "result": "PASS",
+  "endpoint": "http://127.0.0.1:4101",
+  "scope": "real helpers + nginx LB + two mock LiteLLM proxies + isolated SpendLogs",
+  "limitations": [
+    "not authenticated router E2E",
+    "no application DB persistence",
+    "no ETL/department/dashboard verification",
+    "no OCR/Marker",
+    "no Redis/Sentinel",
+    "mock closed-loop load is not production capacity"
+  ],
+  "stages": [
+    {
+      "name": "baseline",
+      "requests": 1,
+      "concurrency": 1,
+      "elapsed_seconds": 0.6480511999998271,
+      "rps": 1.543087953544823,
+      "p50_ms": 646.4336999997613,
+      "p95_ms": 646.4336999997613,
+      "p99_ms": 646.4336999997613
+    },
+    {
+      "name": "ramp2",
+      "requests": 8,
+      "concurrency": 2,
+      "elapsed_seconds": 0.07926270000098157,
+      "rps": 100.93019793548454,
+      "p50_ms": 16.32629999949131,
+      "p95_ms": 30.37869999934628,
+      "p99_ms": 30.37869999934628
+    },
+    {
+      "name": "ramp4",
+      "requests": 24,
+      "concurrency": 4,
+      "elapsed_seconds": 0.13846539999940433,
+      "rps": 173.3284993948181,
+      "p50_ms": 22.094100000686012,
+      "p95_ms": 27.979300000879448,
+      "p99_ms": 29.344399999899906
+    },
+    {
+      "name": "ramp8",
+      "requests": 48,
+      "concurrency": 8,
+      "elapsed_seconds": 1.6890210000001389,
+      "rps": 28.418829606023877,
+      "p50_ms": 35.656900001413305,
+      "p95_ms": 827.195899999424,
+      "p99_ms": 839.4499999994878
+    },
+    {
+      "name": "one_proxy_down",
+      "requests": 8,
+      "concurrency": 2,
+      "elapsed_seconds": 6.065324899998814,
+      "rps": 1.3189730363828598,
+      "p50_ms": 2012.4525999999605,
+      "p95_ms": 2019.2380000007688,
+      "p99_ms": 2019.2380000007688
+    },
+    {
+      "name": "recovery",
+      "requests": 4,
+      "concurrency": 2,
+      "elapsed_seconds": 0.11800179999954707,
+      "rps": 33.89778799997418,
+      "p50_ms": 22.107500000856817,
+      "p95_ms": 95.79350000058184,
+      "p99_ms": 95.79350000058184
+    }
+  ],
+  "calls": [
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "baseline-0",
+      "response_id": "chatcmpl-3dddf1a5-b932-47ce-955f-c8ebe4f37e35",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp2-1",
+      "response_id": "chatcmpl-76ea69e5-2250-4367-8172-447ac10a0481",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp2-2",
+      "response_id": "chatcmpl-f5eedf00-071b-4e45-9399-f7f364d619ce",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp2-3",
+      "response_id": "chatcmpl-5036bc69-078b-4219-8ede-346dfb7347b8",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp2-4",
+      "response_id": "chatcmpl-a0c6134b-1d9a-4e8c-99bd-6d369dc5a626",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp2-5",
+      "response_id": "chatcmpl-a621dc29-d8d7-49e3-803b-5671ba6f5034",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp2-6",
+      "response_id": "chatcmpl-2b8799bf-8662-4c44-bdc9-d2506726f467",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp2-7",
+      "response_id": "chatcmpl-4e21ad36-8992-4805-90d8-1ce67294cc1f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp2-8",
+      "response_id": "chatcmpl-861dda4f-4dab-4cae-a80e-4275862cdf30",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp4-9",
+      "response_id": "chatcmpl-2ee85f1c-d8e5-4ba9-815f-2af8b079cdbc",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp4-11",
+      "response_id": "chatcmpl-19ba2708-e3a0-4046-b98b-b3c2b7158b84",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp4-10",
+      "response_id": "chatcmpl-d4d33102-a944-4fbb-9a12-bb31c7941506",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp4-12",
+      "response_id": "chatcmpl-247babf0-e9cd-4dbb-b170-188df59e133d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp4-13",
+      "response_id": "chatcmpl-62351dc2-7883-44cc-b8b6-fa5535d30655",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp4-14",
+      "response_id": "chatcmpl-4b6700c9-c067-484f-80dc-013fdb571324",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp4-15",
+      "response_id": "chatcmpl-a7083d2a-5f2a-4398-adfd-82dfbecba1d8",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp4-16",
+      "response_id": "chatcmpl-e8114480-ea03-414e-9443-3a3536372ffb",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp4-17",
+      "response_id": "chatcmpl-91f3f2c9-5369-4406-86ef-a6221826d59f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp4-18",
+      "response_id": "chatcmpl-9be120b5-9f67-46eb-abec-98aa69941d04",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp4-19",
+      "response_id": "chatcmpl-c001705f-7af6-43ea-b649-998684ed153b",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp4-21",
+      "response_id": "chatcmpl-74e485a1-98c6-4900-81c7-dd476964214d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp4-20",
+      "response_id": "chatcmpl-4a042560-c5ea-40df-ac8f-eb2bcd46c073",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp4-23",
+      "response_id": "chatcmpl-8f0747b2-9716-4e72-9138-67d88a6b6c98",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp4-22",
+      "response_id": "chatcmpl-5c962c9b-d74b-49cb-a159-feabf7ac39f5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp4-25",
+      "response_id": "chatcmpl-45f06916-d717-4ed0-8f5f-f39731bf8b7e",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp4-27",
+      "response_id": "chatcmpl-a844b8bc-a5da-4c6c-a0ec-c41e50745fa4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp4-24",
+      "response_id": "chatcmpl-33e764a4-5256-41a3-a862-7f13bc53ac89",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp4-26",
+      "response_id": "chatcmpl-74dea996-af53-4683-87bd-77a9a1fb58d7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp4-28",
+      "response_id": "chatcmpl-6629b621-a4db-4cd2-b4c2-a83ef5472997",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp4-30",
+      "response_id": "chatcmpl-a04d17aa-b1c9-4a71-b632-283daec4de94",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp4-29",
+      "response_id": "chatcmpl-ebe4bdf8-7944-4c8e-9770-9c7c352986ef",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp4-31",
+      "response_id": "chatcmpl-11300f2d-b4d9-42a0-9fb6-c8594afa500a",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp4-32",
+      "response_id": "chatcmpl-c3245200-07eb-4fd0-a436-43d1c2c22833",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp8-36",
+      "response_id": "chatcmpl-c9f7c982-1182-4928-8059-60ce14a1ed1c",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp8-33",
+      "response_id": "chatcmpl-717b5b24-4ef8-4d8d-81ec-89734502c46c",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp8-41",
+      "response_id": "chatcmpl-5e09a3eb-db40-4b4c-a70e-f30c3e46e375",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp8-34",
+      "response_id": "chatcmpl-75ceffad-1806-41ce-8072-3534f9d16be3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp8-35",
+      "response_id": "chatcmpl-33375be1-f069-4872-b2a4-1b13ac9ad7af",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp8-44",
+      "response_id": "chatcmpl-87525a34-13dc-4ff6-90f3-520f5d2df902",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp8-45",
+      "response_id": "chatcmpl-dd91ddc7-bc7d-40f3-99e2-2abe57d2981f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp8-43",
+      "response_id": "chatcmpl-df9e7d9d-1fad-4327-b85f-adfd6f19ed78",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp8-42",
+      "response_id": "chatcmpl-39b83c75-318b-4c8c-9bdc-ba5cf5fdfa3d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp8-38",
+      "response_id": "chatcmpl-2d52f98f-1a68-458c-aab4-c437d6e8404a",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp8-40",
+      "response_id": "chatcmpl-3816b648-7592-4b97-a1bc-7931420656c4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp8-37",
+      "response_id": "chatcmpl-a611fb81-c267-44f2-b3d3-07d4c483607e",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp8-39",
+      "response_id": "chatcmpl-76f00a5b-1dd4-4b85-8681-d8ba472fc174",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp8-48",
+      "response_id": "chatcmpl-386c7187-708f-4c93-9187-2dc54dc16f8d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp8-46",
+      "response_id": "chatcmpl-db97c5f4-6c35-49b8-87be-37a7395b99d7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp8-47",
+      "response_id": "chatcmpl-1a0f019c-fb3a-445e-98b1-8db6bdd679b5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp8-50",
+      "response_id": "chatcmpl-7ba8830d-8d5f-477f-94c9-b1926c2a53f9",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp8-49",
+      "response_id": "chatcmpl-8892aef1-a15d-4dbd-845c-deab6e38d935",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp8-54",
+      "response_id": "chatcmpl-f53bd04b-3482-43d6-b96d-518b5d532e8b",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp8-51",
+      "response_id": "chatcmpl-b5f1732d-bc5c-4f9c-b6b6-6abfdb1ba40d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp8-57",
+      "response_id": "chatcmpl-201b798a-61cb-44a1-ab5d-f5fd7be3693c",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp8-58",
+      "response_id": "chatcmpl-0059759c-53dc-424f-ac48-cefaa01ab7db",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp8-52",
+      "response_id": "chatcmpl-0da6b7ee-0cb7-42f1-b218-2082c8bd35a0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp8-53",
+      "response_id": "chatcmpl-3ad87368-db1d-43c5-8b74-6811e1bdcad3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp8-60",
+      "response_id": "chatcmpl-29f27d25-5df5-474a-9ef9-8866e3065b1d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp8-63",
+      "response_id": "chatcmpl-4258bef2-75dd-4041-8ec9-0a4546c0ac48",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp8-64",
+      "response_id": "chatcmpl-23f677f2-bd9c-494b-8802-7e002a1fcc9f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp8-55",
+      "response_id": "chatcmpl-7884ec0c-4a96-42c1-8748-9d65594f79be",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp8-56",
+      "response_id": "chatcmpl-c170d944-bcad-476e-bb39-53587afeef7b",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp8-68",
+      "response_id": "chatcmpl-054ffcd0-68ff-40a6-acaf-6ce2a0a33198",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp8-69",
+      "response_id": "chatcmpl-3fad64f0-7aaa-442b-bcf2-0e3a2f87c789",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp8-59",
+      "response_id": "chatcmpl-9a32520f-f8cb-4e9a-9c6a-79bf87bf2431",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp8-61",
+      "response_id": "chatcmpl-f2ec86c2-4214-4021-b187-cf5b2cf593ff",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp8-66",
+      "response_id": "chatcmpl-0c9b5109-d142-45a7-8710-87f2ed9455b6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp8-62",
+      "response_id": "chatcmpl-e841cc6a-ddb6-4b7c-9daa-288fdd1f95a6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp8-72",
+      "response_id": "chatcmpl-6f26976f-8222-4dbe-8bc1-342472863fda",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp8-67",
+      "response_id": "chatcmpl-3cbca019-dd4e-47b6-8968-e3d00c99b32c",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp8-65",
+      "response_id": "chatcmpl-e7469668-2d86-483e-aa2f-489d7847b1c9",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp8-70",
+      "response_id": "chatcmpl-bb534b4c-bf00-44c6-811b-8131bb8daec4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "ramp8-74",
+      "response_id": "chatcmpl-24840d8f-b218-4ae4-837f-ab845e58b845",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "ramp8-73",
+      "response_id": "chatcmpl-a5c68806-8229-4a44-a7ac-3708ec523788",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp8-71",
+      "response_id": "chatcmpl-4d50129f-9577-48f6-8bf9-47838d45dfd2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "ramp8-75",
+      "response_id": "chatcmpl-b3898e1e-9609-4c4b-982b-6b214c6baeda",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "ramp8-77",
+      "response_id": "chatcmpl-a7e7463e-0103-4d61-b078-24de780d5235",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "ramp8-76",
+      "response_id": "chatcmpl-13bb8263-8bdf-44f9-b443-4ac29ae05cb8",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "ramp8-80",
+      "response_id": "chatcmpl-7342e83e-1c47-49af-b47e-9407a9d7bfcc",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "ramp8-78",
+      "response_id": "chatcmpl-9c52380f-72f4-4e99-939d-efbb9ab11e22",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "ramp8-79",
+      "response_id": "chatcmpl-08babec3-a526-4b59-9104-8504916ff0d7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "one_proxy_down-82",
+      "response_id": "chatcmpl-0132059a-293b-42e4-86fc-e9645711e255",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "one_proxy_down-81",
+      "response_id": "chatcmpl-bdf570c3-33db-49d7-8f01-7340ecd0d624",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "one_proxy_down-83",
+      "response_id": "chatcmpl-9f439a91-0624-4249-8f0d-6614689d58d7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "one_proxy_down-84",
+      "response_id": "chatcmpl-6c9d21a7-972b-4d63-b6f9-f50e28ef5f83",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "operation": "one_proxy_down-86",
+      "response_id": "chatcmpl-5c65923d-0602-4717-86b2-52df9189ed94",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "operation": "one_proxy_down-85",
+      "response_id": "chatcmpl-5c6630ee-988b-47e3-b779-bacbae6e71ab",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "operation": "one_proxy_down-87",
+      "response_id": "chatcmpl-0b48a4b6-4958-4ab4-88c8-cea337885bed",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "operation": "one_proxy_down-88",
+      "response_id": "chatcmpl-f8f5b8d5-dfff-4537-acf9-6d569d6bdae2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "operation": "recovery-89",
+      "response_id": "chatcmpl-71f1de2f-5608-4f0f-87b8-85925166a37a",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "operation": "recovery-90",
+      "response_id": "chatcmpl-007d9eff-3191-43c9-afa6-18811b90fb18",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "operation": "recovery-91",
+      "response_id": "chatcmpl-863cce18-c567-445a-9d99-ae7d12c25193",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "operation": "recovery-92",
+      "response_id": "chatcmpl-53632a91-aef4-409c-a7b8-21d846925243",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    }
+  ],
+  "negative": {
+    "missing_identity_call_llm": "rejected before network",
+    "missing_identity_call_llm_chat": "rejected before network",
+    "invalid_key": "401; one SDK attempt; no bypass",
+    "lb_outage": {
+      "sdk_attempts": 1,
+      "elapsed_seconds": 2.0796114999993733,
+      "bypass": false
+    }
+  },
+  "transport_attempts": [
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    }
+  ],
+  "resources_before": "tla-gateway-smoke-gateway-lb-1 2.23% 11.12MiB / 128MiB\ntla-gateway-smoke-gateway2-1 8.75% 742.8MiB / 2GiB\ntla-gateway-smoke-gateway-1 0.15% 871.2MiB / 2GiB\ntla-gateway-smoke-db-1 0.00% 43.75MiB / 512MiB\n",
+  "spend_logs": [
+    {
+      "request_id": "chatcmpl-f5eedf00-071b-4e45-9399-f7f364d619ce",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-5036bc69-078b-4219-8ede-346dfb7347b8",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-2b8799bf-8662-4c44-bdc9-d2506726f467",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-4e21ad36-8992-4805-90d8-1ce67294cc1f",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-2ee85f1c-d8e5-4ba9-815f-2af8b079cdbc",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-4b6700c9-c067-484f-80dc-013fdb571324",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a7083d2a-5f2a-4398-adfd-82dfbecba1d8",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-e8114480-ea03-414e-9443-3a3536372ffb",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-91f3f2c9-5369-4406-86ef-a6221826d59f",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-74e485a1-98c6-4900-81c7-dd476964214d",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-8f0747b2-9716-4e72-9138-67d88a6b6c98",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-45f06916-d717-4ed0-8f5f-f39731bf8b7e",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a844b8bc-a5da-4c6c-a0ec-c41e50745fa4",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a04d17aa-b1c9-4a71-b632-283daec4de94",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-11300f2d-b4d9-42a0-9fb6-c8594afa500a",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c3245200-07eb-4fd0-a436-43d1c2c22833",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-717b5b24-4ef8-4d8d-81ec-89734502c46c",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-5e09a3eb-db40-4b4c-a70e-f30c3e46e375",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-87525a34-13dc-4ff6-90f3-520f5d2df902",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-dd91ddc7-bc7d-40f3-99e2-2abe57d2981f",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-386c7187-708f-4c93-9187-2dc54dc16f8d",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-7ba8830d-8d5f-477f-94c9-b1926c2a53f9",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-8892aef1-a15d-4dbd-845c-deab6e38d935",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-b5f1732d-bc5c-4f9c-b6b6-6abfdb1ba40d",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0da6b7ee-0cb7-42f1-b218-2082c8bd35a0",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-3ad87368-db1d-43c5-8b74-6811e1bdcad3",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-7884ec0c-4a96-42c1-8748-9d65594f79be",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c170d944-bcad-476e-bb39-53587afeef7b",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9a32520f-f8cb-4e9a-9c6a-79bf87bf2431",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-f2ec86c2-4214-4021-b187-cf5b2cf593ff",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0c9b5109-d142-45a7-8710-87f2ed9455b6",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-e841cc6a-ddb6-4b7c-9daa-288fdd1f95a6",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-e7469668-2d86-483e-aa2f-489d7847b1c9",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-3cbca019-dd4e-47b6-8968-e3d00c99b32c",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-bb534b4c-bf00-44c6-811b-8131bb8daec4",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-4d50129f-9577-48f6-8bf9-47838d45dfd2",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a7e7463e-0103-4d61-b078-24de780d5235",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-7342e83e-1c47-49af-b47e-9407a9d7bfcc",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-3dddf1a5-b932-47ce-955f-c8ebe4f37e35",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-76ea69e5-2250-4367-8172-447ac10a0481",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a0c6134b-1d9a-4e8c-99bd-6d369dc5a626",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a621dc29-d8d7-49e3-803b-5671ba6f5034",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-861dda4f-4dab-4cae-a80e-4275862cdf30",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-19ba2708-e3a0-4046-b98b-b3c2b7158b84",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-d4d33102-a944-4fbb-9a12-bb31c7941506",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-247babf0-e9cd-4dbb-b170-188df59e133d",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-62351dc2-7883-44cc-b8b6-fa5535d30655",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9be120b5-9f67-46eb-abec-98aa69941d04",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c001705f-7af6-43ea-b649-998684ed153b",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-4a042560-c5ea-40df-ac8f-eb2bcd46c073",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-5c962c9b-d74b-49cb-a159-feabf7ac39f5",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-33e764a4-5256-41a3-a862-7f13bc53ac89",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-74dea996-af53-4683-87bd-77a9a1fb58d7",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-6629b621-a4db-4cd2-b4c2-a83ef5472997",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-ebe4bdf8-7944-4c8e-9770-9c7c352986ef",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c9f7c982-1182-4928-8059-60ce14a1ed1c",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-75ceffad-1806-41ce-8072-3534f9d16be3",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-33375be1-f069-4872-b2a4-1b13ac9ad7af",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-df9e7d9d-1fad-4327-b85f-adfd6f19ed78",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-39b83c75-318b-4c8c-9bdc-ba5cf5fdfa3d",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-2d52f98f-1a68-458c-aab4-c437d6e8404a",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-3816b648-7592-4b97-a1bc-7931420656c4",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a611fb81-c267-44f2-b3d3-07d4c483607e",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-76f00a5b-1dd4-4b85-8681-d8ba472fc174",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-db97c5f4-6c35-49b8-87be-37a7395b99d7",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-1a0f019c-fb3a-445e-98b1-8db6bdd679b5",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-f53bd04b-3482-43d6-b96d-518b5d532e8b",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-201b798a-61cb-44a1-ab5d-f5fd7be3693c",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0059759c-53dc-424f-ac48-cefaa01ab7db",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-29f27d25-5df5-474a-9ef9-8866e3065b1d",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-4258bef2-75dd-4041-8ec9-0a4546c0ac48",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-23f677f2-bd9c-494b-8802-7e002a1fcc9f",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-054ffcd0-68ff-40a6-acaf-6ce2a0a33198",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-3fad64f0-7aaa-442b-bcf2-0e3a2f87c789",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-6f26976f-8222-4dbe-8bc1-342472863fda",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-24840d8f-b218-4ae4-837f-ab845e58b845",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a5c68806-8229-4a44-a7ac-3708ec523788",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-b3898e1e-9609-4c4b-982b-6b214c6baeda",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-13bb8263-8bdf-44f9-b443-4ac29ae05cb8",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9c52380f-72f4-4e99-939d-efbb9ab11e22",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-08babec3-a526-4b59-9104-8504916ff0d7",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0132059a-293b-42e4-86fc-e9645711e255",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-bdf570c3-33db-49d7-8f01-7340ecd0d624",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9f439a91-0624-4249-8f0d-6614689d58d7",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-6c9d21a7-972b-4d63-b6f9-f50e28ef5f83",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-5c65923d-0602-4717-86b2-52df9189ed94",
+      "end_user": "law-lb-815c700c6af2.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-5c6630ee-988b-47e3-b779-bacbae6e71ab",
+      "end_user": "law-lb-815c700c6af2.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0b48a4b6-4958-4ab4-88c8-cea337885bed",
+      "end_user": "law-lb-815c700c6af2.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-f8f5b8d5-dfff-4537-acf9-6d569d6bdae2",
+      "end_user": "law-lb-815c700c6af2.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-863cce18-c567-445a-9d99-ae7d12c25193",
+      "end_user": "law-lb-815c700c6af2.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-53632a91-aef4-409c-a7b8-21d846925243",
+      "end_user": "law-lb-815c700c6af2.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-71f1de2f-5608-4f0f-87b8-85925166a37a",
+      "end_user": "law-lb-815c700c6af2.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-007d9eff-3191-43c9-afa6-18811b90fb18",
+      "end_user": "law-lb-815c700c6af2.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    }
+  ],
+  "lb_trace": [
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.017
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.025
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.011
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.019
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.023
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.019
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.022
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.011
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.021
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.019
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.017
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.021
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.02
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.009
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.784
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.784
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.786
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.802
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.81
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.813
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.817
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.82
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.032
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.031
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.024
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.023
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.032
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.042
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.042
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.736
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.734
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.012
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.747
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.718
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.739
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.738
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.732
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.72
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.04
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.022
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.021
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.042
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.026
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.022
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.026
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.011
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.033
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.02
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 401,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "401",
+      "seconds": 0.014
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000, 172.20.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.011
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000, 172.20.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.013
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.005
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000, 172.20.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.009
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000, 172.20.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.007
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000, 172.20.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.01
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.012
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.089
+    },
+    {
+      "user": "law-lb-815c700c6af2.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.087
+    }
+  ],
+  "upstreams": [
+    "172.20.0.3:4000",
+    "172.20.0.4:4000"
+  ],
+  "total_requests": 93,
+  "total_tokens": 2790,
+  "resources_after": "tla-gateway-smoke-gateway-lb-1 0.00% 11.46MiB / 128MiB\ntla-gateway-smoke-gateway2-1 8.71% 742.5MiB / 2GiB\ntla-gateway-smoke-gateway-1 0.14% 899.1MiB / 2GiB\ntla-gateway-smoke-db-1 2.92% 46.12MiB / 512MiB\n",
+  "key_cleanup": {
+    "delete_status": 200,
+    "readback_status": 404
+  }
+}
