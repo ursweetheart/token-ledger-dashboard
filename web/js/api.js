@@ -193,14 +193,6 @@
     return out;
   }
 
-  function thinkingByKey(thinking) {
-    var out = {};
-    (thinking.rows || []).forEach(function (x) {
-      out[x.day + "|" + x.agent_id + "|" + x.model_id] = x.output_tokens_thinking_on || 0;
-    });
-    return out;
-  }
-
   /* Cây đơn vị cho app.js: MỘT cây, đã gộp sẵn, đã bỏ dòng kỹ thuật.
 
      dim_unit chứa HAI cây tổ chức - Trợ lý ảo Ralli 102 đơn vị một gốc, Trợ Lý
@@ -296,9 +288,8 @@
     return out;
   }
 
-  function buildState(usage, perf, thinking, catalog) {
+  function buildState(usage, perf, catalog) {
     var byAgent = perfByAgent(perf),
-        think = thinkingByKey(thinking),
         unit = primaryUnit(catalog),
         tree = orgTree(catalog);
     var agentName = {};
@@ -379,7 +370,6 @@
            NULL ở những ngày hoá đơn chưa về - khi đó app.js mới ước tính, và
            cột token_estimated nói rõ dòng nào là ước tính. */
         cost: x.cost_usd,
-        think: think[x.day + "|" + x.agent_id + "|" + x.model_id] || 0,
         /* Ba trường dưới đây không thuộc hình dạng cũ — thêm vào để phần hiển
            thị nào cần thì biết con số này đáng tin đến đâu. app.js hiện không
            đọc chúng; chúng có mặt để không mất thông tin trong lúc dịch. */
@@ -520,22 +510,29 @@
           var q = "?start=" + r.from + "&end=" + r.to;
           return Promise.all([fetchJson("/api/usage" + q),
                               fetchJson("/api/performance" + q),
-                              fetchJson("/api/thinking" + q),
                               fetchJson("/api/catalog"),
                               fetchJson("/api/adoption"),
                               fetchJson("/api/accounts"),
-                              fetchJson("/api/usage-by-account" + q)]);
+                              fetchJson("/api/usage-by-account" + q)])
+            .then(function (r) {
+              /* ĐẶT TÊN NGAY, KHÔNG ĐỌC THEO CHỈ SỐ XUỐNG DƯỚI. Bỏ `/api/thinking`
+                 ra khỏi danh sách này làm lệch mọi `r[N]` phía sau nó, và kiểu lỗi
+                 đó KHÔNG ném exception - nó chỉ đưa sai bảng vào sai chỗ. Cùng lý
+                 lẽ `backend/store.py::_rows` đã ghi cho việc đọc cột theo tên. */
+              return { usage: r[0], perf: r[1], catalog: r[2],
+                       adoption: r[3], accounts: r[4], byAccount: r[5] };
+            });
         })
         .then(function (r) {
-          var state = buildState(r[0], r[1], r[2], r[3]);
+          var state = buildState(r.usage, r.perf, r.catalog);
           state.health = health;
-          state.adoption = ((r[4] && r[4].rows) || []).map(function (x) {
+          state.adoption = ((r.adoption && r.adoption.rows) || []).map(function (x) {
             return x && x.agent ? Object.assign({}, x, { agent: tenAgent(x.agent) }) : x;
           });
           /* Tài khoản mang `unit_id` GỐC, mà cây đã bỏ các bản trùng. Quy về bản
              chuẩn ngay tại đây - để app.js tự nhớ thì sớm muộn một chỗ quên, và
              tài khoản trỏ vào đơn vị không còn tồn tại sẽ lặng lẽ rơi khỏi bảng. */
-          state.accounts = ((r[5] && r[5].rows) || []).map(function (a) {
+          state.accounts = ((r.accounts && r.accounts.rows) || []).map(function (a) {
             var cid = state.canonicalUnitOf[a.unit_id];
             var b = cid && cid !== a.unit_id
               ? Object.assign({}, a, { unit_id: cid, unit_id_raw: a.unit_id })
@@ -543,12 +540,12 @@
             return b.agent === tenAgent(b.agent) ? b
                  : Object.assign({}, b, { agent: tenAgent(b.agent) });
           });
-          state.byAccount = ((r[6] && r[6].rows) || []).map(function (x) {
+          state.byAccount = ((r.byAccount && r.byAccount.rows) || []).map(function (x) {
             return x && x.agent ? Object.assign({}, x, { agent: tenAgent(x.agent) }) : x;
           });
           /* Cảnh báo độ phủ đi KÈM bảng theo người dùng, không để app.js phải
              nhớ sang hỏi /api/health - xem ghi chú ở backend/main.py. */
-          state.accountWarnings = (r[6] && r[6].warnings) || [];
+          state.accountWarnings = (r.byAccount && r.byAccount.warnings) || [];
           return { ok: true, data: state };
         })
         .catch(function (e) {

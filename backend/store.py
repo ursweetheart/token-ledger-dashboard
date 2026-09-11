@@ -466,59 +466,22 @@ def performance(cn, ph, start: str, end: str) -> dict:
     return {"response_codes": codes, "latency": latency}
 
 
-def thinking(cn, ph, start: str, end: str) -> list[dict]:
-    """Token RA của những lượt CÓ BẬT suy nghĩ, theo day/agent/model.
-
-    ĐỌC CHO ĐÚNG TÊN CỘT - ĐÂY LÀ CHỖ ĐÃ GÂY NHẦM MỘT LẦN
-    -----------------------------------------------------
-    `output_tokens_thinking_on` là **token ra**, lọc theo nhãn của lượt gọi. Nó
-    KHÔNG phải *"số token đã dùng để suy nghĩ"*, và cũng KHÔNG phải toàn bộ token
-    ra. Tên cũ là `thinking_tokens`, và cái tên đó mời người đọc cộng nó vào token
-    ra - đúng một lần suýt xảy ra ngày 11/09/2026. Đo cùng ngày:
-
-        luot BAT suy nghi   11.440 dong   47.913.327 token ra
-        luot TAT suy nghi    3.589 dong    4.647.033
-        khong co nhan            6 dong            0
-                                          ----------
-        tong token ra       15.035 dong   52.560.360
-
-    Cột này là **91,2% token ra**, nằm SẴN trong token ra. Cộng thêm là đếm hai lần.
-
-    Muốn biết phần thật sự dùng để suy nghĩ thì phải lấy `reasoning_tokens` của sổ
-    Gateway: monitoring chỉ dán nhãn bật/tắt, không tách số. Xem
-    `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
-
-    `monitoring_tokens` là tổng của CẢ vào lẫn ra (496,9 triệu), không phải mẫu số
-    của riêng token ra. Chia cột trên cho nó ra một con số không có nghĩa gì.
-
-    VÌ SAO CHỈ ĂN METRIC OUTPUT dù `measures = 'token'` phủ cả input: metric input
-    KHÔNG mang nhãn `thinking_enabled` bao giờ - giá trị là NULL - nên nhánh
-    `CASE WHEN ... = 'true'` cho 0 trên mọi dòng input. Đã đo, không phải suy.
-
-    Chỉ Cloud Monitoring có nhãn này, app không ghi. Hoá đơn thì CÓ tách, nhưng
-    tách kiểu khác: hai SKU output riêng cho `gemini 2.5 flash`, một mang chữ
-    `non-thinking` trong tên. Câu cũ ở đây viết *"hoá đơn không tách"* và nó SAI,
-    đã bác bỏ bằng phép đo 11/09.
-    """
-    r = _rows(cn, f"""
-        SELECT substr(CAST(m.ts_local AS TEXT), 1, 10) AS day,
-               m.agent_id, m.model_id,
-               SUM(CASE WHEN m.thinking_enabled = 'true' THEN m.value ELSE 0 END)
-                   AS output_tokens_thinking_on,
-               SUM(m.value) AS monitoring_tokens
-        FROM monitoring_ai m
-        JOIN dim_metric_alias d
-          ON d.source = 'monitoring' AND d.raw_name = m.metric_type
-        WHERE d.measures = 'token' AND m.model_id IS NOT NULL
-          AND substr(CAST(m.ts_local AS TEXT), 1, 10) >= {ph}
-          AND substr(CAST(m.ts_local AS TEXT), 1, 10) <= {ph}
-        GROUP BY 1, 2, 3
-        ORDER BY 1, 2, 3""", (start, end))
-    for x in r:
-        x["output_tokens_thinking_on"] = int(x["output_tokens_thinking_on"] or 0)
-        x["monitoring_tokens"] = int(x["monitoring_tokens"] or 0)
-    return r
-
+# `thinking()` GỠ 12/09/2026, cùng endpoint `/api/thinking`.
+#
+# Chốt: token suy luận và token ra là MỘT biến. Hoá đơn không có SKU riêng cho
+# suy nghĩ - nó nằm trong SKU output và tính theo giá output, `2,499976` so với
+# `2,499946` USD trên một triệu, tức cùng một giá. Sổ Gateway cũng vậy:
+# `reasoning` nằm trong `completion`, 0 trên 46 dòng vượt ra.
+#
+# Hàm cũ trả về token RA của những lượt CÓ BẬT suy nghĩ - một lát cắt nằm sẵn
+# trong `output_tokens`, chiếm 91,2% - và **không nơi nào đọc nó ra màn hình**.
+# Mỗi lần mở trang là thêm một request và một câu SQL quét `fact_monitoring` cho
+# một con số không ai thấy.
+#
+# Muốn đo lại phần suy nghĩ thì lấy `reasoning_tokens` trong `metadata` của
+# `LiteLLM_SpendLogs`; nó vẫn còn nguyên ở đó. Xem ô 4.3 của change
+# `settle-what-the-bill-does-with-thinking-tokens` và
+# `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
 
 # =====================================================================
 # Sức khoẻ - cái này quan trọng ngang số liệu

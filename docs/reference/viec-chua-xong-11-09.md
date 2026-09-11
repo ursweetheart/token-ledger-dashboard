@@ -17,8 +17,8 @@ Mục tiêu tuần này theo anh Tuấn: **thông luồng Agent CRM**, **kiểm 
 | ~~2~~ | ~~Ô 4.4 — `fact_usage_daily` trộn hai múi giờ~~ **XONG 11/09**, đổi thành phép kiểm | change `settle-what-the-bill-does...` | — | dashboard |
 | 2b | Ô 4.5 — `usage_resolved` ghép tiền Pacific với token VN trên cùng một dòng | change `settle-what-the-bill-does...` | không | dashboard |
 | ~~3~~ | ~~Ô 4.1 — đổi tên cột `thinking_tokens`~~ **XONG 12/09** → `output_tokens_thinking_on` | change `settle-what-the-bill-does...` | — | dashboard |
-| 3b | Ô 4.6 — lý do gỡ thẻ "Token suy luận" ghi trong mã nay đã sai | change `settle-what-the-bill-does...` | không | dashboard |
-| 4 | Ô 4.3 — lưu `reasoning_tokens` để hiện được token suy nghĩ | change `settle-what-the-bill-does...` | không | dashboard |
+| ~~3b~~ | ~~Ô 4.6 — lý do gỡ thẻ "Token suy luận"~~ **XONG 12/09**, sửa lý do, không dựng lại thẻ | change `settle-what-the-bill-does...` | — | dashboard |
+| ~~4~~ | ~~Ô 4.3 — lưu `reasoning_tokens`~~ **KHÔNG LÀM 12/09**, token suy luận và token ra là một biến | change `settle-what-the-bill-does...` | — | dashboard |
 | 5 | Ô 6.2 — bộ chọn agent cho biểu đồ ngân sách | change `revise-dashboard-ui...` | không | dashboard |
 | 6 | Ô 5.3 — xem 8 card ở bề rộng hẹp | change `standardize-kpi-card-insights` | không | dashboard |
 | 7 | Ba việc trước khi lên server (gateway fall back) | `docs/decisions/che-do-hong-cua-gateway-2026-09-10.md` | chỉ cần trước khi lên server | — |
@@ -109,6 +109,14 @@ boolean**, con số thì bỏ. Muốn hiện token suy nghĩ lên dashboard thì
 
 Và phải trình bày kiểu **trong đó** chứ không **cộng thêm**: đo trên 46 dòng sổ Gateway thì
 `reasoning` là 9.554 trên `completion` 9.968, **0 dòng** vượt. Tập con, không phải ngăn riêng.
+
+> **KHÔNG LÀM, chốt 12/09 bởi anh Tuấn:** *"tôi muốn coi token suy luận và token output là 1:
+> đều là biến token output"*. Quyết định đó đúng theo nghĩa kế toán, vì hoá đơn không có SKU
+> nào cho suy nghĩ. Và nó **xoá việc chứ không thêm việc**: cả chuỗi `/api/thinking` đã được gỡ
+> — một endpoint, một hàm SQL, một bảng tra ở frontend, và một trường không nơi nào đọc.
+> Đường quay lại còn nguyên: `reasoning_tokens` vẫn nằm trong `metadata` của
+> `LiteLLM_SpendLogs`. Mở lại ô này khi nào cần trả lời *"tắt suy nghĩ đi thì tiết kiệm bao
+> nhiêu"*.
 
 ### 2.5 Ô 6.2 `revise-dashboard-ui` — bộ chọn agent cho biểu đồ ngân sách
 

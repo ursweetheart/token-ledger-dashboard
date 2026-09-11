@@ -97,7 +97,13 @@ Nhật ký đo: `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
       bằng phép đo 11/09, xem ô 3.2.
       Kiểm: gọi thẳng `store.thinking()` trên database thật, 136 dòng, tên cột mới đúng, tổng
       10.609.201. `node --test` 51/51, `pytest` 11 đạt.
-- [ ] 4.6 **Tiền đề của việc gỡ thẻ "Token suy luận" nay đã SAI.** `app.js:3525` ghi lý do gỡ là
+- [x] 4.6 **XONG 12/09 — sửa lý do, và KHÔNG dựng lại thẻ.** Chốt bởi anh Tuấn cùng ngày: *"tôi
+      muốn coi token suy luận và token output là 1: đều là biến token output"*. Quyết định đó
+      đúng và nó **xoá việc chứ không thêm việc** — xem 4.7.
+      Lý do cũ ghi trong mã là *"con số luôn bằng 0"*, và nó sai: con số là 47.913.327 trên
+      11.440 dòng. Đã thay bằng lý do đúng: token suy luận **không phải một loại token riêng**,
+      nên vẽ nó thành một thẻ cạnh thẻ token là mời người xem cộng hai số đã chồng nhau.
+      → Nguyên văn ô lúc mở, giữ làm vết: **Tiền đề của việc gỡ thẻ "Token suy luận" nay đã SAI.** `app.js:3525` ghi lý do gỡ là
       *"chưa xác nhận được agent nào thực sự bật suy luận mở rộng, nên con số luôn bằng 0 và chỉ
       gây hiểu nhầm"*. Số không bằng 0: nó là 47.913.327, tức 91,2% token ra, trên 11.440 dòng.
       Trường `A.think` vẫn được `aggregate()` tính nên dựng lại thẻ không phải sửa gì thêm.
@@ -126,7 +132,13 @@ Nhật ký đo: `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
       **Bài học phương pháp:** tôi đã báo một "lỗi dữ liệu" mà thực ra là lỗi phép ghép của chính
       tôi — đúng cái ô 2.5 dặn *"lệch lớn thì nghi phép ghép trước"*. Đọc rồi vẫn sa vào.
       Xem mục 11 của nhật ký.
-- [ ] 4.3 Số token suy nghĩ **thật** chưa được lưu ở đâu cả. `load_gateway.py:201` đọc
+- [x] 4.3 **KHÔNG LÀM, CÓ LÝ DO — và đây là kết cục tốt hơn việc làm nó.** Chốt 12/09: token suy
+      luận và token ra là **một biến**. Nên không cần cột `reasoning_tokens` trong `fact_call`,
+      và không cần chỗ nào hiển thị nó.
+      **Đường quay lại vẫn còn nguyên:** `reasoning_tokens` nằm trong `metadata` của
+      `LiteLLM_SpendLogs`, không ai xoá. Ngày nào cần trả lời câu *"tắt suy nghĩ đi thì tiết
+      kiệm bao nhiêu"* thì mở lại ô này. Hôm nay chưa ai hỏi.
+      → Nguyên văn ô lúc mở, giữ làm vết: Số token suy nghĩ **thật** chưa được lưu ở đâu cả. `load_gateway.py:201` đọc
       `completion_tokens_details.reasoning_tokens` chỉ để suy ra **cờ** boolean, con số thì bỏ.
       Muốn hiện token suy nghĩ trên dashboard thì thêm một cột vào `fact_call`, và trình bày
       kiểu **trong đó** chứ không **cộng thêm** — nó là tập con của token ra.
@@ -165,3 +177,38 @@ Nhật ký đo: `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
       một dòng và trông hoàn toàn khớp. Nằm trong hạn chế đã chốt 14/08 nên không phải lỗi mới,
       nhưng đáng gọi tên riêng vì nó không lộ ra như một chuỗi bị dịch. Ảnh hưởng: chỉ số nào
       chia tiền cho token theo NGÀY. Tổng cả kỳ không ảnh hưởng.
+- [x] 4.7 **XONG 12/09 — gỡ cả chuỗi `/api/thinking`, vì mô hình một biến làm nó thành thừa.**
+      Tra ra trước khi cắt: trường `think` được `aggregate()` cộng dồn rồi **không nơi nào đọc**.
+      Mỗi lần mở trang là thêm một request HTTP và một câu SQL quét `fact_monitoring` cho một con
+      số không ai thấy.
+
+      | gỡ ở đâu | gỡ cái gì |
+      |---|---|
+      | `backend/main.py` | endpoint `/api/thinking` |
+      | `backend/store.py` | hàm `thinking()` |
+      | `backend/check_api.py` | URL trong danh sách endpoint |
+      | `web/js/api.js` | `thinkingByKey()`, tham số của `buildState()`, trường `think`, lời gọi fetch |
+      | `web/js/app.js` | `think` trong `aggregate()` và phép cộng dồn |
+
+      **Một cái bẫy suýt dính, và nó là phần đáng giá nhất của ô này.** Danh sách `Promise.all`
+      được đọc lại bằng **chỉ số** — `r[0]` tới `r[6]`. Bỏ một lời gọi ở giữa làm lệch mọi chỉ số
+      phía sau, và kiểu lỗi đó **không ném exception**: nó chỉ đưa bảng `adoption` vào chỗ
+      `catalog`. Đã đổi sang đọc theo **tên** ngay tại chỗ nhận, đúng nguyên tắc mà
+      `backend/store.py::_rows` đã ghi sẵn cho việc đọc cột — *"đọc theo tên thì thêm cột không
+      làm gì hỏng"*. Giờ thêm hay bớt endpoint không còn đụng tới chỗ nào khác.
+
+      Ba chỗ để lại ghi chú tại chỗ thay vì xoá trắng: `store.py` và `main.py` chỗ hàm cũ, và
+      `app.js` chỗ thẻ đã gỡ — để người sau không dựng lại vì tưởng bị bỏ quên.
+
+      **Kiểm bằng máy chủ thật**, không suy từ việc đọc mã: dựng uvicorn trên cổng 8077, gọi cả
+      bảy đường.
+
+      ```
+      200  /api/usage            200  /api/accounts
+      200  /api/performance      200  /api/usage-by-account
+      200  /api/catalog          404  /api/thinking     <- dung nhu mong doi
+      200  /api/adoption
+      ```
+
+      `backend/check_api.py` 31/31 đạt · `node --test` 51/51 · `pytest` 11 đạt ·
+      `audit_db.py` 79 phép kiểm, 69 đạt, 0 hỏng.

@@ -373,9 +373,7 @@ def performance(start: str | None = None, end: str | None = None,
     return {"start": start, "end": end, **result}
 
 
-@app.get("/api/thinking", summary="Token co bat che do thinking (chi Monitoring)")
-def thinking(start: str | None = None, end: str | None = None,
-             who: Principal = Depends(nguoi_goi)):
-    start, end = date_range(start, end)
-    with store.open_db() as (cn, ph):
-        return {"start": start, "end": end, "rows": store.thinking(cn, ph, start, end)}
+# `/api/thinking` GỠ 12/09/2026. Token suy luận và token ra là MỘT biến: hoá đơn
+# không có SKU riêng cho suy nghĩ, nó nằm trong SKU output và tính theo giá output.
+# Endpoint này trả về một lát cắt nằm sẵn trong `output_tokens` và không nơi nào
+# đọc ra màn hình. Ghi chú đầy đủ ở `backend/store.py`, chỗ hàm `thinking()` cũ.

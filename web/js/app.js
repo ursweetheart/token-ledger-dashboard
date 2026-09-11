@@ -1237,13 +1237,13 @@ function renderDelta(id, cur, prev, same, betterUp, fmtFn){
    Đây là ĐIỂM NGHẼN DUY NHẤT: 7 chỗ gọi aggregate() nuôi mọi con số tiền trên cả
    6 tab, nên đếm ở đây là phủ hết. */
 function aggregate(rows){
-  var a = {u:0,c:0,ti:0,to:0,r:0,cached:0,think:0,cost:0,erW:0,latW:0,latR:0,
+  var a = {u:0,c:0,ti:0,to:0,r:0,cached:0,cost:0,erW:0,latW:0,latR:0,
            e4:0,e5:0,e429:0,eKnown:0,lat99W:0,lat99R:0,
            costEst:0, costInv:0, costRowsInv:0, costRowsEst:0, costRowsUnknown:0,
            costEstNoBilling:0, costEstLate:0};
   rows.forEach(function(row){
     a.u+=num(row.u); a.c+=num(row.c); a.ti+=num(row.ti); a.to+=num(row.to);
-    a.r+=num(row.r); a.cached+=num(row.cached); a.think+=num(row.think);
+    a.r+=num(row.r); a.cached+=num(row.cached);
     var _c=cost(row);
     a.cost+=_c; a.erW+=num(row.er)*num(row.r);
     if(row.cost!=null){ a.costInv+=_c; a.costRowsInv++; }
@@ -1910,8 +1910,11 @@ function renderOverview(rows){
     valueTitle:fmtTokFull(A.tokens),
     /* Công thức nói ĐÚNG thứ `aggregate()` làm: ti + to + cached. `cached` chỉ
        được api.js chuyển tiếp khi nó là SKU nằm NGOÀI input (nguồn hoá đơn), nên
-       cộng ở đây không đếm hai lần. Token `thinking` KHÔNG có trong tổng và đó là
-       cố ý — xem ô 2.1 trong tasks.md. */
+       cộng ở đây không đếm hai lần.
+       Token suy luận KHÔNG có số hạng riêng, và đó là vì nó KHÔNG PHẢI một loại
+       token riêng: hoá đơn không có SKU nào cho nó, nó nằm trong SKU output và
+       tính theo giá output. Nên `to` đã gồm nó rồi, cộng thêm là đếm hai lần.
+       Đo 11/09/2026, xem `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`. */
     definition:"= Σ token vào + token ra + token cache (SKU riêng của hoá đơn).",
     components:[{label:"Vào",value:fmtCompactNum(A.ti)},{label:"Ra",value:fmtCompactNum(A.to)},
                 {label:"Cache",value:fmtCompactNum(A.cached)}],
@@ -3522,9 +3525,14 @@ function renderModels(rows){
   }
   var A = aggregate(rows);
   set("m-md-cache", (A.ti? A.cached/A.ti*100:0).toFixed(0)+"%");
-  // Thẻ "Token suy luận" đã gỡ khỏi giao diện: chưa xác nhận được agent nào thực sự bật
-  // suy luận mở rộng, nên con số luôn bằng 0 và chỉ gây hiểu nhầm. Trường A.think vẫn
-  // được tính trong aggregate() nên khi cần dựng lại thẻ thì không phải sửa gì thêm.
+  // Thẻ "Token suy luận" gỡ hẳn 12/09/2026, và lý do CŨ ghi ở đây đã sai nên thay luôn.
+  // Lý do cũ: "chưa xác nhận được agent nào thực sự bật suy luận mở rộng, nên con số luôn
+  // bằng 0". Đo 11/09 thì con số là 47.913.327 trên 11.440 dòng, không bằng 0.
+  // Lý do ĐÚNG để không có thẻ này: token suy luận không phải một loại token riêng. Hoá
+  // đơn không có SKU nào cho nó, nó nằm trong SKU output và tính theo giá output. Vẽ nó
+  // thành một thẻ cạnh thẻ token là mời người xem cộng hai số đã chồng nhau.
+  // Trường A.think và cả `/api/thinking` đã gỡ theo. Muốn đo riêng phần suy nghĩ thì lấy
+  // `reasoning_tokens` của sổ Gateway - xem ô 4.3 của change settle-what-the-bill-does.
   // Bảng chi tiết model cũ đã được gộp vào cây "nhà cung cấp → model"
   // (xem renderProviderModelTree), nên ở đây chỉ còn phần thẻ chỉ số.
 }

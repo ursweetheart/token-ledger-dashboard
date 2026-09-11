@@ -98,7 +98,6 @@ PATHS = [
     f"/api/usage?start={START}&end={END}",
     f"/api/usage-by-account?start={START}&end={END}",
     f"/api/performance?start={START}&end={END}",
-    f"/api/thinking?start={START}&end={END}",
 ]
 
 
