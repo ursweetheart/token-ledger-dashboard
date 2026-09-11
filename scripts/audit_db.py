@@ -1457,7 +1457,7 @@ def _hoa_don_cung_mui_gio_voi_cong_to(a: Audit) -> None:
 
 
 # Nhip mac dinh, chi dung khi KHONG doc duoc nhip that. Xem `read_refresh_interval()`.
-DEFAULT_INTERVAL_SECONDS = 120
+DEFAULT_INTERVAL_SECONDS = 300   # khop .env.example va docker-compose.yml, doi 12/09/2026
 
 
 def read_refresh_interval(cn) -> tuple[int, int, str]:

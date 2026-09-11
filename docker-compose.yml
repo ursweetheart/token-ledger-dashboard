@@ -369,7 +369,7 @@ services:
     restart: unless-stopped
     # `sys.executable` duoc dung ben trong script de goi bon buoc, nen chi can
     # dung trinh thong dich cua image -- khong phu thuoc `python` co ton tai.
-    command: ["python3", "scripts/refresh_gateway.py", "--every", "${REFRESH_EVERY_SECONDS:-120}"]
+    command: ["python3", "scripts/refresh_gateway.py", "--every", "${REFRESH_EVERY_SECONDS:-300}"]
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # PHAI khai CA HAI chuoi ket noi TUONG MINH. db/connect.py dung `PG_HOST`
