@@ -1,0 +1,250 @@
+# Việc chưa xong — rà soát 11/09/2026
+
+Chụp lại trạng thái sau khi đóng ô 2.1 của `standardize-kpi-card-insights` và chạy xong change
+`settle-what-the-bill-does-with-thinking-tokens`. Rà bốn chỗ: task của OpenSpec, checkbox trong
+`docs/`, việc phải bàn giao nhóm CRM, và trạng thái git.
+
+Mục tiêu tuần này theo anh Tuấn: **thông luồng Agent CRM**, **kiểm dữ liệu LiteLLM trả về đầy
+đủ**, **hiển thị được lên dashboard**.
+
+---
+
+## 1. Bảng một trang
+
+| # | việc | thuộc | chặn bởi | mục tiêu tuần |
+|---|---|---|---|---|
+| 1 | Ô 7.6 — so kết quả phân loại hai nhánh CRM | change `route-the-crm-agent-through-the-gateway` | **cần anh Tuấn cho sửa repo CRM** | luồng CRM |
+| 2 | Ô 4.4 — `fact_usage_daily` trộn hai múi giờ | change `settle-what-the-bill-does...` | không | dashboard |
+| 3 | Ô 4.1 — đổi tên cột `thinking_tokens` | change `settle-what-the-bill-does...` | không | dashboard |
+| 4 | Ô 4.3 — lưu `reasoning_tokens` để hiện được token suy nghĩ | change `settle-what-the-bill-does...` | không | dashboard |
+| 5 | Ô 6.2 — bộ chọn agent cho biểu đồ ngân sách | change `revise-dashboard-ui...` | không | dashboard |
+| 6 | Ô 5.3 — xem 8 card ở bề rộng hẹp | change `standardize-kpi-card-insights` | không | dashboard |
+| 7 | Ba việc trước khi lên server (gateway fall back) | `docs/decisions/che-do-hong-cua-gateway-2026-09-10.md` | chỉ cần trước khi lên server | — |
+| 8 | Chín việc bàn giao nhóm CRM | `docs/reference/dua-crm-qua-gateway-10-09.md` mục 7 | cần gặp nhóm CRM | luồng CRM |
+| 9 | Đo tải và độ trễ đường CRM | hoãn có chủ ý 10/09 | cần trần thời gian, không phải trần tiền | luồng CRM |
+
+Tiến độ change:
+
+```
+   route-the-crm-agent-through-the-gateway        54/55
+   standardize-kpi-card-insights                  16/17
+   revise-dashboard-ui-after-2026-07-25-review    52/53
+   settle-what-the-bill-does-with-thinking-tokens 14/17
+```
+
+---
+
+## 2. Việc trong OpenSpec — 6 ô
+
+### 2.1 Ô 7.6 `route-the-crm-agent-through-the-gateway` — ô duy nhất còn chặn
+
+So **kết quả phân loại** của nhánh cũ và nhánh gateway trên **cùng** đầu vào, ở
+`temperature = 0,0`.
+
+Lý do chặn cũ đã hết. Ghi chú cũ nói *"không có khoá Google nào gọi được `gemini-2.5-flash`"* —
+đo lại thì khoá gọi được. Thứ chặn là **địa chỉ**: nhánh cũ mặc định đi AI Studio, khoá đang có
+là khoá Vertex.
+
+Cách gỡ: trỏ nhánh cũ sang Vertex bằng `vertexai=True` trong cùng SDK, để hai nhánh đi cùng một
+địa chỉ. **Đây là sửa mã trong bản clone `CRM-Classification-Pipeline`, mà repo đó không được
+commit theo lệnh người dùng.** Phải hỏi trước.
+
+Rủi ro chính đã bị loại bằng phép đo khác: thân yêu cầu gửi Google **khớp từng trường** giữa hai
+nhánh — `system_instruction`, một lượt `user`, `temperature: 0.0`, `max_output_tokens: 8192`,
+`response_mime_type: application/json`. Việc còn thiếu là so **đầu ra**.
+
+### 2.2 Ô 4.4 — `fact_usage_daily` trộn ngày Pacific với ngày Việt Nam
+
+Việc nặng nhất trong danh sách này, vì nó **đang sai trên dashboard thật** chứ không phải một
+câu hỏi mở.
+
+```
+   fact_usage_daily.day
+     <- load_billing()      ngay US/Pacific   (merge_billing.py:251 lay nguyen tu file hoa don)
+     <- load_monitoring()   ngay Viet Nam     (docstring noi ro)
+     <- load_app()          ngay Viet Nam
+     <- load_gateway()      ngay Viet Nam
+```
+
+Bốn bộ nạp, một cột `day`, một nguồn khác múi giờ. Mọi biểu đồ theo ngày có trộn tiền hoá đơn
+đều **lệch một ngày** ở vế hoá đơn. Tổng cả kỳ đúng, ngày lẻ sai.
+
+Phải quy bằng `America/Los_Angeles`, **không** bù một hằng số: lệch 14 giờ trong PDT nhưng 15
+giờ trong PST, nên bù cứng sẽ sai bốn tháng mỗi năm.
+
+Bằng chứng đầy đủ ở mục 11 của `token-suy-nghi-tren-hoa-don-11-09.md`: xếp monitoring theo ngày
+Pacific thì **238/272 cặp ngày × project trùng khít tới từng con số**, và cả 7 project ra
+**100,00%**.
+
+### 2.3 Ô 4.1 — cột `thinking_tokens` mang tên sai
+
+`store.py:469` cộng `value` của những dòng có nhãn `thinking_enabled = 'true'`. `thinking_enabled`
+là **nhãn trên metric**, không phải metric riêng. Nên cột này đo *token ra của lượt có bật suy
+nghĩ*: **47.913.327 trên tổng 52.560.360 token ra, tức 91,2%**.
+
+Ai đọc tên cột rồi cộng nó vào output sẽ đếm hai lần 91% token ra. Đổi tên, và ghi rõ cách đọc.
+
+### 2.4 Ô 4.3 — số token suy nghĩ thật chưa được lưu ở đâu
+
+`load_gateway.py:201` đọc `completion_tokens_details.reasoning_tokens` **chỉ để suy ra cờ
+boolean**, con số thì bỏ. Muốn hiện token suy nghĩ lên dashboard thì thêm một cột vào `fact_call`.
+
+Và phải trình bày kiểu **trong đó** chứ không **cộng thêm**: đo trên 46 dòng sổ Gateway thì
+`reasoning` là 9.554 trên `completion` 9.968, **0 dòng** vượt. Tập con, không phải ngăn riêng.
+
+### 2.5 Ô 6.2 `revise-dashboard-ui` — bộ chọn agent cho biểu đồ ngân sách
+
+**Chưa bắt đầu.** Đã tìm: không có phần tử chọn nào cho `c-co-agent-budget` trong `index.html`.
+
+Có việc **chưa commit** trong `web/index.html` và `web/js/app.js` đi cùng hướng nhưng không phải
+cùng một việc: nó bỏ agent bị bộ lọc loại ra khỏi biểu đồ và cho mẫu số đi theo tử số. Đoạn đó
+cũng bắt được một lỗi cũ — khối `.user-scope-note` đang `hidden` mà vẫn cao 36,6px vì
+`display:flex` của tác giả thắng luật `[hidden]` của trình duyệt.
+
+### 2.6 Ô 5.3 `standardize-kpi-card-insights` — xem 8 card ở bề rộng hẹp
+
+Xong một nửa. Hai theme đã xem trên Chrome thật và đạt. **Chưa làm:** các bề rộng màn hình, mới
+đo đúng 1536px. Lưới có `@media` trong `dashboard.css` nhưng chưa xem thật ở bề rộng hẹp, mà đây
+là chỗ dễ vỡ nhất sau khi nâng cỡ chữ nhãn từ 11px lên 12px và sàn giá trị từ 21px lên 24px.
+
+---
+
+## 3. Việc ngoài OpenSpec, trong repo này — 3 ô
+
+`docs/decisions/che-do-hong-cua-gateway-2026-09-10.md`. Quyết định của lead: **gateway hỏng thì
+phải fall back, không được chết.** Nguyên văn: *"cái việc mình track không được ưu tiên trước hệ
+thống ổn định"*. Giai đoạn dev giữ cửa chặn cứng, **trước khi lên server phải sửa**:
+
+1. Đổi cửa chặn cứng trong `entrypoint.sh` thành cảnh báo. **Giữ** phần chặn cho
+   `LITELLM_MASTER_KEY` — khoá đó rỗng thì cổng 4000 mở cho bất kỳ ai, đó là lỗ hổng bảo mật chứ
+   không phải mất số liệu.
+2. Thêm cửa kiểm sức khoẻ soi được **từng tuyến**, không chỉ soi tiến trình.
+3. Bỏ `:-` ở những biến mà rỗng đồng nghĩa với hỏng, hoặc giữ `:-` nhưng bắt buộc kèm cảnh báo.
+
+Chỉ cần trước khi lên server, không chặn tuần này.
+
+---
+
+## 4. Chín việc phải bàn giao nhóm CRM
+
+Chi tiết ở mục 7 và 7b của `docs/reference/dua-crm-qua-gateway-10-09.md`. Hai việc nặng nhất:
+
+- **Nâng `max_output_tokens` từ `8192` lên `16000`** (`src/llm.py:274`). Token suy nghĩ ăn 96%
+  hạn mức, và cả lô bị cắt cụt. Đây là chỗ **duy nhất** đặt giá trị đó, và **không đặt được ở
+  tuyến Gateway** — đã thử, tham số client tự khai thắng mặc định tuyến.
+- **Thêm kiểm `finish_reason == "length"`.** Bản gốc có **0** lần nhắc tới trường này, nên cắt
+  cụt đi qua hoàn toàn im lặng.
+
+Bảy việc còn lại, đều là lệch giữa tài liệu và code:
+
+| # | việc |
+|---|---|
+| 1 | `GEMINI_BATCH_SIZE=40` không có tác dụng — `config.py:32` cắt xuống 25 mà không báo |
+| 2 | `config.CKPT_JSON` là cấu hình chết, và cả mục cứu hộ trong `HANDOVER.md` dựng trên nó cũng chết |
+| 3 | `docs/HANDOVER.md` lệch code trên **mọi** con số |
+| 4 | Không có cờ dry-run nào — bật container là tải SharePoint thật và gửi email cho người thật |
+| 5 | Nhánh 429 ngủ 30 giây cho một lần thử lại **không bao giờ xảy ra** |
+| 7 | Câu nhắc hứa `allowed` và `locked_labels`, code **không bao giờ gửi** |
+| 8 | Hai cột ngày sai định dạng ở **100%** số ô, dù câu nhắc ghi `FORMAT BẮT BUỘC: dd/mm/yyyy` |
+| 9 | Tầng từ khoá gánh ít hơn tên gọi gợi ra rất nhiều |
+
+---
+
+## 5. Hoãn có chủ ý — đừng đọc thành bỏ quên
+
+Chốt bởi anh Tuấn ngày 10/09: archive change
+`prove-the-crm-path-survives-refusal-and-outage` ngay, tách phần đo tải thành việc riêng khi nào
+thật sự cần. Ba ô còn lại cần tải thật: **nhịp thực đạt**, **độ trễ phân vị**, **chi phí thực
+tế**.
+
+Cái giá thật của phép đo đó, tính từ số đo 10/09:
+
+| cỡ lô | thời gian mỗi lượt | tiền mỗi lượt | 502 lượt tốn |
+|---|---|---|---|
+| 25 dòng | 39,4 s | $0,0257 | **5,5 tiếng**, $12,90 |
+| 5 dòng | 16,2 s | $0,0071 | **2,3 tiếng**, $3,57 |
+
+Trần của phép đo này phải là **trần thời gian**, không phải trần tiền.
+
+---
+
+## 6. Điều chưa chứng minh — đừng đọc thành đã biết
+
+Từ mục 8 của `dua-crm-qua-gateway-10-09.md`:
+
+- **8.1** Nhánh xử lý 429 của CRM chưa được kiểm chứng.
+- **8.2** Một lượt gọi 81 giây, không tái hiện được, chưa rõ nguyên nhân.
+- **8.3** Chưa đối chiếu kết quả phân loại hai nhánh — chính là ô 7.6 ở trên.
+- **8.4** `MIN_INTERVAL_S` trên production là bao nhiêu, chưa biết.
+- **8.5** Lệch 4 dòng `dim_metric_alias`, có từ trước, cố ý để đó.
+
+---
+
+## 7. Trạng thái git
+
+```
+   47 file thay doi        19 file chua duoc theo doi
+```
+
+Đáng để ý:
+
+- `web/index.html` và `web/js/app.js` có việc chưa commit, xem mục 2.5.
+- `.env.example`, `docker-compose.yml`, `docker/gateway/config.gateway.yaml`,
+  `docker/gateway/entrypoint.sh`, `db/load_gateway.py` đều có sửa chưa commit.
+- Ba thư mục change đã archive nhưng bản gốc còn nằm ở `openspec/changes/` dưới dạng đã xoá,
+  chưa commit.
+- Tám file đo trong `var/` chưa được theo dõi: `audit-cuoi.txt`, `audit-sau.txt`,
+  `do-duong-llm-20260910-112104.jsonl`, `log-truoc-khi-doi.txt`, `log-sau-khi-doi.txt`,
+  `rebuild-cuoi.txt`, `rebuild-sau.txt`, `so-do-truoc-khi-doi.txt`. Quyết định commit hay xoá.
+
+**Đã kiểm và KHÔNG phải việc còn lại:** bind IP của web. `docker-compose.yml:313` đang là
+`192.168.20.111:${WEB_PORT:-8080}:80`, dòng `127.0.0.1` bị chú thích ở 312. Tức đã ở trạng thái
+sẵn sàng push.
+
+---
+
+## 8. Cái trông như việc còn lại mà KHÔNG phải
+
+Lệnh `grep` tìm checkbox mở trong `docs/` trả về **hơn 100 dòng**. Gần hết là **rác lịch sử**,
+không phải backlog:
+
+| chỗ | số ô mở | thực chất |
+|---|---|---|
+| `docs/archive/plan-xay-dung-database-2026-08-07.md` | 16 | plan dựng database, **đã xong** — repo có Postgres, migrations, `db/` đầy đủ |
+| `docs/superpowers/plans/2026-08-18-docker-packaging.md` | 40 | đã xong — `docker-compose.yml` đang chạy 9 container |
+| `docs/superpowers/plans/2026-08-24-complete-schema-migration-change.md` | 45 | đã xong — database đang ở v2 |
+| `docs/archive/superpowers/plans/2026-08-13-date-range-filter-ddmmyyyy.md` | 10 | đã xong |
+
+Cộng đúng khít: `docs/` có **114** ô mở, bằng `16 + 40 + 45 + 10 = 111` ô rác cộng **3** ô thật
+của quyết định gateway. Không còn ô nào lọt ngoài bảng này.
+
+Đây là plan kiểu superpowers, viết theo từng bước rồi không ai tích lại sau khi làm. **Ai rà
+backlog bằng `grep "\[ \]"` trên cả `docs/` sẽ đọc ra hơn 100 việc tồn, trong khi số thật là 6
+ô OpenSpec cộng 3 ô quyết định gateway.** Đáng cân nhắc: chuyển ba file plan còn ở
+`docs/superpowers/plans/` sang `docs/archive/`, cho cùng chỗ với cái đã archive.
+
+**Và code sạch:** `grep` `TODO`, `FIXME`, `ponytail:` trên `.py`, `.js`, `.yaml`, `.sh` trả về
+**0 dòng**.
+
+---
+
+## 9. Thứ tự đề nghị, theo mục tiêu tuần
+
+```
+   THONG LUONG CRM
+     1. Hoi anh Tuan: cho sua ban clone CRM khong?  -> mo duoc o 7.6
+     2. Hen nhom CRM, ban giao 9 viec (2 viec nang: max_output_tokens + finish_reason)
+
+   KIEM LITELLM TRA VE DAY DU
+     DA XONG. Cot so Gateway archive 11/09; token suy nghi dong 11/09.
+
+   HIEN LEN DASHBOARD
+     3. O 4.4  mui gio trong fact_usage_daily   <- nang nhat, dang sai that
+     4. O 4.1  doi ten thinking_tokens          <- re, chan duoc mot loi tuong lai
+     5. O 4.3  luu reasoning_tokens             <- moi hien duoc token suy nghi
+     6. O 6.2  bo chon agent bieu do ngan sach
+     7. O 5.3  xem 8 card o be rong hep
+```
+
+Ô 4.1 nên làm sớm dù nhỏ: tên cột hiện tại **mời người ta cộng sai**, và anh Tuấn đã định cộng
+nó vào output đúng một lần rồi.
