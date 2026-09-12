@@ -4,6 +4,7 @@ Các báo cáo dưới đây được thực hiện trên môi trường mock c�
 
 ## Cập nhật mới nhất
 
+- [Báo cáo Trợ lý ảo Hợp đồng](./CONTRACT-VIRTUAL-ASSISTANT-TEST-REPORT.md): tổng hợp kết quả test, luồng hoạt động, nơi lưu dữ liệu, fault handling và phạm vi chưa nghiệm thu.
 - [Retest fallback 11/09/2026](./FALLBACK-RETEST-REPORT.md): 140 focused tests PASS; fallback 20/20 stage PASS; hồi quy LB 93 request / 93 SpendLogs PASS. Không phải chứng nhận production.
 - Bằng chứng mới: [fallback](./law-fallback-e3cee80a23d0.json), [hồi quy LB](./law-lb-815c700c6af2.json).
 - [Sơ đồ logic Gateway/fallback](./gateway-architecture-diagram.html).
