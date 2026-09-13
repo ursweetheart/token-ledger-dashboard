@@ -51,7 +51,7 @@
 - [x] 5.1 Cho ba nhóm chạy **song song**, không phụ thuộc nhau. Nghiệm thu: một nhóm đỏ thì hai nhóm
       kia vẫn báo kết quả riêng của chúng
 - [x] 5.2 Kích hoạt cả khi đẩy code lên nhánh `Tuan-develop` lẫn khi mở pull request về `main`
-- [ ] 5.3 Đo thời gian chờ thật và **ghi con số đó vào `design.md`**. Ước lượng hiện tại là 30–45
+- [x] 5.3 Đo thời gian chờ thật và **ghi con số đó vào `design.md`**. Ước lượng hiện tại là 30–45
       giây, dựng từ phần đã đo (9,5 giây JavaScript, dưới 1 giây Python, đo trong container sạch)
       cộng phần chưa đo là máy ảo khởi động và lấy mã nguồn. Nếu vượt quá hai phút thì ghi cả nguyên
       nhân, đừng chỉ ghi con số
@@ -62,7 +62,11 @@
       Một hệ thống canh chưa từng bắt được gì thì chưa chứng minh được nó có canh
 - [ ] 6.2 Làm lại điều đó với một phép kiểm Python
 - [ ] 6.3 Làm lại với nhóm canh cấu hình, bằng cách đặt lại một địa chỉ ghi cứng
-- [ ] 6.4 Xác nhận commit sạch thì CI **xanh** cả ba nhóm, và số phép kiểm báo đúng 51 và 11
+- [x] 6.4 Xác nhận commit sạch thì CI **xanh** cả ba nhóm, và số phép kiểm báo đúng 51 và 11.
+      ĐẠT — lần chạy CI #1 (`7d875d1`) xanh cả ba nhóm trong 19 giây. Đã **đọc log** xác nhận, không
+      suy luận: `Đã chạy 51 phép kiểm, mốc chốt là 51` và `Đã chạy 11 phép kiểm, mốc chốt là 11.`
+      Máy ảo dùng Node v22.23.2 và Python 3.12.3, không cài thêm gói nào. Tiếng Việt có dấu hiện
+      đúng trong log (nghiệm thu của việc 3.4)
 
 ## 7. Ghi lại
 

@@ -83,7 +83,12 @@ jobs:
       - name: Chạy và đếm số phép kiểm
         run: |
           node --test tests/*.test.js 2>&1 | tee js.log || RC=$?
-          COUNT=$(awk '$(NF-1)=="tests"{n=$NF} END{print n+0}' js.log)
+          # NF>=2 BẮT BUỘC phải có: gặp dòng trống thì NF=0 và $(NF-1) thành
+          # $(-1), gawk chết ngay với "attempt to access field -1". Báo cáo của
+          # một phép kiểm TRƯỢT có dòng trống, nên thiếu điều kiện này thì bộ đếm
+          # sập đúng lúc cần nó nhất, và nhóm đỏ vì awk chứ không vì thông điệp.
+          # Đo 13/09/2026, lộ ra khi chạy thử chiều đỏ chứ không phải chiều xanh.
+          COUNT=$(awk 'NF>=2 && $(NF-1)=="tests"{n=$NF} END{print n+0}' js.log)
           echo "Đã chạy $COUNT phép kiểm, mốc chốt là $EXPECTED_JS."
           if [ "$COUNT" -ne "$EXPECTED_JS" ]; then
             echo "::error::Số phép kiểm JavaScript là $COUNT, mốc chốt là $EXPECTED_JS."

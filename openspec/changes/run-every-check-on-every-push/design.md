@@ -181,6 +181,21 @@ gì, không tốn đĩa. Chặng 1 vốn không đụng máy nào nên chẳng c
 | Bộ kiểm JavaScript trên máy trắng | 51/51 đạt, **không `npm install`** | `docker run --rm node:24-alpine node --test tests/*.test.js` |
 | Ba `Dockerfile` | sạch, không cảnh báo | `docker build --check` từng tệp |
 | Kho mã | `github.com/ursweetheart/token-ledger-dashboard` | `git remote -v` |
+| **Thời gian chờ thật của CI** | **19 giây** từ lúc tạo tới lúc xong | lần chạy CI #1, commit `7d875d1`, 13/09/2026 |
+| Từng nhóm | canh cấu hình 5s · JavaScript 15s · Python 5s | `gh run view 34746331657` |
+| Node trên máy ảo | **v22.23.2** | bước `node --version` |
+| Python trên máy ảo | **3.12.3** | bước `python3 --version` |
+| Kho mã riêng tư hay công khai | **PRIVATE** | `gh repo view --json visibility` |
+
+Ba con số thời gian từng mâu thuẫn nhau vì chúng **đo ba thứ khác nhau**: giao diện web hiển thị
+11 giây, `gh run list` báo 19 giây, nhóm dài nhất chạy 15 giây. Con số dùng ở đây là **19 giây** vì
+đó là thứ người đẩy code thật sự phải chờ — đã bao gồm cả phần máy ảo xếp hàng và khởi động.
+
+Ước lượng ban đầu là 30–45 giây, dựng từ thời gian đo ở máy phát triển. Nó bi quan, nhưng không xa.
+
+**Kho là PRIVATE** — điều kiện này để treo trong `proposal.md` và nay đã trả lời được. Nó gỡ nút cho
+chặng 3: runner nội bộ trên một kho riêng tư là an toàn, vì không ai ngoài tổ chức mở được pull
+request để chạy mã tuỳ ý trên máy trong mạng.
 
 Hai dòng "máy trắng" là phép đo quan trọng nhất bảng này. Trước khi có chúng, tính chất "chạy được
 mà không cài gì" mới chỉ là **suy luận** từ vị trí lời `import`. Chạy trong container sạch biến nó
@@ -190,6 +205,23 @@ thành **chứng cứ**, và đó cũng chính là môi trường mà máy ảo 
 
 | Rủi ro | Mức | Xử lý |
 |---|---|---|
-| Bộ kiểm đạt ở máy này, đỏ trên máy ảo GitHub | **Thấp** | Đã hạ từ "trung bình" sau khi chạy cả hai bộ kiểm trong container sạch — xem hai dòng "máy trắng" ở bảng trên. Rủi ro còn lại chỉ là khác biệt giữa container và máy ảo GitHub |
+| Bộ kiểm đạt ở máy này, đỏ trên máy ảo GitHub | **Đã xảy ra, và đã đỡ được** | Xem mục ngay dưới bảng |
 | Người phát triển bị chặn merge vì một phép kiểm hỏng sẵn | Thấp | Cả 62 phép đều đang đạt, đo 13/09 |
 | Số phép kiểm khai trong CI trôi khỏi số thật | Trung bình | Thông điệp lỗi phải nói rõ số mong đợi, số thật, và sửa ở đâu |
+
+### Khác biệt giữa máy phát triển và máy ảo — có thật, đo được 13/09
+
+Bộ chạy kiểm của Node in ra **hai định dạng khác nhau** ở hai nơi:
+
+```
+máy phát triển (Windows)   ℹ tests 51
+máy ảo GitHub  (Linux)     # tests 51
+```
+
+Cách đếm dùng `awk '$(NF-1)=="tests"{n=$NF}'` — đọc theo **trường**, không theo ký tự đầu dòng — nên
+nó đi qua được cả hai. Nếu ban đầu chọn `grep` tìm ký tự `ℹ` thì nhóm `test-js` sẽ đỏ ngay lần chạy
+đầu, và đỏ vì một lý do chẳng liên quan gì tới chất lượng mã.
+
+Ghi lại vì đây là bằng chứng cụ thể cho một điều dễ nói suông: môi trường nào cũng "chạy bash" nhưng
+kết xuất của công cụ không vì thế mà giống nhau. Khi phải phân tích kết xuất, bám vào cấu trúc chứ
+đừng bám vào hình thức.

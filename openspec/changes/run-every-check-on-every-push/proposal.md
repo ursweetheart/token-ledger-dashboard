@@ -76,12 +76,11 @@ Chuyện này sắp nặng hơn chứ không nhẹ đi. Kế hoạch đưa Gatew
 **Không đụng tới:** `backend/`, `db/`, `scripts/`, `web/`, `tests/`. Change này chỉ thêm một lớp
 canh bên ngoài; nó không đổi hành vi của hệ thống, và nếu gỡ nó đi thì mọi thứ vẫn chạy y như cũ.
 
-**Chi phí vận hành:** phần chạy phép kiểm đã đo được — 9,5 giây cho JavaScript, dưới 1 giây cho
-Python, cả hai trong container sạch. Cộng thời gian máy ảo khởi động và lấy mã nguồn về, ước
-khoảng **30–45 giây** mỗi lần đẩy code; ba nhóm chạy song song nên đây là thời gian chờ thật, không
-phải tổng. Con số này là **ước lượng**, chưa đo trên máy ảo GitHub — mốc thật sẽ được ghi lại ở việc
-5.3. Kho mã nằm ở `github.com/ursweetheart/token-ledger-dashboard`.
+**Chi phí vận hành: 19 giây** mỗi lần đẩy code, đo trên lần chạy CI #1 (commit `7d875d1`,
+13/09/2026): canh cấu hình 5 giây, JavaScript 15 giây, Python 5 giây, ba nhóm song song.
 
-**Điều kiện chưa xác minh:** kho là riêng tư hay công khai. Chặng 1 không phụ thuộc điều đó, nhưng
-chặng 3 thì có — runner nội bộ trên một kho công khai là lỗ hổng, vì người lạ mở pull request là
-chạy được mã tuỳ ý trên máy của mình. Phải trả lời trước khi sang chặng 3.
+Kho mã nằm ở `github.com/ursweetheart/token-ledger-dashboard`.
+
+**Điều kiện đã xác minh 13/09:** kho là **PRIVATE** (`gh repo view --json visibility`). Điều này gỡ
+nút cho chặng 3 — runner nội bộ trên một kho công khai là lỗ hổng, vì người lạ mở pull request là
+chạy được mã tuỳ ý trên máy trong mạng; kho riêng tư thì không ai ngoài tổ chức làm được việc đó.
