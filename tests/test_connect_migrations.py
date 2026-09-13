@@ -41,6 +41,7 @@ class FakeConnection:
 
 class RebuildTests(unittest.TestCase):
     def test_missing_catalog_fails_before_opening_or_wiping_database(self):
+        self.fail("CO Y LAM HONG de kiem CI co do khong -- se hoan tac ngay")
         """Moving the catalog guard below open_db() would destroy before failing."""
         events = []
         connection = FakeConnection("wipe", events)

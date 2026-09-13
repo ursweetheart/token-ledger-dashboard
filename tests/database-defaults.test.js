@@ -10,6 +10,7 @@ function read(relativePath) {
 }
 
 test("runtime database default is token_ledger_v2 everywhere", () => {
+  assert.equal(1, 2, "CO Y LAM HONG de kiem CI co do khong -- se hoan tac ngay");
   const connect = read("db/connect.py");
   const compose = read("docker-compose.yml");
   const example = read(".env.example");

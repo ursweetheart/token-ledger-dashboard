@@ -316,7 +316,7 @@ services:
       #
       # Muon mo cho ca mang thi dat WEB_BIND=0.0.0.0 -- nhung tra loi cau nay
       # truoc: ai cham toi duoc may nay.
-      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
+      - "192.168.20.111:${WEB_PORT:-8080}:80"
     depends_on:
       - api
 
