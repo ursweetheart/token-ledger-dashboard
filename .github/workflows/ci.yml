@@ -82,7 +82,13 @@ jobs:
       # Cùng nguyên tắc mà automated-check-coverage đã chốt cho bộ kiểm dữ liệu.
       - name: Chạy và đếm số phép kiểm
         run: |
-          node --test tests/*.test.js 2>&1 | tee js.log || RC=$?
+          # GHI RA TỆP RỒI `cat`, KHÔNG dùng `| tee`. GitHub chạy khối run bằng
+          # `bash -e`, KHÔNG có `pipefail` — nên mã thoát của một đường ống là mã
+          # thoát của lệnh CUỐI, tức của `tee`, mà `tee` thì luôn thành công.
+          # Hậu quả đã đo 13/09/2026: phép kiểm TRƯỢT mà nhóm này vẫn XANH.
+          # Bỏ đường ống đi thì cả loại lỗi đó biến mất, không cần nhớ cờ nào.
+          node --test tests/*.test.js > js.log 2>&1 || RC=$?
+          cat js.log
           # NF>=2 BẮT BUỘC phải có: gặp dòng trống thì NF=0 và $(NF-1) thành
           # $(-1), gawk chết ngay với "attempt to access field -1". Báo cáo của
           # một phép kiểm TRƯỢT có dòng trống, nên thiếu điều kiện này thì bộ đếm
@@ -122,7 +128,10 @@ jobs:
       # máy sạch, không cài thêm gói".
       - name: Chạy và đếm số phép kiểm
         run: |
-          python3 -m unittest discover -s tests -p "test_*.py" 2>&1 | tee py.log || RC=$?
+          # Cùng lý do với nhóm JavaScript: không dùng `| tee`, vì `bash -e` của
+          # GitHub không bật `pipefail` và mã thoát sẽ là của `tee`, luôn bằng 0.
+          python3 -m unittest discover -s tests -p "test_*.py" > py.log 2>&1 || RC=$?
+          cat py.log
           COUNT=$(awk '$1=="Ran"{n=$2} END{print n+0}' py.log)
           echo "Đã chạy $COUNT phép kiểm, mốc chốt là $EXPECTED_PY."
           if [ "$COUNT" -ne "$EXPECTED_PY" ]; then
