@@ -299,18 +299,24 @@ services:
     container_name: token-ledger-web
     restart: unless-stopped
     ports:
-      # Switch to 0.0.0.0 for a real deployment -- but answer this first:
-      # who can reach this machine.
+      # Dia chi bind doc tu bien WEB_BIND. Khong dat thi la 127.0.0.1 -- may dev
+      # chi mo cho chinh no. May chu dat WEB_BIND=192.168.20.111 trong .env.
       #
-      # BAY khi chay tren may KHONG PHAI server: may do khong co IP nay nen `web`
-      # khong bind duoc, va `docker compose up` THOAT GIUA CHUNG -- keo theo
+      # TRUOC 13/09/2026 dia chi nay GHI CUNG, nen doi moi truong la phai sua tay
+      # roi nho tra lai truoc khi push. Da quen it nhat mot lan, va chu thich in
+      # hoa nhac viec do KHONG chan duoc. Bien nay bo han loai loi do: hai may
+      # dung CHUNG mot file compose, khac nhau o .env -- ma .env thi khong theo
+      # git. Xem openspec/changes/run-every-check-on-every-push/design.md.
+      #
+      # BAY VAN CON, chi doi cho: dat WEB_BIND thanh mot IP ma may KHONG CO thi
+      # `web` khong bind duoc va `docker compose up` THOAT GIUA CHUNG -- keo theo
       # `gateway-lb` khong bao gio duoc dung, trong khi `docker ps` van cho thay
       # hai instance LiteLLM `healthy`. Rat de tuong la da dung xong.
       # Xem docs/reference/dua-dms-qua-gateway-31-08.md muc 4.6.
       #
-      # Chay tren may dev thi doi tam sang dong duoi, va TRA LAI TRUOC KHI PUSH:
-      #     - "127.0.0.1:${WEB_PORT:-8080}:80"
-      - "192.168.20.111:${WEB_PORT:-8080}:80"
+      # Muon mo cho ca mang thi dat WEB_BIND=0.0.0.0 -- nhung tra loi cau nay
+      # truoc: ai cham toi duoc may nay.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
     depends_on:
       - api
 

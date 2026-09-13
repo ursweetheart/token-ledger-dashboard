@@ -1,0 +1,128 @@
+# Chạy mọi phép kiểm của repo trên mỗi lần đẩy code.
+#
+# Ba nhóm chạy SONG SONG vì chúng độc lập: hỏng nhóm nào biết ngay nhóm đó,
+# không phải đợi nhau. Xem openspec/changes/run-every-check-on-every-push/.
+#
+# KHÔNG có bước cài gói ở bất kỳ nhóm nào, và đó là CÓ Ý:
+#   - repo không có package.json, pytest.ini, pyproject.toml, setup.cfg
+#   - phần JavaScript dùng bộ chạy kiểm có sẵn của Node
+#   - psycopg2 được nạp bên trong hàm (db/connect.py:196), không ở đầu tệp
+# Đã đo 13/09/2026 trong container trắng: python:3.12-slim đạt 11/11 và
+# node:24-alpine đạt 51/51, không cài gói nào. Máy ảo ở đây dựng lại đúng
+# môi trường đó, nên nếu có ai làm mất tính chất này thì nó đỏ ngay.
+
+name: CI
+
+on:
+  push:
+    branches: [main, Tuan-develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Canh cấu hình. Nhóm rẻ nhất, và là nhóm bắt đúng lỗi đã thật sự xảy ra:
+  # ngày 12/09 địa chỉ bind của `web` bị để ở chế độ máy phát triển.
+  # ---------------------------------------------------------------------------
+  guards:
+    name: Canh cấu hình
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Nguyên tắc, không phải một địa chỉ cụ thể: 127.0.0.1 an toàn ở mọi máy
+      # vì nó luôn tồn tại và luôn nghĩa là "chỉ máy này". Mọi IP khác đều là
+      # địa chỉ của MỘT môi trường, nên nó thuộc về .env chứ không thuộc về git.
+      - name: Không IP nào của một môi trường được ghi cứng ở phần khai cổng
+        run: |
+          BAD=$(grep -nE '^[[:space:]]*-[[:space:]]*"([0-9]{1,3}\.){3}[0-9]{1,3}:' \
+                  docker-compose.yml docker-compose.bench.yml \
+                | grep -v '"127\.0\.0\.1:' || true)
+          if [ -n "$BAD" ]; then
+            echo "$BAD"
+            echo "::error::Có địa chỉ IP của một môi trường cụ thể nằm trong tệp theo git (xem dòng ở trên)."
+            echo "::error::Đưa nó ra biến môi trường và khai trong .env, ví dụ WEB_BIND. Xem .env.example."
+            exit 1
+          fi
+          echo "Không có IP ghi cứng nào ngoài 127.0.0.1."
+
+      # Chiều ngược lại của cùng một lỗi: quay về ghi cứng 127.0.0.1 thì máy chủ
+      # mất đường vào, và lần đó CI sẽ im nếu chỉ có phép kiểm ở trên.
+      - name: Địa chỉ bind của `web` phải đọc từ biến
+        run: |
+          if ! grep -qE '^[[:space:]]*-[[:space:]]*"\$\{WEB_BIND' docker-compose.yml; then
+            grep -nE '^[[:space:]]*-[[:space:]]*".*:80"$' docker-compose.yml || true
+            echo '::error::docker-compose.yml: cổng của dịch vụ web không còn đọc địa chỉ từ biến WEB_BIND.'
+            # Nháy đơn là CÓ Ý: thông điệp phải in ra chữ ${WEB_BIND} nguyên văn
+            # để người đọc chép được, chứ không phải giá trị của nó.
+            # shellcheck disable=SC2016
+            echo '::error::Phải là:  - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"  — máy chủ đặt WEB_BIND trong .env.'
+            exit 1
+          fi
+          echo "Dịch vụ web bind qua biến WEB_BIND."
+
+  # ---------------------------------------------------------------------------
+  # 51 phép kiểm JavaScript. Node có sẵn trên máy ảo, không cài gì thêm.
+  # ---------------------------------------------------------------------------
+  test-js:
+    name: Phép kiểm JavaScript
+    runs-on: ubuntu-latest
+    env:
+      # Mốc đo 13/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
+      # con số đổi trong lịch sử git chính là chỗ nhìn thấy việc đó.
+      EXPECTED_JS: "51"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Phiên bản Node đang dùng
+        run: node --version
+
+      # Mã thoát bằng 0 KHÔNG đủ làm bằng chứng: nếu mẫu tên tệp nở hụt thì lệnh
+      # vẫn có thể thoát sạch mà không kiểm gì. Nên phải đọc số phép đã chạy.
+      # Cùng nguyên tắc mà automated-check-coverage đã chốt cho bộ kiểm dữ liệu.
+      - name: Chạy và đếm số phép kiểm
+        run: |
+          node --test tests/*.test.js 2>&1 | tee js.log || RC=$?
+          COUNT=$(awk '$(NF-1)=="tests"{n=$NF} END{print n+0}' js.log)
+          echo "Đã chạy $COUNT phép kiểm, mốc chốt là $EXPECTED_JS."
+          if [ "$COUNT" -ne "$EXPECTED_JS" ]; then
+            echo "::error::Số phép kiểm JavaScript là $COUNT, mốc chốt là $EXPECTED_JS."
+            echo "::error::Nếu việc đổi là có chủ ý, sửa EXPECTED_JS trong .github/workflows/ci.yml."
+            echo "::error::Nếu không, mẫu tên tệp có thể đã nở hụt và không phép nào được chạy."
+            exit 1
+          fi
+          exit "${RC:-0}"
+
+  # ---------------------------------------------------------------------------
+  # 11 phép kiểm Python. Không pip install — xem ghi chú đầu tệp.
+  # ---------------------------------------------------------------------------
+  test-py:
+    name: Phép kiểm Python
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_PY: "11"
+      # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
+      # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Phiên bản Python đang dùng
+        run: python3 --version
+
+      # Nếu bước này đỏ vì THIẾU GÓI thì đừng thêm pip install để vá. Nó có
+      # nghĩa là tính chất "chạy được mà không cài gì" đã mất, và điều cần biết
+      # là tệp nào làm mất. Xem Requirement "Bộ kiểm phải chạy được trên một
+      # máy sạch, không cài thêm gói".
+      - name: Chạy và đếm số phép kiểm
+        run: |
+          python3 -m unittest discover -s tests -p "test_*.py" 2>&1 | tee py.log || RC=$?
+          COUNT=$(awk '$1=="Ran"{n=$2} END{print n+0}' py.log)
+          echo "Đã chạy $COUNT phép kiểm, mốc chốt là $EXPECTED_PY."
+          if [ "$COUNT" -ne "$EXPECTED_PY" ]; then
+            echo "::error::Số phép kiểm Python là $COUNT, mốc chốt là $EXPECTED_PY."
+            echo "::error::Nếu việc đổi là có chủ ý, sửa EXPECTED_PY trong .github/workflows/ci.yml."
+            exit 1
+          fi
+          exit "${RC:-0}"
