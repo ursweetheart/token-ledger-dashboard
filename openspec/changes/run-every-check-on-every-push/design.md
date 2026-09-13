@@ -225,3 +225,38 @@ nó đi qua được cả hai. Nếu ban đầu chọn `grep` tìm ký tự `ℹ
 Ghi lại vì đây là bằng chứng cụ thể cho một điều dễ nói suông: môi trường nào cũng "chạy bash" nhưng
 kết xuất của công cụ không vì thế mà giống nhau. Khi phải phân tích kết xuất, bám vào cấu trúc chứ
 đừng bám vào hình thức.
+
+### Khác biệt thứ hai, và nó tốn hơn nhiều: `pipefail`
+
+Khác biệt trên chỉ làm nhóm đỏ oan — khó chịu nhưng nhìn thấy ngay. Khác biệt dưới đây làm nhóm
+**xanh oan**, và xanh oan thì không ai nhìn thấy.
+
+Bản đầu viết `node --test ... | tee js.log || RC=$?`. Đo trên lần chạy cố ý làm hỏng cả ba:
+
+```
+Canh cấu hình         failure   đúng
+Phép kiểm JavaScript  success   SAI -- đang có một phép kiểm trượt
+Phép kiểm Python      success   SAI -- đang có một phép kiểm trượt
+```
+
+Nguyên nhân: GitHub chạy khối `run` bằng **`bash -e`, không có `pipefail`**. Không có `pipefail` thì
+mã thoát của một đường ống là mã thoát của lệnh **cuối** — tức của `tee` — mà `tee` thì luôn thành
+công. `|| RC=$?` không bao giờ chạy, `RC` không được đặt, `exit "${RC:-0}"` trả 0.
+
+Git Bash trên máy phát triển bật `pipefail` sẵn, nên cùng đoạn mã đó chạy **đúng** ở máy. Thử ở máy
+không phát hiện được.
+
+**Cách sửa: bỏ đường ống, không thêm cờ.** Ghi ra tệp rồi `cat`. Có ba đường sửa:
+
+| Cách | Đánh giá |
+|---|---|
+| Thêm `set -o pipefail` vào đầu mỗi khối | Chạy được, nhưng ai thêm bước mới phải nhớ |
+| Khai `shell: bash` cho từng bước | Chạy được, nhưng dựa vào một khác biệt ngầm của GitHub giữa shell mặc định và shell khai tên |
+| **Bỏ đường ống đi** | Không còn đường ống thì không còn câu hỏi `pipefail`. Không có gì để nhớ |
+
+Chọn cách thứ ba theo cùng lý lẽ đã dùng cho `WEB_BIND`: bỏ nguyên nhân rẻ hơn canh hậu quả.
+
+**Điều đáng nhớ nhất của cả change này:** cả hai lỗi trên chỉ lộ ra khi chạy **chiều đỏ**. Lần chạy
+xanh đầu tiên đã qua, và sẽ còn qua mãi, trong khi thứ nó lẽ ra phải canh đã hỏng từ lâu. Một phép
+kiểm chưa từng đỏ không phải là một phép kiểm đã đạt — nó là một phép kiểm chưa ai biết có chạy hay
+không.

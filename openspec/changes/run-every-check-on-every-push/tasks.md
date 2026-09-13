@@ -58,10 +58,13 @@
 
 ## 6. Kiểm chứng bằng một vòng thật
 
-- [ ] 6.1 Đẩy một commit cố ý làm hỏng một phép kiểm JavaScript, xác nhận CI **đỏ**, rồi hoàn tác.
-      Một hệ thống canh chưa từng bắt được gì thì chưa chứng minh được nó có canh
-- [ ] 6.2 Làm lại điều đó với một phép kiểm Python
-- [ ] 6.3 Làm lại với nhóm canh cấu hình, bằng cách đặt lại một địa chỉ ghi cứng
+- [x] 6.1 Đẩy một commit cố ý làm hỏng một phép kiểm JavaScript, xác nhận CI **đỏ**, rồi hoàn tác.
+      ĐẠT — nhưng **lần đầu nó XANH oan**: `| tee` nuốt mã thoát, vì `bash -e` của GitHub không bật
+      `pipefail`. Đã sửa bằng cách bỏ hẳn đường ống. Sau khi sửa: `# fail 1`, vẫn đếm đủ 51, nhóm đỏ
+- [x] 6.2 Làm lại điều đó với một phép kiểm Python — cùng lỗi, cùng cách sửa.
+      ĐẠT: `FAILED (failures=1)`, vẫn đếm đủ 11, nhóm đỏ, không có lỗi awk
+- [x] 6.3 Làm lại với nhóm canh cấu hình, bằng cách đặt lại một địa chỉ ghi cứng.
+      ĐẠT ngay lần đầu — nhóm này không dùng đường ống nên không dính lỗi trên
 - [x] 6.4 Xác nhận commit sạch thì CI **xanh** cả ba nhóm, và số phép kiểm báo đúng 51 và 11.
       ĐẠT — lần chạy CI #1 (`7d875d1`) xanh cả ba nhóm trong 19 giây. Đã **đọc log** xác nhận, không
       suy luận: `Đã chạy 51 phép kiểm, mốc chốt là 51` và `Đã chạy 11 phép kiểm, mốc chốt là 11.`
