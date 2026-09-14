@@ -36,6 +36,12 @@ Ba điều làm nên kiến trúc này:
 không gọi thẳng Google được — đi qua Gateway trở thành **bắt buộc về mặt kỹ thuật**, không
 phải một thoả thuận.
 
+> ⚠️ **KHÔNG CÒN ĐÚNG CHO AGENT CRM, từ 12/09/2026.** Change
+> `keep-the-crm-agent-running-when-the-gateway-dies` cho CRM một đường dự phòng dùng
+> `sa-key.json`, nên nó **đi thẳng Google được**. Đổi lại là hệ thống không đứng khi
+> `gateway-lb` chết — điểm hỏng đơn của kiến trúc này. Chốt bởi lead 10/09. Bảy agent còn lại
+> vẫn giữ tính chất ①. Chi tiết ở [`fallback-crm-12-09.md`](fallback-crm-12-09.md).
+
 **② Agent gọi bằng bí danh, không gọi bằng tên model thật.** Agent xin `gemini-flash-lite`;
 Gateway mới dịch sang `gemini/gemini-3.5-flash-lite`. Đổi model upstream không phải sửa agent.
 
