@@ -1,0 +1,3377 @@
+{
+  "run_id": "ralli-lb-aedefd25d9c6",
+  "result": "PASS",
+  "endpoint": "http://127.0.0.1:4101",
+  "scope": "real helpers + nginx LB + two mock LiteLLM proxies + isolated SpendLogs",
+  "limitations": [
+    "not authenticated router E2E",
+    "no application DB persistence",
+    "no ETL/department/dashboard verification",
+    "no OCR/Marker",
+    "no Redis/Sentinel",
+    "mock closed-loop load is not production capacity"
+  ],
+  "stages": [
+    {
+      "name": "baseline",
+      "requests": 1,
+      "concurrency": 1,
+      "elapsed_seconds": 0.09399999999914144,
+      "rps": 10.638297872437592,
+      "p50_ms": 93.99999999914144,
+      "p95_ms": 93.99999999914144,
+      "p99_ms": 93.99999999914144
+    },
+    {
+      "name": "ramp2",
+      "requests": 8,
+      "concurrency": 2,
+      "elapsed_seconds": 0.1400000000012369,
+      "rps": 57.142857142352284,
+      "p50_ms": 31.000000000858563,
+      "p95_ms": 47.00000000048021,
+      "p99_ms": 47.00000000048021
+    },
+    {
+      "name": "ramp4",
+      "requests": 24,
+      "concurrency": 4,
+      "elapsed_seconds": 0.9689999999991414,
+      "rps": 24.767801857607083,
+      "p50_ms": 61.99999999989814,
+      "p95_ms": 703.0000000013388,
+      "p99_ms": 703.9999999997235
+    },
+    {
+      "name": "ramp8",
+      "requests": 48,
+      "concurrency": 8,
+      "elapsed_seconds": 0.7659999999996217,
+      "rps": 62.66318537862103,
+      "p50_ms": 109.99999999876309,
+      "p95_ms": 156.00000000085856,
+      "p99_ms": 156.00000000085856
+    },
+    {
+      "name": "one_proxy_down",
+      "requests": 8,
+      "concurrency": 2,
+      "elapsed_seconds": 4.156999999999243,
+      "rps": 1.9244647582394652,
+      "p50_ms": 47.00000000048021,
+      "p95_ms": 2046.9999999986612,
+      "p99_ms": 2046.9999999986612
+    },
+    {
+      "name": "recovery",
+      "requests": 4,
+      "concurrency": 2,
+      "elapsed_seconds": 0.07800000000133878,
+      "rps": 51.282051281171086,
+      "p50_ms": 31.000000000858563,
+      "p95_ms": 47.00000000048021,
+      "p99_ms": 47.00000000048021
+    }
+  ],
+  "calls": [
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "baseline-0",
+      "response_id": "chatcmpl-50caf423-02c5-4c9a-aaff-9a154f6f8b16",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp2-1",
+      "response_id": "chatcmpl-28e65e00-2b34-467d-a647-f2410105cbdd",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp2-2",
+      "response_id": "chatcmpl-3fffc170-a768-4646-96cb-267cb8b2b401",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp2-3",
+      "response_id": "chatcmpl-6a616de7-eb57-4b2a-86c1-c83e797125ff",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp2-4",
+      "response_id": "chatcmpl-44363224-9257-4cad-9823-cdbbd73cf8f9",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp2-5",
+      "response_id": "chatcmpl-c42e9b47-4f5d-49d6-9077-2a8515ec86ab",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp2-6",
+      "response_id": "chatcmpl-d3392ad6-8c0b-4bf7-a12f-6199bee760c0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp2-7",
+      "response_id": "chatcmpl-e7b7ac8f-c3b5-4e80-bb5e-abcf370c3009",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp2-8",
+      "response_id": "chatcmpl-6d498326-7a95-4ec0-985a-7273af68764e",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp4-12",
+      "response_id": "chatcmpl-d4778f69-7241-4f6e-bf60-fa98659ede26",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp4-9",
+      "response_id": "chatcmpl-dd813689-a3fa-4f40-95d0-c9e9c37ac90d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp4-11",
+      "response_id": "chatcmpl-024e1fc3-bb73-4537-8c92-90d6edebac2d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp4-10",
+      "response_id": "chatcmpl-09641540-5be4-4015-a7ca-5603ed0bb347",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp4-13",
+      "response_id": "chatcmpl-29934e08-9073-4973-aed8-8b3a5229d94e",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp4-14",
+      "response_id": "chatcmpl-8b5c3a8a-fb7f-4ac8-8616-f7a6a7294984",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp4-16",
+      "response_id": "chatcmpl-c5e2b18e-f29a-4c3a-b8e2-5c437ce330ad",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp4-15",
+      "response_id": "chatcmpl-997a4695-830d-4200-8639-47f492770610",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp4-17",
+      "response_id": "chatcmpl-98ff63fe-aa15-4496-b396-1091e653dbc8",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp4-18",
+      "response_id": "chatcmpl-15c254eb-ca67-4c01-a2aa-1e1cdc76f649",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp4-19",
+      "response_id": "chatcmpl-ec6fe03a-1a73-415f-8622-4b2a28d17023",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp4-20",
+      "response_id": "chatcmpl-9464b05a-0a96-4475-9a00-e0c5032cf048",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp4-21",
+      "response_id": "chatcmpl-b27238f0-01bc-42de-92e6-6e7012661400",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp4-22",
+      "response_id": "chatcmpl-baa611b7-09f7-4a49-b87d-d3c9334d01a7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp4-24",
+      "response_id": "chatcmpl-a62fe021-4f06-49fe-a53c-2c415b85619f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp4-26",
+      "response_id": "chatcmpl-61ab805c-eaee-4dc4-bcce-fd0ac044ecbd",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp4-28",
+      "response_id": "chatcmpl-e78c74a7-a574-4600-baee-343aaba7236f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp4-23",
+      "response_id": "chatcmpl-76bc9826-d936-45c9-8325-65d3d49a3526",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp4-29",
+      "response_id": "chatcmpl-bc8c69f2-7f88-4d4f-9993-24d80df8cbc4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp4-27",
+      "response_id": "chatcmpl-9c43ca7d-2932-4cd3-ad63-009360971ecb",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp4-25",
+      "response_id": "chatcmpl-b8bdd74f-008f-4801-8024-8ab38d6194eb",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp4-31",
+      "response_id": "chatcmpl-1e2d380c-5fb5-4673-9485-f623432b8277",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp4-30",
+      "response_id": "chatcmpl-8490cbcb-8f44-473a-940b-eaced195c40d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp4-32",
+      "response_id": "chatcmpl-8a9e6352-c389-49de-b0c0-0c6e766e3705",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp8-33",
+      "response_id": "chatcmpl-ab80d8ee-744f-4c0d-b5c7-4c2a6a0e17bc",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp8-36",
+      "response_id": "chatcmpl-db13d2e0-6c5a-4622-b20a-436340d8fb83",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp8-39",
+      "response_id": "chatcmpl-9e5a6176-d498-49fa-a1a5-bd146a7eb88c",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp8-34",
+      "response_id": "chatcmpl-706b7e82-c77f-46ca-abe8-bdd0d0e793a3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp8-37",
+      "response_id": "chatcmpl-06864767-c21b-481e-b7f6-dbc19fe4f5dc",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp8-35",
+      "response_id": "chatcmpl-409a6b52-7aa3-4efc-b192-a53ecd0db4b5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp8-40",
+      "response_id": "chatcmpl-1b5c1ee8-78a3-4afe-9d0c-259cccc6cd11",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp8-38",
+      "response_id": "chatcmpl-a7b51405-e52f-45bc-9b19-f7979f1501ca",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp8-41",
+      "response_id": "chatcmpl-4cd56f46-8320-40e2-b23c-cfd02fbd305a",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp8-43",
+      "response_id": "chatcmpl-f719316c-f2e6-4eda-bc56-d7f2033a5042",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp8-44",
+      "response_id": "chatcmpl-9d19083e-1271-4198-a9fd-3b5eb10231e2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp8-47",
+      "response_id": "chatcmpl-0123097b-8270-4990-85dd-d6c04efd655f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp8-42",
+      "response_id": "chatcmpl-2a3ef391-f6b4-450e-ae8b-4d77d29b0208",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp8-45",
+      "response_id": "chatcmpl-ea41dd09-5765-410d-a6e8-1b5d248d96df",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp8-46",
+      "response_id": "chatcmpl-800830ba-2aab-434d-82c4-98ab42c6c15a",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp8-48",
+      "response_id": "chatcmpl-a3eca63e-043b-43d0-9d5b-782dc34cdc3e",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp8-49",
+      "response_id": "chatcmpl-7b6354cd-a43a-49d5-ad45-3763e77c584c",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp8-52",
+      "response_id": "chatcmpl-b5fdc548-8c2c-4779-8ad4-42c9e8308b09",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp8-50",
+      "response_id": "chatcmpl-45a07246-b588-4436-8aaa-35dd9cf457ed",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp8-51",
+      "response_id": "chatcmpl-550212bb-072e-48be-b417-f8ac19b77022",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp8-53",
+      "response_id": "chatcmpl-9fa90200-7ee8-4354-9cdf-01a1b9d0e5a6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp8-54",
+      "response_id": "chatcmpl-ebd38f32-489f-49fa-948b-bc3fdedbb24d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp8-56",
+      "response_id": "chatcmpl-0b282252-3432-47f0-8f6b-41249e7eb3b1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp8-55",
+      "response_id": "chatcmpl-6503ea07-d772-4da1-a254-8d52fe4d869b",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp8-57",
+      "response_id": "chatcmpl-b97b698a-5152-49b1-b3cb-47b1401dd312",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp8-58",
+      "response_id": "chatcmpl-f7142a29-5019-46a9-a597-f821c93322d7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp8-59",
+      "response_id": "chatcmpl-74ad977a-9964-4398-83a1-107bd63221c8",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp8-60",
+      "response_id": "chatcmpl-a49433d7-d22c-4884-9092-0d3c9bb25c63",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp8-61",
+      "response_id": "chatcmpl-8176e327-9777-473d-89fb-37b87d4051bf",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp8-63",
+      "response_id": "chatcmpl-c6672e88-e908-4985-bff3-4047b358e23d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp8-62",
+      "response_id": "chatcmpl-e0040bf7-e1fc-4a9f-926f-2147e099004b",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp8-64",
+      "response_id": "chatcmpl-15c4623f-534f-4e59-a57a-cfc41a0e3965",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp8-65",
+      "response_id": "chatcmpl-922f6de4-0b51-48c7-9aae-90198fd75990",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp8-67",
+      "response_id": "chatcmpl-59537765-d2aa-44c9-8fee-5ed0ae52fca3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp8-66",
+      "response_id": "chatcmpl-c74d2ebb-442f-4382-8a13-05a2b1e6fa6c",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp8-69",
+      "response_id": "chatcmpl-b7c59749-cda8-4480-b5a6-f7a12568f58d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp8-70",
+      "response_id": "chatcmpl-fb8e9ef0-e5ff-4866-8948-5a6917711241",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp8-68",
+      "response_id": "chatcmpl-c3cd1bd2-15b7-4e4b-b092-2ec7aea00f15",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp8-71",
+      "response_id": "chatcmpl-0716b65e-1053-4b4c-9cde-26f04c9439de",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp8-72",
+      "response_id": "chatcmpl-a93c6280-2821-4d78-a282-abe387882800",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "ramp8-73",
+      "response_id": "chatcmpl-0d32aa2c-1726-49bd-9434-99d4b16bd8a8",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "ramp8-75",
+      "response_id": "chatcmpl-51e37bfc-f0d6-48aa-8402-6828d56ec07d",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "ramp8-74",
+      "response_id": "chatcmpl-c111b6fc-cbe0-49c8-8744-cc30bd569e83",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "ramp8-78",
+      "response_id": "chatcmpl-c53d1013-e153-45a0-8baf-d10bd0e2476a",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "ramp8-76",
+      "response_id": "chatcmpl-291d7aeb-64a8-4568-a6d3-8ace7e516b53",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "ramp8-79",
+      "response_id": "chatcmpl-85b865bd-4819-45ca-b13f-229228bf9ae1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "ramp8-77",
+      "response_id": "chatcmpl-66eec9da-a751-4523-8f97-58c2af9afb71",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "ramp8-80",
+      "response_id": "chatcmpl-4d794c1f-304d-4c9e-bc96-ec46f3dc90f7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "one_proxy_down-81",
+      "response_id": "chatcmpl-7a6fc069-9722-4b6e-bea0-e86dd5a92f78",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "one_proxy_down-82",
+      "response_id": "chatcmpl-e05a7745-8617-43ea-ba71-7cc26eb4d949",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "one_proxy_down-84",
+      "response_id": "chatcmpl-989e2d46-e462-4d52-8029-cd601f2a9b99",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "one_proxy_down-83",
+      "response_id": "chatcmpl-5f00173b-72e5-4b6f-8677-d55559fc13df",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "operation": "one_proxy_down-85",
+      "response_id": "chatcmpl-fa6e5244-35d9-4557-9874-741c2b241412",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "operation": "one_proxy_down-86",
+      "response_id": "chatcmpl-a18d560e-70f7-4386-9a22-28d43383760e",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "operation": "one_proxy_down-87",
+      "response_id": "chatcmpl-2e252aac-a2e1-4d92-92b9-6e82d631d3e7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "operation": "one_proxy_down-88",
+      "response_id": "chatcmpl-d68b5f48-805a-41b3-8fb2-feeadc07c10b",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "operation": "recovery-89",
+      "response_id": "chatcmpl-c1456e6e-6b5d-42f6-b596-f8298819722f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "operation": "recovery-90",
+      "response_id": "chatcmpl-d98afe78-c35f-4be9-90da-c9f4cdb33c05",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "operation": "recovery-91",
+      "response_id": "chatcmpl-34e1c6c1-738c-4b91-ac0e-d7959ef38d05",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "operation": "recovery-92",
+      "response_id": "chatcmpl-8c804d90-a80a-43ad-80dc-5a632fe7cc36",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    }
+  ],
+  "negative": {
+    "missing_identity_call_llm": "rejected before network",
+    "missing_identity_call_llm_chat": "rejected before network",
+    "invalid_key": "401; one SDK attempt; no bypass",
+    "lb_outage": {
+      "sdk_attempts": 1,
+      "elapsed_seconds": 2.063000000000102,
+      "bypass": false
+    }
+  },
+  "transport_attempts": [
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "base": "http://127.0.0.1:4101/v1"
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "base": "http://127.0.0.1:4101/v1"
+    }
+  ],
+  "resources_before": "tla-gateway-smoke-gateway-lb-1 1.00% 12.3MiB / 128MiB\ntla-gateway-smoke-gateway2-1 0.14% 743.8MiB / 2GiB\ntla-gateway-smoke-gateway-1 0.14% 755MiB / 2GiB\ntla-gateway-smoke-db-1 0.02% 52.59MiB / 512MiB\n",
+  "spend_logs": [
+    {
+      "request_id": "chatcmpl-50caf423-02c5-4c9a-aaff-9a154f6f8b16",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-28e65e00-2b34-467d-a647-f2410105cbdd",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-3fffc170-a768-4646-96cb-267cb8b2b401",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-6a616de7-eb57-4b2a-86c1-c83e797125ff",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-44363224-9257-4cad-9823-cdbbd73cf8f9",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c42e9b47-4f5d-49d6-9077-2a8515ec86ab",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-d3392ad6-8c0b-4bf7-a12f-6199bee760c0",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-e7b7ac8f-c3b5-4e80-bb5e-abcf370c3009",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-6d498326-7a95-4ec0-985a-7273af68764e",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-d4778f69-7241-4f6e-bf60-fa98659ede26",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-dd813689-a3fa-4f40-95d0-c9e9c37ac90d",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-29934e08-9073-4973-aed8-8b3a5229d94e",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-997a4695-830d-4200-8639-47f492770610",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-98ff63fe-aa15-4496-b396-1091e653dbc8",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-ec6fe03a-1a73-415f-8622-4b2a28d17023",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-baa611b7-09f7-4a49-b87d-d3c9334d01a7",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a62fe021-4f06-49fe-a53c-2c415b85619f",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-61ab805c-eaee-4dc4-bcce-fd0ac044ecbd",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-e78c74a7-a574-4600-baee-343aaba7236f",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-024e1fc3-bb73-4537-8c92-90d6edebac2d",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-09641540-5be4-4015-a7ca-5603ed0bb347",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-8b5c3a8a-fb7f-4ac8-8616-f7a6a7294984",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c5e2b18e-f29a-4c3a-b8e2-5c437ce330ad",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-15c254eb-ca67-4c01-a2aa-1e1cdc76f649",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9464b05a-0a96-4475-9a00-e0c5032cf048",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-b27238f0-01bc-42de-92e6-6e7012661400",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-76bc9826-d936-45c9-8325-65d3d49a3526",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-bc8c69f2-7f88-4d4f-9993-24d80df8cbc4",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-b8bdd74f-008f-4801-8024-8ab38d6194eb",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9c43ca7d-2932-4cd3-ad63-009360971ecb",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-1e2d380c-5fb5-4673-9485-f623432b8277",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-706b7e82-c77f-46ca-abe8-bdd0d0e793a3",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-06864767-c21b-481e-b7f6-dbc19fe4f5dc",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-409a6b52-7aa3-4efc-b192-a53ecd0db4b5",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-1b5c1ee8-78a3-4afe-9d0c-259cccc6cd11",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a7b51405-e52f-45bc-9b19-f7979f1501ca",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-f719316c-f2e6-4eda-bc56-d7f2033a5042",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9d19083e-1271-4198-a9fd-3b5eb10231e2",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0123097b-8270-4990-85dd-d6c04efd655f",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-7b6354cd-a43a-49d5-ad45-3763e77c584c",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-b5fdc548-8c2c-4779-8ad4-42c9e8308b09",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9fa90200-7ee8-4354-9cdf-01a1b9d0e5a6",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0b282252-3432-47f0-8f6b-41249e7eb3b1",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-b97b698a-5152-49b1-b3cb-47b1401dd312",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-74ad977a-9964-4398-83a1-107bd63221c8",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-8176e327-9777-473d-89fb-37b87d4051bf",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c6672e88-e908-4985-bff3-4047b358e23d",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-922f6de4-0b51-48c7-9aae-90198fd75990",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c74d2ebb-442f-4382-8a13-05a2b1e6fa6c",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c3cd1bd2-15b7-4e4b-b092-2ec7aea00f15",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0716b65e-1053-4b4c-9cde-26f04c9439de",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a93c6280-2821-4d78-a282-abe387882800",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c111b6fc-cbe0-49c8-8744-cc30bd569e83",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c53d1013-e153-45a0-8baf-d10bd0e2476a",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-66eec9da-a751-4523-8f97-58c2af9afb71",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-4d794c1f-304d-4c9e-bc96-ec46f3dc90f7",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-8490cbcb-8f44-473a-940b-eaced195c40d",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-8a9e6352-c389-49de-b0c0-0c6e766e3705",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-ab80d8ee-744f-4c0d-b5c7-4c2a6a0e17bc",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-db13d2e0-6c5a-4622-b20a-436340d8fb83",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-9e5a6176-d498-49fa-a1a5-bd146a7eb88c",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-4cd56f46-8320-40e2-b23c-cfd02fbd305a",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-2a3ef391-f6b4-450e-ae8b-4d77d29b0208",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-ea41dd09-5765-410d-a6e8-1b5d248d96df",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-800830ba-2aab-434d-82c4-98ab42c6c15a",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a3eca63e-043b-43d0-9d5b-782dc34cdc3e",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-45a07246-b588-4436-8aaa-35dd9cf457ed",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-550212bb-072e-48be-b417-f8ac19b77022",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-ebd38f32-489f-49fa-948b-bc3fdedbb24d",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-6503ea07-d772-4da1-a254-8d52fe4d869b",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-f7142a29-5019-46a9-a597-f821c93322d7",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a49433d7-d22c-4884-9092-0d3c9bb25c63",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-e0040bf7-e1fc-4a9f-926f-2147e099004b",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-15c4623f-534f-4e59-a57a-cfc41a0e3965",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-59537765-d2aa-44c9-8fee-5ed0ae52fca3",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-b7c59749-cda8-4480-b5a6-f7a12568f58d",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-fb8e9ef0-e5ff-4866-8948-5a6917711241",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-0d32aa2c-1726-49bd-9434-99d4b16bd8a8",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-51e37bfc-f0d6-48aa-8402-6828d56ec07d",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-291d7aeb-64a8-4568-a6d3-8ace7e516b53",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-85b865bd-4819-45ca-b13f-229228bf9ae1",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-7a6fc069-9722-4b6e-bea0-e86dd5a92f78",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-e05a7745-8617-43ea-ba71-7cc26eb4d949",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-989e2d46-e462-4d52-8029-cd601f2a9b99",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-5f00173b-72e5-4b6f-8677-d55559fc13df",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-fa6e5244-35d9-4557-9874-741c2b241412",
+      "end_user": "ralli-lb-aedefd25d9c6.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-a18d560e-70f7-4386-9a22-28d43383760e",
+      "end_user": "ralli-lb-aedefd25d9c6.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-2e252aac-a2e1-4d92-92b9-6e82d631d3e7",
+      "end_user": "ralli-lb-aedefd25d9c6.user-7",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-d68b5f48-805a-41b3-8fb2-feeadc07c10b",
+      "end_user": "ralli-lb-aedefd25d9c6.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-c1456e6e-6b5d-42f6-b596-f8298819722f",
+      "end_user": "ralli-lb-aedefd25d9c6.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-d98afe78-c35f-4be9-90da-c9f4cdb33c05",
+      "end_user": "ralli-lb-aedefd25d9c6.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-34e1c6c1-738c-4b91-ac0e-d7959ef38d05",
+      "end_user": "ralli-lb-aedefd25d9c6.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    },
+    {
+      "request_id": "chatcmpl-8c804d90-a80a-43ad-80dc-5a632fe7cc36",
+      "end_user": "ralli-lb-aedefd25d9c6.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success",
+      "canary_leaked": false
+    }
+  ],
+  "lb_trace": [
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.016
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.011
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.009
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.009
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.026
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.028
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.005
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.664
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.595
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.645
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.658
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.011
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.018
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.019
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.023
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.027
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.029
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.033
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.035
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.043
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.016
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.017
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.019
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.027
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.027
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.03
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.032
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.011
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.016
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.011
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.017
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.012
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.012
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.016
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.017
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.022
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.009
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.018
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.016
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.018
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.017
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.021
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.029
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 401,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "401",
+      "seconds": 0.016
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000, 172.20.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.007
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000, 172.20.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.005
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.009
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.012
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-7",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.006
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000, 172.20.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.009
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.009
+    },
+    {
+      "user": "ralli-lb-aedefd25d9c6.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    }
+  ],
+  "upstreams": [
+    "172.20.0.3:4000",
+    "172.20.0.4:4000"
+  ],
+  "total_requests": 93,
+  "total_tokens": 2790,
+  "resources_after": "tla-gateway-smoke-gateway-lb-1 2.15% 12.18MiB / 128MiB\ntla-gateway-smoke-gateway2-1 0.17% 738.9MiB / 2GiB\ntla-gateway-smoke-gateway-1 0.18% 756.8MiB / 2GiB\ntla-gateway-smoke-db-1 0.03% 50.52MiB / 512MiB\n",
+  "key_cleanup": {
+    "delete_status": 200,
+    "readback_status": 404
+  }
+}
