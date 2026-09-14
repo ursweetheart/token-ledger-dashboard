@@ -62,12 +62,13 @@ def main() -> None:
                    help="Chuoi ket noi PostgreSQL. Mac dinh: connect.DEFAULT_DSN")
     p.add_argument("--file", default=str(BILLING))
     p.add_argument("--rebuild", action="store_true",
-                   help="Xoa sach va dung lai schema + danh muc truoc khi nap")
+                   help="Migration tai cho, xoa dong moi bang, nap lai danh muc truoc khi nap. "
+                        "KHONG xoa schema, nen quyen da cap con nguyen")
     args = p.parse_args()
 
     if args.rebuild:
         cn, ph = connect.rebuild(args.db)
-        log.info("schema + catalog rebuilt on %s", connect.mask_dsn(args.db))
+        log.info("migrated, rows emptied, catalog reloaded on %s", connect.mask_dsn(args.db))
     else:
         cn, ph = connect.open_db(args.db)
 

@@ -1,5 +1,6 @@
 # Collection pipeline and database rebuild. Separate from api because api is
-# read-only while rebuild_db.py runs DROP SCHEMA.
+# read-only while rebuild_db.py empties every table (TRUNCATE since 14/09/2026;
+# it used to DROP SCHEMA, which also wiped every GRANT).
 #
 # cloud-sdk base: pull_monitoring.py shells out to `gcloud auth
 # print-access-token`. No credential is baked in -- gcloud config is mounted.

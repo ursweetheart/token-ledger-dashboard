@@ -111,7 +111,10 @@ jobs:
     name: Phép kiểm Python
     runs-on: ubuntu-latest
     env:
-      EXPECTED_PY: "11"
+      # Mốc đo 14/09/2026: 11 → 35 sau change stop-a-later-pull-from-shrinking-an-earlier-one
+      # (bỏ 2 phép kiểm rebuild cũ, thêm 6 phép kiểm rebuild, 9 gộp Monitoring,
+      # 7 gộp độ trễ, 4 nạp nhà cung cấp).
+      EXPECTED_PY: "35"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8
