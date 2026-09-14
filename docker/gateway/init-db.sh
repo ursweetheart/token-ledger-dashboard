@@ -55,10 +55,10 @@ fi
 # bang nao cua database so. Mac dinh PostgreSQL da nhu vay (PUBLIC khong duoc
 # cap quyen tren bang), nhung "mac dinh" la mot gia dinh -- day la phep do.
 #
-# DO TAT CA database so, khong doan mot cai. Hom nay ton tai ca `token_ledger`
-# lan `token_ledger_v2`, va `db/connect.py` mac dinh tro vao cai THU HAI trong
-# khi docker-compose.yml mac dinh tao cai THU NHAT. Do dung mot cai la co the
-# dang do cai khong ai dung toi.
+# DO TAT CA database so, khong doan mot cai. Truoc 14/09/2026 ton tai ca
+# `token_ledger` lan `token_ledger_v2`, va do dung mot cai la co the dang do cai
+# khong ai dung toi. Nay chi con `token_ledger_v2` (ban cu da bi xoa), nhung vong
+# lap giu nguyen: them database so moi thi phep do tu phu toi no.
 echo "step 3/3: probing the boundary - can $GW_USER read the ledger database?"
 
 LEDGER_DBS=$(admin_val "SELECT datname FROM pg_database WHERE datname ~ '^token_ledger' ORDER BY datname;")

@@ -6,7 +6,7 @@
     http://127.0.0.1:8000/docs     tài liệu tự sinh, bấm thử được từng endpoint
 
 Đổi database:
-    set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger
+    set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger_v2
 
 PHẢI CÓ KHOÁ MỚI CHẠY ĐƯỢC
 --------------------------

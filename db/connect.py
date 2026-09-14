@@ -58,16 +58,18 @@ PG_HOST = os.environ.get("PGHOST", "127.0.0.1")
 PG_PORT = os.environ.get("PGPORT", "5432")
 PG_USER = os.environ.get("PGUSER", "token")
 PG_PASSWORD = os.environ.get("PGPASSWORD", "token_local")
-# Runtime ledger hiện hành: token_ledger_v2. Quyết định giữ song song 27/08/2026:
-# không DROP/rename để trả tên; token_ledger cũ là bản legacy đối chiếu/rollback.
+# Runtime ledger: token_ledger_v2. Giữ nguyên tên `_v2`, không rename (quyết định
+# 27/08/2026).
 #
-# v2 là bản dựng HOÀN TOÀN từ chuỗi migration rồi nạp lại từ data/, và đã khớp
-# 23/23 khoá với bản cũ (867.657.110 token · $291,985601 · audit 36/31/5/0 ·
+# v2 là bản dựng HOÀN TOÀN từ chuỗi migration rồi nạp lại từ data/, và lúc chuyển
+# đã khớp 23/23 khoá với bản cũ (867.657.110 token · $291,985601 · audit 36/31/5/0 ·
 # check_api 19/19).
 #
-# `token_ledger` cũ VẪN CÒN NGUYÊN. Quay lui runtime = đặt PGDATABASE hoặc
-# TOKEN_LEDGER_DSN về database đó. Gateway ingestion tương lai chỉ ghi vào v2;
-# không ghi cùng một dòng vào cả hai database.
+# `token_ledger` cũ ĐÃ BỊ XOÁ ngày 14/09/2026, sau khi so mọi bảng với v2: 0 khoá mất,
+# và v2 không nhỏ hơn bản cũ ở khoá nào. Chỗ khác còn lại là danh bạ cũ (unit_id,
+# role của 3 người), mà trạng thái cũ vẫn nằm trong data/raw_web/ralli/2026-08-13 và
+# 2026-08-17. KHÔNG còn database nào để quay lui bằng cách đổi PGDATABASE: quay lui
+# nghĩa là dựng lại từ data/ bằng scripts/rebuild_db.py.
 PG_DATABASE = os.environ.get("PGDATABASE", "token_ledger_v2")
 
 # Dùng `or` chứ không `os.environ.get(k, mac_dinh)`: biến đặt thành chuỗi rỗng

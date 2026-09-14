@@ -260,4 +260,4 @@ Cách chặn rẻ nhất, để dành cho chặng 2: trước khi đóng gói im
 | `docker compose pull` chạy êm khi `api`, `web`, `tools` mang tên `:local` không có trên kho nào | **Chưa kiểm.** Có thể cần cờ `--ignore-buildable`; kiểm bằng `docker compose pull --dry-run` |
 | 3.462 ở `fact_monitoring` **gây ra** 3.462 ở `fact_usage_daily` | **Chưa lần theo** đường số liệu; mới thấy hai con số trùng khít |
 | Compose của DMS thật sự khai `external` | **Đã xác minh** (14/09): `service/docker-compose.override.yml:36-41` trong bản clone DMS. Tệp gốc của nhóm DMS không khai |
-| `token_ledger` còn giữ gì độc quyền ngoài 5 dòng đã tìm | **Chưa soát hết** — 3 bảng `fact_call`, `fact_latency_daily`, `fact_perf_daily` có cột khác nhau nên không so trực tiếp được |
+| `token_ledger` còn giữ gì độc quyền | **Đã soát hết** (14/09): so mọi bảng theo khoá thì 0 khoá mất, v2 không nhỏ hơn ở khoá nào, chỉ còn khác ở danh bạ cũ (vẫn nằm trong `data/raw_web/ralli`). Phép so này bắt được lỗi cộng đôi độ trễ, đã sửa ở `cb74ac5`. **`token_ledger` đã bị xoá** |

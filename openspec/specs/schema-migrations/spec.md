@@ -162,17 +162,29 @@ cộng thẳng `fact_usage_daily` là đếm ba lần):
 - **THEN** quá trình SHALL dừng lại và điều tra nguyên nhân
 - **AND** MUST NOT nới phép so cho vừa ý, MUST NOT xoá database cũ
 
-#### Scenario: Hai database được giữ song song
+#### Scenario: Xoá database cũ sau khi đã chứng minh bằng số
 
-- **WHEN** `token_ledger_v2` đã qua nghiệm thu và trở thành runtime ledger
-- **THEN** `token_ledger` SHALL được giữ nguyên làm bản legacy để đối chiếu và rollback
-- **AND** hệ thống MUST NOT yêu cầu xoá database cũ hoặc rename database mới
-- **AND** ingestion Gateway mới SHALL chỉ ghi vào `token_ledger_v2`, MUST NOT ghi cùng một
-  dòng nghiệp vụ vào cả hai ledger
+Ngày 27/08/2026, `token_ledger` được giữ song song làm bản đối chiếu và quay lui. Ngày 14/09/2026
+nó bị xoá, sau khi so **mọi bảng** với `token_ledger_v2`:
+
+- 0 khoá bị mất.
+- Số liệu của v2 không nhỏ hơn bản cũ ở bất kỳ khoá nào: Monitoring, hoá đơn, `fact_usage_daily`,
+  độ trễ, hiệu năng.
+- Chỗ khác còn lại là danh bạ và cây tổ chức mới hơn (`unit_id`, `role` của 3 người), mà trạng thái
+  cũ vẫn nằm trong `data/raw_web/ralli/2026-08-13` và `2026-08-17`.
+
+Chính phép so này đã bắt được lỗi cộng đôi độ trễ trước khi xoá: một khoá của v2 nhỏ hơn bản cũ.
+
+- **WHEN** muốn xoá một database ledger cũ
+- **THEN** SHALL so mọi bảng của nó với database đang chạy trước khi xoá
+- **AND** MUST NOT xoá khi còn khoá bị mất, hoặc còn khoá mà database đang chạy nhỏ hơn
+- **AND** mọi thông tin chỉ còn ở database cũ SHALL được chứng minh là vẫn còn trong `data/`
+- **AND** việc xoá MUST NOT diễn ra khi còn phiên nào đang kết nối vào database đó
+- **AND** ingestion Gateway SHALL chỉ ghi vào `token_ledger_v2`
 
 #### Scenario: Database vận hành của LiteLLM
 
 - **WHEN** Gateway LiteLLM khởi động và ghi SpendLogs
 - **THEN** LiteLLM SHALL dùng database riêng tên `litellm`
-- **AND** `token_ledger` và `token_ledger_v2` MUST NOT chứa bảng vận hành `LiteLLM_*`
+- **AND** `token_ledger_v2` MUST NOT chứa bảng vận hành `LiteLLM_*`
 

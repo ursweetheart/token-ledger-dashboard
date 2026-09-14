@@ -2,7 +2,7 @@
 nhuc nhich khong, roi HOAN TAC.
 
     python tools/dien_tap_gateway.py
-    python tools/dien_tap_gateway.py --db "postgresql://token:token_local@127.0.0.1:5432/token_ledger"
+    python tools/dien_tap_gateway.py --db "postgresql://token:token_local@127.0.0.1:5432/token_ledger_v2"
 
 VI SAO FILE NAY TON TAI
 -----------------------
