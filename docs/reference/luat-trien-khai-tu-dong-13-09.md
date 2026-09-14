@@ -169,16 +169,29 @@ Không việc nào trong số đó thuộc về một lệnh triển khai.
 
 ## 3. Luật 2 — không bao giờ `docker compose down`
 
-**Chứng minh được một nửa.** `docker-compose.yml` khai mạng với dải IP tĩnh, và chú thích trong
-khối `networks:` cuối tệp nói rõ: tên mạng `token-ledger-dashboard_default` không được đổi vì ràng
-buộc `external` trong compose của DMS trỏ vào đó.
+**Chứng minh được (xác minh 14/09/2026).** `docker-compose.yml` khai mạng với dải IP tĩnh, và chú
+thích trong khối `networks:` cuối tệp nói rõ: tên mạng `token-ledger-dashboard_default` không được
+đổi vì ràng buộc `external` bên DMS trỏ vào đó.
+
+Đã mở tệp bên DMS ra đọc. Ràng buộc nằm ở
+`D:\RangDonk\dms-feedback-classification\service\docker-compose.override.yml:36-41`:
+
+```yaml
+networks:
+  gateway:
+    external: true
+    name: token-ledger-dashboard_default
+```
+
+Một chi tiết mà bản trước nói chưa đúng: khai báo này nằm trong **tệp override cục bộ** mà ta tự thêm
+vào bản clone DMS ngày 31/08. `docker-compose.yml` gốc của nhóm DMS **không** có dòng `networks` nào.
+Kết luận của luật thì không đổi.
 
 `down` xoá mạng. DMS khai `external: true` nghĩa là nó **mượn** chứ không tạo, nên mạng mất là DMS
 không lên lại được.
 
-**Chưa xác minh:** tôi đọc chú thích trong repo này, **chưa mở** compose của DMS để tự nhìn thấy
-dòng `external`. Luật vẫn đứng vững vì cái giá của việc tuân theo nó bằng không — `up -d` làm được
-mọi việc `down` rồi `up` làm, mà không xoá mạng.
+Cái giá của việc tuân theo luật này bằng không: `up -d` làm được mọi việc `down` rồi `up` làm, mà
+không xoá mạng.
 
 ---
 
@@ -246,5 +259,5 @@ Cách chặn rẻ nhất, để dành cho chặng 2: trước khi đóng gói im
 | Vì sao Google trả thiếu ở phút mép cửa sổ | **Chưa rõ.** Đã thấy nó xảy ra ở 14 điểm, chưa biết cơ chế bên Google |
 | `docker compose pull` chạy êm khi `api`, `web`, `tools` mang tên `:local` không có trên kho nào | **Chưa kiểm.** Có thể cần cờ `--ignore-buildable`; kiểm bằng `docker compose pull --dry-run` |
 | 3.462 ở `fact_monitoring` **gây ra** 3.462 ở `fact_usage_daily` | **Chưa lần theo** đường số liệu; mới thấy hai con số trùng khít |
-| Compose của DMS thật sự khai `external` | **Chưa mở** tệp đó ra nhìn |
+| Compose của DMS thật sự khai `external` | **Đã xác minh** (14/09): `service/docker-compose.override.yml:36-41` trong bản clone DMS. Tệp gốc của nhóm DMS không khai |
 | `token_ledger` còn giữ gì độc quyền ngoài 5 dòng đã tìm | **Chưa soát hết** — 3 bảng `fact_call`, `fact_latency_daily`, `fact_perf_daily` có cột khác nhau nên không so trực tiếp được |
