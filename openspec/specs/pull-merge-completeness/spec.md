@@ -98,7 +98,7 @@ Lần kéo mang tên tài khoản vẫn là nguồn **đúng** của `db/load_pr
 
 ### Requirement: Gộp histogram độ trễ SHALL đọc mọi lần kéo
 
-`scripts/merge_latency_daily.py` SHALL gộp **mọi** lần kéo đúng khuôn trong `data/raw_google_console/do_tre_phan_bo/`. Với cùng project, cùng phút, cùng chuỗi (service, method, location, credential), nếu nhiều lần kéo có điểm đó thì SHALL giữ điểm có `count` lớn hơn, rồi mới cộng histogram theo ngày. Luật dừng khi gặp `bucketOptions` thứ hai SHALL giữ nguyên.
+`scripts/merge_latency_daily.py` SHALL gộp **mọi** lần kéo đúng khuôn trong `data/raw_google_console/do_tre_phan_bo/`. Với cùng project, cùng phút, cùng chuỗi (xác định bằng `metric_type` và **toàn bộ nhãn gốc** `resource_labels_json`, `metric_labels_json` đã chuẩn hoá; MUST NOT dựa vào các cột phẳng do script kéo tự tách ra, vì bản script cũ không tách đủ), nếu nhiều lần kéo có điểm đó thì SHALL giữ điểm có `count` lớn hơn, rồi mới cộng histogram theo ngày. Luật dừng khi gặp `bucketOptions` thứ hai SHALL giữ nguyên.
 
 Lý do: script hiện đòi đúng một lần kéo, và `scripts/update_dashboard.py` bước 7 gọi nó không có `--in` trên thư mục có 4 lần kéo, nên thoát 1 (đã chạy thật 14/09). `latency-daily.csv` hiện bắt đầu từ 09/06, trong khi lần kéo 08/08 còn dữ liệu tháng 5.
 
@@ -116,6 +116,19 @@ Lý do: script hiện đòi đúng một lần kéo, và `scripts/update_dashboa
 
 - **WHEN** hai lần kéo cùng có một phút của một chuỗi, với `count` 4 và 3
 - **THEN** histogram của ngày đó SHALL chỉ cộng điểm có `count` 4, một lần
+
+#### Scenario: Hai chuỗi khác nhãn trong cùng một lần kéo
+
+Đo ngày 14/09/2026: lần kéo `2026-08-08-196d-1m` được ghi bằng bản script cũ không có cột phẳng `res_credential_id`. Nó có 7 cặp chuỗi cùng project, cùng phút, cùng method, chỉ khác `credential_id` bên trong `resource_labels_json`. Bản đầu của yêu cầu này dùng cột phẳng làm khoá, nên gộp mỗi cặp làm một và mất 8 mẫu ngày 05/05 của pro-tuner. Lỗi lộ ra khi so với database cũ `token_ledger`.
+
+- **WHEN** một lần kéo có hai điểm cùng project, cùng phút, cùng cột phẳng, nhưng khác nhãn trong `resource_labels_json`
+- **THEN** cả hai điểm SHALL được cộng vào histogram
+- **AND** MUST NOT được ghi thành ca lệch
+
+#### Scenario: Cùng một chuỗi được hai lần kéo ghi nhãn theo thứ tự khoá khác nhau
+
+- **WHEN** hai lần kéo ghi cùng một chuỗi, nhưng chuỗi JSON của nhãn khác nhau về thứ tự khoá
+- **THEN** hai điểm SHALL được coi là cùng một điểm và chỉ tính một lần
 
 ### Requirement: Nạp số nhà cung cấp SHALL đọc mọi lần kéo mang tên tài khoản
 

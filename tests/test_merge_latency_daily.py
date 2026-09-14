@@ -68,6 +68,35 @@ class LatencyPullsTests(unittest.TestCase):
         self.assertEqual(len(clashes), 1)
         self.assertEqual((clashes[0]["count_a"], clashes[0]["count_b"], clashes[0]["kept"]), ("3", "4", "4"))
 
+    def test_two_series_in_one_pull_that_differ_only_in_resource_labels_both_count(self):
+        """Measured 14/09/2026: pull 2026-08-08 was written by an older pull script that did
+        not flatten res_credential_id (the field is absent), and held 7 pairs of series whose
+        resource_labels_json differed only in credential_id (a real key vs apikey:UNKNOWN,
+        or two keys). A key built from the flat columns saw both as the same series, kept
+        one of each pair, and dropped 8 samples on 2026-05-05 for pro-tuner."""
+        a = point("2026-05-05 03:30:00", 1, [0, 1])
+        b = point("2026-05-05 03:30:00", 7, [0, 7])
+        del a["res_credential_id"], b["res_credential_id"]
+        a["resource_labels_json"] = '{"credential_id": "apikey:2f5fc44d", "method": "GenerateContent"}'
+        b["resource_labels_json"] = '{"credential_id": "apikey:UNKNOWN", "method": "GenerateContent"}'
+        write_pull(self.root, "2026-08-08-196d-1m", [a, b])
+        summary, _ = self.run_merge()
+        self.assertEqual([r["samples"] for r in read_csv(self.out)], ["8"])
+        self.assertEqual(read_csv(summary["clash_file"]), [])
+
+    def test_same_series_with_label_keys_in_another_order_is_counted_once(self):
+        """The key now holds the raw label JSON. Without normalising it, two pulls that write
+        the same labels in a different key order would double every day they share."""
+        a = point("2026-06-01 10:00:00", 5, [0, 5])
+        b = point("2026-06-01 10:00:00", 5, [0, 5])
+        a["resource_labels_json"] = '{"credential_id": "apikey:1", "method": "GenerateContent"}'
+        b["resource_labels_json"] = '{"method": "GenerateContent", "credential_id": "apikey:1"}'
+        write_pull(self.root, "2026-09-05-196d-1m", [a])
+        write_pull(self.root, "2026-09-12-196d-1m", [b])
+        summary, _ = self.run_merge()
+        self.assertEqual([r["samples"] for r in read_csv(self.out)], ["5"])
+        self.assertEqual(read_csv(summary["clash_file"]), [])
+
     def test_identical_point_in_two_pulls_is_not_doubled(self):
         for name in ("2026-09-05-196d-1m", "2026-09-12-196d-1m"):
             write_pull(self.root, name, [point("2026-06-01 10:00:00", 5, [0, 5])])

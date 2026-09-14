@@ -20,9 +20,13 @@ tu 09/06 trong khi lan keo 08/08 van giu du lieu thang 5.
 
 Nay doc moi thu muc khop `PULL_DIR` (khuon scripts/pull_latency_distribution.py:171
 dat cho lan keo 1 phut), in ten thu muc bi bo qua. Cac lan keo chong nhau phan lon
-khoang ngay, nen KHONG cong thang: moi diem (project, phut, service, method,
-location, credential) chi tinh MOT lan; hai lan keo khac `count` thi giu diem co
-count LON hon - thieu du lieu chi lam count nho di. Ca lech ghi ra tep canh --out.
+khoang ngay, nen KHONG cong thang: moi diem (project, phut, metric_type, TOAN BO nhan
+goc da chuan hoa - xem POINT_KEY) chi tinh MOT lan; hai lan keo khac `count` thi giu
+diem co count LON hon - thieu du lieu chi lam count nho di. Ca lech ghi ra tep canh --out.
+
+Ban dau (14/09) khoa dung cac cot phang res_service/res_method/res_location/
+res_credential_id. Sai: lan keo 2026-08-08 khong co cot res_credential_id, nen hai chuoi
+khac credential bi gop lam mot va mat 8 mau. Phat hien khi so voi database cu token_ledger.
 
 CANH BAO: sua duoc buoc 7 cung la mo duong toi buoc 8 cua update_dashboard.py.
 Change nay chi an toan vi connect.rebuild() da bo DROP SCHEMA cung luc.
@@ -67,8 +71,34 @@ PERCENTILES = (0.50, 0.95, 0.99)
 # phut, nen se bi CONG CHONG neu lot vao.
 PULL_DIR = re.compile(r"^\d{4}-\d{2}-\d{2}-\d+d-1m$")
 
-POINT_KEY = ("gcp_project_id", "ts_utc", "res_service", "res_method", "res_location", "res_credential_id")
+# Mot CHUOI do = metric_type + TOAN BO nhan goc cua Google, KHONG phai cac cot phang
+# (res_method, res_credential_id...) do script keo tu tach ra. Do 14/09/2026: lan keo
+# 2026-08-08 duoc ghi bang ban script cu KHONG co cot res_credential_id, va co 7 cap chuoi
+# chi khac nhau o credential_id ben trong resource_labels_json (mot khoa that va
+# apikey:UNKNOWN, hoac hai khoa). Khoa dung cot phang coi ca cap la mot chuoi, giu mot, va
+# lam mat 8 mau ngay 05/05 cua pro-tuner.
+POINT_KEY = ("gcp_project_id", "ts_utc", "metric_type", "resource_labels_json", "metric_labels_json")
+LABEL_FIELDS = {"resource_labels_json", "metric_labels_json"}
 CLASH_COLS = [*POINT_KEY, "pull_a", "count_a", "pull_b", "count_b", "kept"]
+
+
+def normalized_labels(raw) -> str:
+    """Nhan duoi dang chuoi JSON, CHUAN HOA truoc khi vao khoa.
+
+    Hai lan keo ghi cung mot chuoi do bang chuoi JSON khac cach (thu tu khoa, ma hoa ky tu)
+    thi so sanh chuoi tho se tach mot chuoi thanh hai - va moi ngay chung giua hai lan keo bi
+    CONG DOI. Doc JSON roi ghi lai co sap xep khoa thi hai cach ghi do ra cung mot khoa.
+    """
+    if not raw:
+        return ""
+    try:
+        return json.dumps(json.loads(raw), sort_keys=True, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(raw)
+
+
+def point_key(r: dict) -> tuple:
+    return tuple(normalized_labels(r.get(c)) if c in LABEL_FIELDS else r.get(c, "") for c in POINT_KEY)
 
 
 def bucket_bounds(options: dict) -> list[float]:
@@ -191,7 +221,7 @@ def read_batch(folders: list[Path], by_method: bool):
                             f"  tai      : {folder.name} {r['gcp_project_id']} {r['ts_utc']}"
                         )
 
-                    k = tuple(r.get(c, "") for c in POINT_KEY)
+                    k = point_key(r)
                     n = int(r["count"])
                     cur = best.get(k)
                     if cur is None:
@@ -307,7 +337,7 @@ def run(vao: Path, out: str = "", by_method: bool = False) -> dict:
         w.writeheader()
         w.writerows(row)
         for c in clashes:
-            print(f"  CLASH {c['gcp_project_id']} {c['ts_utc']} {c['res_method']}:"
+            print(f"  CLASH {c['gcp_project_id']} {c['ts_utc']} {c['resource_labels_json']}:"
                   f" {c['pull_a']}={c['count_a']}  {c['pull_b']}={c['count_b']}  -> kept {c['kept']}",
                   file=sys.stderr)
 
