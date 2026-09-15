@@ -206,9 +206,15 @@ nginx đang chạy.
 ## 5. Luật 4 — lệnh triển khai đầy đủ
 
 ```bash
-docker compose pull
+docker compose pull --ignore-buildable
 docker compose --profile refresh up -d
 ```
+
+> **Sửa 15/09/2026.** Bản 13/09 ghi `docker compose pull` không cờ. Đo bằng `--dry-run`: lệnh đó
+> **thoát mã 1**, vì `token-ledger-api:local` và `token-ledger-web:local` không có trên kho nào
+> (`authorization failed`). Thêm `--ignore-buildable` thì mã 0: hai image đó được bỏ qua
+> (`Skipped Image can be built`), mọi image khác vẫn kéo. Xem task 5.6 của
+> `package-the-gateway-image-in-ci`.
 
 **Có `refresh`.** Chú thích trong `docker-compose.yml` nói rõ vì sao dịch vụ `ledger-refresh` tồn
 tại — một khoảng trống đã đo được:
@@ -222,10 +228,21 @@ fact_call WHERE source='gateway'   41 dòng, mới nhất 31/08 10:17
 Kết luận của chú thích đó: *"script đã có sẵn chế độ `--every`; cái thiếu là không ai chạy nó"*.
 Một lệnh triển khai tự động chính là người chạy nó.
 
-**Không có `gateway`, và đây là ràng buộc kỹ thuật chứ không phải lựa chọn.** Khối `x-litellm` khai
-`build.context: ../litellm_tuan_test` — một thư mục **ngang hàng** repo. Máy nào không có thư mục
-đó thì compose thoát ngay, kéo theo `postgres`, `api`, `web` đều không lên. Nút này chỉ gỡ được khi
-image LiteLLM được đóng gói sẵn và `build:` đổi thành `image:` trỏ vào kho.
+**Không có `gateway`.** Bản 13/09 ghi đây là *ràng buộc kỹ thuật*: khối `x-litellm` khai
+`build.context: ../litellm_tuan_test`, một thư mục **ngang hàng** repo, nên máy nào không có thư mục
+đó thì compose không lên được.
+
+> **Nút chặn đã gỡ, 15/09/2026** (`package-the-gateway-image-in-ci`). `x-litellm` nay dùng
+> `image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:<commit fork>}`. Image do CI đóng gói
+> và công khai, kéo không cần đăng nhập. Nhóm `guards` của CI cấm `build:`/`context:` quay lại khối đó.
+>
+> **Đo lại cho chính xác:** nút chặn cũ lộ ra ở bước **build**, không phải ở `config`. Compose cũ trong
+> một thư mục không có fork: `config` vẫn đạt; `build` thì hỏng ngay với
+> `unable to prepare context: path ".../litellm_tuan_test" not found`. Trên máy đã có sẵn image
+> `litellm_tuan_test:gateway` thì lỗi không lộ ra, vì compose không cần build.
+>
+> **Lệnh triển khai có gọi `--profile gateway` hay không vẫn là quyết định của chặng 3.** Change này chỉ
+> gỡ nút chặn. Nếu có, lệnh kéo là `docker compose --profile gateway pull --ignore-buildable`.
 
 ---
 
@@ -249,6 +266,18 @@ ro nằm ở **máy mới** — đúng kịch bản đưa Gateway sang server ri
 Cách chặn rẻ nhất, để dành cho chặng 2: trước khi đóng gói image, `grep` tìm
 `_SENTINEL_IGNORED_CONNECTION_ARGS` trong `litellm/_redis.py`; không thấy thì dừng.
 
+> **Đã làm, 15/09/2026.** Bản clone đứng sai nhánh không còn ảnh hưởng máy chạy Gateway:
+>
+> - Máy chạy **không build** nữa, mà kéo image CI đã đóng gói từ `Tuan-develop`.
+> - Job `gateway-image` grep ký hiệu trên **trước khi build**; thiếu thì đỏ và không đẩy gì lên kho.
+>   Đã làm đỏ có chủ ý: CI `34917662852`.
+> - Nhánh mặc định của fork đã đổi thành `Tuan-develop` (14/09), nên một bản clone mới cũng rơi đúng
+>   nhánh có bản vá.
+> - Bản clone trên máy phát triển nay đứng ở `Tuan-develop`, commit `4373a32c`.
+>
+> Còn một đường vẫn phụ thuộc bản clone: build tay để thử fork (`LITELLM_IMAGE=litellm-local`) và
+> `tools/probe-gateway`. Cả hai là công cụ dò tay, không phải đường chạy.
+
 ---
 
 ## 7. Còn chưa chắc
@@ -257,7 +286,7 @@ Cách chặn rẻ nhất, để dành cho chặng 2: trước khi đóng gói im
 |---|---|
 | Nguyên nhân mất 3.462 token | **Chứng minh được** (14/09): lần kéo cụt ở mép, cộng luật gộp "bản mới thắng". Xem mục 2. Bản 13/09 ghi "cửa sổ trượt" là **sai** |
 | Vì sao Google trả thiếu ở phút mép cửa sổ | **Chưa rõ.** Đã thấy nó xảy ra ở 14 điểm, chưa biết cơ chế bên Google |
-| `docker compose pull` chạy êm khi `api`, `web`, `tools` mang tên `:local` không có trên kho nào | **Chưa kiểm.** Có thể cần cờ `--ignore-buildable`; kiểm bằng `docker compose pull --dry-run` |
+| `docker compose pull` chạy êm khi `api`, `web`, `tools` mang tên `:local` không có trên kho nào | **Đã đo** (15/09, `--dry-run`): **không êm**, mã 1 vì `api:local`/`web:local` báo `authorization failed`. Có `--ignore-buildable` thì mã 0. Luật 4 đã sửa theo |
 | 3.462 ở `fact_monitoring` **gây ra** 3.462 ở `fact_usage_daily` | **Chưa lần theo** đường số liệu; mới thấy hai con số trùng khít |
 | Compose của DMS thật sự khai `external` | **Đã xác minh** (14/09): `service/docker-compose.override.yml:36-41` trong bản clone DMS. Tệp gốc của nhóm DMS không khai |
 | `token_ledger` còn giữ gì độc quyền | **Đã soát hết** (14/09): so mọi bảng theo khoá thì 0 khoá mất, v2 không nhỏ hơn ở khoá nào, chỉ còn khác ở danh bạ cũ (vẫn nằm trong `data/raw_web/ralli`). Phép so này bắt được lỗi cộng đôi độ trễ, đã sửa ở `cb74ac5`. **`token_ledger` đã bị xoá** |

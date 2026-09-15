@@ -34,7 +34,7 @@
 - [x] 5.1 `x-litellm`: bỏ `build:`, thêm `image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:<commit>}`, chuyển chú thích bản vá Sentinel lên trên dòng đó — nhãn `4373a32c…`
 - [x] 5.2 `docker-compose.bench.yml`: `litellm-bench` dùng cùng biến image — cùng nguyên văn dòng `image:`; phép canh 5.4 kiểm hai dòng giống hệt nhau, vì neo YAML không đi qua được hai tệp
 - [x] 5.3 `.env.example`: khai `LITELLM_IMAGE`, giá trị mặc định, và cách build tại chỗ từ `../litellm_tuan_test`
-- [ ] 5.4 Nhóm `guards`: khối `x-litellm` không được có `build:` hay `context:` trỏ ra ngoài repo; làm đỏ có chủ ý một lần — phép canh đã viết (cấm mọi `build:`/`context:` trong `x-litellm`, và bench phải ghim cùng image); 11 phép kiểm trên máy đạt, trong đó có trường hợp khối bench đọc lan sang khoá cấp cao nhất. **Còn thiếu: lần đỏ có chủ ý trên CI**
+- [x] 5.4 Nhóm `guards`: khối `x-litellm` không được có `build:` hay `context:` trỏ ra ngoài repo; làm đỏ có chủ ý một lần — phép canh đã viết (cấm mọi `build:`/`context:` trong `x-litellm`, và bench phải ghim cùng image); 11 phép kiểm trên máy đạt, trong đó có trường hợp khối bench đọc lan sang khoá cấp cao nhất. Xanh trên CI `34919978157` (`be71c41`). Đỏ có chủ ý: CI `34920093402` (`tmp/red-compose-build`, đã xoá), `Canh cấu hình` hỏng ở đúng bước này, chỉ ra hai dòng `build:`/`context: ../litellm_tuan_test`; ba nhóm khác đạt
 - [x] 5.5 Trong một bản sao repo không có thư mục ngang hàng, chạy `docker compose --profile gateway config`; xác nhận đạt — compose mới: `config` đạt, image duy nhất của Gateway là `ghcr.io/…:4373a32c…`, bench cũng vậy. Đối chứng compose cũ (`249f384`): `config` **cũng đạt**; nút chặn chỉ lộ ra ở bước build: `unable to prepare context: path ".../litellm_tuan_test" not found`, rc=1, tái hiện với một nhãn chưa từng build để giống máy mới. `--dry-run` không tái hiện được vì nó bỏ qua bước build
 - [x] 5.6 Đo `docker compose pull --dry-run` và `docker compose --profile gateway pull --dry-run`; ghi xem các image `:local` có cần `--ignore-buildable` không — **CẦN**. Không có cờ: rc=1 cả hai trường hợp, `token-ledger-api:local` và `token-ledger-web:local` báo `authorization failed`. Có `--ignore-buildable`: rc=0, hai image đó `Skipped Image can be built`, image Gateway kéo được
 
@@ -43,13 +43,16 @@
 > Gateway trên máy phát triển là bản local, tắt bật tự do (chốt 15/09/2026). Không cần làm lần lượt
 > từng instance. Cách làm đó để dành cho máy chủ thật ở chặng 3.
 
-- [ ] 6.1 `docker compose --profile gateway pull`; grep `_SENTINEL_IGNORED_CONNECTION_ARGS` bên trong image mới
-- [ ] 6.2 `docker compose --profile gateway up -d`, đợi hai instance healthy, gọi thử một lượt qua `gateway-lb`. Không `down`, không `--remove-orphans`
-- [ ] 6.3 Xác nhận cả hai instance chạy image từ kho (`docker compose ps` và `docker inspect`)
-- [ ] 6.4 Ghi cách quay lui đã kiểm được: `LITELLM_IMAGE=litellm_tuan_test:gateway` trong `.env`, rồi `up -d` lại từng instance
+- [x] 6.1 `docker compose --profile gateway pull`; grep `_SENTINEL_IGNORED_CONNECTION_ARGS` bên trong image mới — image đã kéo ở 4.3; grep trong CẢ HAI container đang chạy: 3 lần mỗi cái
+- [x] 6.2 `docker compose --profile gateway up -d`, đợi hai instance healthy, gọi thử một lượt qua `gateway-lb`. Không `down`, không `--remove-orphans` — 15/09/2026 chạy `up -d litellm-1 litellm-2 gateway-lb` (không bật `api`/`web`/`pgadmin`); hai instance healthy sau khoảng 33 giây; `/health/liveliness` HTTP 200 qua `gateway-lb` (4000), `litellm-1` (4001), `litellm-2` (4002); log 3 phút đầu không có error/traceback. Không gọi model thật để không tốn tiền
+- [x] 6.3 Xác nhận cả hai instance chạy image từ kho (`docker compose ps` và `docker inspect`) — cả hai: `ghcr.io/…:4373a32c…`, digest `sha256:7e888594…`, `revision=4373a32c…`
+- [x] 6.4 Ghi cách quay lui đã kiểm được: `LITELLM_IMAGE=litellm_tuan_test:gateway` trong `.env`, rồi `up -d` lại từng instance — kiểm thật 15/09/2026 lúc 09:14, biến đặt trên dòng lệnh thay vì `.env` (compose đọc như nhau, không để lại gì):
+  - **Quay lui:** `LITELLM_IMAGE=litellm_tuan_test:gateway docker compose --profile gateway up -d --wait litellm-1 litellm-2` → 43 giây, cả hai `image=litellm_tuan_test:gateway` (id `21536058b191`), healthy, `/health/liveliness` 200 qua `gateway-lb`, `litellm-1`, `litellm-2`; log không có traceback
+  - **Trở lại:** `docker compose --profile gateway up -d --wait litellm-1 litellm-2` → 36 giây, cả hai digest `sha256:7e888594…`, healthy, 200 cả ba cổng
+  - Redis, Sentinel, Postgres, `gateway-lb` không bị tạo lại. Không cần revert commit nào
 
 ## 7. Tài liệu và nghiệm thu
 
-- [ ] 7.1 `docs/reference/luat-trien-khai-tu-dong-13-09.md`: mục 5 (nút chặn `gateway` đã gỡ, việc gọi profile này thuộc chặng 3), mục 6 (bản clone sai nhánh không còn ảnh hưởng máy chạy), mục 7 (kết quả 5.6)
-- [ ] 7.2 `docker/gateway/config.gateway.yaml`: chú thích "kiểm bằng grep trong image" trỏ về bước canh của CI
-- [ ] 7.3 `openspec validate package-the-gateway-image-in-ci --strict` đạt
+- [x] 7.1 `docs/reference/luat-trien-khai-tu-dong-13-09.md`: mục 5 (nút chặn `gateway` đã gỡ, việc gọi profile này thuộc chặng 3), mục 6 (bản clone sai nhánh không còn ảnh hưởng máy chạy), mục 7 (kết quả 5.6) — thêm: Luật 4 sửa thành `docker compose pull --ignore-buildable`, vì lệnh cũ thoát mã 1; nút chặn cũ lộ ở bước build chứ không ở `config`
+- [x] 7.2 `docker/gateway/config.gateway.yaml`: chú thích "kiểm bằng grep trong image" trỏ về bước canh của CI
+- [x] 7.3 `openspec validate package-the-gateway-image-in-ci --strict` đạt — 15/09/2026

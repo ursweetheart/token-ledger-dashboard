@@ -292,8 +292,12 @@ router_settings:
   # ra khoi sentinel_kwargs. Thieu ban va do thi `redis_host` o tren se bi copy
   # sang sentinel_kwargs va LiteLLM CHET luc khoi dong:
   #     TypeError: Redis.__init__() got multiple values for argument 'host'
-  # Merge upstream ma mat ban va thi loi nay quay lai -- kiem bang cach grep
-  # _SENTINEL_IGNORED_CONNECTION_ARGS trong image.
+  # Merge upstream ma mat ban va thi loi nay quay lai. Tu 15/09/2026 CI chan
+  # truoc: job `gateway-image` (.github/workflows/ci.yml, buoc "Require the
+  # Sentinel patch") grep _SENTINEL_IGNORED_CONNECTION_ARGS trong
+  # litellm/_redis.py cua fork TRUOC khi build; thieu thi do va khong day image
+  # nao len kho. Kiem tay tren image dang chay: grep cung ky hieu do trong
+  # /app/.venv/lib/python3.13/site-packages/litellm/_redis.py.
   #
   # DA NGHIEM THU bang failover that, ca hai chieu: 6 giay va 7 giay tu luc
   # `docker kill` toi luc co master moi; ngay sau do 10/10 luot goi tra 200 va
