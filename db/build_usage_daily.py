@@ -180,7 +180,7 @@ def load_app(cn, ph) -> int:
     app (period=day|week|month|year) đều không cho chiều NGÀY x MODEL x NGƯỜI:
     year có by_user nhưng là tổng cả kỳ, month chỉ tháng hiện tại. Đã dò ra
     `?period=custom&date_from=&date_to=` cùng `&user_id=` thì lấy được đủ ba
-    chiều; scripts/pull_hd_usage.py kéo về, db/load_hd.py nạp vào fact_app_daily.
+    chiều; scripts/pull_tla_contract_usage.py kéo về, db/load_tla_contract.py nạp vào fact_app_daily.
     Đó là "quyết định N5 hoãn lại" - nay đã xong.
 
     Hệ quả phải nhớ: hai đường KHÔNG cùng độ mịn. Ralli truy được về một lượt
@@ -222,7 +222,7 @@ def load_app(cn, ph) -> int:
     # TLA HĐ: đã ở đúng độ mịn, chỉ chuyển tiếp.
     # `model_id IS NOT NULL` cùng lý do với fact_call ngay trên: fact_usage_daily
     # có model_id trong khoá chính nên dòng không biết model không vào được.
-    # 4 lượt / 13.201 token bị loại như thế, và load_hd.py in ra con số đó mỗi
+    # 4 lượt / 13.201 token bị loại như thế, và load_tla_contract.py in ra con số đó mỗi
     # lần chạy chứ không nuốt lặng.
     # Vẫn GROUP BY dù fact_app_daily đã duy nhất theo (ngày, tài khoản, tên model
     # gốc): hai tên gốc khác nhau có thể trỏ về cùng model_id, và khi đó chèn

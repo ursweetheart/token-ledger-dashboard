@@ -234,17 +234,18 @@ def gop_cac_lan_keo(lan_keo: list[Path]) -> tuple[dict, dict, list[str], list[st
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     p.add_argument("--dir", default="", help="Thu muc mot lan keo Monitoring. "
                                             "De rong = MOI lan keo co ten mang tai khoan.")
     p.add_argument("--account", default="", help="Tai khoan da dung de keo, chi de ghi lai")
-    p.add_argument("--kho", action="store_true", help="Chi in, khong ghi database")
-    p.add_argument("--tuy-chon", action="store_true",
-                   help="Chua co lan keo nao thi CANH BAO roi thoat 0, thay vi hong. "
-                        "Dung cho rebuild_db.py: khong phai ngay nao cung co du lieu "
-                        "nha cung cap, nhung thieu no thi phep doi chieu se bao "
-                        "'chua kiem duoc' chu khong bao dat.")
+    p.add_argument("--dry-run", action="store_true", help="Print only, do not write to the database")
+    p.add_argument("--optional", action="store_true",
+                   help="With no pull at all, WARN and exit 0 instead of failing. "
+                        "For rebuild_db.py: provider data is not there every day, "
+                        "and without it the reconciliation reports 'not checked' "
+                        "rather than 'pass'.")
     args = p.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -254,7 +255,7 @@ def main() -> None:
     lan_keo = [d for d in lan_keo if d.is_dir() and any(d.glob("*.csv"))]
     if not lan_keo:
         noi = args.dir or goc
-        if args.tuy_chon:
+        if args.optional:
             # KHONG im lang. Thieu du lieu nha cung cap khong phai loi, nhung
             # no co hau qua doc duoc: phep doi chieu se bao 'chua kiem duoc'.
             log.warning("khong co lan keo nha cung cap nao (%s)", noi)
@@ -312,7 +313,7 @@ def main() -> None:
                         v.get("requests"), v.get("input_tokens"), v.get("output_tokens"),
                         args.account or None))
 
-        if args.kho:
+        if args.dry_run:
             for b in ban:
                 log.info("  %s %s %-24s req=%s vao=%s ra=%s",
                          b[0], b[1][:28], b[2], b[4], b[5], b[6])
@@ -334,7 +335,7 @@ def main() -> None:
 
         log.info("%d dong | %d ngay | %d project%s",
                  len(ban), len({b[0] for b in ban}), len({b[1] for b in ban}),
-                 "  (KHO - khong ghi)" if args.kho else "")
+                 "  (DRY RUN - nothing written)" if args.dry_run else "")
         if thieu:
             # KHONG im lang. Model chua anh xa thi model_id de NULL va phai noi ra.
             for m, n in thieu.most_common():

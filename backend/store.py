@@ -636,7 +636,7 @@ def health(cn) -> dict:
             # xảy ra nếu chạy trên database dựng trước 20/08/2026 - câu "phần còn
             # lại là tài khoản dịch vụ" nói về một thứ không tồn tại. Nêu cả ba
             # thì câu đúng ở MỌI trạng thái, và người đọc cộng kiểm được.
-            "message": f"{pct:.1f}% token quy được về một danh tính"
+            "message": f"{pct:.1f}% token quy được về một danh tính"  # vi-ok: dashboard text
                        f" ({pct_people:.1f}% người thật"
                        f" + {pct_service:.1f}% tài khoản dịch vụ của các agent"
                        f" một-người-dùng)."
@@ -646,12 +646,12 @@ def health(cn) -> dict:
     if estimated:
         warnings.append({
             "code": "estimated_tokens", "level": "medium", "value": estimated,
-            "message": f"{estimated} dòng có token chưa được hoá đơn xác nhận, lấy từ"
+            "message": f"{estimated} dòng có token chưa được hoá đơn xác nhận, lấy từ"  # vi-ok: dashboard text
                        f" Cloud Monitoring hoặc từ chính ứng dụng."})
     if missing_tokens:
         warnings.append({
             "code": "missing_tokens", "level": "low", "value": missing_tokens,
-            "message": f"{missing_tokens} dòng có số lượt nhưng không có token —"
+            "message": f"{missing_tokens} dòng có số lượt nhưng không có token —"  # vi-ok: dashboard text
                        f" model embedding, Cloud Monitoring không đo token cho chúng."})
     # Ngưỡng suy TỪ nhịp làm mới, và nhịp lấy từ `ref_load_run.every_seconds` —
     # nhịp mà tiến trình làm mới THỰC SỰ đang chạy, do chính nó ghi vào. KHÔNG đọc
@@ -666,14 +666,14 @@ def health(cn) -> dict:
     if heartbeat_error:
         warnings.append({
             "code": "gateway_heartbeat_unreadable", "level": "high", "value": 0,
-            "message": f"Không đọc được nhịp tim của đường nạp Gateway"
+            "message": f"Không đọc được nhịp tim của đường nạp Gateway"  # vi-ok: dashboard text
                        f" ({heartbeat_error}) — bảng `ref_load_run` thiếu hoặc không có"
                        f" quyền đọc. Database có thể chưa chạy migration 012."
                        f" Hệ quả: KHÔNG biết được số của Gateway đang mới hay cũ."})
     elif not heartbeat:
         warnings.append({
             "code": "gateway_refresh_never_ran", "level": "high", "value": 0,
-            "message": "Đường nạp sổ Gateway CHƯA từng chạy thành công lần nào."
+            "message": "Đường nạp sổ Gateway CHƯA từng chạy thành công lần nào."  # vi-ok: dashboard text
                        " Số của Gateway trên màn hình có thể thiếu, và phần thiếu"
                        " KHÔNG nhìn ra được — một bảng số cũ trông y hệt một bảng"
                        " số đầy đủ."})
@@ -684,7 +684,7 @@ def health(cn) -> dict:
             # Nêu CẢ GIÂY, không chỉ phút. `age_s // 60` làm tròn XUỐNG, nên
             # 430 giây in ra "7 phút" trong khi ngưỡng cũng in "7 phút" — người
             # đọc sẽ tưởng nó chưa quá ngưỡng, đúng lúc nó vừa quá.
-            "message": f"Sổ Gateway chưa được làm mới trong {age_s // 60} phút"
+            "message": f"Sổ Gateway chưa được làm mới trong {age_s // 60} phút"  # vi-ok: dashboard text
                        f" {age_s % 60} giây (ngưỡng {stale_threshold} giây)."
                        f" Đường nạp có thể đã dừng —"
                        f" số của Gateway đang CŨ, còn số của các nguồn khác thì"
@@ -693,7 +693,7 @@ def health(cn) -> dict:
     if conflicts:
         warnings.append({
             "code": "unit_conflict", "level": "low", "value": conflicts,
-            "message": f"{conflicts} tài khoản được hai ứng dụng xếp vào hai phòng ban"
+            "message": f"{conflicts} tài khoản được hai ứng dụng xếp vào hai phòng ban"  # vi-ok: dashboard text
                        f" khác nhau; database đã chọn một theo quy tắc tất định."})
 
     # Ba con số dưới đây PHẢI cộng đúng bằng total_tokens. Trả cả ba ra ngoài để

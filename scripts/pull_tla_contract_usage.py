@@ -1,7 +1,7 @@
 """Keo so lieu su dung cua TLA Hop Dong o muc NGAY x NGUOI x MODEL. CHI GET.
 
-    python scripts/pull_hd_usage.py              # keo day du
-    python scripts/pull_hd_usage.py --lat-mong   # 1 thang, de thu nhanh
+    python scripts/pull_tla_contract_usage.py                # keo day du
+    python scripts/pull_tla_contract_usage.py --thin-slice   # 1 thang, de thu nhanh
 
 VI SAO CAN SCRIPT RIENG
 -----------------------
@@ -41,7 +41,8 @@ DAU RA
     data/raw_web/tla-hd/<YYYY-MM-DD>/usage-day-user-model.json
 
 Ghi vao thu muc theo NGAY KEO, giong moi script pull_* khac. File nay doc boi
-db/load_hd.py.
+db/load_tla_contract.py. Key JSON tieng Viet (`keo_luc`, `tu_ngay`, `den_ngay`,
+`tong_luot`) giu nguyen: do la ten du lieu tren dia, file cu dang mang chung.
 """
 
 from __future__ import annotations
@@ -85,8 +86,8 @@ def stats(config: dict, token: str, start: str, end: str, extra: str = "") -> di
     time.sleep(SLEEP_BETWEEN)
     if (payload.get("date_from"), payload.get("date_to")) != (start, end):
         raise Mismatch(
-            f"xin {start}..{end} nhung server tra {payload.get('date_from')}.."
-            f"{payload.get('date_to')} - tham so bi bo qua, KHONG duoc nap so nay")
+            f"asked for {start}..{end} but the server returned {payload.get('date_from')}.."
+            f"{payload.get('date_to')} - the parameters were ignored, do NOT load these numbers")
     return payload
 
 
@@ -96,7 +97,7 @@ def by_model(payload: dict) -> list:
 
 
 def month_spans(start: date, end: date):
-    """Sinh (dau_thang, cuoi_thang) cat theo `den`."""
+    """Sinh (dau_thang, cuoi_thang) cat theo `end`."""
     cursor = start.replace(day=1)
     while cursor <= end:
         next_month = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -116,12 +117,12 @@ def days_with_calls(config: dict, token: str, start: date, end: date) -> list[st
         buc = payload.get("bucket")
         if buc != "day":
             raise SystemExit(
-                f"Thang {marker:%m/%Y} tra bucket={buc!r}, mong doi 'day'."
+                f"Month {marker:%m/%Y} returned bucket={buc!r}, expected 'day'."
                 f" could not derive which days have calls - stopping.")
         days_present = [t["timestamp"][:10] for t in (payload.get("timeline") or []) if t.get("calls")]
         out_path.extend(days_present)
         print(f"  {marker:%m/%Y}  {payload['totals']['call_count']:>6,} calls"
-              f"  {len(days_present):>3} ngay co du lieu")
+              f"  {len(days_present):>3} days with data")
     return sorted(set(out_path))
 
 
@@ -161,7 +162,7 @@ def pull_day(config: dict, token: str, day: str) -> tuple[list[dict], int]:
             uid = u.get("user_id")
             if not uid:
                 # Khong co user_id thi khong loc duoc. Giu nguyen dong nguoi do
-                # voi model rong - load_hd.py se doi no thanh tai khoan
+                # voi model rong - load_tla_contract.py se doi no thanh tai khoan
                 # 'unattributed', chu khong am tham gan bua vao mot model.
                 rows.append(_make_row(day, u, {"model": None, "calls": u["calls"],
                                             "total_tokens": u["total_tokens"],
@@ -191,14 +192,15 @@ def _make_row(day: str, u: dict, m: dict) -> dict:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--lat-mong", dest="thin_slice", action="store_true",
-                   help="Chi keo thang gan nhat. Dung cho vong tu soat.")
-    p.add_argument("--den-ngay", default=date.today().isoformat(),
-                   help="Ngay cuoi, mac dinh hom nay.")
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
+    p.add_argument("--thin-slice", dest="thin_slice", action="store_true",
+                   help="Pull only the latest month. For the self-check loop.")
+    p.add_argument("--until", default=date.today().isoformat(),
+                   help="Last day, default today.")
     args = p.parse_args()
 
-    end = date.fromisoformat(args.den_ngay)
+    end = date.fromisoformat(args.until)
     start = end.replace(day=1) if args.thin_slice else FIRST_DAY
 
     config = P.SOURCES[APP]
@@ -218,7 +220,7 @@ def main() -> None:
         all_rows.extend(rows)
         total_by_day[d] = total
         print(f"  [{i:>3}/{len(day)}] {d}  {total:>5,} calls"
-              f"  {len(rows):>3} dong (nguoi x model)")
+              f"  {len(rows):>3} rows (user x model)")
 
     # ── NGHIEM THU ────────────────────────────────────────────────────
     # Tong cong lai tu cac dong PHAI bang tong server bao cho tung ngay.
@@ -233,7 +235,7 @@ def main() -> None:
     missing_model = [x for x in all_rows if not x["model"]]
     if missing_model:
         print(f"\n  NOTE: {len(missing_model)} rows have no identifiable model"
-              f" ({sum(x['calls'] or 0 for x in missing_model)} luot).")
+              f" ({sum(x['calls'] or 0 for x in missing_model)} calls).")
 
     if errors:
         raise SystemExit("ACCEPTANCE FAILED - no file written:\n  "
@@ -245,13 +247,13 @@ def main() -> None:
     out_path.write_text(json.dumps({
         "keo_luc": datetime.now().isoformat(timespec="seconds"),
         "tu_ngay": start.isoformat(), "den_ngay": end.isoformat(),
-        "tong_luot": sum(total_by_day.values()),
+        "tong_luot": sum(total_by_day.values()),  # vi-ok: on-disk JSON key read by load_tla_contract.py
         "rows": all_rows,
     }, ensure_ascii=False, indent=1), encoding="utf-8")
 
     print(f"\nacceptance passed - {len(all_rows)} rows,"
-          f" {sum(total_by_day.values()):,} luot,"
-          f" {sum(x['total_tokens'] or 0 for x in all_rows):,} token")
+          f" {sum(total_by_day.values()):,} calls,"
+          f" {sum(x['total_tokens'] or 0 for x in all_rows):,} tokens")
     print(f"wrote: {out_path.relative_to(ROOT)}")
 
 

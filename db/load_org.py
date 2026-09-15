@@ -47,7 +47,7 @@ def _latest(parent: Path, *required: str) -> Path:
 
     KHÔNG lấy thẳng thư mục cuối. Nhiều script pull_* cùng ghi vào cây này,
     mỗi cái theo NGÀY KÉO của riêng nó, nên thư mục mới nhất hoàn toàn có thể
-    chỉ chứa đúng một file của một script (pull_hd_usage.py là ví dụ). Lấy bừa
+    chỉ chứa đúng một file của một script (pull_tla_contract_usage.py là ví dụ). Lấy bừa
     thư mục đó thì hỏng giữa khâu nạp bằng FileNotFoundError - đúng chỗ khó
     đoán nhất. Đòi đủ file thì nó lùi về đợt kéo đầy đủ gần nhất, và nếu không
     có đợt nào đủ thì nói thẳng thiếu file gì.
@@ -75,7 +75,7 @@ RALLI_DIR = _latest(ROOT / "data" / "raw_web" / "ralli",
 TLA_DIR = _latest(ROOT / "data" / "raw_web" / "tla-hd",
                   "units-tree.json", "units-members.json",
                   "token-usage-year.json", "token-usage-filter-options.json")
-# Do scripts/pull_hd_usage.py sinh ra. Nó ghi vào thư mục theo NGÀY KÉO của
+# Do scripts/pull_tla_contract_usage.py sinh ra. Nó ghi vào thư mục theo NGÀY KÉO của
 # riêng nó, nên thường KHÁC thư mục đợt kéo đầy đủ ở trên - đó là lý do phải
 # tra bằng tên file chứ không lấy bừa thư mục mới nhất.
 HD_USAGE_DIR = _latest(ROOT / "data" / "raw_web" / "tla-hd",

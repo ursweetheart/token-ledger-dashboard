@@ -360,13 +360,14 @@ def crosscheck_ralli(folder: Path) -> list[str]:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--app", default="ralli,tla-hd", help="ralli | tla-hd | ca hai")
-    p.add_argument("--ra", dest="out_path", default=str(OUT_DIR))
-    p.add_argument("--lat-mong", dest="thin_slice", action="store_true",
-                   help="Bo qua cac endpoint nang, de tu soat quay vong nhanh")
-    p.add_argument("--chi-kiem-token", action="store_true",
-                   help="Chi lay token roi thoat. De goi truoc cac buoc dai.")
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
+    p.add_argument("--app", default="ralli,tla-hd", help="ralli | tla-hd | both")
+    p.add_argument("--out", dest="out_path", default=str(OUT_DIR))
+    p.add_argument("--thin-slice", dest="thin_slice", action="store_true",
+                   help="Skip the heavy endpoints, so the self-check loop turns fast")
+    p.add_argument("--token-only", action="store_true",
+                   help="Only obtain the token, then exit. Call before the long steps.")
     args = p.parse_args()
 
     day = date.today().isoformat()
@@ -386,7 +387,7 @@ def main() -> None:
         tk, source = get_token(app, SOURCES[app], env)
         token_of[app] = tk
         print(f"[{app}] token: {source} | {expires_in(tk)}")
-    if args.chi_kiem_token:
+    if args.token_only:
         print("token check only - stopping here.")
         return
 

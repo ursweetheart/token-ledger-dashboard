@@ -136,9 +136,9 @@ def _chan_sqlite(dsn: str) -> None:
     """
     if dsn.endswith((".sqlite", ".db")):
         raise SystemExit(
-            f"DSN trỏ vào một file SQLite: {dsn}\n"
-            "SQLite đã bị gỡ khỏi dự án ngày 24/08/2026 - xem ghi chú đầu file này.\n"
-            "Dùng một chuỗi kết nối PostgreSQL, ví dụ:\n"
+            f"The DSN points at an SQLite file: {dsn}\n"
+            "SQLite was removed from the project on 24/08/2026 - see the note at the top of this file.\n"
+            "Use a PostgreSQL connection string, for example:\n"
             f"    {mask_dsn(DEFAULT_DSN)}"
         )
 
@@ -201,10 +201,10 @@ def open_db(dsn: str):
             import psycopg as pg  # type: ignore
         except ImportError:
             raise SystemExit(
-                "Cần psycopg2 để nối PostgreSQL:  pip install psycopg2-binary\n"
-                "  hoặc:  pip install -r backend/requirements.txt\n"
-                "PostgreSQL là hệ quản trị DUY NHẤT từ 24/08/2026, nên gói này\n"
-                "bắt buộc - không còn đường quay về SQLite để đỡ."
+                "psycopg2 is needed to reach PostgreSQL:  pip install psycopg2-binary\n"
+                "  or:  pip install -r backend/requirements.txt\n"
+                "PostgreSQL is the ONLY database engine since 24/08/2026, so this\n"
+                "package is required - there is no SQLite fallback any more."
             )
     return pg.connect(dsn), "%s"
 
@@ -280,7 +280,7 @@ def rebuild(dsn: str):
     """
     catalog = DB_DIR / "02_catalog.sql"
     if not catalog.exists():
-        raise SystemExit("Chưa có db/02_catalog.sql. Chạy: python db/gen_catalog.py")
+        raise SystemExit("db/02_catalog.sql does not exist yet. Run: python db/gen_catalog.py")
 
     # Migration CHẠY TRƯỚC khi mở kết nối của hàm này: Alembic mở kết nối riêng,
     # và bảng nó vừa tạo phải nhìn thấy được khi đọc pg_tables ngay dưới đây.
