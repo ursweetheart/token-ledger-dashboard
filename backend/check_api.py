@@ -98,7 +98,6 @@ PATHS = [
     f"/api/usage?start={START}&end={END}",
     f"/api/usage-by-account?start={START}&end={END}",
     f"/api/performance?start={START}&end={END}",
-    f"/api/thinking?start={START}&end={END}",
 ]
 
 
@@ -445,8 +444,10 @@ def con_doc_duoc(c: Check, base: str) -> None:
     c.expect(False, label,
              f"/healthz tra 200 nhung /api/health tra {ma}:"
              f" MAY CHU SONG MA KHONG DOC DUOC DATABASE.\n"
-             f"         Gan nhu chac chan `rebuild_db.py` vua chay - buoc 1 goi"
-             f" DROP SCHEMA, xoa sach GRANT.\n"
+             f"         Vai doc nhieu kha nang da mat quyen. Tu 14/09/2026"
+             f" `rebuild_db.py` chi TRUNCATE, KHONG con xoa GRANT -\n"
+             f"         nen nghi toi: database moi chua chay read-only-api.sql,"
+             f" hoac mot lan DROP bang tay.\n"
              f"         Kiem:  python scripts/check_db_grants.py\n"
              f"         Chua:  docker compose up -d api")
 
@@ -479,7 +480,7 @@ def _ket_noi_cuc_bo_doc_duoc(c: Check) -> None:
             cur = cn.cursor()
             # `ref_source` la bang nho nhat co that trong schema (4 dong). Doc no
             # doi CA `USAGE` tren schema LAN `SELECT` tren bang - dung hai quyen
-            # ma DROP SCHEMA xoa mat.
+            # ma mot lan DROP SCHEMA xoa mat (rebuild truoc 14/09/2026, hay chay tay).
             cur.execute("SELECT COUNT(*) FROM ref_source")
             n = cur.fetchone()[0]
             vai = connect.query_one(cn, "SELECT current_user")[0]
@@ -488,9 +489,10 @@ def _ket_noi_cuc_bo_doc_duoc(c: Check) -> None:
             label = f"{label} (vai `{vai}`, ref_source: {n} rows)"
     except Exception as e:
         detail = (f"CANNOT READ ({type(e).__name__}): {e}\n"
-                  f"         Vai doc da mat quyen. Gan nhu chac chan la"
-                  f" `rebuild_db.py` vua chay: buoc 1 goi DROP SCHEMA, xoa sach"
-                  f" GRANT.\n"
+                  f"         Vai doc da mat quyen. Tu 14/09/2026 `rebuild_db.py`"
+                  f" chi TRUNCATE, KHONG con xoa GRANT - nen nghi toi: database\n"
+                  f"         moi chua chay read-only-api.sql, hoac mot lan DROP"
+                  f" bang tay.\n"
                   f"         Chua: `docker compose up -d api` (keo theo"
                   f" api-db-init, cap lai quyen).")
     c.expect(ok, label, detail)

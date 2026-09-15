@@ -71,27 +71,29 @@ x-sentinel: &sentinel
       condition: service_healthy
 
 x-litellm: &litellm
-  build:
-    # Fork nam NGANG HANG du an, khong long ben trong (repo long repo thi
-    # `git clean -xfd` xoa ca fork). Doi cho fork di la compose bao loi ngay.
-    #
-    # PHAI LA NHANH CO BAN VA SENTINEL. Nen ghi ro vi day la phu thuoc cheo giua
-    # hai repo, va no hong theo kieu kho doan: lay nham nhanh thi LiteLLM CHET
-    # ngay luc khoi dong voi
-    #     TypeError: Redis.__init__() got multiple values for argument 'host'
-    #
-    #     repo   git@github.com:ursweetheart/litellm_rang_dong.git
-    #     nhanh  Tuan-develop        <- CO ban va, dung nhanh nay
-    #     commit e3490555c5          "fix(redis): stop passing the configured
-    #                                 host into Sentinel connections"
-    #
-    #     nhanh  litellm_internal_staging  <- KHONG co ban va (f005afa146).
-    #                                 Dung nhanh nay thi Gateway khong len duoc.
-    #
-    # Kiem nhanh: grep _SENTINEL_IGNORED_CONNECTION_ARGS trong litellm/_redis.py.
-    # Ban goc da do: litellm 1.99.0 tai f005afa146.
-    context: ../litellm_tuan_test
-  image: litellm_tuan_test:gateway
+  # Image do CI dong goi tu nhanh Tuan-develop cua fork roi day len GHCR, nhan =
+  # commit cua fork. Xem job `gateway-image` trong .github/workflows/ci.yml va
+  # openspec/changes/package-the-gateway-image-in-ci/. May nao chi co repo nay,
+  # khong co fork ben canh, van `pull` va `up` duoc.
+  #
+  # PHAI LA COMMIT CO BAN VA SENTINEL. Thieu ban va thi LiteLLM CHET ngay luc
+  # khoi dong voi
+  #     TypeError: Redis.__init__() got multiple values for argument 'host'
+  # CI grep _SENTINEL_IGNORED_CONNECTION_ARGS trong litellm/_redis.py TRUOC khi
+  # build, nen khong nhan nao tren kho thieu ban va.
+  #
+  #     repo   git@github.com:ursweetheart/litellm_rang_dong.git
+  #     nhanh  Tuan-develop               <- CO ban va, CI build tu nhanh nay
+  #     nhanh  litellm_internal_staging   <- KHONG co ban va (f005afa146)
+  #
+  # Doi phien ban: push fork -> CI build nhan moi -> sua nhan o dong `image:`.
+  # CI do neu dong nay ghim mot nhan chua co tren kho, hoac neu
+  # docker-compose.bench.yml ghim khac dong nay.
+  #
+  # Thu mot ban fork dang sua tren may, KHONG sua tep nay:
+  #     docker build -t litellm-local ../litellm_tuan_test
+  #     roi dat LITELLM_IMAGE=litellm-local trong .env
+  image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:4373a32c2a2608cdbd732ba47ba057615e5e2846}
   profiles: ["gateway"]
   restart: unless-stopped
   # entrypoint rieng: chan khoi dong khi thieu khoa, roi moi giao lai cho
@@ -112,10 +114,22 @@ x-litellm: &litellm
     LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
     LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-}
     KEY_GOOGLE_AI_STU: ${KEY_GOOGLE_AI_STU:-}
-    # Khoa cua project CRM rieng, dung o che do Vertex express. Khong co gia tri
-    # mac dinh: thieu thi entrypoint dung han, giong ba khoa tren. Tuyen dung no la
+    # Khoa cua project CRM rieng, dung o che do Vertex express. Tuyen dung no la
     # `gemini-2.5-flash` trong docker/gateway/config.gateway.yaml.
-    KEY_BENCH_CRM_TEST: ${KEY_BENCH_CRM_TEST:-}
+    #
+    # TEN BIEN DOI 10/09/2026: `KEY_BENCH_CRM_TEST` -> `KEY_BENCH_CRM_TEST_GG_AIA_STU`,
+    # theo dung ten dang co trong .env. Truoc do ba cho dung ten cu trong khi .env
+    # da doi, nen `:-` bien khoa thieu thanh chuoi rong va tuyen CRM CHET IM LANG:
+    # container len binh thuong, /health/liveliness tra 200, chi hong khi co nguoi
+    # goi that (HTTP 500 "Missing Gemini API key").
+    #
+    # Hau to `_GG_AIA_STU` GAY HIEU NHAM: day KHONG phai khoa AI Studio. Do bang
+    # tien to thi no la `AQ.`, tuc Vertex express -- dung loai tuyen nay can.
+    #
+    # Chu thich cu o day ghi "thieu thi entrypoint dung han". Cau do SAI luc viet:
+    # vong kiem trong docker/gateway/entrypoint.sh khong he co bien nay. Nay da
+    # them vao that, nen cau tren moi dung.
+    KEY_BENCH_CRM_TEST_GG_AIA_STU: ${KEY_BENCH_CRM_TEST_GG_AIA_STU:-}
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
@@ -287,18 +301,24 @@ services:
     container_name: token-ledger-web
     restart: unless-stopped
     ports:
-      # Switch to 0.0.0.0 for a real deployment -- but answer this first:
-      # who can reach this machine.
+      # Dia chi bind doc tu bien WEB_BIND. Khong dat thi la 127.0.0.1 -- may dev
+      # chi mo cho chinh no. May chu dat WEB_BIND=192.168.20.111 trong .env.
       #
-      # BAY khi chay tren may KHONG PHAI server: may do khong co IP nay nen `web`
-      # khong bind duoc, va `docker compose up` THOAT GIUA CHUNG -- keo theo
+      # TRUOC 13/09/2026 dia chi nay GHI CUNG, nen doi moi truong la phai sua tay
+      # roi nho tra lai truoc khi push. Da quen it nhat mot lan, va chu thich in
+      # hoa nhac viec do KHONG chan duoc. Bien nay bo han loai loi do: hai may
+      # dung CHUNG mot file compose, khac nhau o .env -- ma .env thi khong theo
+      # git. Xem openspec/changes/run-every-check-on-every-push/design.md.
+      #
+      # BAY VAN CON, chi doi cho: dat WEB_BIND thanh mot IP ma may KHONG CO thi
+      # `web` khong bind duoc va `docker compose up` THOAT GIUA CHUNG -- keo theo
       # `gateway-lb` khong bao gio duoc dung, trong khi `docker ps` van cho thay
       # hai instance LiteLLM `healthy`. Rat de tuong la da dung xong.
       # Xem docs/reference/dua-dms-qua-gateway-31-08.md muc 4.6.
       #
-      # Chay tren may dev thi doi tam sang dong duoi, va TRA LAI TRUOC KHI PUSH:
-      #     - "127.0.0.1:${WEB_PORT:-8080}:80"
-      - "192.168.20.111:${WEB_PORT:-8080}:80"
+      # Muon mo cho ca mang thi dat WEB_BIND=0.0.0.0 -- nhung tra loi cau nay
+      # truoc: ai cham toi duoc may nay.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
     depends_on:
       - api
 
@@ -357,7 +377,7 @@ services:
     restart: unless-stopped
     # `sys.executable` duoc dung ben trong script de goi bon buoc, nen chi can
     # dung trinh thong dich cua image -- khong phu thuoc `python` co ton tai.
-    command: ["python3", "scripts/refresh_gateway.py", "--every", "${REFRESH_EVERY_SECONDS:-120}"]
+    command: ["python3", "scripts/refresh_gateway.py", "--every", "${REFRESH_EVERY_SECONDS:-300}"]
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # PHAI khai CA HAI chuoi ket noi TUONG MINH. db/connect.py dung `PG_HOST`
@@ -396,9 +416,9 @@ services:
       PGHOST: postgres
       # `postgres` la database quan tri, LUON ton tai. KHONG dung ${PGDATABASE}
       # o day: docker-compose va db/connect.py deu mac dinh `token_ledger_v2`.
-      # `token_ledger` legacy van nam ben canh tren volume da migrate; quyet dinh
-      # 27/08 khong DROP/rename no. Script tu di tim moi database khop
-      # '^token_ledger' de do ranh gioi tren ca legacy lan runtime ledger.
+      # `token_ledger` legacy da bi XOA ngay 14/09/2026. Script van tu di tim MOI
+      # database khop '^token_ledger' de do ranh gioi, nen them database so moi thi
+      # khong phai sua o day.
       ADMIN_DB: postgres
       ADMIN_USER: ${PGUSER:-token}
       ADMIN_PASSWORD: ${PGPASSWORD:-token_local}

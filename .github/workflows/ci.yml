@@ -1,0 +1,286 @@
+# Chạy mọi phép kiểm của repo trên mỗi lần đẩy code.
+#
+# Ba nhóm kiểm chạy SONG SONG vì chúng độc lập: hỏng nhóm nào biết ngay nhóm đó,
+# không phải đợi nhau. Xem openspec/changes/run-every-check-on-every-push/.
+# Nhóm thứ tư, `gateway-image`, đóng gói image Gateway. Nó không chạy ở pull
+# request. Xem openspec/changes/package-the-gateway-image-in-ci/.
+#
+# KHÔNG có bước cài gói ở bất kỳ nhóm nào, và đó là CÓ Ý:
+#   - repo không có package.json, pytest.ini, pyproject.toml, setup.cfg
+#   - phần JavaScript dùng bộ chạy kiểm có sẵn của Node
+#   - psycopg2 được nạp bên trong hàm (db/connect.py:196), không ở đầu tệp
+# Đã đo 13/09/2026 trong container trắng: python:3.12-slim đạt 11/11 và
+# node:24-alpine đạt 51/51, không cài gói nào. Máy ảo ở đây dựng lại đúng
+# môi trường đó, nên nếu có ai làm mất tính chất này thì nó đỏ ngay.
+
+name: CI
+
+on:
+  push:
+    branches: [main, Tuan-develop]
+  pull_request:
+    branches: [main]
+  # Bấm tay trên tab Actions: dùng khi fork vừa có commit mới mà repo này không đổi.
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Canh cấu hình. Nhóm rẻ nhất, và là nhóm bắt đúng lỗi đã thật sự xảy ra:
+  # ngày 12/09 địa chỉ bind của `web` bị để ở chế độ máy phát triển.
+  # ---------------------------------------------------------------------------
+  guards:
+    name: Canh cấu hình
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Nguyên tắc, không phải một địa chỉ cụ thể: 127.0.0.1 an toàn ở mọi máy
+      # vì nó luôn tồn tại và luôn nghĩa là "chỉ máy này". Mọi IP khác đều là
+      # địa chỉ của MỘT môi trường, nên nó thuộc về .env chứ không thuộc về git.
+      - name: Không IP nào của một môi trường được ghi cứng ở phần khai cổng
+        run: |
+          BAD=$(grep -nE '^[[:space:]]*-[[:space:]]*"([0-9]{1,3}\.){3}[0-9]{1,3}:' \
+                  docker-compose.yml docker-compose.bench.yml \
+                | grep -v '"127\.0\.0\.1:' || true)
+          if [ -n "$BAD" ]; then
+            echo "$BAD"
+            echo "::error::Có địa chỉ IP của một môi trường cụ thể nằm trong tệp theo git (xem dòng ở trên)."
+            echo "::error::Đưa nó ra biến môi trường và khai trong .env, ví dụ WEB_BIND. Xem .env.example."
+            exit 1
+          fi
+          echo "Không có IP ghi cứng nào ngoài 127.0.0.1."
+
+      # Chiều ngược lại của cùng một lỗi: quay về ghi cứng 127.0.0.1 thì máy chủ
+      # mất đường vào, và lần đó CI sẽ im nếu chỉ có phép kiểm ở trên.
+      - name: Địa chỉ bind của `web` phải đọc từ biến
+        run: |
+          if ! grep -qE '^[[:space:]]*-[[:space:]]*"\$\{WEB_BIND' docker-compose.yml; then
+            grep -nE '^[[:space:]]*-[[:space:]]*".*:80"$' docker-compose.yml || true
+            echo '::error::docker-compose.yml: cổng của dịch vụ web không còn đọc địa chỉ từ biến WEB_BIND.'
+            # Nháy đơn là CÓ Ý: thông điệp phải in ra chữ ${WEB_BIND} nguyên văn
+            # để người đọc chép được, chứ không phải giá trị của nó.
+            # shellcheck disable=SC2016
+            echo '::error::Phải là:  - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"  — máy chủ đặt WEB_BIND trong .env.'
+            exit 1
+          fi
+          echo "Dịch vụ web bind qua biến WEB_BIND."
+
+      # Gateway chạy image lấy từ kho (package-the-gateway-image-in-ci). Quay lại
+      # build từ thư mục ngang hàng thì máy nào thiếu thư mục đó, compose thoát
+      # ngay và kéo theo cả postgres, api, web. Bench phải ghim đúng cùng image:
+      # đo tải trên một image khác image đang chạy thì số đo vô nghĩa.
+      - name: Gateway image must come from the registry, not a sibling folder
+        run: |
+          BLOCK=$(awk '/^x-litellm:/{f=1; next} f && /^[^[:space:]#]/{exit} f' docker-compose.yml)
+          if printf '%s\n' "$BLOCK" | grep -nE '^[[:space:]]+(build|context):'; then
+            echo "::error::docker-compose.yml: x-litellm must not build (build:/context:). Use  image: \${LITELLM_IMAGE:-<registry tag>}"
+            exit 1
+          fi
+          MAIN=$(printf '%s\n' "$BLOCK" | sed -nE 's/^[[:space:]]+image:[[:space:]]*(.*[^[:space:]])[[:space:]]*$/\1/p')
+          BENCH=$(awk '/^  litellm-bench:/{f=1; next} f && /^(  )?[^[:space:]#]/{exit} f' docker-compose.bench.yml \
+                  | sed -nE 's/^[[:space:]]+image:[[:space:]]*(.*[^[:space:]])[[:space:]]*$/\1/p')
+          if [ -z "$MAIN" ] || [ "$MAIN" != "$BENCH" ]; then
+            echo "::error::Gateway image mismatch: docker-compose.yml x-litellm has '$MAIN', docker-compose.bench.yml litellm-bench has '$BENCH'."
+            exit 1
+          fi
+          echo "Gateway image comes from the registry: $MAIN"
+
+  # ---------------------------------------------------------------------------
+  # 51 phép kiểm JavaScript. Node có sẵn trên máy ảo, không cài gì thêm.
+  # ---------------------------------------------------------------------------
+  test-js:
+    name: Phép kiểm JavaScript
+    runs-on: ubuntu-latest
+    env:
+      # Mốc đo 13/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
+      # con số đổi trong lịch sử git chính là chỗ nhìn thấy việc đó.
+      EXPECTED_JS: "51"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Phiên bản Node đang dùng
+        run: node --version
+
+      # Mã thoát bằng 0 KHÔNG đủ làm bằng chứng: nếu mẫu tên tệp nở hụt thì lệnh
+      # vẫn có thể thoát sạch mà không kiểm gì. Nên phải đọc số phép đã chạy.
+      # Cùng nguyên tắc mà automated-check-coverage đã chốt cho bộ kiểm dữ liệu.
+      - name: Chạy và đếm số phép kiểm
+        run: |
+          # GHI RA TỆP RỒI `cat`, KHÔNG dùng `| tee`. GitHub chạy khối run bằng
+          # `bash -e`, KHÔNG có `pipefail` — nên mã thoát của một đường ống là mã
+          # thoát của lệnh CUỐI, tức của `tee`, mà `tee` thì luôn thành công.
+          # Hậu quả đã đo 13/09/2026: phép kiểm TRƯỢT mà nhóm này vẫn XANH.
+          # Bỏ đường ống đi thì cả loại lỗi đó biến mất, không cần nhớ cờ nào.
+          node --test tests/*.test.js > js.log 2>&1 || RC=$?
+          cat js.log
+          # NF>=2 BẮT BUỘC phải có: gặp dòng trống thì NF=0 và $(NF-1) thành
+          # $(-1), gawk chết ngay với "attempt to access field -1". Báo cáo của
+          # một phép kiểm TRƯỢT có dòng trống, nên thiếu điều kiện này thì bộ đếm
+          # sập đúng lúc cần nó nhất, và nhóm đỏ vì awk chứ không vì thông điệp.
+          # Đo 13/09/2026, lộ ra khi chạy thử chiều đỏ chứ không phải chiều xanh.
+          COUNT=$(awk 'NF>=2 && $(NF-1)=="tests"{n=$NF} END{print n+0}' js.log)
+          echo "Đã chạy $COUNT phép kiểm, mốc chốt là $EXPECTED_JS."
+          if [ "$COUNT" -ne "$EXPECTED_JS" ]; then
+            echo "::error::Số phép kiểm JavaScript là $COUNT, mốc chốt là $EXPECTED_JS."
+            echo "::error::Nếu việc đổi là có chủ ý, sửa EXPECTED_JS trong .github/workflows/ci.yml."
+            echo "::error::Nếu không, mẫu tên tệp có thể đã nở hụt và không phép nào được chạy."
+            exit 1
+          fi
+          exit "${RC:-0}"
+
+  # ---------------------------------------------------------------------------
+  # 11 phép kiểm Python. Không pip install — xem ghi chú đầu tệp.
+  # ---------------------------------------------------------------------------
+  test-py:
+    name: Phép kiểm Python
+    runs-on: ubuntu-latest
+    env:
+      # Mốc đo 14/09/2026: 11 → 37 sau change stop-a-later-pull-from-shrinking-an-earlier-one
+      # (bỏ 2 phép kiểm rebuild cũ, thêm 6 phép kiểm rebuild, 9 gộp Monitoring,
+      # 9 gộp độ trễ, 4 nạp nhà cung cấp).
+      EXPECTED_PY: "37"
+      # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
+      # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Phiên bản Python đang dùng
+        run: python3 --version
+
+      # Nếu bước này đỏ vì THIẾU GÓI thì đừng thêm pip install để vá. Nó có
+      # nghĩa là tính chất "chạy được mà không cài gì" đã mất, và điều cần biết
+      # là tệp nào làm mất. Xem Requirement "Bộ kiểm phải chạy được trên một
+      # máy sạch, không cài thêm gói".
+      - name: Chạy và đếm số phép kiểm
+        run: |
+          # Cùng lý do với nhóm JavaScript: không dùng `| tee`, vì `bash -e` của
+          # GitHub không bật `pipefail` và mã thoát sẽ là của `tee`, luôn bằng 0.
+          python3 -m unittest discover -s tests -p "test_*.py" > py.log 2>&1 || RC=$?
+          cat py.log
+          COUNT=$(awk '$1=="Ran"{n=$2} END{print n+0}' py.log)
+          echo "Đã chạy $COUNT phép kiểm, mốc chốt là $EXPECTED_PY."
+          if [ "$COUNT" -ne "$EXPECTED_PY" ]; then
+            echo "::error::Số phép kiểm Python là $COUNT, mốc chốt là $EXPECTED_PY."
+            echo "::error::Nếu việc đổi là có chủ ý, sửa EXPECTED_PY trong .github/workflows/ci.yml."
+            exit 1
+          fi
+          exit "${RC:-0}"
+
+  # ---------------------------------------------------------------------------
+  # Đóng gói image LiteLLM từ fork và đẩy lên GHCR, nhãn = commit của fork.
+  # Chỉ job này có quyền ghi gói. Không chạy ở pull request, vì code chưa được
+  # duyệt thì không được cầm quyền đó.
+  # ---------------------------------------------------------------------------
+  gateway-image:
+    name: Gateway image
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    # Hai lần đẩy sát nhau cùng thấy nhãn chưa có thì cùng build, và lần sau ghi
+    # đè lần trước bằng một bản build khác. Xếp hàng thì lần sau thấy nhãn đã có.
+    concurrency:
+      group: gateway-image
+      cancel-in-progress: false
+    env:
+      FORK_URL: https://github.com/ursweetheart/litellm_rang_dong
+      FORK_BRANCH: Tuan-develop
+      IMAGE_REPO: ghcr.io/ursweetheart/litellm_rang_dong
+      PATCH_FILE: litellm/_redis.py
+      PATCH_SYMBOL: _SENTINEL_IGNORED_CONNECTION_ARGS
+    steps:
+      - uses: actions/checkout@v4
+
+      # D2: không ghim commit ở đây. Commit được đọc SAU khi clone; chỗ quyết định
+      # image nào chạy là nhãn ghim trong docker-compose.yml.
+      - name: Clone the fork
+        run: |
+          git clone --quiet --depth 1 --branch "$FORK_BRANCH" "$FORK_URL.git" fork
+          FORK_COMMIT=$(git -C fork rev-parse HEAD)
+          echo "FORK_COMMIT=$FORK_COMMIT" >> "$GITHUB_ENV"
+          echo "Fork $FORK_BRANCH is at $FORK_COMMIT."
+
+      # D3: thiếu bản vá thì LiteLLM chết lúc khởi động. Canh TRƯỚC khi build, để
+      # không có image hỏng nào lên kho. Đo 14/09/2026: nhánh
+      # litellm_internal_staging của fork không có bản vá.
+      - name: Require the Sentinel patch
+        run: |
+          if ! grep -q "$PATCH_SYMBOL" "fork/$PATCH_FILE" 2>/dev/null; then
+            echo "::error::Sentinel patch missing: $PATCH_SYMBOL not found in $PATCH_FILE."
+            echo "::error::Fork $FORK_URL, branch $FORK_BRANCH, commit $FORK_COMMIT."
+            echo "::error::Without it LiteLLM exits at startup with: Redis.__init__() got multiple values for argument 'host'."
+            exit 1
+          fi
+          echo "Sentinel patch present in $PATCH_FILE."
+
+      - name: Log in to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+
+      # D4: GHCR không tự cấm ghi đè nhãn; bước này là thứ giữ nhãn bất biến.
+      # "Chưa có" là một trong các câu trả lời sau. Đo trên GHCR thật 15/09/2026:
+      #   manifest unknown  gói có, nhãn không có
+      #   denied            gói chưa từng tồn tại, tức là lần build ĐẦU TIÊN
+      # Coi denied/unauthorized là "chưa có" vẫn không ghi đè được nhãn nào:
+      # không đọc được gói thì cũng không đẩy được vào gói, `docker push` sẽ hỏng.
+      # Lỗi khác (mạng, kho quá tải) thì dừng, không đoán.
+      - name: Skip if this commit is already packaged
+        run: |
+          IMAGE="$IMAGE_REPO:$FORK_COMMIT"
+          if OUT=$(docker manifest inspect "$IMAGE" 2>&1); then
+            echo "IMAGE_EXISTS=true" >> "$GITHUB_ENV"
+            echo "::notice::Skipping build: $IMAGE is already in the registry."
+          elif printf '%s' "$OUT" | grep -qiE 'no such manifest|manifest unknown|denied|unauthorized'; then
+            echo "IMAGE_EXISTS=false" >> "$GITHUB_ENV"
+            echo "$IMAGE is not in the registry yet (registry said: $(printf '%s' "$OUT" | head -1)), building it."
+          else
+            echo "$OUT"
+            echo "::error::Could not tell whether $IMAGE exists. Refusing to build, so an existing tag is never overwritten."
+            exit 1
+          fi
+
+      # D4: nhãn OCI trả lời "build từ đâu" bằng `docker inspect` ngay trên máy chủ.
+      # `source` trỏ về REPO NÀY chứ không về fork: GHCR dùng nhãn đó để gắn gói
+      # vào repo, mà GITHUB_TOKEN chỉ đẩy được vào gói gắn với repo chạy workflow.
+      # Địa chỉ fork nằm ở `url`, commit fork ở `revision`.
+      # Dung lượng đĩa và thời gian được in ra để đo lần build đầu (task 2.7).
+      - name: Build and push
+        if: env.IMAGE_EXISTS == 'false'
+        run: |
+          IMAGE="$IMAGE_REPO:$FORK_COMMIT"
+          echo "Disk free before build: $(df -h / | awk 'NR==2{print $4}')"
+          START=$(date +%s)
+          docker build \
+            --label "org.opencontainers.image.revision=$FORK_COMMIT" \
+            --label "org.opencontainers.image.url=$FORK_URL" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --tag "$IMAGE" fork
+          echo "Build took $(( $(date +%s) - START ))s."
+          echo "Disk free after build: $(df -h / | awk 'NR==2{print $4}')"
+          docker image ls "$IMAGE" --format 'Image size: {{.Size}}'
+          docker push "$IMAGE"
+
+      # D7: compose phải ghim một nhãn có thật trên kho. Đổi phiên bản vì thế luôn
+      # theo thứ tự: commit fork -> CI build nhãn -> commit sửa nhãn trong compose.
+      # Khi x-litellm còn `build:` (trước nhóm 5) thì chưa có gì để kiểm.
+      - name: Compose must pin a tag that exists
+        run: |
+          BLOCK=$(awk '/^x-litellm:/{f=1; next} f && /^[^[:space:]#]/{exit} f' docker-compose.yml)
+          if printf '%s\n' "$BLOCK" | grep -qE '^[[:space:]]+build:'; then
+            echo "::notice::x-litellm still builds from a sibling folder; no registry tag to check yet."
+            exit 0
+          fi
+          PINNED=$(printf '%s\n' "$BLOCK" | sed -nE 's/^[[:space:]]+image:[[:space:]]*"?\$\{LITELLM_IMAGE:-([^}]+)\}"?[[:space:]]*$/\1/p')
+          if [ -z "$PINNED" ]; then
+            echo "::error::docker-compose.yml: x-litellm must read  image: \${LITELLM_IMAGE:-<registry tag>}"
+            exit 1
+          fi
+          if ! docker manifest inspect "$PINNED" > /dev/null; then
+            echo "::error::docker-compose.yml pins $PINNED, which is not in the registry."
+            exit 1
+          fi
+          echo "docker-compose.yml pins $PINNED, which is in the registry."

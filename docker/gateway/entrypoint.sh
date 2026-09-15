@@ -13,7 +13,7 @@ set -eu
 
 fail() { echo "STOP: $1" >&2; exit 1; }
 
-for v in LITELLM_MASTER_KEY LITELLM_SALT_KEY KEY_GOOGLE_AI_STU DATABASE_URL REDIS_PASSWORD; do
+for v in LITELLM_MASTER_KEY LITELLM_SALT_KEY KEY_GOOGLE_AI_STU KEY_BENCH_CRM_TEST_GG_AIA_STU DATABASE_URL REDIS_PASSWORD; do
   eval "val=\${$v:-}"
   [ -n "$val" ] || fail "$v is missing. Fill it in .env and run again. See .env.example."
 done

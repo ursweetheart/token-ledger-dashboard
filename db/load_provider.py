@@ -37,6 +37,18 @@ VI SAO KHONG DUNG api/request_count CHO SO LUOT
 `generate_content_free_tier_requests` CO nhan model va do duoc la khop chinh
 xac: ngay 31/08 ca hai deu ra 41. Nen lay tu metric quota, va DOI CHIEU voi
 api_request_count nhu mot phep kiem cheo.
+
+DOC MOI LAN KEO, GIU SO LON HON (doi 14/09/2026)
+------------------------------------------------
+Truoc 14/09 bo nap chi doc lan keo MOI NHAT. Buoc dung lai xoa sach bang nay, nen
+lan keo thu hai se lam mat moi ngay chi lan keo dau con giu - dung loai mat phan
+dau ma viec giu lan keo cu tren dia sinh ra de chan.
+
+Nay doc MOI thu muc khop `KHUON_LAN_KEO`. `chon_nhanh` chay TRONG tung lan keo, de
+nhanh PerDay cua lan keo nay khong bi so voi nhanh PerMinute cua lan keo khac. Giua
+cac lan keo, cung (ngay, project, model, dai luong) thi giu SO LON HON va log ca
+lech: mot ngay bi cat o mep cua lan keo nay van co the day du o lan keo khac. Xem
+change `stop-a-later-pull-from-shrinking-an-earlier-one`.
 """
 
 from __future__ import annotations
@@ -166,12 +178,66 @@ def chon_nhanh(tong: dict) -> tuple[dict, list[str]]:
     return ket, loi
 
 
+# `<ngay>-<do min>-<tai khoan>`. Hau to tai khoan la thu phan biet lan keo cua nha
+# cung cap voi lan keo san xuat; KHONG dua vao do min, vi do min doi duoc bang --align.
+KHUON_LAN_KEO = re.compile(r"^\d{4}-\d{2}-\d{2}-\d+[mh]-.+$")
+
+
+def chon_lan_keo(goc: Path) -> list[Path]:
+    """Moi thu muc keo mang ten tai khoan, CU TRUOC MOI SAU (ten bat dau bang ngay)."""
+    return sorted(d for d in goc.glob("*") if d.is_dir() and KHUON_LAN_KEO.match(d.name))
+
+
+def gop_cac_lan_keo(lan_keo: list[Path]) -> tuple[dict, dict, list[str], list[str]]:
+    """-> (ket, luot_api, canh_bao, loi). Doc tung lan keo, giu so lon hon giua cac lan."""
+    ket: dict[tuple, float] = {}
+    nguon: dict[tuple, str] = {}
+    luot_api: dict[tuple, float] = {}
+    canh_bao: list[str] = []
+    loi: list[str] = []
+    so_lech = 0
+    for thu_muc in lan_keo:
+        tong: dict[tuple, float] = collections.defaultdict(float)
+        api: dict[tuple, float] = collections.defaultdict(float)
+        for f in sorted(thu_muc.glob("*.csv")):
+            t, la, c = doc_mot_file(f)
+            for k, v in t.items():
+                tong[k] += v
+            for k, v in la.items():
+                api[k] += v
+            canh_bao += [f"{thu_muc.name}: {x}" for x in c]
+
+        ket_lan, loi_lan = chon_nhanh(tong)
+        loi += [f"{thu_muc.name}: {e}" for e in loi_lan]
+        for k, v in ket_lan.items():
+            cu = ket.get(k)
+            if cu is None:
+                ket[k], nguon[k] = v, thu_muc.name
+                continue
+            if cu == v:
+                continue
+            so_lech += 1
+            log.warning("  LECH %s %s %s %s: lan keo %s = %s, lan keo %s = %s -> giu %s",
+                        k[0], k[1][:28], k[2], k[3], nguon[k], f"{cu:,.0f}",
+                        thu_muc.name, f"{v:,.0f}", f"{max(cu, v):,.0f}")
+            if v > cu:
+                ket[k], nguon[k] = v, thu_muc.name
+        for k, v in api.items():
+            luot_api[k] = max(luot_api.get(k, 0.0), v)
+
+    if so_lech:
+        log.warning("  ca lech: %d (giu so lon hon o moi ca)", so_lech)
+    else:
+        log.info("  ca lech: 0")
+    return ket, luot_api, canh_bao, loi
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     p.add_argument("--dir", default="", help="Thu muc mot lan keo Monitoring. "
-                                            "De rong = lan keo MOI NHAT co ten mang tai khoan.")
+                                            "De rong = MOI lan keo co ten mang tai khoan.")
     p.add_argument("--account", default="", help="Tai khoan da dung de keo, chi de ghi lai")
     p.add_argument("--kho", action="store_true", help="Chi in, khong ghi database")
     p.add_argument("--tuy-chon", action="store_true",
@@ -183,44 +249,22 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    if args.dir:
-        thu_muc = Path(args.dir)
-    else:
-        # Lan keo cua nha cung cap mang ten tai khoan o duoi ten thu muc, nen
-        # phan biet duoc voi lan keo san xuat. Lay lan MOI NHAT theo ten (ten
-        # bat dau bang ngay nen sap xep chu = sap xep thoi gian).
-        goc = Path(__file__).resolve().parents[1] / "data" / "raw_google_console" / "du_lieu_giam_sat"
-        # `<ngay>-<do min>-<tai khoan>`. Hau to tai khoan la thu phan biet lan keo
-        # cua nha cung cap voi lan keo san xuat; KHONG dua vao do min, vi do min
-        # doi duoc bang --align. Ten bat dau bang ngay nen sap chu = sap thoi gian.
-        khuon = re.compile(r"^\d{4}-\d{2}-\d{2}-\d+[mh]-.+$")
-        ung_vien = sorted(d for d in goc.glob("*") if d.is_dir() and khuon.match(d.name))
-        thu_muc = ung_vien[-1] if ung_vien else goc / "(khong co lan keo nao mang ten tai khoan)"
-
-    files = sorted(f for f in thu_muc.glob("*.csv")) if thu_muc.is_dir() else []
-    if not files:
+    goc = Path(__file__).resolve().parents[1] / "data" / "raw_google_console" / "du_lieu_giam_sat"
+    lan_keo = [Path(args.dir)] if args.dir else chon_lan_keo(goc)
+    lan_keo = [d for d in lan_keo if d.is_dir() and any(d.glob("*.csv"))]
+    if not lan_keo:
+        noi = args.dir or goc
         if args.tuy_chon:
             # KHONG im lang. Thieu du lieu nha cung cap khong phai loi, nhung
             # no co hau qua doc duoc: phep doi chieu se bao 'chua kiem duoc'.
-            log.warning("khong co lan keo nha cung cap nao (%s)", thu_muc)
+            log.warning("khong co lan keo nha cung cap nao (%s)", noi)
             log.warning("  -> fact_provider_daily giu nguyen, phep doi chieu se bao CHUA KIEM DUOC")
             log.warning("  -> muon co: scripts/pull_monitoring.py --account <tai khoan> --projects <project>")
             return
-        raise SystemExit("khong co file .csv nao trong %s" % thu_muc)
-    log.info("doc %s", thu_muc.name)
+        raise SystemExit("khong co lan keo nao co file .csv (%s)" % noi)
+    log.info("doc %d lan keo: %s", len(lan_keo), ", ".join(d.name for d in lan_keo))
 
-    tong: dict[tuple, float] = collections.defaultdict(float)
-    luot_api: dict[tuple, float] = collections.defaultdict(float)
-    canh_bao: list[str] = []
-    for f in files:
-        t, la, c = doc_mot_file(f)
-        for k, v in t.items():
-            tong[k] += v
-        for k, v in la.items():
-            luot_api[k] += v
-        canh_bao += c
-
-    ket, loi = chon_nhanh(tong)
+    ket, luot_api, canh_bao, loi = gop_cac_lan_keo(lan_keo)
     for c in canh_bao:
         log.warning("  CANH BAO: %s", c)
     if loi:

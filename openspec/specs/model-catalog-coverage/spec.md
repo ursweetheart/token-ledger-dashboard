@@ -4,11 +4,11 @@
 TBD - created by archiving change close-the-known-gateway-loose-ends. Update Purpose after archive.
 ## Requirements
 ### Requirement: Danh mục model phải nhận diện mọi model đang được phục vụ thật
-Cơ chế phân loại model từ tên SKU hoá đơn (`guess_model()` trong `db/rules.py`, dựa trên
-`MODELS`/`MODEL_PATTERNS`, và catalog `dim_model` sinh ra từ đó) PHẢI ánh xạ được mọi tên
-model mà Google đang thực sự định tuyến lưu lượng sản xuất tới, về một dòng `dim_model`
-khác NULL. Hệ thống KHÔNG được để một dòng hoá đơn của model đang phục vụ thật rơi vào
-`model_id = NULL` một cách im lặng.
+Cơ chế phân loại model từ tên SKU hoá đơn SHALL (PHẢI) ánh xạ được mọi tên model mà Google
+đang thực sự định tuyến lưu lượng sản xuất tới, về một dòng `dim_model` khác NULL. Cơ chế đó gồm
+`guess_model()` trong `db/rules.py`, dựa trên `MODELS`/`MODEL_PATTERNS`, và catalog `dim_model`
+sinh ra từ đó. Hệ thống MUST NOT (KHÔNG được) để một dòng hoá đơn của model đang phục vụ thật
+rơi vào `model_id = NULL` một cách im lặng.
 
 #### Scenario: Google ép chuyển sang một model đã đổi tên
 

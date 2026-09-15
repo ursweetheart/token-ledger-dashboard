@@ -1,0 +1,82 @@
+2026-09-02 16:05:31  INFO   loading from postgresql://gateway_readonly:***@127.0.0.1:5432/litellm
+2026-09-02 16:05:31  INFO     watermark: ALL (rewound by 1:00:00)
+2026-09-02 16:05:31  INFO     read 47 rows | usable 41 | inserted 0 | overwritten 41
+2026-09-02 16:05:31  INFO     dropped: no tag 6 | several tags 0
+2026-09-02 16:05:31  INFO     failed calls loaded 3 | model not declared 0 | failed before routing 2
+2026-09-02 16:05:31  INFO     end_user empty 9 | identity unresolvable 13
+2026-09-02 16:05:31  INFO     cached_tokens NULL 41 | cost_usd NULL 3 | duration_ms NULL 3
+2026-09-02 16:05:31  INFO     via MASTER KEY 7/41 | cache hits 0 | alias model names 2
+2026-09-02 16:05:31  INFO     error codes of failed calls in the ledger: (no code)=3, 401=1, 403=1
+2026-09-02 16:05:31  INFO     whole-ledger check: source 47 rows/45,961 tokens | target 41 rows/45,201 tokens
+2026-09-02 16:05:31  INFO     skipped across the ledger: 6 rows, 760 tokens
+2026-09-02 16:05:31  INFO     billing 1012 | monitoring 606 | app 371 | gateway 1
+2026-09-02 16:05:31  INFO     by source: {'gateway': 1, 'monitoring': 606, 'app': 371, 'billing': 1012}
+2026-09-02 16:05:31  INFO     billing cost $307.360850 | app tokens 112,775,370
+2026-09-02 16:05:31  INFO     agents with an 'app' source: Trợ Lý Ảo Hợp Đồng, Trợ lý ảo Ralli
+2026-09-02 16:05:31  WARNING    app: 2,385 token gap between total and prompt+completion - the app records it that way, checked against the source table
+2026-09-02 16:05:31  INFO     acceptance passed
+
+A. Structure
+────────────────────────────────────────────────────────────────────────
+[  ok  ] Foreign keys (23 relations)
+[  ok  ] Unit tree has no cycle
+[  ok  ] Column `level` matches the real depth
+[  ok  ] Account unit comes from the source
+
+B. Totals
+────────────────────────────────────────────────────────────────────────
+[  ok  ] Cost: invoice + gateway == usage_resolved
+[  ok  ] App tokens: fact_call + fact_app_daily == fact_usage_daily
+[  ok  ] Invoice tokens: source == fact_usage_daily
+[  ok  ] usage_resolved: one row per key
+[  ok  ] usage_resolved keeps the chosen source's figure verbatim
+
+C. Classification
+────────────────────────────────────────────────────────────────────────
+[  ok  ] Every metric_type is in dim_metric_alias
+[  ok  ] Every sku_id is in dim_metric_alias
+[  ok  ] Every sku_id is in dim_model_alias
+[  ok  ] is_quota_limit matches dim_metric_alias
+
+D. Silent gaps
+────────────────────────────────────────────────────────────────────────
+[ note ] Every usage_resolved row carries tokens
+           11/1276 rows have calls but NO tokens - SUM(total_tokens) drops them without warning. Models: ['gemini-embedding-1.0', 'gemini-embedding-2'] (Monitoring has no token metric for embeddings)
+[  ok  ] Table fact_perf_daily has data
+[  ok  ] Table fact_latency_daily has data
+[  ok  ] Table ref_budget has data
+[  ok  ] Table ref_fx has data
+[  ok  ] Table ref_price has data
+[  ok  ] Latency: p50<=p95<=p99 and p95 sits inside its own bucket
+[ note ] Latency coverage
+           95 days with latency / 128 days with calls
+[  ok  ] An agent marked stopped carries no more traffic
+[  ok  ] The three coverage groups add up to the total
+[ note ] Coverage of the 'who used it' dimension
+           (a) real people 107,125,668 = 11.7% | (b) service accounts 793,613,395 = 86.6% | (c) UNATTRIBUTABLE 15,230,908 = 1.7% (the Google invoice only reports at project level)
+[  ok  ] Every agent without a directory has one service account
+[  ok  ] Service accounts are named svc.<code>
+[  ok  ] Rows from a user-aware source all resolve to an account
+[  ok  ] Non-invoice cost is reproducible from ref_price
+[  ok  ] Failed calls never reach the rollup
+[  ok  ] No unknown outcome value
+[  ok  ] Cache hits never reach the rollup
+[  ok  ] Every gateway row has raw_model
+[  ok  ] Every gateway row has virtual_key_id
+[  ok  ] No row has duration_ms = 0
+[  ok  ] Every model in use has a price
+[  ok  ] No future-dated rows
+[ note ] Accounts whose unit two apps declare differently
+           4 accounts - resolved by a deterministic rule, see the unit_conflict column
+
+E. Adoption
+────────────────────────────────────────────────────────────────────────
+[  ok  ] Every agent has a denominator for the adoption rate
+[  ok  ] Adoption rate never exceeds 100%
+[  ok  ] fact_app_daily: one row per (day, account, model)
+[  ok  ] Every person with usage is still in the directory
+[  ok  ] Every account with usage is identifiable as a person
+
+════════════════════════════════════════════════════════════════════════
+42 checks | 38 passed | 4 notes | 0 failed
+Structure is CLEAN. The 'note' entries are known data gaps, not defects.

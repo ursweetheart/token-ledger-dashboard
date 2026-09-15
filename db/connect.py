@@ -58,16 +58,18 @@ PG_HOST = os.environ.get("PGHOST", "127.0.0.1")
 PG_PORT = os.environ.get("PGPORT", "5432")
 PG_USER = os.environ.get("PGUSER", "token")
 PG_PASSWORD = os.environ.get("PGPASSWORD", "token_local")
-# Runtime ledger hiện hành: token_ledger_v2. Quyết định giữ song song 27/08/2026:
-# không DROP/rename để trả tên; token_ledger cũ là bản legacy đối chiếu/rollback.
+# Runtime ledger: token_ledger_v2. Giữ nguyên tên `_v2`, không rename (quyết định
+# 27/08/2026).
 #
-# v2 là bản dựng HOÀN TOÀN từ chuỗi migration rồi nạp lại từ data/, và đã khớp
-# 23/23 khoá với bản cũ (867.657.110 token · $291,985601 · audit 36/31/5/0 ·
+# v2 là bản dựng HOÀN TOÀN từ chuỗi migration rồi nạp lại từ data/, và lúc chuyển
+# đã khớp 23/23 khoá với bản cũ (867.657.110 token · $291,985601 · audit 36/31/5/0 ·
 # check_api 19/19).
 #
-# `token_ledger` cũ VẪN CÒN NGUYÊN. Quay lui runtime = đặt PGDATABASE hoặc
-# TOKEN_LEDGER_DSN về database đó. Gateway ingestion tương lai chỉ ghi vào v2;
-# không ghi cùng một dòng vào cả hai database.
+# `token_ledger` cũ ĐÃ BỊ XOÁ ngày 14/09/2026, sau khi so mọi bảng với v2: 0 khoá mất,
+# và v2 không nhỏ hơn bản cũ ở khoá nào. Chỗ khác còn lại là danh bạ cũ (unit_id,
+# role của 3 người), mà trạng thái cũ vẫn nằm trong data/raw_web/ralli/2026-08-13 và
+# 2026-08-17. KHÔNG còn database nào để quay lui bằng cách đổi PGDATABASE: quay lui
+# nghĩa là dựng lại từ data/ bằng scripts/rebuild_db.py.
 PG_DATABASE = os.environ.get("PGDATABASE", "token_ledger_v2")
 
 # Dùng `or` chứ không `os.environ.get(k, mac_dinh)`: biến đặt thành chuỗi rỗng
@@ -235,42 +237,63 @@ def apply_migrations(dsn: str) -> None:
         ACTIVE_DSN = None
 
 
+# Bảng mà `rebuild()` KHÔNG xoá dòng. Dòng của chúng do MIGRATION ghi, không do data/
+# hay 02_catalog.sql. Một database đã có sẵn không bao giờ chạy lại migration, nên xoá
+# những dòng này là mất vĩnh viễn.
+#   alembic_version  sổ migration. Xoá thì lần upgrade kế tiếp chạy lại 001 lên bảng đang có.
+#   ref_source       4 nguồn, gieo ở db/migrations/sql/001_baseline.sql. Đo 14/09/2026 trên
+#                    database diễn tập: xoá nó thì load_ralli chết với fact_call_source_fkey.
+# Không bảng nào ở đây có khoá ngoại trỏ sang bảng khác, nên TRUNCATE ... CASCADE các bảng
+# còn lại không lan tới chúng. tests/test_connect_migrations.py quét mọi migration và ĐỎ nếu
+# có migration ghi dòng vào một bảng chưa có tên ở đây.
+KEEP_ON_REBUILD = ("alembic_version", "ref_source")
+
+
 def rebuild(dsn: str):
-    """Xoá sạch rồi dựng lại: migration + 02_catalog.sql.
+    """Dựng lại toàn bộ từ data/: migration tại chỗ, xoá dòng, nạp 02_catalog.sql.
 
-    CHỈ dùng cho database do script này tạo ra. Không dùng lên database thật.
+    CHỈ dùng khi sắp nạp lại mọi thứ từ data/ (scripts/rebuild_db.py). Mọi dòng
+    của mọi bảng dữ liệu sẽ bị xoá.
 
-    BƯỚC XOÁ SẠCH VẪN Ở ĐÂY, VÀ PHẢI Ở ĐÂY.
-    ----------------------------------------
-    Change `change-the-schema-without-dropping-it` mang cái tên dễ khiến người
-    đọc tưởng `DROP SCHEMA` phải biến mất. Không phải. Nó chỉ làm cho việc đổi
-    schema KHÔNG CÒN BẮT BUỘC phải xoá - `alembic upgrade head` gọi độc lập sẽ
-    sửa tại chỗ, không đi qua hàm này.
+    KHÔNG CÒN DROP SCHEMA (đổi 14/09/2026)
+    ---------------------------------------
+    Bản trước bắt đầu bằng `DROP SCHEMA public CASCADE`. Lệnh đó xoá luôn mọi
+    GRANT: trên schema, trên từng bảng, và cả `ALTER DEFAULT PRIVILEGES ... IN
+    SCHEMA public` của docker/read-only-api.sql. Ngày 02/09/2026, `api_readonly`
+    đọc được 0/20 bảng suốt 38 phút sau một lần dựng lại.
 
-    Còn hàm này là đường "dựng lại toàn bộ từ data/", và nó thật sự cần một schema
-    trắng: bước ngay sau là nạp `02_catalog.sql`, mà nạp danh mục vào bảng đã có
-    dòng là đụng khoá chính ngay.
+    Hàm này cần bảng danh mục TRỐNG, vì nạp 02_catalog.sql vào bảng đã có dòng là
+    đụng khoá chính. TRUNCATE cho bảng trống mà vẫn giữ nguyên bảng, view, schema
+    và quyền. Xem change `stop-a-later-pull-from-shrinking-an-earlier-one`, D5.
+
+    MỘT GIAO DỊCH: TRUNCATE và nạp danh mục được commit cùng lúc, nên không có
+    lúc nào danh mục trống một nửa mà vẫn nhìn thấy được từ ngoài.
+
+    Danh sách bảng đọc từ pg_tables, không ghi cứng: migration 008, 011, 012 đều
+    thêm bảng, và một danh sách ghi cứng sẽ bỏ sót bảng mới mà không báo gì.
+    Chỉ giữ lại các bảng trong `KEEP_ON_REBUILD`: dòng của chúng do chính migration
+    ghi, và database đã có sẵn thì không chạy lại migration.
 
     Hai đường dùng chung một chuỗi migration:
-        rebuild()              xoá sạch  ->  migration  ->  danh mục
+        rebuild()              migration  ->  xoá dòng  ->  danh mục
         alembic upgrade head   (không xoá gì, database giữ nguyên dữ liệu)
     """
     catalog = DB_DIR / "02_catalog.sql"
     if not catalog.exists():
         raise SystemExit("Chưa có db/02_catalog.sql. Chạy: python db/gen_catalog.py")
 
-    cn, _ = open_db(dsn)
-    with cn.cursor() as cur:
-        cur.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
-    cn.commit()
-    # ĐÓNG kết nối này trước khi Alembic mở kết nối của nó. Giữ mở thì lát nữa
-    # phải tin rằng một kết nối cũ nhìn thấy bảng do kết nối khác vừa tạo -
-    # đúng, nhưng là thứ phải nhớ mỗi lần đọc lại. Mở lại sau rẻ hơn.
-    cn.close()
-
+    # Migration CHẠY TRƯỚC khi mở kết nối của hàm này: Alembic mở kết nối riêng,
+    # và bảng nó vừa tạo phải nhìn thấy được khi đọc pg_tables ngay dưới đây.
     apply_migrations(dsn)
 
     cn, placeholder = open_db(dsn)
+    with cn.cursor() as cur:
+        cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename")
+        tables = [name for (name,) in cur.fetchall() if name not in KEEP_ON_REBUILD]
+        # TRUNCATE với danh sách rỗng là lỗi cú pháp của PostgreSQL.
+        if tables:
+            quoted = ", ".join('"' + name.replace('"', '""') + '"' for name in tables)
+            cur.execute(f"TRUNCATE TABLE {quoted} RESTART IDENTITY CASCADE")
     run_sql_file(cn, placeholder, catalog)
     cn.commit()
     return cn, placeholder

@@ -1,0 +1,87 @@
+########## load_gateway.py --full ##########
+Nap tu postgresql://gateway_readonly:***@127.0.0.1:5432/litellm
+  moc nap: TOAN BO (da lui lai 1:00:00)
+  doc 47 dong tu so | dung duoc 41 | chen moi 0 | ghi de 41
+  bo: khong co tag 6 | nhieu tag 0
+  nap luot HONG 3 | model chua khai 0 | hong truoc khi chot tuyen 2
+  end_user rong 9 | danh tinh khong noi duoc 13
+  cached_tokens NULL 41 | cost_usd NULL 3 | duration_ms NULL 3
+  di bang KHOA TONG 7/41 | trung cache 0 | mang bi danh 2
+  ma loi cua luot hong trong so: (khong co ma)=3, 401=1, 403=1
+  doi chieu ca so: nguon 47 dong/45,961 token | dich 41 dong/45,201 token
+  bo qua tren ca so: 6 dong, 760 token
+
+########## build_usage_daily.py ##########
+  billing 1012 | monitoring 606 | app 371 | gateway 1
+  theo nguon: {'gateway': 1, 'monitoring': 606, 'app': 371, 'billing': 1012}
+  tien billing $307.360850 | token app 112,775,370
+  agent co nguon 'app': Trợ Lý Ảo Hợp Đồng, Trợ lý ảo Ralli
+  app lech 2,385 token giua total va prompt+completion - do chinh app ghi vay, da doi chieu tu bang nguon
+  NGHIEM THU DAT
+
+########## audit_db.py ##########
+
+A. Cau truc
+────────────────────────────────────────────────────────────────────────
+[  ok  ] Khoa ngoai (23 quan he)
+[  ok  ] Cay don vi khong co vong lap
+[  ok  ] Cot `level` khop do sau that
+[  ok  ] Don vi cua tai khoan do nguon khai
+
+B. So khop
+────────────────────────────────────────────────────────────────────────
+[  ok  ] Tien: hoa don + gateway == usage_resolved
+[  ok  ] Token app: fact_call + fact_app_daily == fact_usage_daily
+[  ok  ] Token hoa don: goc == fact_usage_daily
+[  ok  ] usage_resolved: mot khoa mot dong
+[  ok  ] usage_resolved lay nguyen so cua nguon da chon
+
+C. Phan loai
+────────────────────────────────────────────────────────────────────────
+[  ok  ] Moi metric_type co trong dim_metric_alias
+[  ok  ] Moi sku_id co trong dim_metric_alias
+[  ok  ] Moi sku_id co trong dim_model_alias
+[  ok  ] is_quota_limit khop dim_metric_alias
+
+D. Lo im lang
+────────────────────────────────────────────────────────────────────────
+[ luu y] Moi dong usage_resolved deu co token
+           11/1276 dong co luot ma KHONG co token - SUM(total_tokens) bo qua chung khong bao. Model: ['gemini-embedding-1.0', 'gemini-embedding-2'] (Monitoring khong co phep do token cho embedding)
+[  ok  ] Bang fact_perf_daily co du lieu
+[  ok  ] Bang fact_latency_daily co du lieu
+[  ok  ] Bang ref_budget co du lieu
+[  ok  ] Bang ref_fx co du lieu
+[  ok  ] Bang ref_price co du lieu
+[  ok  ] Do tre: p50<=p95<=p99 va p95 nam trong o cua no
+[ luu y] Do phu do tre
+           95 ngay co do tre / 128 ngay co so luot
+[  ok  ] Agent khai da dung thi khong con luu luong
+[  ok  ] Ba nhom do phu cong dung bang tong
+[ luu y] Do phu chieu 'ai dung'
+           (a) nguoi that 107,125,668 = 11.7% | (b) tai khoan dich vu 793,613,395 = 86.6% | (c) KHONG quy duoc 15,230,908 = 1.7% (hoa don Google chi bao muc project)
+[  ok  ] Moi agent khong co danh ba co mot tai khoan dich vu
+[  ok  ] Tai khoan dich vu dat ten svc.<code>
+[  ok  ] Dong tu nguon biet nguoi dung deu quy duoc ve tai khoan
+[  ok  ] Tien nguon khong-hoa-don suy lai duoc tu ref_price
+[  ok  ] Luot hong khong lot vao bang tong hop
+[  ok  ] Khong co gia tri outcome la
+[  ok  ] Luot trung cache khong lot vao bang tong hop
+[  ok  ] Moi dong gateway deu co raw_model
+[  ok  ] Moi dong gateway deu co virtual_key_id
+[  ok  ] Khong dong nao co duration_ms = 0
+[  ok  ] Model dang dung deu co gia
+[  ok  ] Khong co ngay tuong lai
+[ luu y] Tai khoan co don vi bi hai app khai khac nhau
+           4 tai khoan - da chon theo quy tac tat dinh, xem cot unit_conflict
+
+E. Ty le ap dung
+────────────────────────────────────────────────────────────────────────
+[  ok  ] Moi agent co mau so cho ty le ap dung
+[  ok  ] Ty le ap dung khong vuot 100%
+[  ok  ] fact_app_daily: mot (ngay, tai khoan, model) mot dong
+[  ok  ] Nguoi co dung deu con trong danh ba
+[  ok  ] Tai khoan co dung deu nhan dang duoc la nguoi
+
+════════════════════════════════════════════════════════════════════════
+42 phep kiem | 38 dat | 4 luu y | 0 hong
+Cau truc SACH. Cac muc 'luu y' la du lieu thieu da biet, khong phai loi.

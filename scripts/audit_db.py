@@ -1345,9 +1345,119 @@ def group_i_provider_reconciliation(a: Audit) -> None:
                                                  for ten, ly_do in sorted(m.items()))
                          for ngay, m in sorted(khong_do.items())))
 
+    _hoa_don_cung_mui_gio_voi_cong_to(a)
+
+
+def _hoa_don_cung_mui_gio_voi_cong_to(a: Audit) -> None:
+    """Hoá đơn Google và công tơ Google phải khớp - SAU KHI quy về cùng múi giờ.
+
+    VÌ SAO CẦN
+    ----------
+    `fact_billing_daily.day` là ngày theo giờ **US/Pacific**: `merge_billing.py:251`
+    lấy nguyên cột `Date` của file xuất Cloud Billing, không đổi múi giờ ở đâu cả.
+    `fact_monitoring.ts_local` là giờ **Việt Nam** thật. Chốt 14/08 là COI ngày hoá
+    đơn như ngày VN, và chấp nhận chuỗi theo ngày của riêng nguồn billing lệch tới
+    15 giờ - xem docstring `db/build_usage_daily.py` mục (a).
+
+    Quy đúng múi giờ rồi thì hai nguồn là CÙNG MỘT CÔNG TƠ. Đo 11/09/2026:
+
+        gia thuyet          cap   trung khit      lech / token
+        quy ve Pacific      397      356 (90%)          0,20%
+        de nguyen gio VN    365       13 ( 4%)         81,3%
+
+    GIỜ BIÊN LÀ ĐO ĐƯỢC, KHÔNG PHẢI ĐOÁN
+    ------------------------------------
+    Quét cả 24 giờ biên khả dĩ (12/09/2026), giờ 14 thắng áp đảo và không mập mờ:
+
+        gio bien   trung khit / cap   lech
+            14        358 / 401       0,24%
+            13        173 / 395       9,27%
+            15        167 / 396      13,73%
+            12        148 / 395      16,93%
+
+    VN là UTC+7, biên ngày ở VN 14:00 nghĩa là ngày hoá đơn bắt đầu lúc **UTC−7**.
+
+    Tên *"Pacific"* thì là SUY RA, từ hai chỗ khớp nhau: UTC−7 trong tháng 4 tới 8
+    đúng là PDT, và file hoá đơn là bản xuất tay từ **Google Cloud Console** (xem
+    `scripts/merge_billing.py` docstring - BigQuery export bị chặn ở quyền), mà
+    Console báo cáo theo giờ Thái Bình Dương.
+
+    CHỖ CHƯA ĐO ĐƯỢC, VÀ PHÉP KIỂM NÀY SẼ TỰ HỎI VÀO THÁNG 11
+    ---------------------------------------------------------
+    Dữ liệu token của monitoring chỉ có từ 24/04/2026, tức **toàn mùa PDT**: 0 dòng
+    trước 08/03. Nên chưa phân biệt được hai khả năng cho ra cùng kết quả mùa hè:
+
+        America/Los_Angeles   UTC-7 mua he, UTC-8 mua dong  -> bien doi sang VN 15:00
+        mot do lech CO DINH   UTC-7 quanh nam               -> bien van o VN 14:00
+
+    Truy vấn dưới dùng `America/Los_Angeles`, nên nó CHỌN khả năng thứ nhất. Nếu
+    thật ra là độ lệch cố định thì phép kiểm sẽ **đỏ vào tháng 11** - và đó là kết
+    cục đúng, không phải phiền toái: nó hỏi hộ ta một câu chưa ai trả lời được, vào
+    đúng lúc dữ liệu trả lời được. Ai thấy nó đỏ tháng 11 thì thử lại biên VN 14:00
+    trước khi nghi dữ liệu.
+
+    KHÔNG ĐẶT NGƯỠNG, SO HAI GIẢ THUYẾT
+    -----------------------------------
+    Cùng kỷ luật với phần trên: ta ĐÃ BIẾT đáp án là 0,20%, nên đặt ngưỡng bây giờ
+    là chọn con số vừa khít với đáp án. Thay vào đó phép kiểm hỏi một câu nhị phân
+    **không cần ngưỡng**: quy về Pacific có lệch ít hơn để nguyên giờ VN không?
+    Hôm nay chênh nhau 313 lần, nên câu hỏi này dư sức sống sót mọi dao động dữ
+    liệu - nó chỉ đỏ khi quan hệ múi giờ thật sự đổi.
+
+    NÓ ĐỎ KHI NÀO
+    -------------
+    Google đổi múi giờ file xuất hoá đơn · ai đó dịch cột `day` · một trong hai
+    nguồn mất dữ liệu diện rộng. Cả ba đều là thứ phải biết ngay, và cả ba đều
+    không lộ ra bằng cách nhìn vào riêng một nguồn.
+
+    `AT TIME ZONE` hai lần chứ không trừ một hằng số: lệch là 14 giờ trong PDT
+    nhưng 15 giờ trong PST, nên bù cứng sẽ sai bốn tháng mỗi năm.
+
+    Bỏ ngày ĐẦU và ngày CUỐI của monitoring: cửa sổ lưu giữ của Cloud Monitoring
+    trượt nên hai ngày biên luôn khuyết, và một phép kiểm đỏ vĩnh viễn thì bị bỏ
+    qua - đúng cái bẫy docstring nhóm này đã cảnh báo.
+    """
+    NHAN = "Billing and the provider meter agree once the timezone is undone"
+    r = connect.query_one(a.cn, """
+        WITH mon AS (
+            SELECT (m.ts_local AT TIME ZONE 'Asia/Ho_Chi_Minh'
+                               AT TIME ZONE 'America/Los_Angeles')::date AS ngay_pac,
+                   m.ts_local::date AS ngay_vn, m.project, m.value
+              FROM fact_monitoring m
+              JOIN dim_metric_alias d
+                ON d.source = 'monitoring' AND d.raw_name = m.metric_type
+             WHERE d.measures = 'token' AND d.kind = 'output'
+               AND m.model_id IS NOT NULL
+        ), bien AS (SELECT MIN(ngay_pac) AS d1, MAX(ngay_pac) AS d2 FROM mon),
+        pac AS (SELECT ngay_pac AS ngay, project, SUM(value) AS token
+                  FROM mon, bien WHERE ngay_pac > d1 AND ngay_pac < d2 GROUP BY 1, 2),
+        vn  AS (SELECT ngay_vn  AS ngay, project, SUM(value) AS token
+                  FROM mon, bien WHERE ngay_vn  > d1 AND ngay_vn  < d2 GROUP BY 1, 2),
+        bil AS (SELECT day AS ngay, project, SUM(quantity) AS token
+                  FROM fact_billing_daily WHERE kind = 'output' GROUP BY 1, 2)
+        SELECT (SELECT COUNT(*) FROM pac p JOIN bil b USING (ngay, project)),
+               (SELECT COUNT(*) FILTER (WHERE b.token = p.token)
+                  FROM pac p JOIN bil b USING (ngay, project)),
+               (SELECT SUM(ABS(b.token - p.token))
+                  FROM pac p JOIN bil b USING (ngay, project)),
+               (SELECT SUM(ABS(b.token - v.token))
+                  FROM vn  v JOIN bil b USING (ngay, project)),
+               (SELECT SUM(p.token) FROM pac p JOIN bil b USING (ngay, project))
+    """)
+    cap, khit, lech_pac, lech_vn, tong = [float(x or 0) for x in (r or (0,) * 5)]
+
+    # `tong` có thể bằng 0 khi database mới dựng: chia cho 0 thì phép kiểm chết
+    # thay vì báo "chưa kiểm được", mà `check_tren` sinh ra chính để tránh thế.
+    ty_le = (lech_pac / tong) if tong else 0.0
+    a.check_tren(cap, lech_pac < lech_vn,
+                 f"{NHAN} ({int(cap)} cap ngay-project, {int(khit)} trung khit,"
+                 f" lech {ty_le:.2%})",
+                 f"quy ve Pacific lech {int(lech_pac):,} token,"
+                 f" de nguyen gio VN lech {int(lech_vn):,} - quan he mui gio da doi")
+
 
 # Nhip mac dinh, chi dung khi KHONG doc duoc nhip that. Xem `read_refresh_interval()`.
-DEFAULT_INTERVAL_SECONDS = 120
+DEFAULT_INTERVAL_SECONDS = 300   # khop .env.example va docker-compose.yml, doi 12/09/2026
 
 
 def read_refresh_interval(cn) -> tuple[int, int, str]:

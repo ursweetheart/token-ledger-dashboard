@@ -466,31 +466,22 @@ def performance(cn, ph, start: str, end: str) -> dict:
     return {"response_codes": codes, "latency": latency}
 
 
-def thinking(cn, ph, start: str, end: str) -> list[dict]:
-    """Token có bật chế độ suy luận (thinking), theo day/agent/model.
-
-    Chỉ Cloud Monitoring có nhãn này - hoá đơn không tách, app không ghi. Nên
-    đây là con số của RIÊNG nguồn monitoring, không phải của tổng.
-    """
-    r = _rows(cn, f"""
-        SELECT substr(CAST(m.ts_local AS TEXT), 1, 10) AS day,
-               m.agent_id, m.model_id,
-               SUM(CASE WHEN m.thinking_enabled = 'true' THEN m.value ELSE 0 END)
-                   AS thinking_tokens,
-               SUM(m.value) AS monitoring_tokens
-        FROM monitoring_ai m
-        JOIN dim_metric_alias d
-          ON d.source = 'monitoring' AND d.raw_name = m.metric_type
-        WHERE d.measures = 'token' AND m.model_id IS NOT NULL
-          AND substr(CAST(m.ts_local AS TEXT), 1, 10) >= {ph}
-          AND substr(CAST(m.ts_local AS TEXT), 1, 10) <= {ph}
-        GROUP BY 1, 2, 3
-        ORDER BY 1, 2, 3""", (start, end))
-    for x in r:
-        x["thinking_tokens"] = int(x["thinking_tokens"] or 0)
-        x["monitoring_tokens"] = int(x["monitoring_tokens"] or 0)
-    return r
-
+# `thinking()` GỠ 12/09/2026, cùng endpoint `/api/thinking`.
+#
+# Chốt: token suy luận và token ra là MỘT biến. Hoá đơn không có SKU riêng cho
+# suy nghĩ - nó nằm trong SKU output và tính theo giá output, `2,499976` so với
+# `2,499946` USD trên một triệu, tức cùng một giá. Sổ Gateway cũng vậy:
+# `reasoning` nằm trong `completion`, 0 trên 46 dòng vượt ra.
+#
+# Hàm cũ trả về token RA của những lượt CÓ BẬT suy nghĩ - một lát cắt nằm sẵn
+# trong `output_tokens`, chiếm 91,2% - và **không nơi nào đọc nó ra màn hình**.
+# Mỗi lần mở trang là thêm một request và một câu SQL quét `fact_monitoring` cho
+# một con số không ai thấy.
+#
+# Muốn đo lại phần suy nghĩ thì lấy `reasoning_tokens` trong `metadata` của
+# `LiteLLM_SpendLogs`; nó vẫn còn nguyên ở đó. Xem ô 4.3 của change
+# `settle-what-the-bill-does-with-thinking-tokens` và
+# `docs/reference/token-suy-nghi-tren-hoa-don-11-09.md`.
 
 # =====================================================================
 # Sức khoẻ - cái này quan trọng ngang số liệu

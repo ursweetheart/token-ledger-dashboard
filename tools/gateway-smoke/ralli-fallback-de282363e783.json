@@ -1,0 +1,631 @@
+{
+  "run_id": "ralli-fallback-de282363e783",
+  "result": "PASS",
+  "endpoint": "http://127.0.0.1:4101",
+  "scope": "real core helpers + real SDK + isolated LB/two mock proxies",
+  "limitations": [
+    "Direct provider is MOCK at litellm.acompletion, not real Gemini",
+    "SMTP is MOCK at SMTP_SSL.send_message, no real email delivered",
+    "Actual ledger builder only; no application DB persistence or ETL/dashboard verification",
+    "No authenticated HTTP E2E; synthetic UsageContext is injected",
+    "No SpendLogs reconciliation; direct absence from SpendLogs is not verified",
+    "No OCR/Marker/parser, production traffic, or capacity coverage"
+  ],
+  "guards": {
+    "dotenv_read_denial": true,
+    "dotenv_sources_disabled": true,
+    "only_application_egress": "http://127.0.0.1:4101",
+    "direct_boundary": "MOCK",
+    "smtp_boundary": "MOCK",
+    "blocked_egress_count": 0
+  },
+  "stages": [
+    {
+      "name": "healthy-standard",
+      "helper": "call_llm",
+      "expected_route": "gateway",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 0.1569999999992433,
+      "result": "PASS"
+    },
+    {
+      "name": "healthy-chat",
+      "helper": "call_llm_chat",
+      "expected_route": "gateway",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 0.014999999999417923,
+      "result": "PASS"
+    },
+    {
+      "name": "missing-call_llm",
+      "helper": "call_llm",
+      "expected_route": null,
+      "expected_failure": true,
+      "error_type": "ValueError",
+      "sdk_attempts": {},
+      "elapsed_seconds": 0.0,
+      "result": "PASS"
+    },
+    {
+      "name": "missing-call_llm_chat",
+      "helper": "call_llm_chat",
+      "expected_route": null,
+      "expected_failure": true,
+      "error_type": "ValueError",
+      "sdk_attempts": {},
+      "elapsed_seconds": 0.0,
+      "result": "PASS"
+    },
+    {
+      "name": "invalid-call_llm",
+      "helper": "call_llm",
+      "expected_route": null,
+      "expected_failure": true,
+      "error_type": "AuthenticationError",
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 0.04700000000048021,
+      "result": "PASS"
+    },
+    {
+      "name": "invalid-call_llm_chat",
+      "helper": "call_llm_chat",
+      "expected_route": null,
+      "expected_failure": true,
+      "error_type": "AuthenticationError",
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 0.031000000000858563,
+      "result": "PASS"
+    },
+    {
+      "name": "second-proxy-down",
+      "helper": "call_llm_chat",
+      "expected_route": "gateway",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 2.0319999999992433,
+      "result": "PASS"
+    },
+    {
+      "name": "disabled-call_llm",
+      "helper": "call_llm",
+      "expected_route": null,
+      "expected_failure": true,
+      "error_type": "ConnectError",
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 2.04700000000048,
+      "result": "PASS"
+    },
+    {
+      "name": "disabled-call_llm_chat",
+      "helper": "call_llm_chat",
+      "expected_route": null,
+      "expected_failure": true,
+      "error_type": "ConnectError",
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 2.063000000000102,
+      "result": "PASS"
+    },
+    {
+      "name": "successive-0",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.061999999999898,
+      "result": "PASS"
+    },
+    {
+      "name": "successive-1",
+      "helper": "call_llm_chat",
+      "expected_route": "direct_fallback",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.0469999999986612,
+      "result": "PASS"
+    },
+    {
+      "name": "successive-2",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.04700000000048,
+      "result": "PASS"
+    },
+    {
+      "name": "concurrent-2",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.04700000000048,
+      "result": "PASS"
+    },
+    {
+      "name": "concurrent-1",
+      "helper": "call_llm_chat",
+      "expected_route": "direct_fallback",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.04700000000048,
+      "result": "PASS"
+    },
+    {
+      "name": "concurrent-0",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.04700000000048,
+      "result": "PASS"
+    },
+    {
+      "name": "direct-failure-call_llm",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "expected_failure": true,
+      "error_type": "RuntimeError",
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.04700000000048,
+      "result": "PASS"
+    },
+    {
+      "name": "direct-failure-call_llm_chat",
+      "helper": "call_llm_chat",
+      "expected_route": "direct_fallback",
+      "expected_failure": true,
+      "error_type": "RuntimeError",
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.0309999999990396,
+      "result": "PASS"
+    },
+    {
+      "name": "recovery-standard",
+      "helper": "call_llm",
+      "expected_route": "gateway",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 0.01599999999962165,
+      "result": "PASS"
+    },
+    {
+      "name": "recovery-chat",
+      "helper": "call_llm_chat",
+      "expected_route": "gateway",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "elapsed_seconds": 0.01599999999962165,
+      "result": "PASS"
+    },
+    {
+      "name": "second-outage",
+      "helper": "call_llm_chat",
+      "expected_route": "direct_fallback",
+      "expected_failure": false,
+      "error_type": null,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "elapsed_seconds": 2.061999999999898,
+      "result": "PASS"
+    }
+  ],
+  "attempts": [
+    {
+      "operation": "ralli-fallback-de282363e783.healthy-standard",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-healthy-standard"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.healthy-chat",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-healthy-chat"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.invalid-call_llm",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-invalid-call_llm"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.invalid-call_llm_chat",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-invalid-call_llm_chat"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.second-proxy-down",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-second-proxy-down"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.disabled-call_llm",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-disabled-call_llm"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.disabled-call_llm_chat",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-disabled-call_llm_chat"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.successive-0",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-successive-0"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.successive-0",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-successive-0",
+      "boundary": "MOCK litellm.acompletion"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.successive-1",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-successive-1"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.successive-1",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-successive-1",
+      "boundary": "MOCK litellm.acompletion"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.successive-2",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-successive-2"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.successive-2",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-successive-2",
+      "boundary": "MOCK litellm.acompletion"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.concurrent-0",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-concurrent-0"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.concurrent-1",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-concurrent-1"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.concurrent-2",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-concurrent-2"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.concurrent-2",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-concurrent-2",
+      "boundary": "MOCK litellm.acompletion"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.concurrent-1",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-concurrent-1",
+      "boundary": "MOCK litellm.acompletion"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.concurrent-0",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-concurrent-0",
+      "boundary": "MOCK litellm.acompletion"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.direct-failure-call_llm",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-direct-failure-call_llm"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.direct-failure-call_llm",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-direct-failure-call_llm",
+      "boundary": "MOCK litellm.acompletion"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.direct-failure-call_llm_chat",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-direct-failure-call_llm_chat"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.direct-failure-call_llm_chat",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-direct-failure-call_llm_chat",
+      "boundary": "MOCK litellm.acompletion"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.recovery-standard",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-recovery-standard"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.recovery-chat",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-recovery-chat"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.second-outage",
+      "route": "gateway",
+      "user": "ralli-fallback-de282363e783.user-second-outage"
+    },
+    {
+      "operation": "ralli-fallback-de282363e783.second-outage",
+      "route": "direct_fallback",
+      "user": "ralli-fallback-de282363e783.user-second-outage",
+      "boundary": "MOCK litellm.acompletion"
+    }
+  ],
+  "ledger_rows": [
+    {
+      "call_id": "chatcmpl-a9365cca-04fb-4cee-adb4-24fe2d1f1aeb",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "49c37420-7b7c-41d4-bb96-6945ee70b164",
+      "user_id": "synthetic-healthy-standard",
+      "username_snapshot": "ralli-fallback-de282363e783.user-healthy-standard",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-healthy-standard",
+      "session_id": "ralli-fallback-de282363e783.healthy-standard",
+      "function_name": "call_llm",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "call_id": "chatcmpl-6f3304d9-c1f1-426a-a156-87251945de98",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "653d1290-d1db-4b1d-b54a-40d3c6506652",
+      "user_id": "synthetic-healthy-chat",
+      "username_snapshot": "ralli-fallback-de282363e783.user-healthy-chat",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-healthy-chat",
+      "session_id": "ralli-fallback-de282363e783.healthy-chat",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "call_id": "chatcmpl-cd1d0d02-e6ba-400c-bf33-f01a1fe9383e",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "7ed62a2c-f4e6-4a54-97e6-85d75edd67b6",
+      "user_id": "synthetic-second-proxy-down",
+      "username_snapshot": "ralli-fallback-de282363e783.user-second-proxy-down",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-second-proxy-down",
+      "session_id": "ralli-fallback-de282363e783.second-proxy-down",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "call_id": "mock-direct-89186b7d4bfe2197",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "a7dd6e95-d9b4-4cfe-8b15-77fc364ad60c",
+      "user_id": "synthetic-successive-0",
+      "username_snapshot": "ralli-fallback-de282363e783.user-successive-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-successive-0",
+      "session_id": "ralli-fallback-de282363e783.successive-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18
+    },
+    {
+      "call_id": "mock-direct-768b77b9a6ce9786",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "7365b8e9-0e2a-4af0-b42b-9690a7d62c57",
+      "user_id": "synthetic-successive-1",
+      "username_snapshot": "ralli-fallback-de282363e783.user-successive-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-successive-1",
+      "session_id": "ralli-fallback-de282363e783.successive-1",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18
+    },
+    {
+      "call_id": "mock-direct-729ab027a613e5b5",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "28593dcf-0c8d-490a-916c-3ac9ac8a1101",
+      "user_id": "synthetic-successive-2",
+      "username_snapshot": "ralli-fallback-de282363e783.user-successive-2",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-successive-2",
+      "session_id": "ralli-fallback-de282363e783.successive-2",
+      "function_name": "call_llm",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18
+    },
+    {
+      "call_id": "mock-direct-e2f954ea0335f535",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "0ee31b6e-df7e-46ec-bc2b-e091e5376d83",
+      "user_id": "synthetic-concurrent-2",
+      "username_snapshot": "ralli-fallback-de282363e783.user-concurrent-2",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-concurrent-2",
+      "session_id": "ralli-fallback-de282363e783.concurrent-2",
+      "function_name": "call_llm",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18
+    },
+    {
+      "call_id": "mock-direct-db3eaa2dd3189f9a",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "74676eed-5a4b-495a-a36f-5a05504b99ea",
+      "user_id": "synthetic-concurrent-1",
+      "username_snapshot": "ralli-fallback-de282363e783.user-concurrent-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-concurrent-1",
+      "session_id": "ralli-fallback-de282363e783.concurrent-1",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18
+    },
+    {
+      "call_id": "mock-direct-034a69410fec06b3",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "3d0e5e27-b0f3-470e-b744-f9cea8a8fdcc",
+      "user_id": "synthetic-concurrent-0",
+      "username_snapshot": "ralli-fallback-de282363e783.user-concurrent-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-concurrent-0",
+      "session_id": "ralli-fallback-de282363e783.concurrent-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18
+    },
+    {
+      "call_id": "chatcmpl-51eb6723-d04e-4af5-ac93-104d3bd5b486",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "dd0dab7e-8e25-4433-a51f-052423a17225",
+      "user_id": "synthetic-recovery-standard",
+      "username_snapshot": "ralli-fallback-de282363e783.user-recovery-standard",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-recovery-standard",
+      "session_id": "ralli-fallback-de282363e783.recovery-standard",
+      "function_name": "call_llm",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "call_id": "chatcmpl-f29160a6-bf47-4198-993f-b6e812b9066a",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "a5b846d3-21a5-4ed4-8bdf-f99475105028",
+      "user_id": "synthetic-recovery-chat",
+      "username_snapshot": "ralli-fallback-de282363e783.user-recovery-chat",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-recovery-chat",
+      "session_id": "ralli-fallback-de282363e783.recovery-chat",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "call_id": "mock-direct-24d7e982c9562226",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "7294a55e-f613-4277-bd1b-b3b5272ba9c8",
+      "user_id": "synthetic-second-outage",
+      "username_snapshot": "ralli-fallback-de282363e783.user-second-outage",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-second-outage",
+      "session_id": "ralli-fallback-de282363e783.second-outage",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18
+    }
+  ],
+  "smtp": [
+    {
+      "boundary": "MOCK SMTP_SSL.send_message",
+      "sanitized_actual_message": true,
+      "stage": "lb_down_enabled"
+    }
+  ],
+  "initial_health": {
+    "tla-gateway-smoke-gateway-lb-1": "healthy",
+    "tla-gateway-smoke-gateway2-1": "healthy",
+    "tla-gateway-smoke-gateway-1": "healthy",
+    "tla-gateway-smoke-db-1": "healthy"
+  },
+  "credential_created_and_readback": true,
+  "credential_cleanup": {
+    "delete_status": 200,
+    "readback_status": 404
+  },
+  "final_health": {
+    "tla-gateway-smoke-gateway-lb-1": "healthy",
+    "tla-gateway-smoke-gateway2-1": "healthy",
+    "tla-gateway-smoke-gateway-1": "healthy",
+    "tla-gateway-smoke-db-1": "healthy"
+  },
+  "cleanup_errors": [],
+  "totals": {
+    "stages": 20,
+    "sdk_attempts": {
+      "gateway": 18,
+      "direct_fallback": 9
+    },
+    "ledger_rows": 12,
+    "mock_emails": 1
+  }
+}

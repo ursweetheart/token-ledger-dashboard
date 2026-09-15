@@ -175,3 +175,103 @@ mà là **lỗi quy tiền**.
 
 Chưa trả lời được câu này thì **chưa được bật cache thật**, dù change này đã làm cho việc bật
 cache an toàn về mặt số token.
+
+
+## 9. Bật cache và đo thật — 11/09/2026
+
+Mục 8 ghi việc 6 là **BỊ CHẶN** vì không đọc được khoá ảo của DMS. Lý do đó sai, và sai ở hai
+chỗ. Tag định danh đến từ `request_tags` chứ không từ khoá (`db/load_gateway.py:238`), mà tuyến
+`gemini-flash-lite` vốn đã tự mang `tags: ["dms-feedback"]` — nên mọi lượt gọi vào tuyến đó đều
+được đóng dấu, ai gọi cũng vậy. Còn khoá ảo mới thì xin được mà không đọc khoá nào: gọi
+`/key/generate` từ bên trong container, để `$LITELLM_MASTER_KEY` giãn nở ở đó.
+
+### 9.1 Cache KHÔNG tách theo khoá
+
+Ba lượt, cùng một câu, `temperature: 0.0`.
+
+| lượt | khoá | thời gian | `cache_hit` | `spend` | token vào/ra |
+|---|---|---|---|---|---|
+| 1 | A | 2,31 s | `None` | 1,26e-05 | 17 / 3 |
+| 2 | A | 0,16 s | `True` | 0 | 17 / 3 |
+| 3 | **B** | 0,05 s | `True` | 0 | 17 / 3 |
+
+Lượt 3 dùng một khoá ảo **khác**, xin riêng, chưa từng hỏi câu đó. Nó nhận đúng câu trả lời của
+khoá A: cùng `id` phản hồi, cùng `x-litellm-cache-key`. Truy vấn trên sổ xác nhận hai dòng trúng
+cache mang **hai giá trị `api_key` khác nhau**.
+
+Nên câu trả lời cho phép đo là: **cache dùng chung cho mọi khoá**. Câu trả lời của agent này
+phục vụ được cho khoá của agent khác. Đây là số đo, không phải quyết định — bật hay không là
+việc của người.
+
+Cũng lưu ý: dòng trúng cache **vẫn ghi đủ token** y hệt dòng gốc, chỉ có `spend = 0`. Ba dòng
+cộng lại là 60 token trong sổ, mà nhà cung cấp chỉ phục vụ 20.
+
+### 9.2 Một dòng trúng cache làm ĐỨNG cả đường nạp
+
+Đây là phần quan trọng hơn, và nó không nằm trong dự đoán của ô 7.3.
+
+Bộ nạp loại dòng trúng cache ngay đầu đường (`db/load_gateway.py:311`, bẫy 7) vì `call_id` chứa
+`_cache_hit`. Lý do chính đáng: dòng đó **lặp lại nguyên token** của dòng gốc, nạp cả hai là
+đếm đôi. Đo lại hôm nay xác nhận đúng như vậy, 17 vào + 3 ra ở cả hai dòng.
+
+Nhưng phép đối chiếu toàn sổ ở cuối hàm (`db/load_gateway.py:690`) cộng
+`fact_call + bị bỏ qua` rồi so với sổ nguồn, mà câu truy vấn đếm "bị bỏ qua" (dòng 674) **chỉ
+đếm dòng có số tag định danh khác 1**. Loại `bo_ban_sao_cache` không được đếm vào đâu cả.
+
+| vế | dòng | token |
+|---|---|---|
+| sổ nguồn | 505 | 231.421 |
+| `fact_call` | 421 | 229.697 |
+| bị bỏ qua (đếm được) | 82 | 1.684 |
+| **thiếu** | **2** | **40** |
+
+Bộ nạp báo `MISMATCH`, thoát mã 1, kèm câu *"DUNG LAI - khong tong hop tren du lieu thieu"*.
+`fact_usage_daily` vì thế không được tổng hợp. Nghĩa là **chỉ cần một dòng trúng cache trong sổ
+là cả đường nạp đứng, và đứng mãi** — không phải chỉ lệch một con số.
+
+### 9.2b Đã sửa, cùng ngày
+
+Sửa ở `db/load_gateway.py`: vế "bị bỏ qua" của phép đối chiếu nay đếm cả bản sao cache. Hậu tố
+`_cache_hit` đặt thành hằng `HAU_TO_CACHE`, dùng chung cho chỗ bỏ dòng và chỗ đếm dòng đã bỏ —
+hai chỗ lệch nhau là bộ nạp dừng, nên không để mỗi chỗ viết một bản. Câu SQL dùng `strpos` chứ
+không dùng `LIKE '%_cache_hit%'`: trong LIKE thì `_` là ký tự đại diện khớp một ký tự bất kỳ,
+nên mẫu đó còn khớp cả `Xcache_hit`.
+
+| | trước khi sửa | sau khi sửa |
+|---|---|---|
+| bỏ qua toàn sổ | 82 dòng / 1.684 token | **84 dòng / 1.724 token** |
+| riêng bản sao cache | không được đếm | **3 dòng / 392 token** |
+| mã thoát | 1, `MISMATCH` | **0, `acceptance passed`** |
+| `fact_usage_daily` | không tổng hợp | 1.998 → **1.999** dòng |
+
+Ba dòng bản sao cache gồm 2 dòng của phép đo này (40 token) và 1 dòng có sẵn từ 01/09
+(352 token). Dòng cũ trước đây vẫn được đếm, nhưng nhờ nó KHÔNG có tag định danh — tức đúng số
+vì một lý do chẳng liên quan, đúng loại may mắn mà bẫy 7 đã cảnh báo.
+
+`scripts/audit_db.py` chạy lại sau khi sửa: **78 phép kiểm · 68 đạt · 10 lưu ý · 0 hỏng**.
+
+Nhờ vậy **không phải xoá dòng nào trong sổ gốc**. Hai dòng thử cứ để nguyên; sổ gốc là bằng
+chứng, và nay bộ nạp đếm được chúng.
+
+### 9.3 Mã đúng, `design.md` sai
+
+`design.md` mục ③ của change `read-the-gateway-columns-we-still-ignore` viết *"fact_call GIU
+luot trung cache"* và *"Không lọc ở tầng nạp"*. Mã đang làm ngược lại, và **phép đo cho thấy mã
+đúng**: giữ dòng trúng cache trong `fact_call` là đếm đôi token thật, đúng lỗi mà bẫy 7 dựng ra
+để chặn. Phải sửa design trước khi archive change đó, cùng hạng việc với lần sửa spec 10/09.
+
+### 9.4 Còn lại gì
+
+Hai việc nêu ra lúc đầu đều đã xong: phép đối chiếu nay đếm bản sao cache, và vì thế không phải
+động vào sổ gốc.
+
+Còn hai chuyện **chưa làm, và cố ý không làm ở đây**:
+
+1. **Khối cache soạn sẵn trỏ thẳng `host: redis`**, trong khi phần còn lại của cấu hình đã đi
+   qua Sentinel. Khối đó viết trước change Sentinel. Ai bật cache thật phải đổi sang dạng
+   Sentinel, không thì mất master là cache trỏ vào chỗ chết.
+2. **Có bật cache hay không.** Phép đo chỉ nói cache dùng chung mọi khoá và dòng trúng cache
+   lặp token. Quyết định là của người, không phải của change này.
+
+Cấu hình đã trả về nguyên trạng: cache tắt, `diff` với bản sao lưu rỗng, hai instance khởi động
+lại và không còn dòng `Setting Cache on Proxy`.

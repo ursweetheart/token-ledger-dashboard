@@ -4,8 +4,8 @@
 
 VI SAO CO SCRIPT NAY
 --------------------
-`scripts/rebuild_db.py` buoc 1 goi `load_billing --rebuild`, ma buoc do goi
-`db/connect.py:251`:
+Truoc 14/09/2026, `scripts/rebuild_db.py` buoc 1 goi `load_billing --rebuild`, ma
+buoc do goi:
 
     DROP SCHEMA public CASCADE; CREATE SCHEMA public;
 
@@ -15,6 +15,11 @@ Lenh do xoa MOI GRANT - tren schema, tren moi bang, moi view, VA ca cac dong
 (`restart: "no"`), tuc chi khi ai do goi `docker compose up -d`.
 
 Nen: cu dung lai database la vai doc cua API mat sach quyen.
+
+Tu 14/09/2026 `connect.rebuild()` chi TRUNCATE, nen duong dung lai KHONG con xoa
+quyen (change `stop-a-later-pull-from-shrinking-an-earlier-one`). Script nay VAN
+o lai: quyen con mat duoc theo duong khac - mot database moi chua chay
+`read-only-api.sql`, hay ai do DROP bang tay - va bao dong thi re.
 
 DO THAT NGAY 02/09/2026
 -----------------------
@@ -87,7 +92,7 @@ def kiem(cn, role: str) -> list[str]:
             cn, "SELECT has_schema_privilege(%s, 'public', 'USAGE')", (role,))[0]:
         thieu.append(f"vai `{role}` khong co USAGE tren schema `public`")
 
-    # TUNG bang va TUNG view, khong phai "thu mot bang". `DROP SCHEMA` xoa tat,
+    # TUNG bang va TUNG view, khong phai "thu mot bang". Mot lan `DROP SCHEMA` xoa tat,
     # nhung mot migration hong nua chung co the de lai quyen KHONG DEU - va do
     # moi la truong hop kho thay nhat.
     doi_tuong = connect.query(cn, """
@@ -139,13 +144,14 @@ def main() -> int:
     if any("KHONG TON TAI" in d for d in thieu):
         log.error("  Vai chua duoc tao bao gio, hoac ten vai truyen vao sai.")
         log.error("  `DROP SCHEMA` xoa GRANT chu KHONG xoa vai, nen day KHONG"
-                  " phai dau vet cua rebuild_db.py.")
+                  " phai dau vet cua mot lan DROP SCHEMA.")
         log.error("  ")
         log.error("  Kiem lai ten:  docker-compose.yml khai `-v"
                   " api_role=api_readonly` cho docker/read-only-api.sql")
     else:
-        log.error("  Vai co that nhung da mat quyen. `DROP SCHEMA public"
-                  " CASCADE` (db/connect.py:251) xoa moi GRANT,")
+        log.error("  Vai co that nhung da mat quyen. Tu 14/09/2026 rebuild_db.py"
+                  " chi TRUNCATE, KHONG xoa GRANT - nen nghi toi database moi")
+        log.error("  chua chay read-only-api.sql, hoac mot lan DROP SCHEMA bang tay,")
         log.error("  va cho cap lai la docker/read-only-api.sql - no CHI chay"
                   " qua container `api-db-init` (`restart: \"no\"`).")
     log.error("  ")
