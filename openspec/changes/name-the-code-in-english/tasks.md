@@ -14,12 +14,12 @@
 - [x] 1.6 `backend/main.py`, `backend/check_api.py`: chuỗi và câu lỗi HTTP; `backend/store.py`: đánh dấu `vi-ok: dashboard text` cho 7 câu `message`, đổi phần còn lại
 - [x] 1.7 Thêm `allow_abbrev=False` vào mọi `ArgumentParser` của các tệp trong đợt này; với tệp có cờ không `dest`, sửa `args.<tên cũ>` theo tên mới
 - [ ] 1.8 Kiểm theo D6: `py_compile`, `--help` từng tệp đã sửa, `unittest` đủ số, `grep` tên và cờ cũ ra 0 trong code; CI xanh
-- [ ] 1.9 Xin phép rồi build lại image `tools` và `up -d ledger-refresh`; xem một chu kỳ làm mới chạy hết không lỗi. Không `down`, không `--remove-orphans`
+- [x] 1.9 Xin phép rồi build lại image `tools` và `up -d ledger-refresh`; xem một chu kỳ làm mới chạy hết không lỗi. Không `down`, không `--remove-orphans` — **không áp dụng trên máy phát triển**: `docker ps -a` sáng 15/09/2026 không có `token-ledger-refresh`, tức dịch vụ chưa từng được tạo nên không container nào đang gọi cờ cũ. Máy nào đang chạy `ledger-refresh` thì phải build lại image `tools` khi nhận commit này (việc của chặng 3)
 
 ## 2. Phần còn lại của `db/`
 
-- [ ] 2.1 `db/load_provider.py`: `--kho` → `--dry-run`, `--tuy-chon` → `--optional`, `allow_abbrev=False`; chuỗi, định danh (`gop_cac_lan_keo` và giá trị trả về); sửa `tests/test_load_provider.py` theo tên hàm và chuỗi mới (`loi`, `ket`, `ca lech`)
-- [ ] 2.2 Chuỗi và định danh ở các tệp `db/` còn lại (`build_usage_daily`, `build_usage_hourly`, `gen_catalog`, `load_org`, `load_billing`, `load_ralli`, `rules`…); tên tệp/cột dữ liệu trên đĩa đánh dấu `vi-ok`
+- [x] 2.1 `db/load_provider.py`: `--kho` → `--dry-run`, `--tuy-chon` → `--optional`, `allow_abbrev=False`; chuỗi, định danh (`gop_cac_lan_keo` và giá trị trả về); sửa `tests/test_load_provider.py` theo tên hàm và chuỗi mới (`loi`, `ket`, `ca lech`)
+- [x] 2.2 Chuỗi và định danh ở các tệp `db/` còn lại (`build_usage_daily`, `build_usage_hourly`, `gen_catalog`, `load_org`, `load_billing`, `load_ralli`, `rules`…); tên tệp/cột dữ liệu trên đĩa đánh dấu `vi-ok` — thêm `load_monitoring`, `logs`. Tên agent, tên đơn vị và nhãn tài khoản (`Trợ Lý Ảo Hợp Đồng`, `Phòng BH1`, `Chưa quy được`…) là DỮ LIỆU hiện trên dashboard: giữ, đánh dấu `vi-ok`. Comment SQL do `gen_catalog.py` sinh vào `02_catalog.sql` dịch sang tiếng Anh. **Phát hiện thật, có từ trước change:** `db/load_monitoring.py` gọi `"\n  ".join(hong)` trong khi danh sách tên `fatal` - khi khâu nạp gặp lỗi dữ liệu thì rollback đúng rồi chết `NameError`, mất thông báo lỗi; kèm hai chỗ `tno_model` do một lần thay thế cũ nuốt chữ `trong`. Đã sửa. `hong` ở `tools/soat_khoa_api.py`, `tools/dien_tap_gateway.py`, `scripts/audit_db.py` đều CÓ khai báo, không cùng lỗi
 - [ ] 2.3 Kiểm theo D6; CI xanh
 
 ## 3. Phần còn lại của `scripts/`

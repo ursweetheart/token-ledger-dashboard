@@ -63,10 +63,10 @@ COLUMNS = ["hour", "agent_id", "model_id", "account_id", "calls",
 
 # Ba nguồn xuống được giờ. `billing` KHÔNG có mặt, và sự vắng mặt đó là có chủ ý
 # - xem docstring. Đọc bảng này để biết nguồn nào phải có, thay vì đếm số 3.
-NGUON_THEO_GIO = ("app", "gateway", "monitoring")
+HOURLY_SOURCES = ("app", "gateway", "monitoring")
 
 
-def _bo_dong_khong_co_gio(cn, source: str) -> int:
+def _rows_without_hour(cn, source: str) -> int:
     """Đếm dòng `fact_call` của nguồn này KHÔNG có `ts_local`.
 
     `hour` là NOT NULL và nằm trong khoá chính, nên dòng thiếu `ts_local` không
@@ -154,7 +154,7 @@ def load_monitoring(cn, ph, anchor) -> int:
         # đã cắt sẽ KHÁC số cắt một lần - lệch âm thầm, mỗi giờ một chút.
         #
         # Đo 03/09: 0/62.785 dòng monitoring có phần lẻ, nên hôm nay không lệch.
-        # Không dựa vào đó: `doi_chieu_voi_bang_ngay()` so đúng hai con số này và
+        # Không dựa vào đó: `compare_with_daily()` so đúng hai con số này và
         # DỪNG HẲN nếu chúng khác nhau. Đó mới là thứ giữ cho phép cắt an toàn.
         return int(d[k]) if k in d else None
 
@@ -166,7 +166,7 @@ def load_monitoring(cn, ph, anchor) -> int:
     return connect.insert_many(cn, ph, "fact_usage_hourly", COLUMNS, out)
 
 
-def doi_chieu_voi_bang_ngay(cn) -> list[str]:
+def compare_with_daily(cn) -> list[str]:
     """Tổng theo giờ phải bằng tổng theo ngày, CHO TỪNG NGUỒN.
 
     Trả về danh sách mô tả các chỗ lệch. Rỗng nghĩa là khớp.
@@ -176,37 +176,38 @@ def doi_chieu_voi_bang_ngay(cn) -> list[str]:
     Gộp lại thành một con số là biến một sự thật đã biết thành một báo động giả,
     rồi người ta sẽ tắt phép kiểm đi.
     """
-    lech = []
-    for src in NGUON_THEO_GIO:
-        gio = connect.query_one(cn, f"""
+    gaps = []
+    for src in HOURLY_SOURCES:
+        hourly = connect.query_one(cn, f"""
             SELECT COALESCE(SUM(total_tokens), 0), COALESCE(SUM(calls), 0)
             FROM fact_usage_hourly WHERE source = '{src}'""")
-        ngay = connect.query_one(cn, f"""
+        daily = connect.query_one(cn, f"""
             SELECT COALESCE(SUM(total_tokens), 0), COALESCE(SUM(calls), 0)
             FROM fact_usage_daily WHERE source = '{src}'""")
         if src == "app":
             # Chỉ Ralli xuống được giờ. So với phần fact_call của nguồn app, chứ
             # không với cả nguồn - fact_app_daily (TLA HĐ) không có giờ.
-            ngay = connect.query_one(cn, """
+            daily = connect.query_one(cn, """
                 SELECT COALESCE(SUM(total_tokens), 0), COALESCE(SUM(calls), 0)
                 FROM (SELECT SUM(total_tokens) AS total_tokens,
                              COUNT(*) AS calls
                         FROM fact_call
                        WHERE source = 'app' AND model_id IS NOT NULL
                          AND ts_local IS NOT NULL) t""")
-        if int(gio[0]) != int(ngay[0]):
-            lech.append(f"{src}: token theo gio {int(gio[0]):,}"
-                        f" != {int(ngay[0]):,} theo ngay")
-        if int(gio[1]) != int(ngay[1]):
-            lech.append(f"{src}: calls theo gio {int(gio[1]):,}"
-                        f" != {int(ngay[1]):,} theo ngay")
-    return lech
+        if int(hourly[0]) != int(daily[0]):
+            gaps.append(f"{src}: hourly tokens {int(hourly[0]):,}"
+                        f" != {int(daily[0]):,} daily")
+        if int(hourly[1]) != int(daily[1]):
+            gaps.append(f"{src}: hourly calls {int(hourly[1]):,}"
+                        f" != {int(daily[1]):,} daily")
+    return gaps
 
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     args = p.parse_args()
 
@@ -214,7 +215,7 @@ def main() -> None:
     cn.cursor().execute("DELETE FROM fact_usage_hourly")
 
     for src in ("app", "gateway"):
-        n = _bo_dong_khong_co_gio(cn, src)
+        n = _rows_without_hour(cn, src)
         if n:
             log.warning("  %s: %d rows have no ts_local - they are missing from"
                         " the daily table too, not just this one", src, n)
@@ -225,9 +226,9 @@ def main() -> None:
     n_m = load_monitoring(cn, ph, anchor)
     cn.commit()
 
-    tong = connect.query_one(cn, "SELECT COUNT(*) FROM fact_usage_hourly")[0]
+    total = connect.query_one(cn, "SELECT COUNT(*) FROM fact_usage_hourly")[0]
     log.info("  app %d | gateway %d | monitoring %d  ->  %d rows",
-             n_a, n_g, n_m, tong)
+             n_a, n_g, n_m, total)
 
     by_source = dict(connect.query(cn, "SELECT source, COUNT(*)"
                                        " FROM fact_usage_hourly GROUP BY source"))
@@ -236,23 +237,23 @@ def main() -> None:
     # `billing` KHÔNG được có mặt. Nếu ai đó thêm nó vào thì phép kiểm này kêu
     # ngay tại chỗ, chứ không đợi tới lúc có người đọc một con số tiền theo giờ.
     if "billing" in by_source:
-        raise SystemExit("fact_usage_hourly co nguon 'billing' - hoa don Google"
-                         " chi tinh theo NGAY, moi con so tien theo gio deu la"
-                         " bia. Xem docstring cua db/build_usage_hourly.py")
+        raise SystemExit("fact_usage_hourly has a 'billing' source - Google invoices"
+                         " are DAILY only, so every hourly cost figure would be"
+                         " made up. See the docstring of db/build_usage_hourly.py")
 
-    gio_rieng = connect.query_one(
+    distinct_hours = connect.query_one(
         cn, "SELECT COUNT(DISTINCT hour) FROM fact_usage_hourly")[0]
-    ngay_rieng = connect.query_one(
+    distinct_days = connect.query_one(
         cn, "SELECT COUNT(DISTINCT CAST(hour AS DATE)) FROM fact_usage_hourly")[0]
-    log.info("  %d distinct hours across %d days", gio_rieng, ngay_rieng)
+    log.info("  %d distinct hours across %d days", distinct_hours, distinct_days)
 
-    lech = doi_chieu_voi_bang_ngay(cn)
-    if lech:
-        for d in lech:
+    gaps = compare_with_daily(cn)
+    if gaps:
+        for d in gaps:
             log.error("  %s", d)
-        raise SystemExit("tong theo gio KHONG bang tong theo ngay - xem tren")
+        raise SystemExit("hourly totals do NOT match daily totals - see above")
     log.info("  hourly totals match daily totals for all %d sources",
-             len(NGUON_THEO_GIO))
+             len(HOURLY_SOURCES))
 
     cn.close()
 

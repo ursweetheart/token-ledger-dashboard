@@ -12,7 +12,7 @@ View `monitoring_ai` la cua duy nhat nen di qua khi tinh toan.
 
 HAI CAI BAY
 -----------
-Quy tac 9  `dich_vu` KHONG co san tno_model file. Dung cac dong TOKEN cua
+Quy tac 9  `dich_vu` KHONG co san trong file. Dung cac dong TOKEN cua
            generativelanguage lai co `res_service` RONG - dich vu cua chung nam
            o tien to `metric_type`. Gan thang dich_vu = res_service roi loc se
            tra ve 0 dong token, KHONG bao loi.
@@ -53,11 +53,11 @@ def _latest_monitoring() -> Path:
     chi con 112. Mot dot keo don le KHONG con phu het dai ngay, nen nguon dung
     cho nap la ban gop nhieu dot.
     """
-    parent_dir = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"
+    parent_dir = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"  # vi-ok: on-disk path
     remaining = sorted(p for p in parent_dir.glob("*") if p.is_dir())
     if not remaining:
         raise SystemExit(f"no folder in {parent_dir}."
-                         f" Chay scripts/merge_monitoring.py truoc.")
+                         f" Run scripts/merge_monitoring.py first.")
     merged = [p for p in remaining if p.name.endswith("-gop")]
     return (merged or remaining)[-1]
 
@@ -75,11 +75,12 @@ BATCH_SIZE = 20000
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     p.add_argument("--dir", default=str(MONITORING_DIR))
     p.add_argument("--limit", type=int, default=0,
-                   help="Chi nap N dong dau moi file - de chay lat mong cho nhanh")
+                   help="Load only the first N rows of each file - for a fast thin slice")
     args = p.parse_args()
 
     cn, dc = connect.open_db(args.db)
@@ -151,12 +152,12 @@ def main() -> None:
         written += connect.insert_many(cn, dc, "fact_monitoring", COLUMNS, batch)
 
     # Kiem TRUOC commit. Neu de sau thi du lieu sai da kip ghi xuong dia, va
-    # nguoi chay se co mot database tno_model nhu binh thuong nhung thieu model.
+    # nguoi chay se co mot database trong nhu binh thuong nhung thieu model.
     fatal = []
     if missing_model:
         fatal.append(f"model labels not yet in the model catalog: {dict(missing_model)}")
     if missing_agent:
-        fatal.append(f"project khong co tno_model dim_agent: {dict(missing_agent)}")
+        fatal.append(f"projects not in dim_agent: {dict(missing_agent)}")
     if missing_metric:
         fatal.append(f"metrics with no alias yet: {dict(missing_metric)}")
     if quota_mismatch:
@@ -165,7 +166,7 @@ def main() -> None:
         cn.rollback()
         raise SystemExit(
             "rolled back, nothing written. Re-run db/gen_catalog.py and load again:\n  "
-            + "\n  ".join(hong))
+            + "\n  ".join(fatal))
     cn.commit()
 
     cur.execute("SELECT COUNT(*) FROM fact_monitoring")
@@ -189,12 +190,12 @@ def main() -> None:
     if n != written:
         errors.append(f"row count in the DB {n} != {written} read from the source file")
     if projects != src_projects:
-        errors.append(f"so du an {projects} != {src_projects} file nguon")
+        errors.append(f"project count {projects} != {src_projects} source files")
     if clean == 0:
         errors.append("monitoring_ai = 0 - the service filter is dead, no row gets through")
     elif clean >= n:
         errors.append(f"monitoring_ai {clean} >= total {n} - the filter did not run, "
-                   f"luu luong Drive/Sheets dang bi tinh chung")
+                   f"Drive/Sheets traffic is being counted in")
     if errors:
         raise SystemExit("ACCEPTANCE FAILED: " + " | ".join(errors))
     log.info("  acceptance passed (source: %s)", MONITORING_DIR.name)

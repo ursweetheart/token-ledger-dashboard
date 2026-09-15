@@ -73,14 +73,14 @@ def anchor_accounts(cn) -> dict[int, int]:
         SELECT unit_agent_id, account_id FROM account
          WHERE kind IN ('service_account', 'whole_agent')""")
     out = {int(a): int(acc) for a, acc in rows}
-    thieu = [aid for (aid,) in connect.query(cn, "SELECT agent_id FROM dim_agent")
-             if aid not in out]
-    if thieu:
-        raise SystemExit(f"agents with no agent-level contribution: {thieu}."
-                         f" Chay lai db/load_org.py.")
+    missing = [aid for (aid,) in connect.query(cn, "SELECT agent_id FROM dim_agent")
+               if aid not in out]
+    if missing:
+        raise SystemExit(f"agents with no agent-level contribution: {missing}."
+                         f" Run db/load_org.py again.")
     if len(out) != len(rows):
-        raise SystemExit(f"co agent >1 dong gop muc agent: {len(rows)} dong,"
-                         f" {len(out)} agent. Chay lai db/load_org.py.")
+        raise SystemExit(f"some agent has more than one agent-level contribution:"
+                         f" {len(rows)} rows, {len(out)} agents. Run db/load_org.py again.")
     return out
 
 
@@ -295,7 +295,8 @@ def load_gateway(cn, ph) -> int:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     args = p.parse_args()
 
@@ -343,18 +344,18 @@ def main() -> None:
 
     errors = []
     if abs(float(cost) - float(src_cost or 0)) > 1e-4:
-        errors.append(f"tien {float(cost):.6f} != {float(src_cost or 0):.6f}"
-                      f" trong fact_billing_daily")
+        errors.append(f"cost {float(cost):.6f} != {float(src_cost or 0):.6f}"
+                      f" in fact_billing_daily")
     if app_tokens != src_tokens:
-        errors.append(f"token app {app_tokens} != {src_tokens} trong fact_call")
+        errors.append(f"app tokens {app_tokens} != {src_tokens} in fact_call")
     # Trước 31/08/2026 chỗ này ghim cứng `!= 3`. Ghim SỐ là sai hướng: thêm nguồn
     # thứ tư là phép kiểm báo lỗi trong khi hệ thống đang đúng. Nay nêu ĐÍCH DANH
     # ba nguồn bắt buộc, còn `gateway` là tuỳ - sổ Gateway có thể rỗng khi chưa
     # agent nào chạy qua, và đó không phải lỗi.
-    BAT_BUOC = {"billing", "monitoring", "app"}
-    thieu = BAT_BUOC - set(by_source)
-    if thieu:
-        errors.append(f"thieu nguon {sorted(thieu)}")
+    REQUIRED = {"billing", "monitoring", "app"}
+    missing = REQUIRED - set(by_source)
+    if missing:
+        errors.append(f"missing sources {sorted(missing)}")
 
     # Nguồn gateway: nếu có dòng thì token phải khớp bảng gốc.
     gw_tokens = connect.query_one(cn, "SELECT SUM(total_tokens) FROM fact_usage_daily"
@@ -365,7 +366,7 @@ def main() -> None:
                                        " AND source='gateway'"
                                        " AND outcome='success'")[0]
         if int(gw_tokens) != int(gw_src or 0):
-            errors.append(f"token gateway {gw_tokens} != {gw_src} trong fact_call")
+            errors.append(f"gateway tokens {gw_tokens} != {gw_src} in fact_call")
 
     # Ba cột tách phải cộng lại ra total_tokens - theo đúng QUY ƯỚC CỦA TỪNG
     # NGUỒN, không phải một công thức chung:
@@ -406,8 +407,8 @@ def main() -> None:
         parts = int(r[1] or 0) + int(r[2] or 0) + (int(r[3] or 0) if add_cached else 0)
         allowed = source_conflict if source == "app" else 0
         if (total - parts) != allowed:
-            errors.append(f"nguon {source}: tach {parts:,} != tong {total:,}"
-                          f" (lech {total - parts:,}, bang nguon lech {allowed:,})")
+            errors.append(f"source {source}: parts {parts:,} != total {total:,}"
+                          f" (gap {total - parts:,}, source-table gap {allowed:,})")
     if source_conflict:
         log.warning("  app: %s token gap between total and prompt+completion"
                     " - the app records it that way, checked against the source"
