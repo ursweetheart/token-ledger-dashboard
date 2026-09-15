@@ -19,24 +19,24 @@
 
 ## 3. Làm đỏ có chủ ý
 
-- [ ] 3.1 Trên một nhánh tạm, làm phép canh bản vá không tìm thấy ký hiệu; ghi mã lần chạy CI đỏ; xoá nhánh tạm
-- [ ] 3.2 Chạy lại lần hai trên cùng commit fork; xác nhận bước build bị bỏ qua và ghi thời gian công việc
-- [ ] 3.3 Trên một nhánh tạm, ghim compose vào một nhãn không tồn tại; ghi mã lần chạy đỏ; xoá nhánh tạm
+- [x] 3.1 Trên một nhánh tạm, làm phép canh bản vá không tìm thấy ký hiệu; ghi mã lần chạy CI đỏ; xoá nhánh tạm — CI `34917662852` (`tmp/red-sentinel-guard`, đã xoá): đỏ ở `Require the Sentinel patch`, ba bước sau đều skipped, thông điệp nêu ký hiệu, tệp, fork, nhánh và commit `4373a32c`
+- [x] 3.2 Chạy lại lần hai trên cùng commit fork; xác nhận bước build bị bỏ qua và ghi thời gian công việc — CI `34917485220` (push `249f384`): `Skipping build: …:4373a32c… is already in the registry`, bước `Build and push` = skipped, công việc `gateway-image` 9 giây (lần build thật 8 phút 45 giây)
+- [x] 3.3 Trên một nhánh tạm, ghim compose vào một nhãn không tồn tại; ghi mã lần chạy đỏ; xoá nhánh tạm — CI `34917665176` (`tmp/red-compose-pin`, đã xoá): build skipped vì nhãn `4373a32c` đã có, rồi đỏ ở `Compose must pin a tag that exists` với `pins …:0000…0000, which is not in the registry`
 
 ## 4. Kho GHCR
 
-- [ ] 4.1 Người sở hữu đặt gói `ursweetheart/litellm_rang_dong` thành công khai (thao tác tay trên GitHub, chỉ sau khi 1.1 đạt)
-- [ ] 4.2 `docker logout ghcr.io` rồi `docker pull` nhãn vừa build; xác nhận kéo được mà không đăng nhập
-- [ ] 4.3 `docker inspect` image kéo về: nhãn `revision` đúng commit fork, không có tệp `.env` nào trong image
+- [x] 4.1 Người sở hữu đặt gói `ursweetheart/litellm_rang_dong` thành công khai (thao tác tay trên GitHub, chỉ sau khi 1.1 đạt) — 15/09/2026, API `visibility=public`. Lần thử đầu không được lưu; gói do workflow đẩy lên sinh ra riêng tư dù repo công khai
+- [x] 4.2 `docker logout ghcr.io` rồi `docker pull` nhãn vừa build; xác nhận kéo được mà không đăng nhập — không `logout` (tránh xoá thông tin đăng nhập khác trên máy); chứng minh bằng `curl` ẩn danh: token ẩn danh lấy được, manifest `HTTP 200`, digest `sha256:7e888594…` khớp CI. Trước khi công khai: token 401, manifest 403
+- [x] 4.3 `docker inspect` image kéo về: nhãn `revision` đúng commit fork, không có tệp `.env` nào trong image — `revision=4373a32c…`, `url=…/litellm_rang_dong`, `source=…/token-ledger-dashboard`; `.env*` duy nhất là `/app/docker/.env.example`; bản vá Sentinel có 3 lần; `python 3.13.15+`, `import math` chạy được
 
 ## 5. Compose
 
-- [ ] 5.1 `x-litellm`: bỏ `build:`, thêm `image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:<commit>}`, chuyển chú thích bản vá Sentinel lên trên dòng đó
-- [ ] 5.2 `docker-compose.bench.yml`: `litellm-bench` dùng cùng biến image
-- [ ] 5.3 `.env.example`: khai `LITELLM_IMAGE`, giá trị mặc định, và cách build tại chỗ từ `../litellm_tuan_test`
-- [ ] 5.4 Nhóm `guards`: khối `x-litellm` không được có `build:` hay `context:` trỏ ra ngoài repo; làm đỏ có chủ ý một lần
-- [ ] 5.5 Trong một bản sao repo không có thư mục ngang hàng, chạy `docker compose --profile gateway config`; xác nhận đạt
-- [ ] 5.6 Đo `docker compose pull --dry-run` và `docker compose --profile gateway pull --dry-run`; ghi xem các image `:local` có cần `--ignore-buildable` không
+- [x] 5.1 `x-litellm`: bỏ `build:`, thêm `image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:<commit>}`, chuyển chú thích bản vá Sentinel lên trên dòng đó — nhãn `4373a32c…`
+- [x] 5.2 `docker-compose.bench.yml`: `litellm-bench` dùng cùng biến image — cùng nguyên văn dòng `image:`; phép canh 5.4 kiểm hai dòng giống hệt nhau, vì neo YAML không đi qua được hai tệp
+- [x] 5.3 `.env.example`: khai `LITELLM_IMAGE`, giá trị mặc định, và cách build tại chỗ từ `../litellm_tuan_test`
+- [ ] 5.4 Nhóm `guards`: khối `x-litellm` không được có `build:` hay `context:` trỏ ra ngoài repo; làm đỏ có chủ ý một lần — phép canh đã viết (cấm mọi `build:`/`context:` trong `x-litellm`, và bench phải ghim cùng image); 11 phép kiểm trên máy đạt, trong đó có trường hợp khối bench đọc lan sang khoá cấp cao nhất. **Còn thiếu: lần đỏ có chủ ý trên CI**
+- [x] 5.5 Trong một bản sao repo không có thư mục ngang hàng, chạy `docker compose --profile gateway config`; xác nhận đạt — compose mới: `config` đạt, image duy nhất của Gateway là `ghcr.io/…:4373a32c…`, bench cũng vậy. Đối chứng compose cũ (`249f384`): `config` **cũng đạt**; nút chặn chỉ lộ ra ở bước build: `unable to prepare context: path ".../litellm_tuan_test" not found`, rc=1, tái hiện với một nhãn chưa từng build để giống máy mới. `--dry-run` không tái hiện được vì nó bỏ qua bước build
+- [x] 5.6 Đo `docker compose pull --dry-run` và `docker compose --profile gateway pull --dry-run`; ghi xem các image `:local` có cần `--ignore-buildable` không — **CẦN**. Không có cờ: rc=1 cả hai trường hợp, `token-ledger-api:local` và `token-ledger-web:local` báo `authorization failed`. Có `--ignore-buildable`: rc=0, hai image đó `Skipped Image can be built`, image Gateway kéo được
 
 ## 6. Chuyển Gateway đang chạy sang image từ kho
 

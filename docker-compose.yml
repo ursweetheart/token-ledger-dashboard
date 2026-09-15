@@ -71,27 +71,29 @@ x-sentinel: &sentinel
       condition: service_healthy
 
 x-litellm: &litellm
-  build:
-    # Fork nam NGANG HANG du an, khong long ben trong (repo long repo thi
-    # `git clean -xfd` xoa ca fork). Doi cho fork di la compose bao loi ngay.
-    #
-    # PHAI LA NHANH CO BAN VA SENTINEL. Nen ghi ro vi day la phu thuoc cheo giua
-    # hai repo, va no hong theo kieu kho doan: lay nham nhanh thi LiteLLM CHET
-    # ngay luc khoi dong voi
-    #     TypeError: Redis.__init__() got multiple values for argument 'host'
-    #
-    #     repo   git@github.com:ursweetheart/litellm_rang_dong.git
-    #     nhanh  Tuan-develop        <- CO ban va, dung nhanh nay
-    #     commit e3490555c5          "fix(redis): stop passing the configured
-    #                                 host into Sentinel connections"
-    #
-    #     nhanh  litellm_internal_staging  <- KHONG co ban va (f005afa146).
-    #                                 Dung nhanh nay thi Gateway khong len duoc.
-    #
-    # Kiem nhanh: grep _SENTINEL_IGNORED_CONNECTION_ARGS trong litellm/_redis.py.
-    # Ban goc da do: litellm 1.99.0 tai f005afa146.
-    context: ../litellm_tuan_test
-  image: litellm_tuan_test:gateway
+  # Image do CI dong goi tu nhanh Tuan-develop cua fork roi day len GHCR, nhan =
+  # commit cua fork. Xem job `gateway-image` trong .github/workflows/ci.yml va
+  # openspec/changes/package-the-gateway-image-in-ci/. May nao chi co repo nay,
+  # khong co fork ben canh, van `pull` va `up` duoc.
+  #
+  # PHAI LA COMMIT CO BAN VA SENTINEL. Thieu ban va thi LiteLLM CHET ngay luc
+  # khoi dong voi
+  #     TypeError: Redis.__init__() got multiple values for argument 'host'
+  # CI grep _SENTINEL_IGNORED_CONNECTION_ARGS trong litellm/_redis.py TRUOC khi
+  # build, nen khong nhan nao tren kho thieu ban va.
+  #
+  #     repo   git@github.com:ursweetheart/litellm_rang_dong.git
+  #     nhanh  Tuan-develop               <- CO ban va, CI build tu nhanh nay
+  #     nhanh  litellm_internal_staging   <- KHONG co ban va (f005afa146)
+  #
+  # Doi phien ban: push fork -> CI build nhan moi -> sua nhan o dong `image:`.
+  # CI do neu dong nay ghim mot nhan chua co tren kho, hoac neu
+  # docker-compose.bench.yml ghim khac dong nay.
+  #
+  # Thu mot ban fork dang sua tren may, KHONG sua tep nay:
+  #     docker build -t litellm-local ../litellm_tuan_test
+  #     roi dat LITELLM_IMAGE=litellm-local trong .env
+  image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:4373a32c2a2608cdbd732ba47ba057615e5e2846}
   profiles: ["gateway"]
   restart: unless-stopped
   # entrypoint rieng: chan khoi dong khi thieu khoa, roi moi giao lai cho

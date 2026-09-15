@@ -12,7 +12,7 @@ fork   github.com/ursweetheart/litellm_rang_dong   PUBLIC, nhanh mac dinh Tuan-d
        litellm_internal_staging   5b13b8361e   KHONG co ban va
        ban clone tren may nay:    nhanh litellm_internal_staging, commit e3490555c5
 
-repo   github.com/ursweetheart/token-ledger-dashboard   PRIVATE
+repo   github.com/ursweetheart/token-ledger-dashboard   PUBLIC tu 25/07/2026 (ban dau ghi nham PRIVATE)
 CI     .github/workflows/ci.yml: guards, test-js, test-py — khong co Docker
 
 image  litellm_tuan_test:gateway   21536058b191   1,65 GB (giai nen)   tao 07/09/2026 17:25 +07
@@ -171,7 +171,8 @@ compose. Ghim một nhãn chưa từng build thì đỏ ngay, trước khi máy 
 
 ### D8. Gói công khai, đặt bằng tay một lần
 
-Gói sinh ra từ repo PRIVATE thì mặc định riêng tư. Có hai cách để máy chủ kéo được:
+Gói do workflow đẩy lên lần đầu thì riêng tư, **kể cả khi repo công khai** (đo 15/09/2026: repo
+`private=false`, gói `visibility=private`). Có hai cách để máy chủ kéo được:
 
 | | Công khai gói | `docker login` trên máy chủ |
 |---|---|---|
@@ -261,7 +262,9 @@ rồi `up -d` lại từng instance. Không cần revert commit.
 
 - **Kiến trúc máy chủ Gateway mới.** Change này giả định `linux/amd64`, giống máy hiện tại. Máy mới là
   ARM thì phải build thêm một kiến trúc. Hỏi trước khi mua hoặc cấp máy.
-- **`docker compose pull` với các image `:local`** (`api`, `web`, `tools`) không có trên kho nào: chạy
-  êm, hay cần `--ignore-buildable`? Đây là việc của chặng 3. Change này đo luôn bằng `--dry-run`, vì
-  gần như không tốn gì, rồi ghi kết quả vào luật triển khai.
+- ~~**`docker compose pull` với các image `:local`** (`api`, `web`, `tools`) không có trên kho nào: chạy
+  êm, hay cần `--ignore-buildable`?~~ **Đã đo 15/09/2026 (task 5.6): CẦN `--ignore-buildable`.**
+  Không có cờ thì `pull` thoát mã 1 vì `token-ledger-api:local`/`token-ledger-web:local` báo
+  `authorization failed`, có hay không `--profile gateway`. Có cờ thì mã 0. Lệnh triển khai của chặng 3
+  phải là `docker compose [--profile gateway] pull --ignore-buildable`.
 - **Ai đặt gói công khai.** Thao tác trên giao diện GitHub, chỉ người sở hữu tài khoản làm được.

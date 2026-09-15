@@ -70,8 +70,10 @@ chính là kịch bản cả ba lỗi trên cùng xảy ra.
 
 **Hệ thống bên ngoài:**
 
-- **GHCR** thêm gói `ursweetheart/litellm_rang_dong`. Repo này là **PRIVATE**, nên gói sinh ra mặc
-  định cũng riêng tư. Người sở hữu phải **đặt gói thành công khai một lần bằng tay**, để máy chủ kéo
+- **GHCR** thêm gói `ursweetheart/litellm_rang_dong`. Gói sinh ra **riêng tư**, dù repo này công khai
+  (đo qua API 15/09/2026: gói `visibility=private`, repo `private=false` từ 25/07/2026; bản đầu của
+  proposal ghi nhầm repo là PRIVATE). Người sở hữu phải **đặt gói thành công khai một lần bằng tay**
+  trên giao diện web, vì GitHub không có API đổi chế độ hiển thị của gói, để máy chủ kéo
   được mà không phải giữ khoá. Mã nguồn bên trong đã công khai sẵn ở fork.
 - **Gateway trên máy phát triển** là bản local, sẽ được khởi động lại khi đổi image. Không ảnh hưởng
   hệ thống thật.

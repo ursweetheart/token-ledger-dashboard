@@ -65,6 +65,26 @@ jobs:
           fi
           echo "Dịch vụ web bind qua biến WEB_BIND."
 
+      # Gateway chạy image lấy từ kho (package-the-gateway-image-in-ci). Quay lại
+      # build từ thư mục ngang hàng thì máy nào thiếu thư mục đó, compose thoát
+      # ngay và kéo theo cả postgres, api, web. Bench phải ghim đúng cùng image:
+      # đo tải trên một image khác image đang chạy thì số đo vô nghĩa.
+      - name: Gateway image must come from the registry, not a sibling folder
+        run: |
+          BLOCK=$(awk '/^x-litellm:/{f=1; next} f && /^[^[:space:]#]/{exit} f' docker-compose.yml)
+          if printf '%s\n' "$BLOCK" | grep -nE '^[[:space:]]+(build|context):'; then
+            echo "::error::docker-compose.yml: x-litellm must not build (build:/context:). Use  image: \${LITELLM_IMAGE:-<registry tag>}"
+            exit 1
+          fi
+          MAIN=$(printf '%s\n' "$BLOCK" | sed -nE 's/^[[:space:]]+image:[[:space:]]*(.*[^[:space:]])[[:space:]]*$/\1/p')
+          BENCH=$(awk '/^  litellm-bench:/{f=1; next} f && /^(  )?[^[:space:]#]/{exit} f' docker-compose.bench.yml \
+                  | sed -nE 's/^[[:space:]]+image:[[:space:]]*(.*[^[:space:]])[[:space:]]*$/\1/p')
+          if [ -z "$MAIN" ] || [ "$MAIN" != "$BENCH" ]; then
+            echo "::error::Gateway image mismatch: docker-compose.yml x-litellm has '$MAIN', docker-compose.bench.yml litellm-bench has '$BENCH'."
+            exit 1
+          fi
+          echo "Gateway image comes from the registry: $MAIN"
+
   # ---------------------------------------------------------------------------
   # 51 phép kiểm JavaScript. Node có sẵn trên máy ảo, không cài gì thêm.
   # ---------------------------------------------------------------------------
