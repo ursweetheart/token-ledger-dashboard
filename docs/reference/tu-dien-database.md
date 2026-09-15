@@ -1,22 +1,27 @@
-# Từ điển database `token_ledger`
+# Từ điển database `token_ledger_v2`
 
 > **File này có HAI PHẦN. Đừng lẫn chúng với nhau.**
 >
 > | | Nội dung | Trạng thái |
 > |---|---|---|
-> | **PHẦN I** | 18 bảng + 3 view đang chạy — 599.686 dòng | ✅ **CÓ THẬT.** Mở pgAdmin ra là thấy |
-> | **PHẦN II** | Schema đề xuất cho kiến trúc API Gateway | 🟡 **CHƯA TỒN TẠI.** Bản vẽ để bàn |
+> | **PHẦN I** | 23 bảng + 5 view đang chạy — 747.714 dòng | ✅ **CÓ THẬT.** Mở pgAdmin ra là thấy |
+> | **PHẦN II** | Schema đề xuất cho kiến trúc API Gateway | 🟡 **PHẦN LỚN CHƯA TỒN TẠI.** Bản vẽ để bàn — xem đầu Phần II để biết mảnh nào đã thành thật |
 >
-> Không bảng nào trong Phần II tồn tại trong database. Viết truy vấn thì đọc Phần I.
+> Viết truy vấn thì đọc Phần I. Chỉ những gì có ở Phần I mới có trong database.
 
 ---
 
 # ✅ PHẦN I — SCHEMA HIỆN TẠI
 
-> Tra cứu từng bảng, từng cột. Số liệu đọc trực tiếp từ PostgreSQL **ngày 19/08/2026**.
-> Kết nối: `postgresql://token:***@127.0.0.1:5432/token_ledger` (PostgreSQL 17, docker-compose).
+> Tra cứu từng bảng, từng cột. Số liệu đọc trực tiếp từ PostgreSQL **ngày 14/09/2026**,
+> ngay sau lần dựng lại từ `data/` cùng ngày. Schema ở migration `012_nhip_tim_lam_moi`.
+> Kết nối: `postgresql://token:***@127.0.0.1:5432/token_ledger_v2` (PostgreSQL 17, docker-compose).
 >
-> **18 bảng + 3 view — 599.686 dòng.**
+> **23 bảng + 5 view — 747.714 dòng** (tổng của 23 bảng, không tính view). **38 khoá ngoại.**
+>
+> Database cũ `token_ledger` **đã bị xoá ngày 14/09/2026**, sau khi so mọi bảng với v2
+> (xem `openspec/specs/schema-migrations/spec.md`). Bản trước của file này đo trên database đó
+> ngày 19/08/2026; vài con số lịch sử bên dưới vẫn giữ và **được ghi rõ ngày đo**.
 >
 > Muốn hiểu *vì sao* database có hình dạng này thì đọc `mo-ta-database.md`.
 > Muốn biết dữ liệu *đến đây bằng đường nào* thì đọc `toan-trinh-du-lieu.md`.
@@ -29,9 +34,10 @@
 | Tiền tố | Nghĩa | Dùng thế nào | Các bảng |
 |---|---|---|---|
 | `dim_` | **dimension** — thực thể mô tả: *ai / cái gì* | Ít dòng, ít đổi. Chỉ để JOIN vào. **Không bao giờ cộng.** | `dim_agent` `dim_unit` `dim_user` `dim_model` `dim_model_alias` `dim_function` `dim_metric_alias` |
-| `fact_` | **fact** — số đo: *chuyện đã xảy ra* | Nhiều dòng. Cộng và nhóm thoải mái. | `fact_call` `fact_app_daily` `fact_billing_daily` `fact_monitoring` `fact_usage_daily` `fact_perf_daily` `fact_latency_daily` |
-| `ref_` | **reference** — quy ước do *người* quyết định | Bảng giá, tỷ giá, ngân sách. Không đo được, phải khai. | `ref_price` `ref_fx` `ref_budget` |
-| *(không tiền tố)* | `account` — bảng danh tính hợp nhất | Nằm giữa `dim_` và trục chính. Là khoá CHUNG cho cả ba nguồn. | `account` |
+| `fact_` | **fact** — số đo: *chuyện đã xảy ra* | Nhiều dòng. Cộng và nhóm thoải mái — **trừ** `fact_provider_daily`, bảng chỉ để đối chiếu. | `fact_call` `fact_app_daily` `fact_billing_daily` `fact_monitoring` `fact_usage_daily` `fact_usage_hourly` `fact_perf_daily` `fact_latency_daily` `fact_provider_daily` |
+| `ref_` | **reference** — quy ước do *người* quyết định, hoặc sổ theo dõi của đường nạp | Bảng giá, tỷ giá, ngân sách, năng lực của nguồn, nhịp tim. Không cộng vào số liệu. | `ref_price` `ref_fx` `ref_budget` `ref_source` `ref_load_run` |
+| *(không tiền tố)* | `account` — bảng danh tính hợp nhất | Nằm giữa `dim_` và trục chính. Là khoá CHUNG cho mọi nguồn. | `account` |
+| *(không tiền tố)* | `alembic_version` — bảng của công cụ migration | Không phải dữ liệu. Đừng sửa tay. | `alembic_version` |
 
 **Hai quy ước xuyên suốt:**
 
@@ -57,7 +63,7 @@
 | 5 | `has_org_tree` | `boolean` | có cây tổ chức không | `true` ở 2/8 (TLA HĐ và Ralli) — chỉ hai app này khai phòng ban | `true` (2), `false` (6) |
 | 6 | `project_created_at` | `date` | ngày lập project trên GCP | 7/8 có. Ralli để trống | `2025-03-19` … `2026-06-25` |
 | 7 | `data_from` | `date` | ngày đầu tiên **có dữ liệu** | Khác `project_created_at`: lập project trước, có số liệu sau | `2026-01-01` … `2026-07-06` |
-| 8 | `data_to` | `date` | ngày cuối có dữ liệu | `NULL` = **còn chạy**. Chỉ 2/8 có giá trị | `2026-08-13` (invoice), `2026-07-01` (quizzer) |
+| 8 | `data_to` | `date` | ngày cuối có dữ liệu | `NULL` = **còn chạy**. Chỉ 2/8 có giá trị | `2026-08-26` (invoice), `2026-08-21` (quizzer) |
 | 9 | `is_running` | `boolean` | còn hoạt động không | `true` (6), `false` (2 — invoice và tools-quizzer đã dừng) | `true` |
 | 10 | `has_google_source` | `boolean` | có nối Google Billing/Monitoring không | **7/8 = `true`.** Ralli `false`: project `tla-ralli` CÓ tồn tại nhưng CHƯA nối billing. Cột này tồn tại để giao diện biết lúc nào phải hiện `-` thay vì `0%` | `false` (chỉ Ralli) |
 
@@ -67,8 +73,8 @@
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | `contact-center` | Chatbot Contact Center | `pro-tuner-454203-v3` | ✗ | 2025-03-19 | 2026-01-13 | — | ✓ | ✓ |
 | 2 | `sale-agent` | Sale Agent | `tranquil-post-471401-c1` | ✗ | 2025-09-07 | 2026-01-01 | — | ✓ | ✓ |
-| 3 | `invoice` | Multi modal AI Invoice | `multimodal-invoice` | ✗ | 2025-09-15 | 2026-01-22 | 2026-08-13 | ✗ | ✓ |
-| 4 | `tools-quizzer` | Tools Quizzer | `tools-quizz` | ✗ | 2026-04-10 | 2026-06-17 | 2026-07-01 | ✗ | ✓ |
+| 3 | `invoice` | Multi modal AI Invoice | `multimodal-invoice` | ✗ | 2025-09-15 | 2026-01-22 | 2026-08-26 | ✗ | ✓ |
+| 4 | `tools-quizzer` | Tools Quizzer | `tools-quizz` | ✗ | 2026-04-10 | 2026-06-17 | 2026-08-21 | ✗ | ✓ |
 | 5 | `tla-hd` | Trợ Lý Ảo Hợp Đồng | `ai-chatbot-contract` | ✓ | 2026-06-20 | 2026-07-02 | — | ✓ | ✓ |
 | 6 | `dms-feedback` | Phân Loại Phản Hồi Tiếp Thị | `feedback-dms-tiep-thi` | ✗ | 2026-06-25 | 2026-07-06 | — | ✓ | ✓ |
 | 7 | `crm-feedback` | Phân Loại Dữ Liệu CRM | `crm-500509` | ✗ | 2026-06-25 | 2026-07-06 | — | ✓ | ✓ |
@@ -88,7 +94,9 @@
 | 4 | `parent_id` | `text` | đơn vị cha | 117/130 có cha. 13 dòng `NULL` = gốc cây | `69ee5b13be38bdbf5a8de670` |
 | 5 | `level` | `integer` | độ sâu trong cây | 0–5. `0` dành cho dòng kỹ thuật | `0`, `1`, `3`, `5` |
 | 6 | `path` | `text` | đường dẫn đầy đủ từ gốc | Ghép tên các cấp bằng ` > `, để hiện lên màn hình mà không phải đệ quy | `Công ty CPBĐ PN Rạng Đông > Phòng BH3 > …` |
-| 7 | `is_technical` | `boolean` | dòng kỹ thuật hay phòng ban thật | **`true` ở 8/130.** Gồm 6 dòng *"Đơn vị sử dụng &lt;agent&gt;"* và các dòng *"Chưa quy được"*. Không có cột này thì `COUNT(*)` đếm cả dòng kỹ thuật thành phòng ban thật | `false` (122), `true` (8) |
+| 7 | `is_technical` | `boolean` | dòng kỹ thuật hay phòng ban thật | **`true` ở 8/130.** Gồm 6 dòng *"Đơn vị sử dụng &lt;agent&gt;"* (`__technical_1__` … `__technical_7__`, trừ 5) và 2 dòng *"Chưa quy được"* (`__unattributed_5__`, `__unattributed_8__`). Không có cột này thì `COUNT(*)` đếm cả dòng kỹ thuật thành phòng ban thật | `false` (122), `true` (8) |
+| 8 | `canonical_unit_id` | `text` | **cùng một phòng ban ngoài đời** nằm ở dòng nào của cây kia | Chỉ 4/130 có. Cả 4 là phòng ban của cây TLA HĐ trỏ sang dòng tương ứng ở cây Ralli: `TT C4LED`, `Phòng BH1`, `Phòng BH2`, `Phòng BH3`. Trước 20/08 phép gộp này nằm trong `UNIT_ALIASES` gõ tay ở `web/js/app.js` | `69ee5b13be38bdbf5a8de6a3` |
+| 9 | `is_report_aggregate` | `boolean` | **cấp gom thuần tuý**, báo cáo bắt đầu từ bên dưới nó | `true` ở đúng 2 dòng: `Toàn công ty` và `Tổng công ty Rạng Đông`. Mọi phòng ban đều nằm dưới chúng, nên để làm cấp 1 của bảng thì tốn hai lần bung mà không phân biệt được gì. Gốc báo cáo = đơn vị không phải cấp gom, mà cha của nó hoặc không có, hoặc là cấp gom | `false` (128), `true` (2) |
 
 **Dữ liệu mẫu:**
 
@@ -103,7 +111,7 @@
 
 ## `account` — **Tài khoản** hợp nhất. Một dòng = một tài khoản, KHÔNG phải một con người
 
-953 dòng · Khoá chính `account_id` · `username` là UNIQUE
+954 dòng · Khoá chính `account_id` · `username` là UNIQUE
 
 **Vì sao bảng này tồn tại:** trước đây mỗi nguồn ghi *"ai dùng"* theo kiểu riêng — Ralli ghi ObjectId của Ralli, TLA HĐ ghi id của TLA HĐ, còn Google thì **không ghi người nào cả** (hoá đơn chỉ biết *"cả project này tiêu ngần này"*). Ba quyển sổ, không mã chung. Từ đây mọi nơi đều trỏ về `account_id`.
 
@@ -111,16 +119,16 @@
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `account_id` | `integer` | mã tài khoản chung | 1–953. Khoá dùng cho MỌI phép tính | `1`, `505`, `950` |
-| 2 | `username` | `text` | tên đăng nhập | Đã hạ chữ thường, cắt khoảng trắng | `admin`, `bh1.longnt`, `quy.tv@rangdong.com.vn` |
-| 3 | `full_name` | `text` | họ tên | 946/953 có | `Nguyễn Văn Quí`, `Quản trị viên` |
-| 4 | `email` | `text` | thư điện tử | 927/953 có | `ct.giangcl@rangdong.com.vn` |
-| 5 | `kind` | `text` | **loại tài khoản** | `real` (937) người thật · `whole_agent` (8) Google chỉ báo mức project nên không quy được về ai, một dòng mỗi agent · `unattributed` (8) có lượt gọi nhưng bản ghi không kèm người | `real` |
+| 1 | `account_id` | `integer` | mã tài khoản chung | 1–954. Khoá dùng cho MỌI phép tính | `1`, `505`, `950` |
+| 2 | `username` | `text` | tên đăng nhập | Đã hạ chữ thường, cắt khoảng trắng | `admin`, `bh1.longnt`, `svc.crm-feedback` |
+| 3 | `full_name` | `text` | họ tên | 947/954 có | `Nguyễn Văn Quí`, `Quản trị viên` |
+| 4 | `email` | `text` | thư điện tử | 928/954 có | `ct.giangcl@rangdong.com.vn` |
+| 5 | `kind` | `text` | **loại tài khoản** | `real` (938) người thật · `service_account` (6) tài khoản dịch vụ của 6 agent một-người-dùng (`svc.contact-center`, `svc.crm-feedback`…): biết chính xác ai gọi, chỉ là "ai" đó không phải một con người · `whole_agent` (2) cả agent, không quy được về ai (ví dụ `__whole_agent_5__`) · `unattributed` (8) có lượt gọi nhưng bản ghi không kèm người | `real` |
 | 6 | `unit_id` | `text` | đơn vị của tài khoản | **Đơn vị nằm ở đây, không ở `dim_user`.** Một tài khoản = một đơn vị, đã chọn dứt điểm | `69ee5b13be38bdbf5a8de6c5` |
 | 7 | `is_shared` | `integer` | tài khoản dùng chung? | `0`/`1`. `1` = `admin`, tài khoản thử… Vẫn tính đủ token và tiền, nhưng **phải loại khỏi tỷ lệ áp dụng** — `admin` một mình tạo 46,4% lưu lượng TLA HĐ | `0`, `1` |
-| 8 | `role` | `text` | vai trò cao nhất trong các app | `MEMBER` (803) · `DT` (63) · `UNIT_LEAD` (42) · `COMPANY_ADMIN` (15) · `ADMIN` (4) · `PKH` (1) · `ASSISTANT` (1) · `NULL` (24) | `MEMBER` |
-| 9 | `is_enabled` | `boolean` | tài khoản còn bật? | 891 `true`, 62 `NULL` (`NULL` = app không khai, khác với "bị tắt") | `true` |
-| 10 | `created_at` | `timestamp` | ngày được cấp tài khoản | 891/953 có. Từ 02/04/2026 đến 12/08/2026 | `2026-04-26 17:59:49` |
+| 8 | `role` | `text` | vai trò cao nhất trong các app | `MEMBER` (801) · `DT` (63) · `UNIT_LEAD` (45) · `COMPANY_ADMIN` (15) · `ADMIN` (4) · `PKH` (1) · `ASSISTANT` (1) · `NULL` (24) | `MEMBER` |
+| 9 | `is_enabled` | `boolean` | tài khoản còn bật? | 892 `true`, 62 `NULL` (`NULL` = app không khai, khác với "bị tắt") | `true` |
+| 10 | `created_at` | `timestamp` | ngày được cấp tài khoản | 892/954 có. Từ 02/04/2026 đến 18/08/2026 | `2026-04-26 17:59:49` |
 | 11 | `unit_agent_id` | `integer` | đơn vị lấy từ cây của app nào | Ghi lại đã chọn cây nào, vì hai app mô hình hoá tổ chức khác nhau | `5`, `8` |
 | 12 | `unit_conflict` | `integer` | các nguồn có bất đồng không | `1` = hai app nói hai đơn vị khác nhau, ta đã chọn hộ (lấy đơn vị **sâu nhất**). Giữ lại dấu vết để việc chọn không diễn ra âm thầm | `0`, `1` |
 
@@ -136,39 +144,39 @@
 
 ## `dim_user` — **Bản ghi người dùng theo từng app** (thô, trước khi hợp nhất)
 
-964 dòng · Khoá chính `(agent_id, user_id)`
+965 dòng · Khoá chính `(agent_id, user_id)`
 
-Khác `account` thế nào: **nhiều dòng `dim_user` có thể trỏ vào CÙNG một `account`** — 13 dòng do Ralli ghi hai dạng khoá, 5 dòng do cùng tên đăng nhập tồn tại ở cả hai app, 1 dòng do hai tài khoản dùng chung email. Bảng này giữ nguyên hiện trạng từng app; `account` mới là bản đã gộp.
+Khác `account` thế nào: **nhiều dòng `dim_user` có thể trỏ vào CÙNG một `account`** — đo 19/08/2026: 13 dòng do Ralli ghi hai dạng khoá, 5 dòng do cùng tên đăng nhập tồn tại ở cả hai app, 1 dòng do hai tài khoản dùng chung email. Đo 14/09: 965 dòng trỏ vào 944 tài khoản khác nhau. Bảng này giữ nguyên hiện trạng từng app; `account` mới là bản đã gộp.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
 | 1 | `user_id` | `text` | khoá GỐC của app | ObjectId của Ralli, hoặc id của TLA HĐ | `69ee5296c7fb84b9e507c2f9` |
 | 2 | `agent_id` | `integer` | dòng này do app nào khai | 1–8 | `8` |
-| 3 | `account_id` | `integer` | trỏ về tài khoản đã hợp nhất | 964/964 đều đã quy được | `472`, `516` |
+| 3 | `account_id` | `integer` | trỏ về tài khoản đã hợp nhất | 965/965 đều đã quy được | `472`, `516` |
 | 4 | `username` | `text` | tên đăng nhập app khai | Giữ nguyên dạng gốc, chưa chuẩn hoá | `tg.xemdon`, `NCTT.TungTX` |
-| 5 | `full_name` | `text` | họ tên | 935/964 có | `Trần Vinh Quy` |
-| 6 | `email` | `text` | thư điện tử | 931/964 có | `crm.trangnt@rangdong.com.vn` |
+| 5 | `full_name` | `text` | họ tên | 936/965 có | `Trần Vinh Quy` |
+| 6 | `email` | `text` | thư điện tử | 932/965 có | `crm.trangnt@rangdong.com.vn` |
 | 7 | `unit_id` | `text` | đơn vị **theo cây của app này** | Đây là chỗ hai app bất đồng nhau | `69ee5b13be38bdbf5a8de6c6` |
-| 8 | `is_enabled` | `boolean` | còn bật không | 891 `true`, 73 `NULL` | `true` |
-| 9 | `created_at` | `timestamp` | ngày cấp | 891/964 có | `2026-04-02 01:04:35` |
-| 10 | `is_technical` | `boolean` | dòng kỹ thuật? | `true` ở 6 dòng — sinh ra cho 6 agent một-người-dùng | `false` (958), `true` (6) |
-| 11 | `found_in` | `text` | **tìm thấy ở đâu** | `directory` (935) có trong danh bạ · `log` (23) CHỈ thấy trong nhật ký, không có trong danh bạ (`system`, `admin`, `guest`) · `technical` (6) dòng tự sinh | `directory` |
-| 12 | `role` | `text` | vai trò do CHÍNH APP khai | `MEMBER` (803) · `DT` (64) · `UNIT_LEAD` (45) · `COMPANY_ADMIN` (16) · `ADMIN` (4) · `ASSISTANT` · `PKH` · `NULL` (30) | `COMPANY_ADMIN` |
+| 8 | `is_enabled` | `boolean` | còn bật không | 892 `true`, 73 `NULL` | `true` |
+| 9 | `created_at` | `timestamp` | ngày cấp | 892/965 có | `2026-04-02 01:04:35` |
+| 10 | `is_technical` | `boolean` | dòng kỹ thuật? | `true` ở 6 dòng — sinh ra cho 6 agent một-người-dùng | `false` (959), `true` (6) |
+| 11 | `found_in` | `text` | **tìm thấy ở đâu** | `directory` (936) có trong danh bạ · `log` (23) CHỈ thấy trong nhật ký, không có trong danh bạ (`system`, `admin`, `guest`) · `technical` (6) dòng tự sinh | `directory` |
+| 12 | `role` | `text` | vai trò do CHÍNH APP khai | `MEMBER` (801) · `DT` (64) · `UNIT_LEAD` (48) · `COMPANY_ADMIN` (16) · `ADMIN` (4) · `ASSISTANT` · `PKH` · `NULL` (30) | `COMPANY_ADMIN` |
 
 ---
 
 ## `dim_model` — Danh mục **model** AI
 
-10 dòng · Khoá chính `model_id` · `name` là UNIQUE
+12 dòng · Khoá chính `model_id` · `name` là UNIQUE
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `model_id` | `integer` | mã model | 1–10 | `4` |
-| 2 | `name` | `text` | tên **CHUẨN**, dạng gạch ngang | Tên ta chọn làm gốc để ba nguồn quy về | `gemini-2.5-pro` |
-| 3 | `family` | `text` | dòng model | `gemini-3` (4) · `gemini-2.5` (3) · `embedding` (2) · `gemini-2.0` (1) | `gemini-2.5` |
-| 4 | `provider` | `text` | nhà cung cấp | Hiện toàn bộ 10/10 là `Google` | `Google` |
+| 1 | `model_id` | `integer` | mã model | 1–12 | `4` |
+| 2 | `name` | `text` | tên **CHUẨN**, dạng gạch ngang | Tên ta chọn làm gốc để mọi nguồn quy về | `gemini-2.5-pro` |
+| 3 | `family` | `text` | dòng model | `gemini-3` (6) · `gemini-2.5` (3) · `embedding` (2) · `gemini-2.0` (1) | `gemini-2.5` |
+| 4 | `provider` | `text` | nhà cung cấp | Hiện toàn bộ 12/12 là `Google` | `Google` |
 
-**Trọn vẹn 10 dòng — kèm giá từ `ref_price` (USD / 1 triệu token):**
+**Trọn vẹn 12 dòng — kèm giá từ `ref_price` (USD / 1 triệu token):**
 
 | id | name | family | giá vào | giá ra | giá cached |
 |---|---|---|---|---|---|
@@ -182,22 +190,24 @@ Khác `account` thế nào: **nhiều dòng `dim_user` có thể trỏ vào CÙN
 | 8 | `gemini-3.5-flash` | gemini-3 | 1,50 | 9,00 | — |
 | 9 | `gemini-embedding-1.0` | embedding | 0,15 | — | — |
 | 10 | `gemini-embedding-2` | embedding | 0,20 | — | — |
+| 11 | `gemini-3.6-flash` | gemini-3 | 0,75 | 3,75 | 0,075 |
+| 12 | `gemini-3.5-flash-lite` | gemini-3 | 0,30 | 2,50 | 0,03 |
 
-*(Hai model embedding không có giá đầu ra vì phép nhúng không sinh token ra.)*
+*(Hai model embedding không có giá đầu ra vì phép nhúng không sinh token ra. Model 11 và 12 đến cùng Gateway: hôm nay chỉ `fact_call` nguồn `gateway` và `fact_provider_daily` dùng chúng.)*
 
 ---
 
-## `dim_model_alias` — Bảng **dịch tên model**: ba nguồn gọi một model theo ba kiểu
+## `dim_model_alias` — Bảng **dịch tên model**: mỗi nguồn gọi một model theo một kiểu
 
-44 dòng · Khoá chính `(source, raw_name)`
+49 dòng · Khoá chính `(source, raw_name)`
 
 Không có bảng này thì phải đoán bằng chuỗi, mà `gemini-embedding-001` với `gemini-embedding-1.0` thì không quy tắc chuẩn hoá nào nói được với nhau.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `source` | `text` | nguồn gọi tên | `billing_sku` (31) mã SKU hoá đơn · `monitoring` (9) tên trong Cloud Monitoring · `app` (4) tên app tự ghi | `billing_sku` |
-| 2 | `raw_name` | `text` | tên **thô** ở nguồn đó | SKU là mã 3 cụm; monitoring/app là tên chữ | `07D6-73CA-C859`, `gemini-2.0-flash` |
-| 3 | `model_id` | `integer` | quy về model chuẩn nào | Trỏ sang `dim_model` | `5`, `1` |
+| 1 | `source` | `text` | nguồn gọi tên | `billing_sku` (31) mã SKU hoá đơn · `monitoring` (11) tên trong Cloud Monitoring · `app` (4) tên app tự ghi · `gateway` (3) tên upstream mà LiteLLM ghi | `billing_sku` |
+| 2 | `raw_name` | `text` | tên **thô** ở nguồn đó | SKU là mã 3 cụm; monitoring/app là tên chữ; gateway có tiền tố `gemini/` | `07D6-73CA-C859`, `gemini/gemini-2.5-flash` |
+| 3 | `model_id` | `integer` | quy về model chuẩn nào | Trỏ sang `dim_model`, 1–12 | `5`, `1` |
 
 **Dữ liệu mẫu — mỗi nguồn một dòng:**
 
@@ -206,6 +216,7 @@ Không có bảng này thì phải đoán bằng chuỗi, mà `gemini-embedding-
 | `app` | `gemini-2.0-flash` | 1 |
 | `monitoring` | `gemini-2.0-flash` | 1 |
 | `billing_sku` | `07D6-73CA-C859` | 5 |
+| `gateway` | `gemini/gemini-3.5-flash-lite` | 12 |
 
 ---
 
@@ -224,19 +235,19 @@ Không có bảng này thì phải đoán bằng chuỗi, mà `gemini-embedding-
 
 ## `dim_metric_alias` — Bảng **dịch tên phép đo** của Google sang từ vựng của ta
 
-44 dòng · Khoá chính `(source, raw_name)`
+48 dòng · Khoá chính `(source, raw_name)`
 
 Cùng khuôn với `dim_model_alias`, sinh ra để chữa cùng một bệnh. Trước khi có bảng này, phân loại là **đoán tên** ở hai chỗ khác nhau (regex trên `sku_name`, và `LIKE '%token_count'`); Google đổi cách đặt tên thì cả hai trả về **rỗng** chứ không báo lỗi. Đổi thành bảng tra cứu thì tên lạ làm khâu nạp **dừng hẳn** — hỏng ồn ào, không hỏng im lặng.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `source` | `text` | nguồn của tên | `billing_sku` (31) · `monitoring` (13) | `monitoring` |
+| 1 | `source` | `text` | nguồn của tên | `billing_sku` (31) · `monitoring` (17) | `monitoring` |
 | 2 | `raw_name` | `text` | mã chính chủ của Google | SKU id, hoặc `metric_type` đầy đủ | `serviceruntime.googleapis.com/api/request_latencies` |
-| 3 | `label` | `text` | mô tả chính chủ của Google | 44/44 có. Đây là chỗ regex chạy trên (thay vì trên tên tự chế) | `Distribution of latencies in seconds for non-streaming requests.` |
-| 4 | `measures` | `text` | **phép đo này đo cái gì** | `token` (34) · `quota_limit` (5) · `calls` (4) · `latency` (1) | `token` |
-| 5 | `kind` | `text` | loại token | `input` (17) · `output` (10) · `cached` (7) · `NULL` (10, khi không phải token) | `cached` |
-| 6 | `metric_kind` | `text` | kiểu công tơ (Google khai) | `DELTA` (8) công tơ cộng dồn · `GAUGE` (5) hạn mức. Chỉ nguồn monitoring có | `DELTA` |
-| 7 | `value_type` | `text` | kiểu giá trị (Google khai) | `INT64` (12) · `DISTRIBUTION` (1, chính là độ trễ) | `INT64` |
+| 3 | `label` | `text` | mô tả chính chủ của Google | 48/48 có. Đây là chỗ regex chạy trên (thay vì trên tên tự chế) | `Distribution of latencies in seconds for non-streaming requests.` |
+| 4 | `measures` | `text` | **phép đo này đo cái gì** | `token` (35) · `quota_limit` (7) · `calls` (5) · `latency` (1) | `token` |
+| 5 | `kind` | `text` | loại token | `input` (18) · `output` (10) · `cached` (7) · `NULL` (13, khi không phải token) | `cached` |
+| 6 | `metric_kind` | `text` | kiểu công tơ (Google khai) | `DELTA` (10) công tơ cộng dồn · `GAUGE` (7) hạn mức. Chỉ nguồn monitoring có | `DELTA` |
+| 7 | `value_type` | `text` | kiểu giá trị (Google khai) | `INT64` (16) · `DISTRIBUTION` (1, chính là độ trễ) | `INT64` |
 
 **Phần nào lấy từ metadata, phần nào vẫn phải đọc tên:**
 
@@ -262,44 +273,62 @@ Cùng khuôn với `dim_model_alias`, sinh ra để chữa cùng một bệnh. T
 
 > **Nguyên tắc số một: mỗi nguồn một bảng riêng, không trộn.**
 
-## `fact_call` — **Từng lượt gọi API**, mức mịn nhất. Chỉ Ralli có
+## `fact_call` — **Từng lượt gọi API**, mức mịn nhất. Hai nguồn: nhật ký Ralli và Gateway
 
-8.330 dòng · Khoá chính `call_id` · Toàn bộ `agent_id = 8`
+9.453 dòng · Khoá chính `call_id` · Cột `source` tách hai nguồn:
+
+```
+   source = 'app'       8.972 dong   luon agent 8 (Ralli)       14/03 -> 12/09/2026
+   source = 'gateway'     481 dong   agent 6 (377) · agent 7 (104)   31/08 -> 12/09/2026
+                                     398 thanh cong · 83 hong
+```
+
+Cột 1–15 có từ baseline. Cột 16–25 thêm ở migration 004, 006, 007, 008 cho nguồn Gateway — **nguồn `app` để `NULL` cả mười cột**, vì nhật ký Ralli không ghi những thứ đó. Gán giá trị cho chúng là bịa.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `call_id` | `text` | mã lượt gọi | ObjectId từ nhật ký Ralli | `69b4ec3d1c64451042f7f58f` |
-| 2 | `agent_id` | `integer` | agent nào | Luôn `8` (Ralli) | `8` |
-| 3 | `ts_raw` | `timestamp` | **thời điểm chép nguyên**, chưa quy đổi | Giờ UTC. 14/03 → 17/08/2026 | `2026-03-14 05:03:57.488` |
-| 4 | `tz_confirmed` | `boolean` | đã chứng minh múi giờ chưa | `true` cho cả 8.330 dòng — đã chứng minh là UTC | `true` |
+| 1 | `call_id` | `text` | mã lượt gọi | `app`: ObjectId từ nhật ký Ralli · `gateway`: mã do LiteLLM ghi | `69b4ec3d1c64451042f7f58f`, `-0Geasv7DZi6vr0PnoaskAQ` |
+| 2 | `agent_id` | `integer` | agent nào | `8` (8.972) · `6` (377) · `7` (104) | `8` |
+| 3 | `ts_raw` | `timestamp` | **thời điểm chép nguyên**, chưa quy đổi | Giờ UTC. 14/03 → 12/09/2026 | `2026-03-14 05:03:57.488` |
+| 4 | `tz_confirmed` | `boolean` | đã chứng minh múi giờ chưa | `true` cho cả 9.453 dòng — đã chứng minh là UTC | `true` |
 | 5 | `ts_local` | `timestamp` | **giờ Việt Nam** (= `ts_raw` + 7h) | Đây là cột dùng để tính | `2026-03-14 12:03:57.488` |
-| 6 | `user_id` | `text` | khoá **GỐC** của app, giữ để truy vết | 7.976/8.330 có. Trộn hai dạng: username và ObjectId | `system`, `tt3.longnhb`, `6a60535b2fb111497fa554c3` |
-| 7 | `account_id` | `integer` | khoá **CHUNG**, dùng để tính toán | 8.330/8.330 đã quy được | `505` |
-| 8 | `unit_id` | `text` | đơn vị | **7.887/8.330 rơi vào `__unattributed_8__`** — phần lớn lượt gọi là của `system` | `__unattributed_8__` |
-| 9 | `model_id` | `integer` | model dùng | Chỉ 1–3 (2.0-flash, 2.5-flash, 2.5-flash-lite) | `1`, `3` |
-| 10 | `function_code` | `text` | chức năng nào gọi | `gemini_generate_text` (4.344) · `gemini_structured_call` (3.607) · `gemini_chat_json_messages` (319) · `assistant_extract_image_text` (39) · … | `gemini_generate_text` |
-| 11 | `prompt_tokens` | `bigint` | token đầu vào | 20 → 120.614 | `376` |
+| 6 | `user_id` | `text` | khoá **GỐC** của nguồn, giữ để truy vết | 8.339/9.453 có (`app` 8.209/8.972). `app` trộn hai dạng: username và ObjectId. `gateway` ghi tên tài khoản dịch vụ | `system`, `6a60535b2fb111497fa554c3`, `svc.crm-feedback` |
+| 7 | `account_id` | `integer` | khoá **CHUNG**, dùng để tính toán | 9.453/9.453 đã quy được | `505` |
+| 8 | `unit_id` | `text` | đơn vị | **8.327/8.972 dòng `app` rơi vào `__unattributed_8__`** — phần lớn lượt gọi là của `system`. Dòng `gateway` rơi vào `__technical_6__` / `__technical_7__` | `__unattributed_8__` |
+| 9 | `model_id` | `integer` | model dùng | 9.447/9.453 có. `app` chỉ 1–3 · `gateway` 2, 11, 12. **6 dòng `NULL` đều là lượt Gateway hỏng** trước khi Router chốt tuyến — xem `raw_model` | `3`, `12` |
+| 10 | `function_code` | `text` | chức năng nào gọi | Chỉ `app`: `gemini_generate_text` (4.637) · `gemini_structured_call` (3.939) · `gemini_chat_json_messages` (336) · `assistant_extract_image_text` (39) · … `NULL` ở 481 dòng `gateway` | `gemini_generate_text` |
+| 11 | `prompt_tokens` | `bigint` | token đầu vào | 0 → 120.614 (`app` từ 20) | `376` |
 | 12 | `completion_tokens` | `bigint` | token đầu ra | 0 → 65.536 | `2305` |
-| 13 | `total_tokens` | `bigint` | **cột chuẩn** — tổng token | 127 → 155.511. **KHÔNG tự cộng hai cột trên** (quy tắc 6) | `2681` |
-| 14 | `cached_tokens` | `bigint` | token đọc từ bộ nhớ đệm | Chỉ 1.459/8.330 có. **`NULL` ở 6.871 dòng cũ nghĩa là "không biết", KHÔNG phải 0** (quy tắc 5) | `NULL`, `0`, `8625` |
-| 15 | `record_format` | `smallint` | định dạng bản ghi | `1` (6.871) · `3` (917) · `2` (542). Ralli đổi cấu trúc log 3 lần — đây là dấu vết | `1` |
+| 13 | `total_tokens` | `bigint` | **cột chuẩn** — tổng token | 0 → 155.511. `app` từ 127; số 0 chỉ có ở `gateway`. **KHÔNG tự cộng hai cột trên** (quy tắc 6) | `2681` |
+| 14 | `cached_tokens` | `bigint` | token đọc từ bộ nhớ đệm | Chỉ 2.102/9.453 có. **`NULL` ở 6.871 dòng cũ nghĩa là "không biết", KHÔNG phải 0** (quy tắc 5) | `NULL`, `0`, `8625` |
+| 15 | `record_format` | `smallint` | định dạng bản ghi | `1` (6.871) · `3` (1.559) · `2` (542) · `NULL` (481, `gateway`). Ralli đổi cấu trúc log 3 lần — đây là dấu vết | `1` |
+| 16 | `source` | `text` | **nguồn của dòng** (migration 004) | `app` (8.972) · `gateway` (481). Khoá ngoại tới `ref_source`. `DEFAULT 'app'` là đúng nghĩa: trước 31/08 mọi dòng đều của app | `gateway` |
+| 17 | `cost_usd` | `numeric` | tiền USD (migration 004) | Chỉ `gateway`, 398 dòng = đúng số lượt thành công. **Số ƯỚC TÍNH** do LiteLLM tự nhân từ bảng giá của nó, không phải hoá đơn. `NULL` ở `app` = nguồn này không có tiền | `0.0000031` → `0.0306313` |
+| 18 | `duration_ms` | `integer` | độ trễ, mili giây (migration 006) | 398 dòng, 254 → 102.366 ms. Gateway ghi `0` cho MỌI lượt hỏng, nên `0` không phải một phép đo — bộ nạp quy về `NULL`. Nạp `0` vào là kéo tụt mọi phân vị | `1002` |
+| 19 | `outcome` | `text` | kết cục (migration 006) | `success` (398) · `failure` (83) · `NULL` (8.972 dòng `app` — **không biết, KHÔNG phải thành công**). **Mọi phép tổng hợp lưu lượng và chi phí PHẢI lọc cột này** | `success` |
+| 20 | `error_code` | `text` | mã lỗi khi hỏng (migration 006) | 77 dòng: `429` (74) · `500` (2) · `401` (1). 6 lượt hỏng còn lại không có mã (bộ nạp quy chuỗi rỗng về `NULL`). `TEXT` vì không bảo đảm là số | `429` |
+| 21 | `raw_model` | `text` | tên model **đúng như Gateway nhận** (migration 007) | 481 dòng `gateway`: `gemini/gemini-3.5-flash-lite` (372) · `gemini/gemini-2.5-flash` (100) · `gemini/gemini-3.6-flash` (3) · và 6 dòng mang **bí danh** (`gemini-flash-lite`, `gemini-flash`…) — chính là 6 dòng `model_id NULL`. Ở dòng đó cột này là bằng chứng duy nhất để biết nên khai thêm tuyến nào | `gemini/gemini-3.5-flash-lite` |
+| 22 | `virtual_key_id` | `text` | khoá đã gọi (migration 007) | 481 dòng. **Không chuẩn hoá**: `litellm_proxy_master_key` (303 — khoá tổng) và 5 khoá ảo dạng băm (178). Số dòng đi bằng khoá tổng phải giảm về 0 khi mỗi agent có khoá riêng | `litellm_proxy_master_key` |
+| 23 | `cache_hit` | `boolean` | lượt được trả từ bộ nhớ đệm? (migration 007) | Chỉ 83 dòng có giá trị, đều `false`, đều là lượt hỏng. 398 lượt thành công đều `NULL` = không có thông tin. **Bẫy: `NOT cache_hit` vứt sạch dòng `NULL` — lọc bằng `cache_hit IS NOT TRUE`** | `NULL` |
+| 24 | `output_modality` | `text` | **nhãn** kiểu phản hồi, không phải số token (migration 008) | `text` (391) · `NULL`. Cùng quy ước với `fact_monitoring.output_modality` | `text` |
+| 25 | `thinking_enabled` | `boolean` | lượt có sinh token suy luận? (migration 008) | `true` (16) · `NULL`. **`NULL` = không có thông tin, KHÔNG phải "không bật"**. Khác kiểu với cột cùng tên ở `fact_monitoring` (ở đó là `TEXT`) — so hai bảng phải dịch kiểu tường minh | `true` |
 
 ---
 
 ## `fact_app_daily` — Mức **ngày × người × model** do app tự tổng hợp (TLA Hợp Đồng)
 
-77 dòng · Khoá chính `row_id` · Toàn bộ `agent_id = 5`
+78 dòng · Khoá chính `row_id` · Toàn bộ `agent_id = 5`
 
 **Vì sao cần bảng riêng:** Ralli phơi từng lượt gọi nên vào được `fact_call`. TLA Hợp Đồng **chỉ phơi API đã tổng hợp sẵn**, mức mịn nhất lấy được là (ngày × người × model). Không có bảng này thì hoặc phải bịa ra lượt gọi giả, hoặc phải bỏ hẳn chiều người dùng của TLA HĐ — trước 14/08 là phương án thứ hai, và hậu quả là biểu đồ tỷ lệ áp dụng báo `0/39` trong khi sự thật là *"có người dùng, không nhìn thấy ai"*.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `row_id` | `integer` | số thứ tự | 1–77. Gán tường minh vì `model_id` được phép `NULL`, mà PostgreSQL cấm `NULL` trong khoá chính | `1` |
-| 2 | `day` | `date` | ngày (giờ VN) | 14/03 → 15/08/2026 | `2026-03-14` |
+| 1 | `row_id` | `integer` | số thứ tự | 1–78. Gán tường minh vì `model_id` được phép `NULL`, mà PostgreSQL cấm `NULL` trong khoá chính | `1` |
+| 2 | `day` | `date` | ngày (giờ VN) | 14/03 → 04/09/2026 | `2026-03-14` |
 | 3 | `agent_id` | `integer` | agent | Luôn `5` (TLA HĐ) | `5` |
-| 4 | `account_id` | `integer` | tài khoản | 1–690 | `1` |
-| 5 | `model_id` | `integer` | model | 75/77 có. **`NULL` = app không nói model** | `2`, `4`, `NULL` |
-| 6 | `raw_model` | `text` | tên model **gốc**, giữ để truy vết | `gemini-2.5-flash` (56) · `gemini-2.5-pro` (19) · `none` (1) · `NULL` (1) | `gemini-2.5-pro` |
+| 4 | `account_id` | `integer` | tài khoản | 1–691 | `1` |
+| 5 | `model_id` | `integer` | model | 76/78 có. **`NULL` = app không nói model** | `2`, `4`, `NULL` |
+| 6 | `raw_model` | `text` | tên model **gốc**, giữ để truy vết | `gemini-2.5-flash` (56) · `gemini-2.5-pro` (20) · `none` (1) · `NULL` (1) | `gemini-2.5-pro` |
 | 7 | `calls` | `integer` | số lượt gọi trong ngày | 1 → 230 | `143` |
 | 8 | `total_tokens` | `bigint` | tổng token | 0 → 8.126.973 | `3227233` |
 | 9 | `prompt_tokens` | `bigint` | token vào | 0 → 6.815.690 | `2532049` |
@@ -309,19 +338,19 @@ Cùng khuôn với `dim_model_alias`, sinh ra để chữa cùng một bệnh. T
 
 ## `fact_billing_daily` — **Hoá đơn Google.** Nguồn DUY NHẤT có TIỀN
 
-2.441 dòng · Khoá chính `(day, project, sku_id)` · 7/8 agent (Ralli không có)
+2.833 dòng · Khoá chính `(day, project, sku_id)` · 7/8 agent (Ralli không có)
 
 > **Cảnh báo múi giờ:** Google cắt ngày hoá đơn theo giờ Thái Bình Dương; ta coi luôn là giờ VN, không quy đổi. **Tổng cả kỳ vẫn tuyệt đối đúng.** Cái phải biết: **ngày CUỐI CÙNG luôn hụt**, và mỗi ngày lẫn khoảng 15 giờ của ngày kề bên. Đủ để theo xu hướng, không đủ để đối chiếu một ngày lẻ với nguồn khác.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `day` | `date` | ngày hoá đơn | 01/01 → 16/08/2026 | `2026-07-02` |
+| 1 | `day` | `date` | ngày hoá đơn | 01/01 → 11/09/2026 | `2026-07-02` |
 | 2 | `agent_id` | `integer` | **khoá CHUẨN** | 1–7. Thêm vào để không phải nhớ viết `JOIN … ON gcp_project_id = project` mỗi lần — quên là mất dòng mà không lỗi nào báo | `5` |
-| 3 | `project` | `text` | mã project GCP, giữ để truy vết | `pro-tuner-454203-v3` (921) · `tranquil-post-471401-c1` (909) · `multimodal-invoice` (394) · … | `ai-chatbot-contract` |
-| 4 | `sku_id` | `text` | mã hàng hoá của Google | Mã 3 cụm. Nối vào `dim_model_alias` và `dim_metric_alias` | `0F51-429B-C2DC` |
+| 3 | `project` | `text` | mã project GCP, giữ để truy vết | `pro-tuner-454203-v3` (1.033) · `tranquil-post-471401-c1` (1.005) · `multimodal-invoice` (421) · … | `ai-chatbot-contract` |
+| 4 | `sku_id` | `text` | mã hàng hoá của Google | Mã 3 cụm, 31 giá trị. Nối vào `dim_model_alias` và `dim_metric_alias` | `0F51-429B-C2DC` |
 | 5 | `sku_name` | `text` | tên hàng hoá | Mô tả dài của Google | `Generate content output token count Gemini 2.5 Pro short output text` |
-| 6 | `model_id` | `integer` | model đã quy chuẩn | 2.441/2.441 đều quy được (1–10) | `4` |
-| 7 | `kind` | `text` | **loại token** | `input` (1.138) · `output` (873) · `cached` (430) | `output` |
+| 6 | `model_id` | `integer` | model đã quy chuẩn | 2.833/2.833 đều quy được (1–10) | `4` |
+| 7 | `kind` | `text` | **loại token** | `input` (1.296) · `output` (1.016) · `cached` (521) | `output` |
 | 8 | `quantity` | `bigint` | **số token** | 5 → 24.990.232 | `15215` |
 | 9 | `cost_usd` | `numeric(14,6)` | **tiền thật, USD** | 0 → 25,14 USD một dòng. **Đây là con số duy nhất không phải ước tính** | `0.152150` |
 
@@ -331,53 +360,55 @@ Cùng khuôn với `dim_model_alias`, sinh ra để chữa cùng một bệnh. T
 
 ## `fact_monitoring` — Số đo **từng phút** từ Google Cloud Monitoring. Bảng lớn nhất
 
-583.917 dòng · **Không có khoá chính** (là bảng thô) · 7/8 agent
+726.051 dòng · **Không có khoá chính** (là bảng thô) · 7/8 agent
 
-Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Compute, rồi **lọc ở tầng view** `monitoring_ai`. Giữ dòng rác vì chính nó là bằng chứng: quên lọc thì agent `pro-tuner` sai **45,7 lần**.
+Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Compute, rồi **lọc ở tầng view** `monitoring_ai`. Giữ dòng rác vì chính nó là bằng chứng: quên lọc thì agent `pro-tuner` sai **45,7 lần** (đo 19/08/2026).
+
+Nhiều lần kéo cùng một phút được gộp **trước khi nạp**, giữ số lớn hơn cho mỗi khoá — vì lần kéo sau bị cửa sổ lưu giữ cắt ở mép và báo số nhỏ hơn. Luật gộp nằm ở `docs/reference/toan-trinh-du-lieu.md`.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `ts_utc` | `timestamp` | mốc thời gian **UTC** | 22/01 → 17/08/2026, từng phút | `2026-08-17 01:59:00` |
+| 1 | `ts_utc` | `timestamp` | mốc thời gian **UTC** | 22/01 → 12/09/2026, từng phút | `2026-08-17 01:59:00` |
 | 2 | `ts_local` | `timestamp` | mốc thời gian **giờ VN** | = `ts_utc` + 7h | `2026-08-17 08:59:00` |
 | 3 | `agent_id` | `integer` | khoá CHUẨN | 1–7 | `5` |
-| 4 | `project` | `text` | mã project, giữ để truy vết | `pro-tuner-454203-v3` chiếm 497.953/583.917 | `ai-chatbot-contract` |
-| 5 | `metric_nickname` | `text` | **biệt danh** do script cào tự đặt | 14 giá trị. `api_request_count` (170.180) · `api_request_latencies_p95`/`_p99` (165.362 mỗi loại) · … Tiện đọc, nhưng **không có cam kết ổn định** | `generate_content_usage_output_token_count` |
+| 4 | `project` | `text` | mã project, giữ để truy vết | `pro-tuner-454203-v3` chiếm 621.612/726.051 | `ai-chatbot-contract` |
+| 5 | `metric_nickname` | `text` | **biệt danh** do script cào tự đặt | 14 giá trị. `api_request_count` (212.598) · `api_request_latencies_p95`/`_p99` (206.206 mỗi loại) · … Tiện đọc, nhưng **không có cam kết ổn định** | `generate_content_usage_output_token_count` |
 | 6 | `metric_type` | `text` | **mã CHÍNH CHỦ của Google** | 13 giá trị. Đây mới là thứ nối vào `dim_metric_alias`. Trước đây cột này bị vứt lúc nạp — tức bỏ thứ ổn định, giữ thứ tự chế | `generativelanguage.googleapis.com/generate_content_usage_output_token_count` |
-| 7 | `model_id` | `integer` | model | **Chỉ 83.013/583.917 (14,2%) có.** Phép đo dạng request không mang nhãn `model`. Trong view `monitoring_ai` tỷ lệ là 60,3% | `2` |
-| 8 | `response_code` | `text` | mã HTTP trả về | Chỉ 170.180 dòng có. `200` (169.654) · `302` (277) · `503` (83) · `400` (58) · `404` (45) · `499` (27) · `500` (23) · `403` (13) | `200` |
-| 9 | `service` | `text` | dịch vụ Google nào | **`drive.googleapis.com` (460.003) lấn át `generativelanguage.googleapis.com` (120.247)** — chính là lý do phải lọc | `generativelanguage.googleapis.com` |
-| 10 | `method` | `text` | phương thức API | 500.904/583.917 có | `google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent` |
+| 7 | `model_id` | `integer` | model | **Chỉ 101.041/726.051 (13,9%) có.** Phép đo dạng request không mang nhãn `model`. Trong view `monitoring_ai` tỷ lệ là 60,3% | `2` |
+| 8 | `response_code` | `text` | mã HTTP trả về | Chỉ 212.598 dòng có, 8 mã. `200` (211.958) · `302` (349) · `503` (105) · `400` (73) · `404` (50) · `499` (27) · `500` (23) · … | `200` |
+| 9 | `service` | `text` | dịch vụ Google nào | **`drive.googleapis.com` (575.797) lấn át `generativelanguage.googleapis.com` (146.587)** — chính là lý do phải lọc | `generativelanguage.googleapis.com` |
+| 10 | `method` | `text` | phương thức API | 625.010/726.051 có | `google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent` |
 | 11 | `credential_id` | `text` | khoá API nào gọi | Cùng phút cùng method vẫn nhiều dòng nếu nhiều API key. Dạng `oauth2:…` hoặc `apikey:…` | `apikey:536546b1-37fd-…` |
-| 12 | `is_quota_limit` | `boolean` | dòng này là **hạn mức** hay số đo thật | `true` (26.370) = ALIGN_MAX, **KHÔNG được SUM**. Mọi hạn mức đều `GAUGE`, mọi công tơ đều `DELTA` | `false` |
-| 13 | `thinking_enabled` | `text` | có bật chế độ suy luận không | 13.527 dòng có: `true` (10.568) · `false` (2.959). **Đây là nguồn duy nhất cho cột "think" trên dashboard** | `true` |
-| 14 | `output_modality` | `text` | dạng đầu ra | 13.527 dòng có, toàn bộ là `text` | `text` |
-| 15 | `limit_name` | `text` | tên hạn mức Google áp | 69.480 dòng có, 8 loại | `GenerateContentPaidTierInputTokensPerModelPerMinute` |
+| 12 | `is_quota_limit` | `boolean` | dòng này là **hạn mức** hay số đo thật | `true` (31.930) = ALIGN_MAX, **KHÔNG được SUM**. Mọi hạn mức đều `GAUGE`, mọi công tơ đều `DELTA` | `false` |
+| 13 | `thinking_enabled` | `text` | có bật chế độ suy luận không | 16.546 dòng có: `true` (12.698) · `false` (3.848). Đo 19/08/2026: đây là nguồn duy nhất cho cột "think" trên dashboard. Từ migration 008 `fact_call` cũng có cột cùng tên, khác kiểu | `true` |
+| 14 | `output_modality` | `text` | dạng đầu ra | 16.546 dòng có, toàn bộ là `text` | `text` |
+| 15 | `limit_name` | `text` | tên hạn mức Google áp | 84.489 dòng có, 8 loại | `GenerateContentPaidTierInputTokensPerModelPerMinute` |
 | 16 | `value` | `double precision` | **giá trị đo được** | Ý nghĩa **phụ thuộc `metric_type`**: token, số lượt, giây, hay hạn mức | `145.0` |
-| 17 | `unit` | `text` | đơn vị | `s` (330.724) giây · `1` (253.193) đếm | `1` |
+| 17 | `unit` | `text` | đơn vị | `s` (412.412) giây · `1` (313.639) đếm | `1` |
 
 ---
 
-## `fact_usage_daily` — **Bảng ĐỐI CHỨNG.** Ba nguồn đặt cạnh nhau, chưa chọn
+## `fact_usage_daily` — **Bảng ĐỐI CHỨNG.** Bốn nguồn đặt cạnh nhau, chưa chọn
 
-1.845 dòng · Khoá chính `(day, agent_id, model_id, account_id, source)`
+2.203 dòng · Khoá chính `(day, agent_id, model_id, account_id, source)`
 
-> **Đọc bảng này để SO SÁNH ba nguồn, KHÔNG phải để hỏi một con số.** Muốn một con số thì đọc view `usage_resolved`. Vì `source` nằm trong khoá chính nên ai hỏi bảng này cũng phải tự chọn nguồn trước — đó là việc của view, không phải của người hỏi.
+> **Đọc bảng này để SO SÁNH các nguồn, KHÔNG phải để hỏi một con số.** Muốn một con số thì đọc view `usage_resolved`. Vì `source` nằm trong khoá chính nên ai hỏi bảng này cũng phải tự chọn nguồn trước — đó là việc của view, không phải của người hỏi.
 >
 > **Không có cột `unit_id` — và đó là cố ý.** Đơn vị là thuộc tính CỦA tài khoản, `JOIN account` là ra. Chép thêm bản sao vào đây thì hai bản có thể lệch nhau.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `day` | `date` | ngày (giờ VN) | 01/01 → 17/08/2026 | `2026-07-26` |
+| 1 | `day` | `date` | ngày (giờ VN) | 01/01 → 12/09/2026 | `2026-07-26` |
 | 2 | `agent_id` | `integer` | agent | 1–8 (đủ cả 8) | `7` |
-| 3 | `model_id` | `integer` | model | 1–10. **NOT NULL** | `2` |
-| 4 | `account_id` | `integer` | tài khoản | 1–953. **NOT NULL** — dùng dòng kỹ thuật (`whole_agent`/`unattributed`) thay cho `NULL` | `950` |
-| 5 | `calls` | `integer` | số lượt gọi | 880/1.845 có (nguồn `billing` không đếm lượt) | `NULL`, `11582` |
-| 6 | `total_tokens` | `bigint` | tổng token | 1.733/1.845 có. Tới 35.048.214 | `88818` |
-| 7 | `input_tokens` | `bigint` | token vào | 1.732/1.845 có | `39649` |
-| 8 | `output_tokens` | `bigint` | token ra | 1.727/1.845 có | `49169` |
-| 9 | `cached_tokens` | `bigint` | token đệm | 1.063/1.845 có. **`monitoring` không có phép đo cached → luôn `NULL`** | `0` |
-| 10 | `cost_usd` | `numeric(14,6)` | tiền | Chỉ 965/1.845 có — đúng bằng số dòng `source='billing'` | `0.134816` |
-| 11 | `source` | `text` | **nguồn của dòng này** | `billing` (965) · `monitoring` (539) · `app` (341) | `billing` |
+| 3 | `model_id` | `integer` | model | 1–12. **NOT NULL** | `2` |
+| 4 | `account_id` | `integer` | tài khoản | 1–954. **NOT NULL** — dùng dòng kỹ thuật (`whole_agent`/`unattributed`) thay cho `NULL` | `950` |
+| 5 | `calls` | `integer` | số lượt gọi | 1.097/2.203 có (nguồn `billing` không đếm lượt) | `NULL`, `11582` |
+| 6 | `total_tokens` | `bigint` | tổng token | 2.070/2.203 có. Tới 36.207.425 | `88818` |
+| 7 | `input_tokens` | `bigint` | token vào | 2.069/2.203 có | `39649` |
+| 8 | `output_tokens` | `bigint` | token ra | 2.064/2.203 có | `49169` |
+| 9 | `cached_tokens` | `bigint` | token đệm | 1.270/2.203 có. **`monitoring` không có phép đo cached → luôn `NULL`** | `0` |
+| 10 | `cost_usd` | `numeric(14,6)` | tiền | 1.117/2.203 có = 1.106 dòng `billing` (**tiền hoá đơn**) + 11 dòng `gateway` (**tiền ước tính** của LiteLLM). `app` và `monitoring` luôn `NULL` | `0.134816` |
+| 11 | `source` | `text` | **nguồn của dòng này** | `billing` (1.106) · `monitoring` (679) · `app` (407) · `gateway` (11). Khoá ngoại tới `ref_source` | `billing` |
 
 > **`cached` không cùng nghĩa ở ba nguồn** (đã đo, không phải suy): billing coi cached là SKU riêng ngoài input; app coi cached là tập con của `prompt_tokens`; monitoring không đo cached. Vì vậy `total_tokens` **giữ nguyên theo quy ước của nguồn**, và cột `source` cho biết đang đọc quy ước nào.
 
@@ -385,16 +416,16 @@ Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Comp
 
 ## `fact_perf_daily` — **Số lượt gọi theo mã lỗi**, mức ngày
 
-600 dòng · Khoá chính `(day, agent_id, method, response_code)`
+747 dòng · Khoá chính `(day, agent_id, method, response_code, source)`
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `day` | `date` | ngày (giờ VN) | 22/01 → 17/08/2026 | `2026-01-22` |
+| 1 | `day` | `date` | ngày (giờ VN) | 22/01 → 12/09/2026 | `2026-01-22` |
 | 2 | `agent_id` | `integer` | agent | 1–7 | `1` |
-| 3 | `method` | `text` | phương thức API | 12 giá trị, đều thuộc `generativelanguage` | `google.ai.generativelanguage.v1beta.GenerativeService.EmbedContent` |
-| 4 | `response_code` | `text` | **mã HTTP** | `200` (554) · `503` (21) · `400` (11) · `404` (6) · `499` (6) · `500` (2) | `200` |
+| 3 | `method` | `text` | phương thức API | 13 giá trị, đều thuộc `generativelanguage` | `google.ai.generativelanguage.v1beta.GenerativeService.EmbedContent` |
+| 4 | `response_code` | `text` | **mã HTTP** | `200` (696) · `503` (21) · `400` (14) · `404` (8) · `499` (6) · `500` (2) | `200` |
 | 5 | `calls` | `integer` | số lượt | 1 → 5.790 | `51` |
-| 6 | `source` | `text` | **nguồn của dòng** (migration 008, 03/09) | `monitoring` (669). Đếm qua `serviceruntime/api/request_count`, đã lọc `service = generativelanguage` | `monitoring` |
+| 6 | `source` | `text` | **nguồn của dòng** (migration 008, 03/09) | `monitoring` (747). **Đo 14/09: chưa có dòng `gateway` nào.** Đếm qua `serviceruntime/api/request_count`, đã lọc `service = generativelanguage` | `monitoring` |
 
 **Cột `source` thêm 03/09/2026.** Nó nằm trong **khoá chính**, không phải cột phụ. Hai nguồn đếm **hai thứ khác nhau** dù cùng tên cột: `monitoring` đếm qua công tơ Google, `gateway` sẽ đếm từng lượt trong sổ LiteLLM. Cộng hai nguồn lại là đếm hai lần cùng một lưu lượng.
 
@@ -404,22 +435,22 @@ Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Comp
 
 ## `fact_latency_daily` — **Độ trễ** ở đúng độ mịn Google cho: một số cho mỗi (ngày, agent)
 
-297 dòng · Khoá chính `(day, agent_id)`
+454 dòng · Khoá chính `(day, agent_id, source)`
 
 **Vì sao tách khỏi `fact_perf_daily`:** hai chỉ tiêu đo ở hai độ mịn khác nhau. Số lượt có `response_code` và `method`; độ trễ thì **không** có `response_code`, và con số đúng chỉ tồn tại ở mức (ngày, agent) — phân vị không cộng được, phải gộp histogram rồi mới đọc mốc. Lấy trung bình các p95 từng phút đã đo thử: **lệch trên 19%**.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `day` | `date` | ngày (giờ VN) | 01/05 → 08/08/2026 | `2026-05-02` |
+| 1 | `day` | `date` | ngày (giờ VN) | 01/05 → 12/09/2026 | `2026-05-02` |
 | 2 | `agent_id` | `integer` | agent | 1–7 | `3` |
-| 3 | `samples` | `integer` | số mẫu vào histogram ngày đó | 1 → 5.791 | `15` |
-| 4 | `p50_seconds` | `double precision` | **trung vị** — nửa số lượt nhanh hơn mức này | 0,197 → 39,15 giây | `1.7039` |
+| 3 | `samples` | `integer` | số mẫu vào histogram ngày đó (`gateway`: số lượt thành công có độ trễ) | 1 → 5.791. Tổng `monitoring` 53.038 mẫu · `gateway` 398 | `15` |
+| 4 | `p50_seconds` | `double precision` | **trung vị** — nửa số lượt nhanh hơn mức này | 0,034 → 39,15 giây | `1.7039` |
 | 5 | `p95_seconds` | `double precision` | **phân vị 95** — 5% lượt chậm hơn mức này | 0,256 → 382,52 giây | `3.67` |
 | 6 | `p95_bucket_from` | `double precision` | **cận dưới** ô histogram chứa p95 | Ô rộng gấp đôi sau mỗi bậc | `2.0972` |
 | 7 | `p95_bucket_to` | `double precision` | **cận trên** ô đó | Trung vị bề rộng ô = **57% của chính giá trị p95** → dashboard phải hiện **KHOẢNG**, không phải số lẻ | `4.1943` |
 | 8 | `p99_seconds` | `double precision` | phân vị 99 | 0,261 → 506,00 giây | `4.0894` |
-| 9 | `enough_samples` | `boolean` | đủ mẫu để phân vị có nghĩa? | `true` (259) · **`false` (38) khi `samples < 10`** | `true` |
-| 10 | `source` | `text` | **nguồn của phân vị** (migration 008, 03/09) | `monitoring` (339) · `gateway` (1) | `gateway` |
+| 9 | `enough_samples` | `boolean` | đủ mẫu để phân vị có nghĩa? | `true` (394) · **`false` (60) khi `samples < 10`** | `true` |
+| 10 | `source` | `text` | **nguồn của phân vị** (migration 008, 03/09) | `monitoring` (445) · `gateway` (9) | `gateway` |
 
 ### Cột `source` và hai cách tính phân vị hoàn toàn khác nhau (03/09/2026)
 
@@ -442,7 +473,21 @@ Nạp **đủ** mọi dòng cào về, kể cả lưu lượng Drive/Sheets/Comp
 
 **MỖI NGUỒN MỘT DÒNG, KHÔNG GỘP TRUNG BÌNH.** Trung bình hai phân vị cho ra một con số không thuộc về phép đo nào. Muốn **một** con số duy nhất thì phải **CHỌN** một nguồn — và hôm nay chưa view nào làm việc đó.
 
-**Chưa giải thích được, ghi lại để đừng ai kết luận vội (đo 03/09/2026):** hai nguồn lệch **31,9 lần** cho cùng agent 6 — thủ công p95 TB **58,206 s** vs gateway **1,822 s**; p50 lệch 24,9 lần (19,66 s vs 0,788 s). Ba phép đo đã loại trừ các giải thích dễ dãi: 0/38 lượt Gateway vượt 33,55 s; số lượt/ngày tương đương (45,4 vs 38); p50 cũng lệch, mà p50 ít chịu sai số ô hơn nhiều. **Chưa ngày nào hai nguồn cùng có số**, nên chưa nguồn nào kiểm chứng được nguồn kia.
+**Chưa giải thích được, ghi lại để đừng ai kết luận vội (đo 03/09/2026):** hai nguồn lệch **31,9 lần** cho cùng agent 6 — thủ công p95 TB **58,206 s** vs gateway **1,822 s**; p50 lệch 24,9 lần (19,66 s vs 0,788 s). Ba phép đo đã loại trừ các giải thích dễ dãi: 0/38 lượt Gateway vượt 33,55 s; số lượt/ngày tương đương (45,4 vs 38); p50 cũng lệch, mà p50 ít chịu sai số ô hơn nhiều. Lúc đó chưa ngày nào hai nguồn cùng có số.
+
+**Đo 14/09/2026: đã có 5 cặp (ngày, agent) hai nguồn cùng có số.** Chúng **chưa** trả lời được câu hỏi trên, vì lệch không cùng chiều:
+
+```
+   ngay    agent   monitoring           gateway            p95 mon / gw
+                   mau    p95 (s)       mau    p95 (s)
+   07/09     6      17    63,034        202     1,361        46,3 lan
+   08/09     7      17    52,848          1    38,238         1,4    <- gateway 1 mau
+   09/09     6   1.713    32,010         12    90,564         0,4    <- NGUOC chieu
+   09/09     7      17    63,544          6    11,834         5,4    <- gateway < 10 mau
+   12/09     7      44    48,654         60     0,953        51,1 lan
+```
+
+Ba cặp đủ mẫu ở cả hai phía: hai cặp monitoring chậm hơn ~50 lần, một cặp gateway chậm hơn. Hai nguồn có thể đo hai tập lượt gọi khác nhau trong cùng ngày (lượt không qua Gateway vẫn vào Monitoring) — **chưa kiểm**. `latency_resolved` chọn `monitoring` cho cả 5 cặp.
 
 ---
 
@@ -469,8 +514,8 @@ Chỉ đúng **một** chỗ được đọc nó: nhóm I của `scripts/audit_d
 | 5 | `requests` | `bigint` | số lượt **họ** nói họ đã phục vụ | NULL = không đo được, **khác hẳn 0** | `41` |
 | 6 | `input_tokens` | `bigint` | token vào theo số của họ | Lấy từ nhánh **quota**, không phải metric `generate_content_usage_*` (metric đó **không tồn tại**) | `47613` |
 | 7 | `output_tokens` | `bigint` | token ra theo số của họ | | `3922` |
-| 8 | `pulled_account` | `text` | tài khoản Google dùng để kéo | Giữ lại vì **hai tài khoản cho ra hai thế giới khác nhau**, và sau này không ai nhớ project nào thuộc tài khoản nào | `dinhthinhan1811971@gmail.com` |
-| 9 | `pulled_at` | `timestamp` | thời điểm kéo | | `2026-09-04 23:41` |
+| 8 | `pulled_account` | `text` | tài khoản Google dùng để kéo | Giữ lại vì **hai tài khoản cho ra hai thế giới khác nhau**, và sau này không ai nhớ project nào thuộc tài khoản nào. **Đo 14/09: 0/5 dòng có** sau lần dựng lại từ `data/` | `NULL` |
+| 9 | `pulled_at` | `timestamp` | thời điểm nạp | **Đo 14/09: cả 5 dòng mang cùng giờ của lần dựng lại** (`2026-09-14 03:05`), không phải giờ kéo thật | `2026-09-14 03:05` |
 
 ### Ba cái bẫy khi đọc số của nhà cung cấp — cả ba đều **đo được**, không phải phòng xa
 
@@ -484,41 +529,41 @@ Ghi chú: `*_limit` là hạn mức theo `ALIGN_MAX`, **không phải số đế
 
 ## `fact_usage_hourly` — **Lưu lượng theo GIỜ.** Cùng năm chiều khoá như bảng ngày
 
-3.327 dòng · Khoá chính `(hour, agent_id, model_id, account_id, source)` · migration 008, 03/09/2026
+3.691 dòng · Khoá chính `(hour, agent_id, model_id, account_id, source)` · migration 008, 03/09/2026
 
 **BA nguồn, không phải bốn — và nguồn vắng mặt là một thông tin.**
 
 ```
-   app          fact_call.ts_local        698 dong    -> xuong duoc gio
-   gateway      fact_call.ts_local          5 dong    -> xuong duoc gio
-   monitoring   fact_monitoring.ts_local 2.624 dong   -> xuong duoc gio
-   billing      fact_billing_daily.day    KHONG CO    -> KHONG BAO GIO co gio
+   app          fact_call.ts_local          738 dong    -> xuong duoc gio
+   gateway      fact_call.ts_local           32 dong    -> xuong duoc gio
+   monitoring   fact_monitoring.ts_local  2.921 dong    -> xuong duoc gio
+   billing      fact_billing_daily.day    KHONG CO      -> KHONG BAO GIO co gio
 ```
 
 Hoá đơn Google tính theo **ngày**. Đó là giới hạn của nhà cung cấp, không phải của ta. Chia đều tiền một ngày cho 24 giờ sẽ cho ra một biểu đồ đẹp và một con số **bịa**. Người đọc biết `billing` vắng mặt bằng cách **truy vấn cột `source`**, không phải bằng một dòng chú thích trên giao diện.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `hour` | `timestamp` | **đầu giờ**, giờ VN | 1.751 giờ riêng biệt trên 153 ngày | `2026-08-31 18:00:00` |
+| 1 | `hour` | `timestamp` | **đầu giờ**, giờ VN | 1.924 giờ riêng biệt trên 165 ngày, 14/03 → 12/09/2026 | `2026-08-31 18:00:00` |
 | 2 | `agent_id` | `integer` | agent | 1–8 | `6` |
-| 3 | `model_id` | `integer` | model | | `3` |
+| 3 | `model_id` | `integer` | model | 1–12 | `3` |
 | 4 | `account_id` | `integer` | tài khoản. Nguồn `monitoring` dùng **tài khoản neo** vì Google chỉ báo mức project | | `949` |
 | 5 | `calls` | `integer` | số lượt | | `38` |
 | 6 | `total_tokens` | `bigint` | tổng token | | `45187` |
 | 7 | `input_tokens` | `bigint` | token vào | | |
 | 8 | `output_tokens` | `bigint` | token ra | | |
 | 9 | `cached_tokens` | `bigint` | token cache. **NULL ở `monitoring`** — Cloud Monitoring không có phép đo nào cho nó | | |
-| 10 | `cost_usd` | `numeric(14,6)` | tiền. **CHỈ `gateway` có**, và đó là số LiteLLM tự nhân từ bảng giá — không phải hoá đơn | | `0.021305` |
-| 11 | `source` | `text` | nguồn | `monitoring` · `app` · `gateway`. **Không bao giờ có `billing`** | `gateway` |
+| 10 | `cost_usd` | `numeric(14,6)` | tiền. **CHỈ `gateway` có** (32/3.691 dòng), và đó là số LiteLLM tự nhân từ bảng giá — không phải hoá đơn | | `0.021305` |
+| 11 | `source` | `text` | nguồn | `monitoring` (2.921) · `app` (738) · `gateway` (32). **Không bao giờ có `billing`** | `gateway` |
 
-**TỔNG THEO GIỜ PHẢI BẰNG TỔNG THEO NGÀY — nhưng CHO TỪNG NGUỒN, không phải tổng chung.**
+**TỔNG THEO GIỜ PHẢI BẰNG TỔNG THEO NGÀY — nhưng CHO TỪNG NGUỒN, không phải tổng chung.** Đo 14/09/2026:
 
 ```
-   gateway       45.187 = 45.187        calls  38 = 38          DAT
-   monitoring   496.933.793 = 496.933.793  calls 111.290        DAT
-   app           50.068.543  <- so voi PHAN fact_call cua nguon app
-                 bang ngay 112.775.370, vi TLA Hop Dong nam o
-                 fact_app_daily (gop san theo ngay, KHONG co gio)
+   gateway          233.084 = 233.084        calls     398 = 398        DAT
+   monitoring   560.901.702 = 560.901.702    calls 142.163 = 142.163    DAT
+   app           52.591.837  <- so voi PHAN fact_call cua nguon app
+                 (52.591.837, khop). Bang ngay ghi 115.837.209, vi TLA Hop
+                 Dong nam o fact_app_daily (gop san theo ngay, KHONG co gio)
 ```
 
 So tổng chung là biến một sự thật đã biết thành một báo động giả — rồi người ta sẽ tắt phép kiểm đi. `scripts/audit_db.py` nhóm F kiểm theo từng nguồn.
@@ -533,16 +578,16 @@ So tổng chung là biến một sự thật đã biết thành một báo độ
 
 ## `ref_price` — **Bảng giá** model theo thời điểm hiệu lực
 
-10 dòng · Khoá chính `(model_id, effective_from)` · Đơn vị: **USD / 1 triệu token**
+12 dòng · Khoá chính `(model_id, effective_from)` · Đơn vị: **USD / 1 triệu token**
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `model_id` | `integer` | model nào | 1–10, đủ cả 10 model | `4` |
+| 1 | `model_id` | `integer` | model nào | 1–12, đủ cả 12 model | `4` |
 | 2 | `effective_from` | `date` | **giá có hiệu lực từ ngày** | Hiện toàn bộ là `2026-08-13` — mới có một mốc giá duy nhất | `2026-08-13` |
-| 3 | `price_input` | `numeric(12,8)` | giá token vào | 0,10 → 2,00 USD/1M. 10/10 có | `1.25000000` |
-| 4 | `price_output` | `numeric(12,8)` | giá token ra | 0,40 → 12,00 USD/1M. 8/10 có (2 model embedding không sinh token ra) | `10.00000000` |
-| 5 | `price_cached` | `numeric(12,8)` | giá token đệm | 0,01 → 0,20 USD/1M. Chỉ 5/10 có | `0.12500000` |
-| 6 | `source` | `text` | giá lấy từ đâu | Cả 10/10 là `google`. Ba giá trị hợp lệ: `derived` (suy ra) · `google` · `vendor` | `google` |
+| 3 | `price_input` | `numeric(12,8)` | giá token vào | 0,10 → 2,00 USD/1M. 12/12 có | `1.25000000` |
+| 4 | `price_output` | `numeric(12,8)` | giá token ra | 0,40 → 12,00 USD/1M. 10/12 có (2 model embedding không sinh token ra) | `10.00000000` |
+| 5 | `price_cached` | `numeric(12,8)` | giá token đệm | 0,01 → 0,20 USD/1M. Chỉ 7/12 có | `0.12500000` |
+| 6 | `source` | `text` | giá lấy từ đâu | Cả 12/12 là `google`. Ba giá trị hợp lệ: `derived` (suy ra) · `google` · `vendor` | `google` |
 
 > ⚠️ Bảng này là gốc của các con số **ước tính**. Phần tiền hiển thị mà không đến từ `fact_billing_daily` đều tính bằng bảng giá này — giao diện hiện không phân biệt.
 
@@ -579,67 +624,107 @@ So tổng chung là biến một sự thật đã biết thành một báo độ
 | 7 | crm-feedback | 20,00 | — |
 | 8 | ralli | — | **50.000.000 token** |
 
+## `ref_source` — **Nguồn tự khai năng lực** của nó
+
+4 dòng · Khoá chính `source` · Dòng do **migration 001 gieo**, nên `connect.rebuild()` **không xoá** bảng này (`KEEP_ON_REBUILD`)
+
+Khoá ngoại từ 6 bảng trỏ vào đây: `fact_call`, `fact_usage_daily`, `fact_usage_hourly`, `fact_perf_daily`, `fact_latency_daily`, `ref_load_run` — một nguồn không có tên ở đây thì không nạp được dòng nào.
+
+**Vì sao tồn tại:** chuỗi `source = 'app'` từng mang nghĩa ngầm *"nguồn duy nhất biết người dùng"*. Ngày Gateway ghi dữ liệu có username, mọi câu hỏi viết bằng tên nguồn sẽ trả sai mà không báo lỗi. **Hỏi cột năng lực, đừng liệt kê tên nguồn.** Lý lẽ đầy đủ ở Phần II §7b.
+
+| # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
+|---|---|---|---|---|---|
+| 1 | `source` | `text` | tên nguồn | `app` · `billing` · `gateway` · `monitoring` | `gateway` |
+| 2 | `knows_user` | `boolean` | nguồn **có thể** nói ai gọi không | `true` ở `app` và `gateway`. Có thể ≠ mọi dòng đều có — xem §7b | `true` |
+| 3 | `has_invoice_cost` | `boolean` | nguồn có mang tiền **hoá đơn** không | Chỉ `billing`. Tên cột là `has_invoice_cost`, **không phải** `has_cost`: Gateway có tiền, nhưng là tiền suy từ bảng giá | `false` |
+| 4 | `era` | `text` | kỷ nguyên | `scrape` (đi cào số của người khác: `app`, `billing`, `monitoring`) · `gateway` (ta tự đếm) | `scrape` |
+| 5 | `note` | `text` | ghi chú | 4/4 có | `Hoá đơn Google. Tính theo project nên không biết ai gọi. Về trễ ~1 ngày.` |
+
+## `ref_load_run` — **Nhịp tim** của đường nạp. KHÔNG phải một nguồn dữ liệu
+
+0 dòng · Khoá chính `source` (khoá ngoại tới `ref_source`) · migration 012, 09/09/2026
+
+Trả lời đúng một câu: *"Lần cuối đường nạp của nguồn này chạy THÀNH CÔNG là khi nào?"* Thiếu câu trả lời đó thì hai trạng thái trông y hệt nhau từ phía dashboard: *dòng gateway mới nhất cách đây 3 tiếng vì không ai gọi* — bình thường; và *vì đường nạp đã chết 3 tiếng* — sự cố.
+
+**`usage_resolved` KHÔNG đọc bảng này**, và không bao giờ được đọc. Nó không mang token, tiền hay lượt gọi nào. Người đọc nó: `scripts/audit_db.py` và `/api/health`.
+
+**Đo 14/09/2026: 0 dòng.** Lần dựng lại cùng ngày xoá dòng mọi bảng dữ liệu, kể cả bảng này, và dịch vụ `ledger-refresh` (profile `refresh`) chưa chạy lại trên database. 0 dòng nghĩa là **chưa có nhịp tim nào được ghi** — không tự nói lên đường nạp sống hay chết.
+
+| # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
+|---|---|---|---|---|---|
+| 1 | `source` | `text` | nguồn nào | Khoá ngoại tới `ref_source`: nhịp tim của một nguồn không tồn tại là dòng rác không ai phát hiện | `gateway` |
+| 2 | `last_success_at` | `timestamp` | lần cuối chạy thành công | **Giờ Việt Nam**, NOT NULL. Bên ghi PHẢI dùng `now() AT TIME ZONE 'Asia/Ho_Chi_Minh'` — đồng hồ của database, không phải của container. Postgres ở đây chạy UTC; lẫn hai đồng hồ là tuổi nhịp tim lệch đúng 7 giờ | — |
+| 3 | `rows_after` | `bigint` | số dòng của nguồn trong `fact_call` ngay sau lượt đó | Không để tính toán, để đọc log ngược: *"lượt 03:02 kết thúc với 366 dòng"* | — |
+| 4 | `written_by` | `text` | đường nào ghi | Đường nạp nhanh và đường dựng lại toàn bộ là hai đường khác nhau | |
+| 5 | `every_seconds` | `bigint` | nhịp mà tiến trình ghi **đang** chạy, giây | `NULL` nếu chạy một lần rồi thoát. Ngưỡng của phép kiểm độ trễ suy từ đây chứ không từ biến môi trường — vì mỗi tiến trình thấy một giá trị `REFRESH_EVERY_SECONDS` khác nhau, và đó là nguồn báo động giả | `300` |
+
 ---
 
 # 4. View
 
 ## `usage_resolved` — **CỬA CHÍNH để hỏi số liệu.** Đã chọn sẵn nguồn
 
-1.189 dòng · Một dòng cho mỗi `(ngày, agent, model)`
+1.385 dòng · Một dòng cho mỗi `(ngày, agent, model)`
 
-Đây là cái `fact_usage_daily` lẽ ra phải là. Bảng đó đặt ba nguồn cạnh nhau và bắt người hỏi tự chọn; view này **chọn sẵn, và nói rõ nó đã chọn gì**.
+Đây là cái `fact_usage_daily` lẽ ra phải là. Bảng đó đặt các nguồn cạnh nhau và bắt người hỏi tự chọn; view này **chọn sẵn, và nói rõ nó đã chọn gì**.
 
 **Chọn theo từng chỉ tiêu, không phải theo từng dòng** — mỗi nguồn mạnh một thứ:
 
 | Chỉ tiêu | Thứ tự ưu tiên |
 |---|---|
-| tiền | **chỉ** `billing` có |
-| token | `billing` → thiếu thì `monitoring` → thiếu nữa thì `app` |
-| lượt gọi | `monitoring` → thiếu thì `app`. `billing` không có |
-| người dùng | **chỉ** `app` có |
+| tiền | `billing` → thiếu thì `gateway` (**từ migration 005, 31/08/2026**). Trước đó chỉ `billing` |
+| token | `gateway` → thiếu thì `billing` → `monitoring` → `app` |
+| lượt gọi | `gateway` → thiếu thì `monitoring` → `app`. `billing` không có |
+| người dùng | nguồn có `ref_source.knows_user` (`app`, `gateway`) |
 
-**Không cộng ba nguồn lại** — chúng đo CÙNG một lưu lượng bằng ba cái công tơ khác nhau. Cộng lại là đếm ba lần.
+**Hai thứ tự khác nhau là có chủ ý.** Về token, Gateway là bộ đếm của chính ta và có mặt ngay trong ngày. Về tiền, hoá đơn là số Google thật sự trừ; số của Gateway là LiteLLM tự nhân từ bảng giá. Ngày hoá đơn về, nó thay số ước tính.
+
+> ⚠ **Migration 005 đảo ngược một quyết định của baseline.** Trước đó `cost_usd IS NULL` nghĩa là *"chưa có hoá đơn"*, và giao diện gắn dấu `≈`. Nay tiền Gateway nằm trong cột này và **trông như tiền hoá đơn**. Chủ dự án chốt đánh đổi đó ngày 31/08/2026. Muốn biết một con số tiền có phải hoá đơn không: `token_source = 'billing'`.
+
+**Không cộng các nguồn lại** — chúng đo CÙNG một lưu lượng bằng những cái công tơ khác nhau. Cộng lại là đếm nhiều lần.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `day` | `date` | ngày (giờ VN) | 01/01 → 17/08/2026 | `2026-01-01` |
+| 1 | `day` | `date` | ngày (giờ VN) | 01/01 → 12/09/2026 | `2026-01-01` |
 | 2 | `agent_id` | `integer` | agent | 1–8 | `2` |
-| 3 | `model_id` | `integer` | model | 1–10 | `1` |
-| 4 | `total_tokens` | `numeric` | tổng token đã chọn nguồn | 1.179/1.189 có. Tới 35.048.214 | `950445` |
+| 3 | `model_id` | `integer` | model | 1–12 | `1` |
+| 4 | `total_tokens` | `numeric` | tổng token đã chọn nguồn | 1.372/1.385 có. Tới 35.467.506 | `950445` |
 | 5 | `input_tokens` | `numeric` | token vào | Lấy từ **CÙNG nguồn** với `total_tokens`, không COALESCE riêng từng cột | `887473` |
 | 6 | `output_tokens` | `numeric` | token ra | nt. | `62972` |
-| 7 | `cached_tokens` | `numeric` | token đệm | 998/1.189 có | `0` |
-| 8 | `cost_usd` | `numeric` | tiền | **Chỉ 965/1.189 (81,2%) có** — phần còn lại không có hoá đơn | `0.113907` |
-| 9 | `calls` | `bigint` | số lượt gọi | 707/1.189 có | `NULL` |
-| 10 | `token_source` | `text` | **con số token này từ nguồn nào** | `billing` (965) · `app` (168) · `monitoring` (46) · `NULL` (10) | `billing` |
-| 11 | `call_source` | `text` | **con số lượt gọi này từ nguồn nào** | `monitoring` (539) · `app` (168) · `NULL` (482) | `NULL` |
-| 12 | `token_estimated` | `integer` | **1 = chưa được hoá đơn xác nhận** | `0` (965) · `1` (224) | `0` |
+| 7 | `cached_tokens` | `numeric` | token đệm | 1.166/1.385 có | `0` |
+| 8 | `cost_usd` | `numeric` | tiền | **1.117/1.385 (80,6%) có** = 1.106 dòng tiền hoá đơn + 11 dòng tiền ước tính của Gateway. Phần còn lại không có tiền | `0.113907` |
+| 9 | `calls` | `bigint` | số lượt gọi | 882/1.385 có | `NULL` |
+| 10 | `token_source` | `text` | **con số token này từ nguồn nào** | `billing` (1.106) · `app` (194) · `monitoring` (61) · `gateway` (11) · `NULL` (13) | `billing` |
+| 11 | `call_source` | `text` | **con số lượt gọi này từ nguồn nào** | `monitoring` (677) · `app` (194) · `gateway` (11) · `NULL` (503) | `NULL` |
+| 12 | `token_estimated` | `integer` | **1 = TOKEN chưa được hoá đơn xác nhận** | `0` (1.106) · `1` (279). Nói về token, không nói về tiền: dòng Gateway vẫn mang cờ `1` dù có tiền | `0` |
 
 > **Hai cột `*_source` là BẮT BUỘC, không phải trang trí.** Một con số token của hôm nay đến từ `monitoring` (ước tính, hoá đơn chưa về) trông **y hệt** con số tuần trước đến từ hoá đơn. Không có cột này thì không phân biệt được.
 >
-> Ralli (`agent_id=8`) **luôn** rơi về `app` vì project `tla-ralli` chưa nối billing.
+> Ralli (`agent_id=8`) **luôn** rơi về `app` (161/161 dòng) vì project `tla-ralli` chưa nối billing.
 
-**Tổng quan hiện tại theo nguồn:**
+**Tổng quan theo nguồn (đo 14/09/2026):**
 
 | token_source | số dòng | tổng token | tổng tiền (USD) |
 |---|---|---|---|
-| `billing` | 965 | 708.868.471 | **291,99** |
-| `app` | 168 | 104.990.903 | — |
-| `monitoring` | 46 | 53.797.736 | — |
-| `NULL` | 10 | — | — |
+| `billing` | 1.106 | 818.408.100 | **347,72** |
+| `app` | 194 | 109.648.962 | — |
+| `monitoring` | 61 | 56.878.640 | — |
+| `gateway` | 11 | 233.084 | 0,25 *(ước tính)* |
+| `NULL` | 13 | — | — |
+| **Tổng** | **1.385** | **985.168.786** | **347,97** |
 
 **Tổng quan theo agent:**
 
 | agent | code | dòng | tổng token | tiền (USD) |
 |---|---|---|---|---|
-| 1 | contact-center | 470 | 333.221.182 | 100,13 |
-| 2 | sale-agent | 350 | 300.806.849 | 131,62 |
-| 3 | invoice | 106 | 95.881.301 | 17,44 |
-| 4 | tools-quizzer | 7 | 63.304 | 0,04 |
-| 5 | tla-hd | 59 | 70.240.065 | 18,65 |
-| 6 | dms-feedback | 19 | 8.829.396 | 8,90 |
-| 7 | crm-feedback | 43 | 10.681.235 | 15,20 |
-| 8 | **ralli** | 135 | 47.933.778 | **— (không có hoá đơn)** |
+| 1 | contact-center | 534 | 360.640.136 | 111,09 |
+| 2 | sale-agent | 376 | 317.103.358 | 140,69 |
+| 3 | invoice | 112 | 114.031.474 | 20,94 |
+| 4 | tools-quizzer | 9 | 79.915 | 0,06 |
+| 5 | tla-hd | 87 | 75.793.066 | 23,55 |
+| 6 | dms-feedback | 35 | 49.795.155 | 30,32 |
+| 7 | crm-feedback | 71 | 15.133.845 | 21,31 |
+| 8 | **ralli** | 161 | 52.591.837 | **— (không có hoá đơn)** |
 
 ---
 
@@ -651,23 +736,23 @@ So tổng chung là biến một sự thật đã biết thành một báo độ
 > `tools/dien_tap_gateway.py` đọc nó làm mốc lịch sử — đổi nó là mọi số mốc cũ không so lại
 > được.
 
-320 dòng · Lọc `source='app'` và `kind='real'`
+360 dòng · Lọc nguồn có `ref_source.knows_user` và `kind='real'`
 
-**Chỉ phủ phần có nguồn `app`** — vì Google không ghi ai gọi. Chỉ agent 5 và 8 xuất hiện.
+**Chỉ phủ tài khoản là CON NGƯỜI, ở nguồn biết người dùng.** Hôm nay chỉ agent 5 (76 dòng) và 8 (284 dòng) xuất hiện: dòng Gateway thuộc tài khoản dịch vụ nên bị `kind='real'` loại.
 
 | # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
 |---|---|---|---|---|---|
-| 1 | `day` | `date` | ngày | 14/03 → 17/08/2026 | `2026-07-01` |
+| 1 | `day` | `date` | ngày | 14/03 → 12/09/2026 | `2026-07-01` |
 | 2 | `agent_id` | `integer` | agent | Chỉ `5` và `8` | `8` |
 | 3 | `model_id` | `integer` | model | 1–4 | `3` |
-| 4 | `unit_id` | `text` | đơn vị — lấy từ `account`, **không** từ fact | 22 giá trị | `69ee5b13be38bdbf5a8de666` |
-| 5 | `unit_path` | `text` | đường dẫn đơn vị | **`Chưa quy được` chiếm 223/320 (69,7%)** | `Toàn công ty` |
+| 4 | `unit_id` | `text` | đơn vị — lấy từ `account`, **không** từ fact | 26 giá trị | `69ee5b13be38bdbf5a8de666` |
+| 5 | `unit_path` | `text` | đường dẫn đơn vị | **`Chưa quy được` chiếm 227/360 (63,1%)** | `Toàn công ty` |
 | 6 | `unit_conflict` | `integer` | các nguồn có bất đồng đơn vị không | `0`/`1` | `0` |
 | 7 | `is_shared` | `integer` | tài khoản dùng chung? | `0`/`1` — nhớ loại `1` khi tính tỷ lệ áp dụng | `1` |
-| 8 | `account_id` | `integer` | tài khoản | 1–891 | `505` |
-| 9 | `username` | `text` | tên đăng nhập | 320/320 có | `system`, `c4led.anhld`, `admin` |
-| 10 | `full_name` | `text` | họ tên | **Chỉ 194/320 (60,6%) có** | `Lê Đức Anh` |
-| 11 | `email` | `text` | thư điện tử | **Chỉ 96/320 (30,0%) có** | `c4led.anhld@rangdong.com.vn` |
+| 8 | `account_id` | `integer` | tài khoản | 56 tài khoản, 1–892 | `505` |
+| 9 | `username` | `text` | tên đăng nhập | 360/360 có | `system`, `c4led.anhld`, `admin` |
+| 10 | `full_name` | `text` | họ tên | **Chỉ 234/360 (65,0%) có** | `Lê Đức Anh` |
+| 11 | `email` | `text` | thư điện tử | **Chỉ 132/360 (36,7%) có** | `c4led.anhld@rangdong.com.vn` |
 | 12 | `calls` | `integer` | số lượt gọi | 1 → 663 | `14` |
 | 13 | `total_tokens` | `bigint` | tổng token | 350 → 8.126.973 | `75588` |
 | 14 | `input_tokens` | `bigint` | token vào | 236 → 6.815.690 | `73500` |
@@ -677,14 +762,38 @@ So tổng chung là biến một sự thật đã biết thành một báo độ
 
 ## `usage_by_account_resolved` — **Chiều tài khoản cho CẢ 8 AGENT.** Dùng view này
 
-1.453 dòng · 8 agent · 60 tài khoản · migration 009, 03/09/2026
+1.584 dòng · 8 agent · 63 tài khoản · migration 009, 03/09/2026
 
-**Dùng view này, không dùng `usage_by_account`.** Hai view trả lời hai câu khác nhau:
+**Dùng view này, không dùng `usage_by_account`.** Hai view trả lời hai câu khác nhau (đo 14/09/2026):
 
 ```
-   usage_by_account            "quy ve mot CON NGUOI"    ->  2/8 agent · 53 account
-   usage_by_account_resolved   "quy ve mot TAI KHOAN"    ->  8/8 agent · 60 account
+   usage_by_account            "quy ve mot CON NGUOI"    ->  2/8 agent · 56 account
+   usage_by_account_resolved   "quy ve mot TAI KHOAN"    ->  8/8 agent · 63 account
 ```
+
+| # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
+|---|---|---|---|---|---|
+| 1 | `day` | `date` | ngày (giờ VN) | 01/01 → 12/09/2026 | `2026-07-01` |
+| 2 | `agent_id` | `integer` | agent | 1–8, đủ cả 8 | `1` |
+| 3 | `model_id` | `integer` | model | 1–12 | `2` |
+| 4 | `account_id` | `integer` | tài khoản | 63 tài khoản, 1–954 | `950` |
+| 5 | `username` | `text` | tên đăng nhập | 1.584/1.584 có | `svc.contact-center`, `admin`, `__unattributed_8__` |
+| 6 | `full_name` | `text` | họ tên | 1.458/1.584 có. Tài khoản dịch vụ mang tên `Cả <agent>` | `Cả Sale Agent`, `Quản trị viên` |
+| 7 | `email` | `text` | thư điện tử | Chỉ 125/1.584 có — tài khoản dịch vụ không có email | `tt3.khaitq@rangdong.com.vn` |
+| 8 | `kind` | `text` | **loại tài khoản** — cột view cũ không có | `service_account` (1.137) · `real` (346) · `whole_agent` (54) · `unattributed` (47) | `service_account` |
+| 9 | `unit_id` | `text` | đơn vị, lấy từ `account` | 32 giá trị. Tài khoản dịch vụ rơi vào `__technical_<agent>__` | `__technical_1__` |
+| 10 | `unit_path` | `text` | đường dẫn đơn vị | `Chưa quy được` 321/1.584 | `Đơn vị sử dụng Chatbot Contact Center` |
+| 11 | `unit_conflict` | `integer` | các nguồn có bất đồng đơn vị không | `0` (1.566) · `1` (18) | `0` |
+| 12 | `is_shared` | `integer` | tài khoản dùng chung? | `1` (1.458) · `0` (126) | `1` |
+| 13 | `calls` | `integer` | số lượt gọi, từ `call_source` | 1.081/1.584 có | `21082` |
+| 14 | `total_tokens` | `bigint` | tổng token, từ `token_source` | 1.571/1.584 có. Tới 35.467.506 | `950445` |
+| 15 | `input_tokens` | `bigint` | token vào | cùng nguồn với `total_tokens` | |
+| 16 | `output_tokens` | `bigint` | token ra | cùng nguồn với `total_tokens` | |
+| 17 | `cached_tokens` | `bigint` | token đệm — cột view cũ không có | 1.270/1.584 có | `0` |
+| 18 | `token_source` | `text` | nguồn của token — cột view cũ không có | `billing` (1.106) · `app` (393) · `monitoring` (61) · `gateway` (11) · `NULL` (13) | `billing` |
+| 19 | `call_source` | `text` | nguồn của lượt gọi — cột view cũ không có | `monitoring` (677) · `app` (393) · `gateway` (11) · `NULL` (503) | `monitoring` |
+
+**Nghiệm thu đo 14/09:** `SUM(total_tokens)` = 985.168.786 và `SUM(calls)` = 153.956 — **cả hai** bằng `usage_resolved`.
 
 Sáu agent chạy bằng **một** tài khoản dịch vụ: ta biết chính xác ai gọi, chỉ là "ai" đó không phải một con người — `001_baseline.sql:176-186` đã tách hai câu hỏi đó từ 20/08.
 
@@ -704,7 +813,7 @@ Sáu agent chạy bằng **một** tài khoản dịch vụ: ta biết chính x�
 
 `usage_resolved` không mang `account_id`, nhưng nó **nói ra** nó đã chọn nguồn nào. Lấy đúng nguồn ấy quay lại `fact_usage_daily` là có chiều tài khoản mà không đếm hai lần.
 
-**Một lần là không đủ.** Đo: JOIN chỉ theo `token_source` cho **token lệch 0** trong khi **calls hụt 77,9%** (27.056/122.504) — vì `usage_resolved` chọn nguồn theo **từng chỉ tiêu**, và `billing` **không có** cột `calls`:
+**Một lần là không đủ.** Đo 03/09/2026: JOIN chỉ theo `token_source` cho **token lệch 0** trong khi **calls hụt 77,9%** (27.056/122.504) — vì `usage_resolved` chọn nguồn theo **từng chỉ tiêu**, và `billing` **không có** cột `calls`:
 
 ```
    token_source | call_source | dong |    token    | calls
@@ -721,15 +830,16 @@ Sáu agent chạy bằng **một** tài khoản dịch vụ: ta biết chính x�
 ### Phân bố, và vì sao GIỮ phần không quy được
 
 ```
-   service_account  1.057 dong · 6 agent ·  6 account · 793.613.395 · 86,6%
-   real               324 dong · 2 agent · 52 account · 102.905.141 · 11,2%
-   whole_agent         38 dong · 1 agent ·  1 account ·  15.230.908 ·  1,7%
-   unattributed        34 dong · 1 agent ·  1 account ·   4.220.527 ·  0,5%
+   do 14/09/2026
+   service_account  1.137 dong · 6 agent ·  6 account · 856.783.883 · 87,0%
+   real               346 dong · 2 agent · 55 account · 103.783.862 · 10,5%
+   whole_agent         54 dong · 1 agent ·  1 account ·  18.735.941 ·  1,9%
+   unattributed        47 dong · 1 agent ·  1 account ·   5.865.100 ·  0,6%
 ```
 
-`whole_agent` + `unattributed` = **2,2%** ta THẬT SỰ không quy được về tài khoản nào. Lọc chúng đi là nói dối rằng độ phủ bằng 100%.
+`whole_agent` + `unattributed` = **2,5%** ta THẬT SỰ không quy được về tài khoản nào. Lọc chúng đi là nói dối rằng độ phủ bằng 100%.
 
-**Chéo kiểm với `/api/health`** — một đường tính hoàn toàn khác (đi từ `usage_resolved`, không qua `account`) — khớp cả ba: people 107.125.668 · service 793.613.395 · opaque 15.230.908.
+**Chéo kiểm với `/api/health`** — một đường tính hoàn toàn khác (đi từ `usage_resolved`, không qua `account`) — ngày 03/09/2026 khớp cả ba: people 107.125.668 · service 793.613.395 · opaque 15.230.908.
 
 **KHÔNG có `cost_usd`, và đó là có chủ ý:** tiền chỉ tồn tại ở mức (ngày, agent, model). Chia đều cho các tài khoản là bịa ra một con số không nguồn nào từng báo cáo.
 
@@ -739,7 +849,20 @@ Cột riêng so với view cũ: `kind` · `cached_tokens` · `token_source` · `
 
 ## `latency_resolved` — **MỘT con số độ trễ** cho mỗi (ngày, agent). Chọn, không trung bình
 
-340 dòng · migration 010, 03/09/2026
+449 dòng · migration 010, 03/09/2026 · 454 dòng của `fact_latency_daily` trừ 5 cặp (ngày, agent) có cả hai nguồn
+
+| # | Cột | Kiểu | Nghĩa tên cột | Chứa dữ liệu gì | Dữ liệu mẫu |
+|---|---|---|---|---|---|
+| 1 | `day` | `date` | ngày (giờ VN) | 01/05 → 12/09/2026 | `2026-05-02` |
+| 2 | `agent_id` | `integer` | agent | 1–7 | `6` |
+| 3 | `latency_source` | `text` | nguồn đã được chọn | `monitoring` (445) · `gateway` (4). Xem mục dưới | `monitoring` |
+| 4 | `samples` | `integer` | số mẫu | 1 → 5.791 | `17` |
+| 5 | `p50_seconds` | `double precision` | trung vị | cùng nguồn với mọi cột khác | `14.98` |
+| 6 | `p95_seconds` | `double precision` | phân vị 95 | 0,256 → 382,52 giây | `63.034` |
+| 7 | `p95_bucket_from` | `double precision` | cận dưới ô chứa p95 | 445/449 có — `NULL` đúng ở 4 dòng `gateway` | |
+| 8 | `p95_bucket_to` | `double precision` | cận trên ô chứa p95 | như trên | |
+| 9 | `p99_seconds` | `double precision` | phân vị 99 | | |
+| 10 | `enough_samples` | `boolean` | đủ mẫu? | `true` (391) · `false` (58) | `true` |
 
 Từ migration 008, `fact_latency_daily` **có thể có hai dòng** cho cùng một `(day, agent_id)`. Đó là đúng ở tầng dữ liệu — mỗi nguồn giữ phép đo của nó. Nhưng tầng đọc chưa chịu nổi:
 
@@ -758,8 +881,9 @@ View lấy **tất cả** cột từ **cùng** nguồn đã chọn — không CO
 ### `latency_source` — cột phục vụ PHÉP KIỂM, không lên màn hình
 
 ```
-   monitoring  339 dong    p95 NOI SUY, p95_bucket_* CO gia tri
-   gateway       1 dong    p95 tu SO THO, p95_bucket_* = NULL
+   do 14/09/2026
+   monitoring  445 dong    p95 NOI SUY, p95_bucket_* CO gia tri
+   gateway       4 dong    p95 tu SO THO, p95_bucket_* = NULL
 ```
 
 Dashboard hiện **một con số trần**. `/api/performance` **không** trả cột này — kiểm qua HTTP: `'latency_source' in row` là `False`.
@@ -776,7 +900,7 @@ Dashboard hiện **một con số trần**. `/api/performance` **không** trả 
                          nhu that.
 ```
 
-Hai nguồn lệch **31,9 lần** trên cùng agent 6 (p95 58,206 s vs 1,822 s; p50 lệch 24,9 lần) và **chưa ngày nào chồng lấn** để kiểm chứng lẫn nhau. Ba phép đo đã loại trừ giải thích dễ dãi: 0/38 lượt Gateway vượt 33,55 s; số lượt/ngày tương đương (45,4 vs 38); p50 cũng lệch mà p50 ít chịu sai số ô hơn.
+Hai nguồn lệch **31,9 lần** trên cùng agent 6 (p95 58,206 s vs 1,822 s; p50 lệch 24,9 lần; đo 03/09/2026). **Đo 14/09 đã có 5 ngày chồng lấn, nhưng lệch không cùng chiều** (0,4 lần tới 51,1 lần) — bảng số ở mục `fact_latency_daily`. Chưa đủ để đổi thứ tự. Ba phép đo đã loại trừ giải thích dễ dãi: 0/38 lượt Gateway vượt 33,55 s; số lượt/ngày tương đương (45,4 vs 38); p50 cũng lệch mà p50 ít chịu sai số ô hơn.
 
 **Đổi chiều = sửa đúng MỘT dòng `CASE`** trong SQL của view. Phép đo sẽ trả lời: một buổi chạy DMS qua Gateway **trong ngày** mà Cloud Monitoring đang ghi.
 
@@ -786,7 +910,7 @@ Hai nguồn lệch **31,9 lần** trên cùng agent 6 (p95 58,206 s vs 1,822 s; 
 
 ## `monitoring_ai` — `fact_monitoring` **đã lọc**, dùng khi cần số liệu thô
 
-93.877 dòng (từ 583.917 — **giữ lại 16,1%**)
+114.657 dòng (từ 726.051 — **giữ lại 15,8%**)
 
 ```sql
 CREATE VIEW monitoring_ai AS
@@ -795,14 +919,14 @@ WHERE service = 'generativelanguage.googleapis.com'
   AND is_quota_limit = FALSE;
 ```
 
-Cột giống hệt `fact_monitoring`. Khác biệt sau khi lọc:
+**Cột giống hệt `fact_monitoring`, cùng thứ tự, cùng kiểu** — 17 cột: `ts_utc` `ts_local` `agent_id` `project` `metric_nickname` `metric_type` `model_id` `response_code` `service` `method` `credential_id` `is_quota_limit` `thinking_enabled` `output_modality` `limit_name` `value` `unit`. Nghĩa từng cột xem bảng cột của `fact_monitoring`. Khác biệt sau khi lọc (đo 14/09/2026):
 
 | Cột | Ở bảng thô | Ở view |
 |---|---|---|
-| `service` | 12 dịch vụ, `drive.googleapis.com` chiếm 78,8% | **1 dịch vụ duy nhất** |
-| `is_quota_limit` | 26.370 dòng `true` | **0 dòng** — chỉ còn số đo thật |
-| `model_id` có giá trị | 83.013/583.917 = **14,2%** | 56.643/93.877 = **60,3%** |
-| `project` lớn nhất | `pro-tuner` (497.953) | `tranquil-post` (51.114) — **thứ hạng đảo hẳn** |
+| `service` | 12 dịch vụ, `drive.googleapis.com` chiếm 79,3% | **1 dịch vụ duy nhất** |
+| `is_quota_limit` | 31.930 dòng `true` | **0 dòng** — chỉ còn số đo thật |
+| `model_id` có giá trị | 101.041/726.051 = **13,9%** | 69.111/114.657 = **60,3%** |
+| `project` lớn nhất | `pro-tuner` (621.612) | `tranquil-post` (61.187) — **thứ hạng đảo hẳn** |
 | `value` lớn nhất | 9,22 × 10¹⁸ (giá trị hạn mức "vô hạn") | 3.961.961 |
 
 Dòng cuối của bảng trên là lý do view tồn tại: quên lọc thì giá trị hạn mức giả sẽ trộn vào phép cộng.
@@ -810,6 +934,8 @@ Dòng cuối của bảng trên là lý do view tồn tại: quên lọc thì gi
 ---
 
 # Phụ lục: sơ đồ quan hệ
+
+Số dòng đo 14/09/2026. Sơ đồ chỉ vẽ trục chính — 38 khoá ngoại thật đọc từ `pg_constraint`.
 
 ```
                         ┌─────────────┐
@@ -819,35 +945,40 @@ Dòng cuối của bảng trên là lý do view tồn tại: quên lọc thì gi
           ▼            ▼       ▼        ▼             ▼
     ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐
     │ dim_unit │ │ dim_user │ │dim_funct.│ │ ref_budget │
-    │   130    │ │   964    │ │    8     │ │     7      │
+    │   130    │ │   965    │ │    8     │ │     7      │
     └────┬─────┘ └────┬─────┘ └──────────┘ └────────────┘
          │            │
          └──────┬─────┘
                 ▼
           ┌───────────┐          ┌───────────┐      ┌───────────┐
-          │  account  │ 953      │ dim_model │ 10 ──│ ref_price │ 10
+          │  account  │ 954      │ dim_model │ 12 ──│ ref_price │ 12
           └─────┬─────┘          └─────┬─────┘      └───────────┘
                 │                      │
     ┌───────────┼──────────┬───────────┼────────────┐
     ▼           ▼          ▼           ▼            ▼
 ┌─────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌──────────────┐
 │fact_call│ │fact_app_ │ │fact_bill-│ │fact_moni- │ │fact_perf_ /  │
-│  8.330  │ │  daily   │ │ing_daily │ │  toring   │ │  latency_    │
-│ (Ralli) │ │    77    │ │  2.441   │ │  583.917  │ │  600 / 297   │
-│từng lượt│ │(TLA HĐ)  │ │ có TIỀN  │ │ từng phút │ │ lỗi / độ trễ │
+│  9.453  │ │  daily   │ │ing_daily │ │  toring   │ │  latency_    │
+│Ralli +  │ │    78    │ │  2.833   │ │  726.051  │ │  747 / 454   │
+│Gateway  │ │(TLA HĐ)  │ │ có TIỀN  │ │ từng phút │ │ lỗi / độ trễ │
 └────┬────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────────────┘
      └───────────┴────────────┼─────────────┘
-              nguồn 'app'     │  'billing'   'monitoring'
+     'app' + 'gateway'        │  'billing'   'monitoring'
+                              ▼
+                  ┌───────────────────────┐        ┌───────────────────┐
+                  │   fact_usage_daily    │ 2.203  │ fact_usage_hourly │ 3.691
+                  │  (4 nguồn cạnh nhau)  │        │ (không có billing)│
+                  └───────────┬───────────┘        └───────────────────┘
                               ▼
                   ┌───────────────────────┐
-                  │   fact_usage_daily    │ 1.845 — ĐỐI CHỨNG
-                  │  (3 nguồn cạnh nhau)  │    chưa chọn nguồn
-                  └───────────┬───────────┘
-                              ▼
-                  ┌───────────────────────┐
-                  │    usage_resolved     │ 1.189 — CỬA CHÍNH
+                  │    usage_resolved     │ 1.385 — CỬA CHÍNH
                   │  (đã chọn sẵn nguồn)  │    hỏi số liệu ở đây
                   └───────────────────────┘
+
+   ĐỨNG NGOÀI trục cộng — chỉ để đối chiếu, KHÔNG BAO GIỜ cộng vào:
+     fact_provider_daily 5 (sổ nhà cung cấp) · ref_load_run 0 (nhịp tim)
+
+   ref_source 4 — mọi cột `source` của 5 bảng fact trỏ vào đây
 ```
 
 ---
@@ -877,46 +1008,72 @@ Từ **03/09/2026** báo cáo audit có ba mức thay vì hai, và nhãn của m
 
 Mốc 03/09/2026 sau khi áp cơ chế: **72 phép · 65 đạt · 7 lưu ý · 0 hỏng** (trước đó 68 · 64 · 4 · 0).
 
-**Khoá ngoại nay đọc từ `pg_constraint`,** không từ danh sách gõ tay. Đo ngày 03/09: danh sách cũ đã trôi mất **13/36** quan hệ, trong đó 6 do migration 008 tạo ra cùng sáng hôm đó. Nhãn `Foreign keys (36 relations, read from the database)` in ra số quan hệ **có thật**. Kèm một mốc số lượng (`>= 36`) để bắt chiều ngược lại: xoá một khoá ngoại thì danh sách tự sinh vẫn xanh, vì nó chỉ kiểm những gì còn lại.
+**Khoá ngoại nay đọc từ `pg_constraint`,** không từ danh sách gõ tay. Đo ngày 03/09: danh sách cũ đã trôi mất **13/36** quan hệ, trong đó 6 do migration 008 tạo ra cùng sáng hôm đó. Nhãn `Foreign keys (36 relations, read from the database)` in ra số quan hệ **có thật**. Kèm một mốc số lượng (`>= 36`) để bắt chiều ngược lại: xoá một khoá ngoại thì danh sách tự sinh vẫn xanh, vì nó chỉ kiểm những gì còn lại. Đo 14/09/2026: database có **38** khoá ngoại, trong đó `ref_load_run → ref_source` do migration 012 thêm sau mốc 03/09.
 
 ---
 
 # Phụ lục: bảng tra nhanh số dòng
 
+Đo 14/09/2026 trên `token_ledger_v2`.
+
 | Đối tượng | Loại | Số dòng | Khoá chính |
 |---|---|---|---|
+| `ref_load_run` | bảng | 0 | `source` |
+| `alembic_version` | bảng | 1 | `version_num` |
 | `ref_fx` | bảng | 1 | `day` |
+| `ref_source` | bảng | 4 | `source` |
+| `fact_provider_daily` | bảng | 5 | `(day, provider_project, raw_model)` |
 | `ref_budget` | bảng | 7 | `(agent_id, month)` |
 | `dim_agent` | bảng | 8 | `agent_id` |
 | `dim_function` | bảng | 8 | `(agent_id, code)` |
-| `dim_model` | bảng | 10 | `model_id` |
-| `ref_price` | bảng | 10 | `(model_id, effective_from)` |
-| `dim_model_alias` | bảng | 44 | `(source, raw_name)` |
-| `dim_metric_alias` | bảng | 44 | `(source, raw_name)` |
-| `fact_app_daily` | bảng | 77 | `row_id` |
+| `dim_model` | bảng | 12 | `model_id` |
+| `ref_price` | bảng | 12 | `(model_id, effective_from)` |
+| `dim_metric_alias` | bảng | 48 | `(source, raw_name)` |
+| `dim_model_alias` | bảng | 49 | `(source, raw_name)` |
+| `fact_app_daily` | bảng | 78 | `row_id` |
 | `dim_unit` | bảng | 130 | `unit_id` |
-| `fact_latency_daily` | bảng | 297 | `(day, agent_id)` |
-| `fact_perf_daily` | bảng | 600 | `(day, agent_id, method, response_code)` |
-| `account` | bảng | 953 | `account_id` |
-| `dim_user` | bảng | 964 | `(agent_id, user_id)` |
-| `fact_usage_daily` | bảng | 1.845 | `(day, agent_id, model_id, account_id, source)` |
-| `fact_billing_daily` | bảng | 2.441 | `(day, project, sku_id)` |
-| `fact_call` | bảng | 8.330 | `call_id` |
-| `fact_monitoring` | bảng | **583.917** | *(không có)* |
-| `usage_by_account` | view | 320 | — |
-| `usage_resolved` | view | 1.189 | — |
-| `monitoring_ai` | view | 93.877 | — |
-| **Tổng (18 bảng)** | | **599.686** | |
+| `fact_latency_daily` | bảng | 454 | `(day, agent_id, source)` |
+| `fact_perf_daily` | bảng | 747 | `(day, agent_id, method, response_code, source)` |
+| `account` | bảng | 954 | `account_id` |
+| `dim_user` | bảng | 965 | `(agent_id, user_id)` |
+| `fact_usage_daily` | bảng | 2.203 | `(day, agent_id, model_id, account_id, source)` |
+| `fact_billing_daily` | bảng | 2.833 | `(day, project, sku_id)` |
+| `fact_usage_hourly` | bảng | 3.691 | `(hour, agent_id, model_id, account_id, source)` |
+| `fact_call` | bảng | 9.453 | `call_id` |
+| `fact_monitoring` | bảng | **726.051** | *(không có)* |
+| `usage_by_account` | view | 360 | — |
+| `latency_resolved` | view | 449 | — |
+| `usage_resolved` | view | 1.385 | — |
+| `usage_by_account_resolved` | view | 1.584 | — |
+| `monitoring_ai` | view | 114.657 | — |
+| **Tổng (23 bảng)** | | **747.714** | |
+
+## `alembic_version` — bảng của công cụ migration
+
+1 dòng · Khoá chính `version_num` · giá trị đo 14/09/2026: `012_nhip_tim_lam_moi`
+
+Alembic ghi vào đây migration cuối cùng đã áp. **Không phải dữ liệu, đừng sửa tay** — sửa là Alembic tin một schema không có thật. `connect.rebuild()` giữ nguyên bảng này khi xoá dòng (`KEEP_ON_REBUILD`), vì database có sẵn không chạy lại migration.
 
 ---
 ---
 
 # 🟡 PHẦN II — SCHEMA ĐỀ XUẤT CHO KIẾN TRÚC API GATEWAY
 
-> ## ⚠️ KHÔNG BẢNG NÀO DƯỚI ĐÂY TỒN TẠI
+> ## ⚠️ PHẦN LỚN CÁC BẢNG DƯỚI ĐÂY KHÔNG TỒN TẠI
 >
-> Đây là **bản vẽ để bàn**, soạn ngày 19/08/2026. Database đang chạy vẫn là 18 bảng
-> ở Phần I. Chạy `SELECT * FROM fact_attempt` sẽ báo lỗi — bảng đó chưa có.
+> Đây là **bản vẽ để bàn**, soạn ngày 19/08/2026. Database đang chạy là 23 bảng ở Phần I.
+> Chạy `SELECT * FROM fact_attempt` sẽ báo lỗi — bảng đó chưa có.
+>
+> **Đo 14/09/2026 — mảnh nào đã thành thật, và thành thật bằng hình dạng nào:**
+>
+> | Đề xuất ở đây | Thực tế ở Phần I |
+> |---|---|
+> | `ref_source` (§7b) | ✅ có, đúng 5 cột, 4 dòng |
+> | Gateway ghi mức từng request vào `fact_request` | 🔀 **khác hình dạng:** lượt Gateway vào `fact_call` với `source = 'gateway'` (migration 004–008), không có bảng `fact_request` |
+> | `fact_latency_daily` → `fact_request.latency_ms` | 🔀 **khác hình dạng:** `fact_call.duration_ms` + dòng `source = 'gateway'` trong `fact_latency_daily`, chọn qua view `latency_resolved` |
+> | Bỏ `source` khỏi khoá chính, bỏ `usage_resolved` | ❌ **ngược lại:** `source` nay nằm trong khoá của 4 bảng fact, và có thêm `usage_by_account_resolved`, `latency_resolved` |
+> | `fact_attempt`, `dim_provider`, `dim_deployment`, `dim_virtual_key`, `fact_invoice_daily` | ❌ chưa có bảng nào. Khoá ảo hiện chỉ là cột `fact_call.virtual_key_id` |
+> | *(không có trong bản vẽ)* | ➕ `fact_usage_hourly`, `fact_provider_daily`, `ref_load_run` |
 >
 > **Ba điểm còn treo** chưa được quyết, xem mục 8 cuối phần này. Chúng đổi được
 > hình dạng schema, nên đừng coi bản vẽ này là đã chốt.
@@ -1515,9 +1672,14 @@ Bảng mới, 5 cột, 4 dòng. Nó tồn tại vì `source = 'app'` từng mang
 
 **① `gateway.has_invoice_cost = FALSE` không có nghĩa Gateway không biết tiền.** LiteLLM
 *có* trả về một con số tiền — nhưng nó tự nhân từ bảng giá, y như `ref_price`. Cột này hỏi
-*"đã có hoá đơn nào xác nhận chưa"*, và câu trả lời là chưa. Vì vậy `usage_resolved.cost_usd`
+*"đã có hoá đơn nào xác nhận chưa"*, và câu trả lời là chưa. ~~Vì vậy `usage_resolved.cost_usd`
 vẫn **chỉ** lấy của `billing`: để NULL thì tiền Gateway tự động được tính lại từ `ref_price`
-**và** được gắn dấu `≈` — đúng bản chất của nó cho tới ngày hoá đơn về.
+**và** được gắn dấu `≈` — đúng bản chất của nó cho tới ngày hoá đơn về.~~
+
+> **Đã đảo ngược ngày 31/08/2026 (migration 005).** `usage_resolved.cost_usd` nay là
+> `COALESCE(billing, gateway)`: tiền Gateway hiện lên màn hình **không** có dấu `≈`. Chủ dự án
+> chấp nhận đánh đổi đó. Cột `has_invoice_cost` vẫn đúng nghĩa — chỉ là view không còn dùng nó
+> để quyết định. Xem mục `usage_resolved` ở Phần I.
 
 **② `knows_user = TRUE` không có nghĩa mọi dòng đều quy được.** Nguồn `app` khai TRUE nhưng
 21 dòng của nó rơi vào tài khoản `__unattributed__` — nhật ký Ralli có lượt không kèm user,
