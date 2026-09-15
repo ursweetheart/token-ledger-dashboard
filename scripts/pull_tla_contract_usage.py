@@ -82,7 +82,7 @@ def stats(config: dict, token: str, start: str, end: str, extra: str = "") -> di
     goi deu hong cung mot kieu, va bat mot cho thi khong the quen cho nao.
     """
     q = f"?period=custom&date_from={start}&date_to={end}{extra}"
-    payload = json.loads(P.http_get(config["goc"], API_PATH + q, token))
+    payload = json.loads(P.http_get(config["base_url"], API_PATH + q, token))
     time.sleep(SLEEP_BETWEEN)
     if (payload.get("date_from"), payload.get("date_to")) != (start, end):
         raise Mismatch(

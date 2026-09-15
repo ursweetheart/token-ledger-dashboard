@@ -56,7 +56,7 @@ from pull_monitoring import (  # noqa: E402
 )
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUT = ROOT / "data" / "raw_google_console" / "do_tre_phan_bo"
+DEFAULT_OUT = ROOT / "data" / "raw_google_console" / "do_tre_phan_bo"  # vi-ok: on-disk path
 
 METRIC = "serviceruntime.googleapis.com/api/request_latencies"
 GENLANG_SERVICE = "generativelanguage.googleapis.com"
@@ -98,8 +98,8 @@ def rows_for(project: str, token: str, start: datetime, end: datetime,
             if distribution is None:
                 raise SystemExit(
                     f"a point has no distributionValue in {project}.\n"
-                    f"Nhan duoc: {json.dumps(point.get('value', {}))[:300]}\n"
-                    "Kiem lai METRIC va ALIGNER truoc khi chay tiep."
+                    f"Got: {json.dumps(point.get('value', {}))[:300]}\n"
+                    "Check METRIC and ALIGNER before running again."
                 )
 
             stamp = point["interval"]["endTime"].replace("Z", "+00:00")
@@ -143,23 +143,24 @@ def rows_for(project: str, token: str, start: datetime, end: datetime,
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False)
     parser.add_argument("--projects", default=",".join(PROJECTS),
-                        help="Danh sach project_id, ngan cach bang dau phay")
+                        help="Comma-separated project_id list")
     parser.add_argument("--days", type=int, default=196,
-                        help="So ngay lui ve (mac dinh 196 = toi da Google con giu)")
+                        help="Days to go back (default 196 = the most Google retains)")
     parser.add_argument("--align", type=int, default=60,
-                        help="Do min tinh bang giay (mac dinh 60 = min nhat Google co)")
+                        help="Grain in seconds (default 60 = the finest Google has)")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--all-services", action="store_true",
-                        help="Keo moi service, khong chi generativelanguage")
+                        help="Pull every service, not only generativelanguage")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Chi in ra se lam gi, khong goi mang, khong ghi file")
-    parser.add_argument("--gcloud", default="", help="Duong dan gcloud neu khong co trong PATH")
+                        help="Only print what would happen: no network call, no file written")
+    parser.add_argument("--gcloud", default="", help="Path to gcloud if it is not on PATH")
     args = parser.parse_args()
 
     if args.align < 60:
-        raise SystemExit(f"--align {args.align} nho hon 60s. Google chi luu o muc 60s.")
+        raise SystemExit(f"--align {args.align} is below 60s. Google only stores 60s resolution.")
 
     service = "" if args.all_services else GENLANG_SERVICE
     end = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
@@ -187,9 +188,9 @@ def main() -> None:
     # Chan X2: khong bao gio ghi de len mot ban cao da co.
     if out_dir.exists() and any(out_dir.iterdir()):
         raise SystemExit(
-            f"Thu muc da co du lieu: {out_dir}\n"
+            f"The folder already holds data: {out_dir}\n"
             "this script never overwrites. Google keeps only 196 days and `data/` is not\n"
-            "trong git - de len la mat vinh vien. Doi --out hoac doi ten thu muc cu."
+            "in git - overwriting loses it forever. Change --out or rename the old folder."
         )
     out_dir.mkdir(parents=True, exist_ok=True)
 

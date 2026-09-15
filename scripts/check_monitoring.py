@@ -89,13 +89,13 @@ def pick_limit(rows: list[dict]) -> tuple[str, str]:
     """
     limits = sorted({row.get("limit_name", "") for row in rows if row.get("limit_name")})
     if not limits:
-        return "", "khong co nhan limit_name — KHONG khu duoc dem dup, kiem tay"
+        return "", "no limit_name label - the double count could NOT be removed, check by hand"
     per_day = [limit for limit in limits if "PerDay" in limit]
     if per_day:
-        return per_day[0], f"chon PerDay trong {len(limits)} limit"
+        return per_day[0], f"chose PerDay out of {len(limits)} limits"
     if len(limits) == 1:
-        return limits[0], "chi co 1 limit, dung luon"
-    return limits[0], f"KHONG thay PerDay; tam dung {limits[0]!r} trong {limits}"
+        return limits[0], "only 1 limit, used as is"
+    return limits[0], f"NO PerDay; using {limits[0]!r} out of {limits} for now"
 
 
 def summarise(rows: list[dict]) -> dict:
@@ -158,10 +158,11 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--dir", default="", help="Thu muc mot dot keo")
-    parser.add_argument("--file", default="", help="Mot file CSV cu the")
-    parser.add_argument("--out", default="", help="Neu dat, ghi ban da loc ra CSV nay")
+                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     allow_abbrev=False)
+    parser.add_argument("--dir", default="", help="One pull folder")
+    parser.add_argument("--file", default="", help="One specific CSV file")
+    parser.add_argument("--out", default="", help="If set, write the filtered copy to this CSV")
     args = parser.parse_args()
 
     if args.file:
@@ -169,7 +170,7 @@ def main() -> None:
     elif args.dir:
         paths = sorted(Path(args.dir).glob("*.csv"))
     else:
-        pulls = sorted((ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat").glob("*/"))
+        pulls = sorted((ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat").glob("*/"))  # vi-ok: on-disk path
         if not pulls:
             raise SystemExit("No pull batch yet. Run pull_monitoring.py first.")
         paths = sorted(pulls[-1].glob("*.csv"))
@@ -194,8 +195,8 @@ def main() -> None:
         print(f"{project:<26}{quota:>22}{api:>22}")
 
     print("\nCROSS-CHECK TABLE")
-    header = (f"{'project':<26}{'GenContent':>11}{'req(API)':>9}{'loi':>6}"
-              f"{'ty le loi':>11}{'p95':>8}{'p99':>8}{'key':>5}{'gio':>6}{'model':>7}  khoang")
+    header = (f"{'project':<26}{'GenContent':>11}{'req(API)':>9}{'errors':>7}"
+              f"{'error rate':>11}{'p95':>8}{'p99':>8}{'key':>5}{'hours':>6}{'model':>7}  range")
     print(header)
     print("-" * len(header))
     for project, data in report.items():
@@ -203,7 +204,7 @@ def main() -> None:
         span = f"{data['since'][:10]} -> {data['until'][:10]}"
         # The agreed definition of "a request": user-facing generation only.
         gen = sum(v for k, v in data["methods"].items() if "GenerateContent" in k)
-        print(f"{project:<26}{gen:>11,.0f}{data['api']:>9,.0f}{data['errors']:>6,.0f}"
+        print(f"{project:<26}{gen:>11,.0f}{data['api']:>9,.0f}{data['errors']:>7,.0f}"
               f"{rate:>10.2f}%{data['p95_max']:>8.2f}{data['p99_max']:>8.2f}"
               f"{len(data['keys']):>5}{data['hours']:>6}{len(data['models']):>7}  {span}")
 
@@ -214,7 +215,7 @@ def main() -> None:
         print(f"    response codes: {', '.join(data['codes']) or '-'}")
         print(f"    model         : {', '.join(data['models']) or '-'}")
         print(f"    quota requests: {data['quota']:,.0f}"
-              f"  (don vi han muc, KHONG phai luot goi)")
+              f"  (quota units, NOT calls)")
         if data["methods"]:
             top = ", ".join(f"{k}={v:,.0f}" for k, v in data["methods"].most_common(6))
             print(f"    method        : {top}")
