@@ -15,7 +15,7 @@
 > 2.1–2.6 kiểm trên máy 15/09/2026: 22/22 phép kiểm chạy nguyên văn các khối `run:` lấy từ `ci.yml`,
 > với `docker` giả; `actionlint 1.7.7` (kèm shellcheck) mã thoát 0. Bước clone, đăng nhập, build và
 > đẩy thật chỉ kiểm được ở 2.7.
-- [ ] 2.7 Đẩy lên và đo lần build đầu: thời gian, dung lượng image, đĩa còn trống; ghi vào `proposal.md` phần chi phí vận hành
+- [x] 2.7 Đẩy lên và đo lần build đầu: thời gian, dung lượng image, đĩa còn trống; ghi vào `proposal.md` phần chi phí vận hành — CI `34916164838`: build 487 giây, image 1,19 GB, đĩa 14 GB → 6,0 GB. Lần đầu `34914702065` hỏng vì glibc, sửa ở fork `4373a32c`
 
 ## 3. Làm đỏ có chủ ý
 

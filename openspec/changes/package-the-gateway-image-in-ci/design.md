@@ -111,8 +111,11 @@ GHCR không tự cấm ghi đè nhãn. Tính bất biến ở đây do bước b
 
 Bản đầu chỉ nhận `manifest unknown`, nên lần build đầu tiên sẽ đỏ mãi: gói chỉ ra đời sau khi build.
 Nay `denied` và `unauthorized` cũng tính là "chưa có". Không ghi đè được nhãn nào vì thế: không đọc được
-gói thì `docker push` cũng hỏng. Lỗi khác (mạng, kho quá tải) thì dừng. **Chưa đo** câu trả lời khi đã
-đăng nhập bằng `GITHUB_TOKEN`; lần chạy đầu ở task 2.7 sẽ cho biết.
+gói thì `docker push` cũng hỏng. Lỗi khác (mạng, kho quá tải) thì dừng.
+
+**Khi đã đăng nhập bằng `GITHUB_TOKEN`**, gói chưa tồn tại, GHCR trả `manifest unknown` (đo ở lần chạy
+CI `34914702065`, 15/09/2026). `denied` chỉ gặp khi không đăng nhập. Vẫn giữ `denied` trong danh sách,
+vì lý do không ghi đè ở trên vẫn đúng.
 
 **Không có nhãn trôi `latest`.** Nhãn trôi làm `pull` kéo về một thứ không ai chọn.
 
@@ -146,7 +149,7 @@ Docker trên `ubuntu-latest` mặc định dùng BuildKit.
 
 ```yaml
 x-litellm: &litellm
-  image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:e3490555c5310b84d2c7235a32a6f631d12fcbc7}
+  image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:4373a32c2a2608cdbd732ba47ba057615e5e2846}
 ```
 
 - **Máy chủ** không đặt gì và nhận đúng nhãn ghim trong git. Đổi phiên bản Gateway là một dòng đổi
@@ -214,6 +217,17 @@ Image chỉ lộ thêm được thứ gì đó khi build từ một cây mã có
 - **[Base image ghim digest trên `cgr.dev` bị gỡ]** Build hỏng dù mã không đổi.
   → Hỏng ồn ào, không hỏng im lặng. Image đã có trên GHCR vẫn kéo được, nên máy đang chạy không bị ảnh
   hưởng.
+- **[Gói apk trôi khỏi base image — ĐÃ XẢY RA ở lần chạy CI đầu, `34914702065`, 15/09/2026]**
+  Digest ghim chỉ cố định base image, còn `apk add python3` luôn lấy gói mới nhất. Gói
+  `python-3.13 3.13.15_git20260912` cần glibc 2.44; base `a31344ab…` có glibc 2.43. `import math` hỏng,
+  uv bỏ `/usr/bin/python3` **không báo gì** (chỉ thấy khi `-v`), tải CPython 3.14, và `uvloop 0.21.0`
+  không có wheel 3.14 nên build hỏng. Tầng runtime cài cùng gói, nên dù build qua được, Gateway cũng
+  chết lúc chạy. Bản build tay ngày 07/09 không gặp vì gói mới chưa ra.
+  → Fork commit `4373a32c`: cả hai tầng lên base `9a8d954d…` (glibc 2.44), thêm
+  `UV_PYTHON_DOWNLOADS=never` để lần lệch sau hỏng ngay ở `uv sync`. Kiểm bằng Dockerfile dò: uv chọn
+  `/usr/bin/python3` 3.13.15, `.venv` có `home = /usr/bin`. **Sẽ lặp lại** khi Wolfi ra gói mới hơn
+  base; cách chữa vẫn là nâng digest. Commit này chỉ đổi 3 dòng trong `Dockerfile`, không đổi kết quả
+  quét bí mật ở 1.1.
 - **[Merge upstream vào `Tuan-develop` làm mất bản vá]**
   → D3 chặn trước khi build. Image cũ trên kho vẫn còn.
 - **[Image từ kho khác image đang chạy dù cùng commit]** Image hiện tại build trên máy người, không có
@@ -232,7 +246,8 @@ Image chỉ lộ thêm được thứ gì đó khi build từ một cây mã có
 
 ## Migration Plan
 
-1. Hợp nhất workflow và để CI build nhãn cho `e3490555c5…`. Compose **chưa** đổi.
+1. Hợp nhất workflow và để CI build nhãn cho `4373a32c…`. Compose **chưa** đổi. (Bản đầu ghi
+   `e3490555c5…`; commit đó không build được, xem Risks "gói apk trôi khỏi base image".)
 2. Người sở hữu đặt gói công khai. Kéo thử **không đăng nhập** từ một máy.
 3. Commit đổi `x-litellm` sang `image:` với nhãn vừa build. CI đỏ nếu nhãn không có.
 4. Trên máy phát triển: `docker compose --profile gateway pull`, grep bản vá trong image, rồi

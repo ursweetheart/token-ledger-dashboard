@@ -80,6 +80,19 @@ chính là kịch bản cả ba lỗi trên cùng xảy ra.
 khoá bí mật nào vào repo. Token `gh` trên máy này không có quyền `read:packages`; điều đó không ảnh
 hưởng CI, chỉ ảnh hưởng việc xem gói bằng dòng lệnh.
 
-**Chi phí vận hành: chưa đo.** Dockerfile của fork build giao diện bằng Node, cài Rust và cài gói bằng
-uv. Nhờ bỏ qua khi nhãn đã có, chỉ lần đẩy đầu tiên sau mỗi commit mới của fork mới trả chi phí đó. Commit
-gần nhất của fork là ngày 08/09/2026.
+**Chi phí vận hành, đo ở lần build đầu thành công** (CI `34916164838`, 15/09/2026, fork `4373a32c`):
+
+| Đo | Giá trị |
+|---|---|
+| Thời gian `docker build` | 487 giây |
+| Cả công việc `gateway-image` | 8 phút 45 giây |
+| Đĩa trống trên runner | 14 GB trước build → 6,0 GB sau build |
+| Dung lượng image (giải nén) | 1,19 GB |
+| Digest đã đẩy | `sha256:7e888594ede9dfdfa3cc8e2fd6efef6042d5bc046fe3609d3ea0f08c2e2c4b64` |
+
+Nhờ bỏ qua khi nhãn đã có, chỉ lần đẩy đầu tiên sau mỗi commit mới của fork mới trả chi phí này. Build
+dùng hết khoảng 8 GB đĩa, còn dư 6 GB: chưa cần bước dọn đĩa, nhưng nếu Dockerfile của fork nặng thêm
+thì đây là giới hạn đầu tiên chạm tới.
+
+Lần chạy trước đó (`34914702065`, fork `e3490555c5`) hỏng ở bước build sau khoảng 1 phút 30 giây, vì gói
+apk trôi khỏi base image. Xem Risks trong `design.md`.
