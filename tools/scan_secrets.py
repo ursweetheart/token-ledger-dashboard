@@ -13,7 +13,7 @@ Không bao giờ in giá trị bắt được. Chỉ in: đường dẫn, số d
 
 Chạy:
     python tools/scan_secrets.py
-    python tools/scan_secrets.py --goc D:/RangDonk/token-ledger-dashboard
+    python tools/scan_secrets.py --root D:/RangDonk/token-ledger-dashboard
 
 Mã thoát:  0 = sạch   1 = có phát hiện nghiêm trọng   2 = lỗi khi chạy
 """
@@ -30,12 +30,12 @@ from pathlib import Path
 # --- Hình dạng bí mật -------------------------------------------------------
 # Mỗi mục: (tên để đọc, biểu thức). Thêm một loại bí mật mới = thêm một dòng.
 PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    ("JWT (3 doan base64url)", re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")),
-    ("Khoa Google API", re.compile(r"AIza[0-9A-Za-z_-]{35}")),
-    ("Khoa kieu sk-", re.compile(r"\bsk-[A-Za-z0-9_-]{16,}")),
+    ("JWT (3 base64url segments)", re.compile(r"eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")),
+    ("Google API key", re.compile(r"AIza[0-9A-Za-z_-]{35}")),
+    ("sk- style key", re.compile(r"\bsk-[A-Za-z0-9_-]{16,}")),
     ("Google OAuth client secret", re.compile(r"GOCSPX-[A-Za-z0-9_-]{20,}")),
-    ("Khoi private key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
-    ("Mat khau nhung trong URL", re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:([^/\s@]+)@")),
+    ("Private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("Password embedded in URL", re.compile(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:([^/\s@]+)@")),
 ]
 
 # Mật khẩu mặc định CỤC BỘ, đã công khai trong docker-compose.yml và .env.example.
@@ -77,13 +77,13 @@ def classify_password(password: str) -> str | None:
     thêm một file vào danh sách trắng là mở một chỗ mù vĩnh viễn.
     """
     if "$" in password or "{" in password or "}" in password:
-        return "tham chieu bien, khong phai gia tri"
+        return "variable reference, not a value"
     if MASKED_PLACEHOLDER.fullmatch(password) or password.upper() in {"REDACTED", "PASSWORD", "PASS"}:
-        return "da che san"
+        return "already masked"
     if password in LOCAL_DEFAULT_PASSWORDS:
-        return "mat khau mac dinh cuc bo, da cong khai"
+        return "local default password, already public"
     if len(password) <= 3:
-        return "qua ngan, la vi du trong van xuoi"
+        return "too short, an example in prose"
     return None
 
 
@@ -136,7 +136,7 @@ def git_is_clean(repo: Path) -> tuple[bool, int, str]:
             capture_output=True, text=True, timeout=60,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        return False, -1, f"khong chay duoc git: {exc}"
+        return False, -1, f"could not run git: {exc}"
     if proc.returncode != 0:
         return False, -1, proc.stderr.strip()[:200]
     lines = [ln for ln in proc.stdout.splitlines() if ln.strip()]
@@ -145,17 +145,18 @@ def git_is_clean(repo: Path) -> tuple[bool, int, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--goc", default=".", help="thu muc repo du an")
-    parser.add_argument("--fork", default="../litellm_tuan_test", help="repo fork LiteLLM")
+    parser.add_argument("--root", default=".", help="repo to scan")
+    parser.add_argument("--fork", default="../litellm_tuan_test",
+                        help="LiteLLM fork, relative to --root; only its git status is checked")
     args = parser.parse_args()
 
-    root = Path(args.goc).resolve()
+    root = Path(args.root).resolve()
     if not (root / ".git").exists():
-        print(f"LOI: {root} khong phai mot repo git", file=sys.stderr)
+        print(f"ERROR: {root} is not a git repo", file=sys.stderr)
         return 2
 
-    print(f"Quet: {root}")
-    print(f"Hinh dang tim: {len(PATTERNS)} loai\n")
+    print(f"Scanning: {root}")
+    print(f"Secret shapes: {len(PATTERNS)}\n")
 
     # --- 1. Quét toàn bộ file văn bản trong repo ---------------------------
     findings: list[tuple[str, int, str, int, str | None]] = []
@@ -166,15 +167,15 @@ def main() -> int:
         for result in scan_file(path, root):
             (skipped if result[4] else findings).append(result)
 
-    print(f"== 1/3  quet hinh dang -- {file_count} file van ban")
+    print(f"== 1/3  shape scan -- {file_count} text files")
     if findings:
-        print(f"   {len(findings)} PHAT HIEN NGHIEM TRONG (khong in gia tri):")
+        print(f"   {len(findings)} SERIOUS FINDINGS (values not printed):")
         for rel_path, line_no, name, length, _ in findings:
-            print(f"     {rel_path}:{line_no}  [{name}]  {length} ky tu")
+            print(f"     {rel_path}:{line_no}  [{name}]  {length} chars")
     else:
-        print("   0 phat hien nghiem trong -- dat")
+        print("   0 serious findings -- pass")
     if skipped:
-        print(f"   {len(skipped)} khop duoc bo qua, tung cai co ly do:")
+        print(f"   {len(skipped)} matches skipped, each with a reason:")
         by_reason: dict[str, int] = {}
         for *_, reason in skipped:
             by_reason[reason or "?"] = by_reason.get(reason or "?", 0) + 1
@@ -185,41 +186,41 @@ def main() -> int:
     fork = (root / args.fork).resolve()
     print(f"\n== 2/3  fork: {fork}")
     if not fork.exists():
-        print("   khong tim thay fork -- BO QUA (khong tinh la dat)")
+        print("   fork not found -- SKIPPED (does not count as pass)")
         fork_ok = False
     else:
         clean, count, error = git_is_clean(fork)
         if error:
-            print(f"   khong kiem duoc: {error}")
+            print(f"   could not check: {error}")
             fork_ok = False
         else:
-            print(f"   git status --porcelain = {count} dong  ->  " +
-                  ("sach, khong file nao them" if clean else "CO FILE THAY DOI"))
+            print(f"   git status --porcelain = {count} lines  ->  " +
+                  ("clean, no files added" if clean else "FILES CHANGED"))
             fork_ok = clean
 
     # --- 3. .env: không quét nội dung, chỉ ghi dấu vân tay ------------------
-    print("\n== 3/3  .env (duoc phep chua khoa, chi ghi dau van tay)")
+    print("\n== 3/3  .env (may hold keys, fingerprint only)")
     env_file = root / ".env"
     if env_file.exists():
         digest = hashlib.sha256(env_file.read_bytes()).hexdigest()
-        print(f"   ton tai, {env_file.stat().st_size} byte")
+        print(f"   exists, {env_file.stat().st_size} bytes")
         print(f"   sha256 {digest}")
-        print("   -> so con so nay voi lan quet truoc de biet .env co doi khong")
+        print("   -> compare with the previous scan to see whether .env changed")
         is_ignored = subprocess.run(
             ["git", "-C", str(root), "check-ignore", "-q", ".env"],
             capture_output=True, timeout=30,
         ).returncode == 0
-        print(f"   nam trong .gitignore: {'co -- dat' if is_ignored else 'KHONG -- HONG'}")
+        print(f"   in .gitignore: {'yes -- pass' if is_ignored else 'NO -- FAIL'}")
         if not is_ignored:
-            findings.append((".env", 0, "khong duoc gitignore", 0, None))
+            findings.append((".env", 0, "not gitignored", 0, None))
     else:
-        print("   khong co .env")
+        print("   no .env")
 
     print()
     if findings or not fork_ok:
-        print("KET LUAN: KHONG DAT")
+        print("RESULT: FAIL")
         return 1
-    print("KET LUAN: dat -- khong bi mat nao lot vao repo")
+    print("RESULT: pass -- no secrets leaked into the repo")
     return 0
 
 
