@@ -1,4 +1,4 @@
-# Token Ledger — Billing Export & IAM Research Log
+﻿# Token Ledger — Billing Export & IAM Research Log
 
 **Mục đích:** Ghi lại toàn bộ kiến thức đã tìm hiểu và tiến độ test billing export → BigQuery, phục vụ dự án Token Ledger Dashboard (Rạng Đông).
 
@@ -127,3 +127,145 @@ LIMIT 20;
 2. Viết script `crawl_billing_bigquery.py` thay thế `import_manual_billing.py`, giữ nguyên logic `aggregate_tokens_weekly.py`
 3. Đề xuất bật billing export chính thức trên billing account công ty (cần quyền Billing Account Administrator/Costs Manager — khác với Project Billing Manager đang có)
 4. Cân nhắc dài hạn: có nên migrate 1 phần calling từ AI Studio sang Vertex/Agent Platform để có model-level metrics tự động (Monitoring) mà không cần tự log
+
+---
+
+## 9. Ket qua kiem thu tich hop 2 agent qua API Gateway (tuan 08-14/09/2026)
+
+> **Nguoi thuc hien:** Tuan (nhanh `Tuan-develop`)
+> **Moi truong:** Container Docker ket noi vao Gateway stack that (`gateway-lb:4000`). Co mot so luot goi that toi Google. Khong ghi du lieu san xuat SharePoint hay gui email that trong cac bai kiem harness.
+> **Nhat ky day du:** [dua-dms-qua-gateway-31-08.md](../docs/reference/dua-dms-qua-gateway-31-08.md) - [dua-crm-qua-gateway-10-09.md](../docs/reference/dua-crm-qua-gateway-10-09.md) - [fallback-crm-12-09.md](../docs/reference/fallback-crm-12-09.md) - [ep-429-va-mat-gateway-10-09.md](../docs/reference/ep-429-va-mat-gateway-10-09.md)
+
+---
+
+### 9.1 Agent DMS — DMS Feedback Classification
+
+- **App:** `dms-feedback-classification`, commit goc `f875b24`
+- **Ngay test:** 29-31/08/2026
+- **Model:** `gemini-3.5-flash-lite` (AI Studio, Virtual Key `dms-feedback-tagged`)
+- **Agent code:** `dms-feedback` | **Account:** `svc.dms-feedback`
+
+#### Ket luan tong the
+
+**PASS — luong end-to-end da chay that.** Mot luot `POST /api/classify/text` cua DMS di qua Gateway, ra Google, ve lai DMS voi ket qua dung va de lai du dong trong `LiteLLM_SpendLogs`. DMS la **agent dau tien** di qua Gateway trong du an.
+
+#### Nhung gi da chung minh duoc (bang so do)
+
+| Dieu | Bang chung |
+|---|---|
+| Tuyen `gemini-flash-lite` goi duoc that | HTTP 200, 25 token |
+| So ghi dung luot goi | `request_id` trong SpendLogs **khop dung `id`** trong response |
+| `X-User` thanh `end_user` | `svc.dms-feedback` xuat hien dung trong cot `end_user` |
+| Tag loc dung 10/10 luot | `attempted_retries = 0`, 0 lan cham tuyen moi co khoa sai |
+| Che do JSON hoat dong qua Gateway | `json_mode=False` ra van xuoi; `True` ra JSON hop le |
+| Phan loai that khop moc cu | `Bao loi = true`, `Bao hanh = true`, `Tieu cuc`, 2 muc |
+| Nhanh lui lai duoc | `GEMINI_BACKEND=apikey` -> SpendLogs dung yen; DMS di thang Google, Gateway khong biet |
+| Mot luot phan loai = 2 luot goi LLM | `rag_product.py`: 236 token; `issue_classifier.py`: 6.044 token |
+| Dashboard nhan duoc luu luong DMS | `fact_call` +2 dong sau lan chay lai nguoi, tre ~2 giay |
+
+#### Phat hien quan trong
+
+| # | Phat hien | Muc do |
+|---|---|---|
+| 1 | `enable_tag_filtering` mac dinh **TAT** — neu bo sot, 8 agent don vao 1 project, hoa don sai ma moi phep do van DAT | Nghiem trong — da sua |
+| 2 | `/gemini` passthrough khong dung duoc: `next()` luon lay deployment dau, mat phan biet agent | Loai han |
+| 3 | `GEMINI_MODEL_PRICING` thieu `gemini-3.5-flash-lite` -> moi luot tinh chi phi **0** khong bao | Can sua |
+| 4 | DMS tra HTTP 200 khi LLM hong (429) — `safe fallback` im lang, nguoi goi khong biet | Can bao nhom DMS |
+| 5 | `startTime` trong SpendLogs la UTC tran -> loader phai cong +7 gio | Da xu ly trong loader |
+| 6 | Luot goi HONG van sinh dong trong SpendLogs (`status = failure`) -> loader phai loc `WHERE status = success` | Da xu ly |
+
+#### Pham vi chua nghiem thu
+
+- Loc tag khi co nhieu tuyen cung bi danh (chi do tren 1 tuyen).
+- Tuyen `gemini-3.6-flash` va `gemini-3-flash-preview` chua co bang chung goi duoc.
+- `X-User` hien la dinh danh dich vu co dinh, chua gan voi tung nguoi dung JWT.
+- ETL day du sang `token_ledger_v2`, mapping phong ban va giao dien dashboard.
+
+---
+
+### 9.2 Agent CRM — CRM Classification Pipeline
+
+- **App:** `CRM-Classification-Pipeline` (ban clone)
+- **Ngay test:** 09-12/09/2026 (routing: 09-10/09; fallback + 429: 12/09)
+- **Model:** `gemini-2.5-flash` (Vertex Express, Virtual Key `crm-feedback-tagged`)
+- **Agent code:** `crm-feedback` | **Account:** `svc.crm-feedback` | **Agent ID:** 7
+- **Dac diem noi bat:** CRM la **pipeline theo lich** (batch), khong phai web service
+
+#### 9.2.1 Ket qua routing qua Gateway (09-10/09)
+
+**PASS.** CRM goi dung model `gemini-2.5-flash` qua Gateway, moi luot ghi dung `end_user` va tag:
+
+| Chi so (luot goi that, prompt production day du) | Gia tri |
+|---|---|
+| Prompt | 10.181 ky tu |
+| So dong trong lo | 2 (`CRM_merge_sample.xlsx`) |
+| Thoi gian | 2,75 giay |
+| Token | 4.009 |
+| `end_user` trong SpendLogs | `svc.crm-feedback` |
+| Tag | `crm-feedback` |
+| `model_group` | `gemini-2.5-flash` |
+| Ket qua | JSON hop le, phan tich duoc bang `_parse_llm_json` cua CRM |
+| Cham SharePoint / email / Excel | **khong** |
+
+#### 9.2.2 Ket qua xu ly 429 va fallback khi Gateway chet (10-12/09)
+
+**PASS — 0 lo bi bo trong ca ba bai dien tap:**
+
+| Bai dien tap | Kich ban | Ket qua |
+|---|---|---|
+| 7 unit test tu dong | Client gia, khong goi mang | **7/7 PASS** trong mili giay |
+| Dien tap cat duong | Tro sang cong chet sau lo 3 | **8/8 lo thanh cong**, 5 luot duong thang |
+| Dien tap dung container that | Dung `gateway-lb` giua luc chay | **60/60 lo thanh cong**, 8 luot duong thang, tu ve Gateway sau 69 giay |
+
+Ve 429: Gateway hoan loi 123,7 giay (3 lan thu lai noi bo); mot lo hong vi 429 ton 7 phut 14 giay tong, trong do **86% la Gateway, chi 14% la CRM**.
+
+**Quy tac fallback da xac nhan:**
+- Chuyen duong sau 3 lan lien tiep loi ket noi/timeout; lo dang chay khong bi bo.
+- Nhieu worker cung hong van chi gui 1 email canh bao (khoa toan cuc).
+- Tham do dinh ky thanh cong -> tu ve Gateway.
+- Rang buoc bat buoc: `FALLBACK_FAIL_THRESHOLD (3) <= call_llm_batch(max_retry=3)`.
+
+#### 9.2.3 Phat hien quan trong
+
+| # | Phat hien | Muc do |
+|---|---|---|
+| 1 | **Token suy nghi an 96% ngan sach dau ra** — lo 5 dong nhan ve chi **1 dong**, khong bao loi (4 tang che gon) | Nghiem trong |
+| 2 | Sua bang `reasoning_effort: disable` o tuyen Gateway -> tiet kiem **3,3x tien**, nhanh **2,1x**, chu that tang **6,4x** | Da sua o Gateway |
+| 3 | `max_output_tokens=8192` cung trong code CRM van cat lo 25 dong (nhan ve 20) du da tat suy nghi -> can nang len 16.000 trong repo CRM | Can bao nhom CRM |
+| 4 | Bi danh model che tuyen that — `model_group` trong dung nhung `model` trong so lo model that; gay **1,46x dat hon** ma khong ai thay | Da sua (xoa bi danh) |
+| 5 | `docs/HANDOVER.md` cua CRM lech code tren **moi con so** (model, batch size, retry, backoff) | Can bao nhom CRM |
+| 6 | Cau nhac hua `allowed` + `locked_labels` nhung code khong bao gio gui — taxonomy chi dua vao danh sach tinh | Rui ro chua no |
+| 7 | `GEMINI_BATCH_SIZE=40` trong `.env.example` bi `min(25, ...)` cat xuong 25 khong bao; va 25 van qua lon | Can bao nhom CRM |
+| 8 | Khoa du phong `sa-key.json` ghi phi vao `crm-test-508114`, khong phai `crm-500509` (project that agent 7) | Chap nhan giai doan phat trien |
+
+#### 9.2.4 Pham vi chua nghiem thu
+
+- Lo 25 dong voi `max_output_tokens=16.000` (chi da thu voi file mount de, chua sua repo CRM).
+- Khoa `sa-key.json` thuoc dung `crm-500509` truoc khi len server.
+- Email Graph (Microsoft) — chua co credential Azure.
+- Nhip thuc dat va do tre hai duong (da hoan co chu y, tach thanh viec rieng).
+- ETL `LiteLLM_SpendLogs -> token_ledger_v2`, mapping user/phong ban va giao dien dashboard.
+
+---
+
+### 9.3 So sanh hai agent
+
+| Tieu chi | DMS Feedback | CRM Classification |
+|---|---|---|
+| Kieu app | Web service (thuong tru) | Pipeline theo lich (batch) |
+| SDK Google | `google-generativeai` (cu) | `google-genai` (moi) |
+| Backend mac dinh | AI Studio (API key) | Vertex Express (service account) |
+| Tu tuan tu hoa loi goi | Khong | Co (`wait_for_rate_limit()`, khoa toan cuc) |
+| Thu tu dua vao Gateway | **Dau tien** (31/08) | **Thu hai** (10/09) |
+| Fallback tu chuyen duong | Khong co (fail-closed) | Co — `sa-key.json` Vertex direct |
+| Phat hien nghiem trong nhat | Tag loc mac dinh TAT | Token suy nghi an 96% ngan sach |
+| Cach sua phat hien nghiem trong | Khai `enable_tag_filtering: true` o Gateway | Them `reasoning_effort: disable` o tuyen Gateway |
+
+### 9.4 Hanh dong tiep theo
+
+1. **Bao nhom CRM:** nang `max_output_tokens` `8192 -> 16000` trong `src/llm.py:274`; them kiem `finish_reason == length`; sua nhanh 429 ngu vo ich o luot cuoi.
+2. **Xin khoa `crm-500509`:** de phi ghi ve dung project agent 7 truoc khi len server.
+3. **Can nhac Azure Graph sau cuoc hop:** neu co credential, CRM va cac agent khac dung duoc hom thu cong ty thay Gmail ca nhan.
+4. **Nghiem thu ETL pipeline:** noi `LiteLLM_SpendLogs -> token_ledger_v2 -> dashboard` cho ca DMS va CRM.
+5. **Dua them agent vao Gateway:** DMS va CRM moi la 2/8 agent — can routing cho 6 agent con lai.
+6. **Dat lai nguong va khoang cho fallback** theo so do su co that dau tien (hien dung con so de nghi chua hieu chinh).
