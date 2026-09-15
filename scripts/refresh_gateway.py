@@ -36,7 +36,7 @@ HANH VI O CHE DO VONG LAP - BIET TRUOC DE KHONG TUONG MINH LAM HONG GI
 `--every` no se keu MOI CHU KY cho toi khi co nguoi sua.
 
 Do la hanh vi DUNG - im lang thi te hon nhieu, va chinh khoang lang do la thu
-change nay di bit. Nhanh `try/except` quanh `mot_luot()` giu cho vong lap khong
+change nay di bit. Nhanh `try/except` quanh `run_once()` giu cho vong lap khong
 chet vi mot luot hong; no chi keu.
 
 KHONG PHAI BAN THAY THE rebuild_db.py
@@ -70,18 +70,18 @@ PY = sys.executable
 # THU TU LA BAT BUOC, KHONG PHAI TUY
 #   3 phai sau 2: build_usage_hourly tu doi chieu tong cua minh voi bang NGAY va
 #     SystemExit neu lech. Dao thu tu la so voi bang ngay CU roi bao lech gia.
-#   4 dung --chi-gateway: che do day du doc `latency-daily.csv`, mot file CAO TAY,
+#   4 dung --gateway-only: che do day du doc `latency-daily.csv`, mot file CAO TAY,
 #     va DUNG HAN neu file vang mat. Mot vong lap `--every 120` ma phu thuoc file
-#     phai cao tay la qua bom hen gio. Xem db/build_performance.py:chi_gateway().
+#     phai cao tay la qua bom hen gio. Xem db/build_performance.py:gateway_only().
 STEPS = [
-    ("Nap so Gateway",     "db/load_gateway.py",       []),
-    ("Tong hop theo ngay", "db/build_usage_daily.py",  []),
-    ("Tong hop theo gio",  "db/build_usage_hourly.py", []),
-    ("Phan vi Gateway",    "db/build_performance.py",  ["--chi-gateway"]),
+    ("Load Gateway ledger", "db/load_gateway.py",       []),
+    ("Daily rollup",        "db/build_usage_daily.py",  []),
+    ("Hourly rollup",       "db/build_usage_hourly.py", []),
+    ("Gateway percentiles", "db/build_performance.py",  ["--gateway-only"]),
 ]
 
 
-def dem(dsn: str) -> tuple[int, int, int, int, int]:
+def count_gateway_rows(dsn: str) -> tuple[int, int, int, int, int]:
     """Dem CA BON bang ma nguon gateway nuoi.
 
     Ban truoc 03/09 chi dem hai (fact_call, fact_usage_daily) - dung bang hai
@@ -95,13 +95,13 @@ def dem(dsn: str) -> tuple[int, int, int, int, int]:
         n, tok = connect.query_one(
             cn, "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)"
                 " FROM fact_call WHERE source = 'gateway'")
-        agg = connect.query_one(
+        daily = connect.query_one(
             cn, "SELECT COUNT(*) FROM fact_usage_daily WHERE source = 'gateway'")[0]
-        gio = connect.query_one(
+        hourly = connect.query_one(
             cn, "SELECT COUNT(*) FROM fact_usage_hourly WHERE source = 'gateway'")[0]
-        lat = connect.query_one(
+        latency = connect.query_one(
             cn, "SELECT COUNT(*) FROM fact_latency_daily WHERE source = 'gateway'")[0]
-        return int(n), int(tok), int(agg), int(gio), int(lat)
+        return int(n), int(tok), int(daily), int(hourly), int(latency)
     finally:
         cn.close()
 
@@ -112,7 +112,7 @@ def dem(dsn: str) -> tuple[int, int, int, int, int]:
 # -------------------------
 # `db/rules.py` co mot quyet dinh co y: tuyen nao chua khai thi de luu luong cua
 # no roi vao muc "khong noi duoc model", vi o do no "duoc DEM va IN RA, khong bien
-# mat im lang". Nhung o che do vong lap, `mot_luot()` chay bo nap voi
+# mat im lang". Nhung o che do vong lap, `run_once()` chay bo nap voi
 # `capture_output=True` va CHI in lai khi buoc do THAT BAI -- nen o luot chay
 # THANH CONG, dong dem do bi nem vao thung.
 #
@@ -143,7 +143,7 @@ def print_counters_worth_attention(step_label: str, output: str | None) -> None:
         for pattern in COUNTERS_NEVER_SWALLOWED:
             m = pattern.search(line)
             if m and int(m.group(1)) > 0:
-                print(f"  CHU Y [{step_label}]: {line.strip()}")
+                print(f"  NOTE [{step_label}]: {line.strip()}")
                 break
 
 
@@ -178,7 +178,7 @@ def write_heartbeat(dsn: str, row_count: int, interval: int) -> None:
     try:
         cn, _ = connect.open_db(dsn)
     except Exception as e:                        # noqa: BLE001
-        print(f"  CANH BAO: khong mo duoc ket noi de ghi nhip tim: {type(e).__name__}")
+        print(f"  WARNING: could not open a connection to write the heartbeat: {type(e).__name__}")
         return
     try:
         with cn.cursor() as cur:
@@ -200,68 +200,68 @@ def write_heartbeat(dsn: str, row_count: int, interval: int) -> None:
                         (row_count, interval or None))
         cn.commit()
     except Exception as e:                        # noqa: BLE001
-        print(f"  CANH BAO: khong ghi duoc nhip tim: {type(e).__name__}: {e}")
+        print(f"  WARNING: could not write the heartbeat: {type(e).__name__}: {e}")
     finally:
         cn.close()
 
 
-def mot_luot(dsn: str, im_lang: bool, interval: int = 0) -> int:
-    truoc = dem(dsn)
-    for nhan, duong_dan, them in STEPS:
+def run_once(dsn: str, quiet: bool, interval: int = 0) -> int:
+    before = count_gateway_rows(dsn)
+    for label, path, extra in STEPS:
         # encoding PHAI dat tuong minh: mac dinh cua subprocess la codepage cua
-        # console (cp1252 tren may nay), ma hai buoc deu in tieng Viet. Thieu no
+        # console (cp1252 tren may nay), ma cac buoc co the in tieng Viet. Thieu no
         # thi luong doc nem UnicodeDecodeError - va mat dung doan chan doan can
         # xem nhat khi co su co.
-        r = subprocess.run([PY, str(ROOT / duong_dan), *them],
-                           capture_output=im_lang, text=True,
+        r = subprocess.run([PY, str(ROOT / path), *extra],
+                           capture_output=quiet, text=True,
                            encoding="utf-8", errors="replace")
         if r.returncode != 0:
-            print(f"FAILED at step '{nhan}' ({duong_dan}), exit code {r.returncode}."
-                  f" DUNG LAI - khong tong hop tren du lieu thieu.")
+            print(f"FAILED at step '{label}' ({path}), exit code {r.returncode}."
+                  f" Stopping - no rollup on incomplete data.")
             # In CA hai luong. Traceback nam o stderr; in moi stdout la giau
             # dung thu can xem.
-            for luong in (r.stdout, r.stderr):
-                if im_lang and luong:
-                    print(luong.rstrip())
+            for stream in (r.stdout, r.stderr):
+                if quiet and stream:
+                    print(stream.rstrip())
             return r.returncode
         # Buoc nay THANH CONG. Nhung dau ra van co the chua bo dem canh bao, va o
         # che do vong lap dau ra dang bi capture -- khong in lai la nuot mat.
-        if im_lang:
-            print_counters_worth_attention(nhan, r.stdout)
-    sau = dem(dsn)
-    write_heartbeat(dsn, sau[0], interval)
+        if quiet:
+            print_counters_worth_attention(label, r.stdout)
+    after = count_gateway_rows(dsn)
+    write_heartbeat(dsn, after[0], interval)
 
-    print(f"  fact_call gateway  {truoc[0]:>6} -> {sau[0]:<6} (+{sau[0] - truoc[0]})"
-          f"  | token {truoc[1]:,} -> {sau[1]:,}")
-    for nhan, i in (("fact_usage_daily", 2), ("fact_usage_hourly", 3),
-                    ("fact_latency_daily", 4)):
-        print(f"  {nhan:<18} {truoc[i]:>6} -> {sau[i]:<6} gateway rows")
+    print(f"  fact_call gateway  {before[0]:>6} -> {after[0]:<6} (+{after[0] - before[0]})"
+          f"  | token {before[1]:,} -> {after[1]:,}")
+    for table, i in (("fact_usage_daily", 2), ("fact_usage_hourly", 3),
+                     ("fact_latency_daily", 4)):
+        print(f"  {table:<18} {before[i]:>6} -> {after[i]:<6} gateway rows")
     return 0
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     p.add_argument("--every", type=int, default=0,
-                   help="Chay lap lai moi N giay. 0 = chay mot lan roi thoat.")
+                   help="Repeat every N seconds. 0 = run once and exit.")
     p.add_argument("--quiet", action="store_true",
-                   help="Nuot dau ra cua hai buoc, chi in tom tat")
+                   help="Swallow the steps' output, print only the summary")
     args = p.parse_args()
 
     if not args.every:
-        return mot_luot(args.db, args.quiet, 0)
+        return run_once(args.db, args.quiet, 0)
 
     print(f"Looping every {args.every}s. Ctrl-C to stop.")
     while True:
-        # Bat CA loi cua dem(): database co the dang khoi dong lai, va mot vong
-        # lap chet vi mot luot hong la mat luon co che tu dong.
+        # Bat CA loi cua count_gateway_rows(): database co the dang khoi dong lai,
+        # va mot vong lap chet vi mot luot hong la mat luon co che tu dong.
         try:
-            ma = mot_luot(args.db, True, args.every)
+            code = run_once(args.db, True, args.every)
         except Exception as exc:
             print(f"  ERROR: {type(exc).__name__}: "
                   f"{str(exc).strip().splitlines()[0]}")
-            ma = 1
-        if ma != 0:
+            code = 1
+        if code != 0:
             print(f"  (retrying in {args.every}s)")
         time.sleep(args.every)
 

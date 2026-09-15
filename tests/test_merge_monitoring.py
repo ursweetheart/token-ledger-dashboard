@@ -30,21 +30,22 @@ class MergeCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
         self.raw = root / "raw"
-        self.ra = root / "gop"
+        self.out_root = root / "merged"
         self.raw.mkdir()
 
     def tearDown(self):
         self.tmp.cleanup()
 
-    def run_merge(self, dot: str = "", out: str = "out-gop"):
+    def run_merge(self, batches: str = "", out: str = "out-gop"):
         buf = io.StringIO()
         with redirect_stdout(buf):
-            summary = merge_monitoring.run(raw=self.raw, ra=self.ra, dot=dot, out_name=out)
+            summary = merge_monitoring.run(raw=self.raw, out_root=self.out_root,
+                                           batches=batches, out_name=out)
         return summary, buf.getvalue()
 
     def merged_values(self, project="p", out="out-gop") -> dict:
         return {(r["metric_alias"], r["ts_utc"]): r["value"]
-                for r in read_csv(self.ra / out / f"{project}.csv")}
+                for r in read_csv(self.out_root / out / f"{project}.csv")}
 
 
 class KeepTheLargerValueTests(MergeCase):
@@ -54,7 +55,7 @@ class KeepTheLargerValueTests(MergeCase):
         write_pull(self.raw, "2026-09-05-1m", "p", [("tok", "2026-06-11 00:00:00", "4406.0")])
         write_pull(self.raw, "2026-09-12-1m", "p", [("tok", "2026-06-11 00:00:00", "944.0")])
         self.run_merge()
-        rows = read_csv(self.ra / "out-gop" / "p.csv")
+        rows = read_csv(self.out_root / "out-gop" / "p.csv")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["value"], "4406.0")
 
@@ -75,8 +76,8 @@ class KeepTheLargerValueTests(MergeCase):
         for pull in ("2026-09-05-1m", "2026-09-12-1m"):
             write_pull(self.raw, pull, "p", [("tok", "2026-06-12 00:00:00", "12.0")])
         summary, _ = self.run_merge()
-        self.assertEqual(len(read_csv(self.ra / "out-gop" / "p.csv")), 1)
-        self.assertEqual(summary["lech"], 0)
+        self.assertEqual(len(read_csv(self.out_root / "out-gop" / "p.csv")), 1)
+        self.assertEqual(summary["clashes"], 0)
 
 
 class ClashFileTests(MergeCase):
@@ -90,7 +91,7 @@ class ClashFileTests(MergeCase):
         summary, printed = self.run_merge()
         clashes = read_csv(summary["clash_file"])
         self.assertEqual(len(clashes), 2)
-        self.assertEqual(summary["lech"], 2)
+        self.assertEqual(summary["clashes"], 2)
         self.assertIn("value clash 2", printed)
         tok = next(r for r in clashes if r["metric_alias"] == "tok")
         self.assertEqual((tok["value_a"], tok["value_b"], tok["kept"], tok["newest_value"]),
@@ -111,8 +112,8 @@ class ClashFileTests(MergeCase):
         write_pull(self.raw, "2026-09-12-1m", "p", [("tok", "2026-06-11 00:00:00", "944.0")])
         summary, _ = self.run_merge()
         clash = Path(summary["clash_file"])
-        self.assertEqual(clash.parent, self.ra)
-        self.assertEqual(sorted(f.name for f in (self.ra / "out-gop").iterdir()), ["p.csv"])
+        self.assertEqual(clash.parent, self.out_root)
+        self.assertEqual(sorted(f.name for f in (self.out_root / "out-gop").iterdir()), ["p.csv"])
 
 
 class PullFolderPatternTests(MergeCase):
@@ -128,12 +129,12 @@ class PullFolderPatternTests(MergeCase):
         self.assertEqual(summary["skipped"], ["2026-09-04-1h", "2026-09-04-1h-dinhthinhan18111971"])
         self.assertIn("2026-09-04-1h-dinhthinhan18111971", printed)
         self.assertEqual(self.merged_values(), {("tok", "2026-09-01 10:00:00"): "3.0"})
-        self.assertFalse((self.ra / "out-gop" / "project-e62bad30-a591-407b-ba7.csv").exists())
+        self.assertFalse((self.out_root / "out-gop" / "project-e62bad30-a591-407b-ba7.csv").exists())
 
     def test_explicit_list_is_honoured_with_a_warning_for_odd_names(self):
         write_pull(self.raw, "2026-09-12-1m", "p", [("tok", "2026-09-01 10:00:00", "3.0")])
         write_pull(self.raw, "2026-09-04-1h", "p", [("tok", "2026-09-02 10:00:00", "180.0")])
-        summary, printed = self.run_merge(dot="2026-09-12-1m,2026-09-04-1h")
+        summary, printed = self.run_merge(batches="2026-09-12-1m,2026-09-04-1h")
         self.assertEqual(sorted(summary["batches"]), ["2026-09-04-1h", "2026-09-12-1m"])
         self.assertIn("WARNING", printed)
         self.assertIn("2026-09-04-1h", printed)

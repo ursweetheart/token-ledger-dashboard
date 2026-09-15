@@ -1,6 +1,7 @@
 """Keo metadata CHINH CHU cua Google ve dia - chi doc, chi GET.
 
-    python scripts/keo_danh_muc_google.py
+    python scripts/pull_sku_catalog.py
+    python scripts/pull_sku_catalog.py --list-services
 
 Lay hai thu, luu vao data/raw_google_console/danh_muc/:
     sku-gemini-api.json   597 SKU cua dich vu "Gemini API", KEM GIA chinh thuc
@@ -44,7 +45,7 @@ OUT_DIR = ROOT / "data" / "raw_google_console" / "danh_muc"
 
 CATALOG = "https://cloudbilling.googleapis.com/v1"
 # Ma dich vu "Gemini API" trong Cloud Billing Catalog. Tim bang cach duyet
-# /v1/services va loc displayName - xem --tim-dich-vu.
+# /v1/services va loc displayName - xem --list-services.
 GEMINI_SERVICE = "AEFD-7695-64FA"
 
 
@@ -82,7 +83,7 @@ def get(url: str, tok: str) -> dict:
         with urllib.request.urlopen(req, timeout=120) as r:
             return json.load(r)
     except urllib.error.HTTPError as e:
-        raise SystemExit(f"HTTP {e.code} khi GET {url.split('?')[0]}\n"
+        raise SystemExit(f"HTTP {e.code} on GET {url.split('?')[0]}\n"
                          f"  {e.read()[:300].decode('utf-8', 'replace')}")
 
 
@@ -105,17 +106,18 @@ def find_service(tok: str) -> None:
     for s in svc:
         name = s.get("displayName", "")
         if any(k in name.lower() for k in ("generative", "gemini", "vertex")):
-            marker = "  <-- dang dung" if s["serviceId"] == GEMINI_SERVICE else ""
+            marker = "  <-- in use" if s["serviceId"] == GEMINI_SERVICE else ""
             print(f"  {s['serviceId']:<24} {name}{marker}")
 
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--tim-dich-vu", dest="find_service", action="store_true",
-                   help="Chi liet ke ma dich vu roi thoat, khong ghi file")
-    p.add_argument("--dich", dest="dest", default=str(OUT_DIR))
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
+    p.add_argument("--list-services", dest="find_service", action="store_true",
+                   help="Only list the service ids and exit, write no file")
+    p.add_argument("--out", dest="dest", default=str(OUT_DIR))
     args = p.parse_args()
 
     tok = token()
@@ -125,8 +127,8 @@ def main() -> None:
 
     skus = paged_get(f"{CATALOG}/services/{GEMINI_SERVICE}/skus?pageSize=5000", "skus", tok)
     if not skus:
-        raise SystemExit(f"Catalog tra ve 0 SKU cho dich vu {GEMINI_SERVICE}."
-                         " is the service id still correct? Run --tim-dich-vu.")
+        raise SystemExit(f"The catalog returned 0 SKUs for service {GEMINI_SERVICE}."
+                         " Is the service id still correct? Run --list-services.")
 
     dest = Path(args.dest)
     dest.mkdir(parents=True, exist_ok=True)

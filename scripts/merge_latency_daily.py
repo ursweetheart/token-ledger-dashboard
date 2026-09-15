@@ -62,7 +62,7 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_IN = ROOT / "data" / "raw_google_console" / "do_tre_phan_bo"
+DEFAULT_IN = ROOT / "data" / "raw_google_console" / "do_tre_phan_bo"  # vi-ok: on-disk path
 
 PERCENTILES = (0.50, 0.95, 0.99)
 
@@ -113,7 +113,7 @@ def bucket_bounds(options: dict) -> list[float]:
     mu = options.get("exponentialBuckets")
     if not mu:
         raise SystemExit(
-            f"Chi ho tro exponentialBuckets. Nhan duoc: {json.dumps(options)[:200]}"
+            f"Only exponentialBuckets is supported. Got: {json.dumps(options)[:200]}"
         )
     scale = float(mu["scale"])
     g = float(mu["growthFactor"])
@@ -129,7 +129,7 @@ def pad_zeros(counts: list, want: int) -> list[int]:
     """proto3 cat o 0 o duoi -> chen lai cho du truoc khi cong."""
     out_path = [int(x) for x in counts]
     if len(out_path) > want:
-        raise SystemExit(f"bucketCounts dai {len(out_path)} o, vuot qua {want} o cua schema.")
+        raise SystemExit(f"bucketCounts is {len(out_path)} buckets long, more than the schema's {want}.")
     return out_path + [0] * (want - len(out_path))
 
 
@@ -216,9 +216,9 @@ def read_batch(folders: list[Path], by_method: bool):
                     elif json.dumps(opts, sort_keys=True) != schema_json:
                         raise SystemExit(
                             "a second bucketOptions appeared - the buckets do not line up, cannot merge.\n"
-                            f"  dang dung: {json.dumps(schema)}\n"
-                            f"  gap phai : {json.dumps(opts)}\n"
-                            f"  tai      : {folder.name} {r['gcp_project_id']} {r['ts_utc']}"
+                            f"  in use: {json.dumps(schema)}\n"
+                            f"  found : {json.dumps(opts)}\n"
+                            f"  at    : {folder.name} {r['gcp_project_id']} {r['ts_utc']}"
                         )
 
                     k = point_key(r)
@@ -252,8 +252,8 @@ def read_batch(folders: list[Path], by_method: bool):
     return merged, old_way, schema, n_points, n_empty, clashes, n_dup
 
 
-def run(vao: Path, out: str = "", by_method: bool = False) -> dict:
-    folder = Path(vao)
+def run(in_path: Path, out: str = "", by_method: bool = False) -> dict:
+    folder = Path(in_path)
     folders, skipped, odd = select_folders(folder)
     if not folders:
         raise SystemExit(f"no pull folder matching {PULL_DIR.pattern} with .jsonl files in {folder}")
@@ -347,14 +347,15 @@ def run(vao: Path, out: str = "", by_method: bool = False) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--in", dest="vao", default=str(DEFAULT_IN),
-                        help="Thu muc mot lan keo, hoac thu muc cha (doc MOI lan keo khop khuon)")
-    parser.add_argument("--out", default="", help="File CSV ra (mac dinh: in ra man hinh)")
-    parser.add_argument("--theo-method", dest="by_method", action="store_true",
-                        help="Tach them theo res_method thay vi gop ca du an")
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False)
+    parser.add_argument("--in", dest="in_path", default=str(DEFAULT_IN),
+                        help="One pull folder, or the parent folder (reads EVERY pull matching the pattern)")
+    parser.add_argument("--out", default="", help="Output CSV file (default: print to the screen)")
+    parser.add_argument("--by-method", dest="by_method", action="store_true",
+                        help="Also split by res_method instead of merging the whole project")
     args = parser.parse_args()
-    run(Path(args.vao), args.out, args.by_method)
+    run(Path(args.in_path), args.out, args.by_method)
 
 
 if __name__ == "__main__":

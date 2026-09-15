@@ -12,9 +12,9 @@ Anh xa project  File CSV cua Console KHONG co cot nao dinh danh project. Thong
                 tin do chi nam o duoi ten file, va do la TEN HIEN THI chu khong
                 phai PROJECT ID. Hai khong gian dinh danh khac nhau
                 (AI-sale_agent <-> tranquil-post-471401-c1). Bang anh xa duoi
-                day gõ tay, so khop CHINH XAC TUYET DOI. Xem ANH_XA_PROJECT.
+                day gõ tay, so khop CHINH XAC TUYET DOI. Xem PROJECT_MAP.
 
-Cot tien       chi_phi_usd lay tu "Unrounded subtotal ($)", KHONG phai Cost hay
+Cot tien       cost_usd lay tu "Unrounded subtotal ($)", KHONG phai Cost hay
                 Subtotal. Hai cot do lam tron toi xu o muc TUNG DONG, khien
                 740/2.259 dong (32,8%) hien $0,00 du mang $0,83 tien that va
                 8,06 trieu token. Sai so lech mot chieu (bao thieu) vi dong nho
@@ -37,18 +37,18 @@ tang 2  tung project so dong va tong tien == chinh file tho cua project do
 tang 3  toan bo      trung khit billing_gop_tru_CTDA.csv (2.259 dong $270,9517)
 
 Tang 1 va 2 luon dung voi MOI ban export nen chay mac dinh. Tang 3 ghim vao mot
-anh chup cu the nen la CO TUY CHON --doi-chieu. Day la bai hoc tu nap_billing.py:
+anh chup cu the nen la CO TUY CHON --reconcile. Day la bai hoc tu load_billing.py:
 no ghim != 2259 va != $270.9517 lam dieu kien dung MAC DINH, nen ban export ngay
 mai se lam no dung.
 
 Bat ky phep kiem nao truot -> thoat ma khac 0 va KHONG de lai file nao. Mot file
-gop sai nhung ton tai nguy hiem hon khong co file: nap_billing.py se nap no vao
+gop sai nhung ton tai nguy hiem hon khong co file: load_billing.py se nap no vao
 database ma khong biet.
 
 CACH DUNG
 ---------
-    python scripts/gop_billing.py
-    python scripts/gop_billing.py --doi-chieu data/billing/billing_gop_tru_CTDA.csv
+    python scripts/merge_billing.py
+    python scripts/merge_billing.py --reconcile data/billing/billing_gop_tru_CTDA.csv
 """
 
 from __future__ import annotations
@@ -119,13 +119,13 @@ def money(text: str, where: str) -> Decimal:
     """Doc mot cot tien thanh Decimal, THANG tu chuoi goc, khong qua float."""
     s = (text or "").strip().replace(",", "")
     if s == "":
-        fail(f"Cot tien rong tai {where}.",
-             "  File Console luon dien du 5 cot tien. Rong nghia la file bi cat",
-             "  hoac tai thieu. Tai lai file tu Console.")
+        fail(f"Empty money column at {where}.",
+             "  A Console file always fills all 5 money columns. Empty means the file",
+             "  was cut short or partly downloaded. Download it again from the Console.")
     try:
         return Decimal(s)
     except InvalidOperation:
-        fail(f"Khong doc duoc so tien {text!r} tai {where}.")
+        fail(f"Cannot read the amount {text!r} at {where}.")
         raise  # khong toi day, chi de type checker yen tam
 
 
@@ -135,11 +135,11 @@ def to_int(text: str, where: str) -> int:
     try:
         d = Decimal(s)
     except InvalidOperation:
-        fail(f"Khong doc duoc luong dung {text!r} tai {where}.")
+        fail(f"Cannot read the usage amount {text!r} at {where}.")
         raise
     if d != d.to_integral_value():
-        fail(f"Luong dung {text!r} khong phai so nguyen tai {where}.",
-             "  Cot Usage amount cua SKU token luon la so dem. Kiem tra lai file tho.")
+        fail(f"Usage amount {text!r} is not an integer at {where}.",
+             "  The Usage amount of a token SKU is always a count. Check the raw file.")
     return int(d)
 
 
@@ -156,12 +156,12 @@ def find_files(folder: Path) -> list[Path]:
     script VAN BAO THANH CONG.
     """
     if not folder.is_dir():
-        fail(f"Khong thay thu muc {folder}.")
+        fail(f"Folder not found: {folder}.")
     files = sorted(folder.glob(FILE_PATTERN))
     if not files:
-        fail(f"Khong file nao khop mau {FILE_PATTERN!r} trong {folder}.",
-             "  Tai cac ban xuat tu Cloud Console (Billing > Reports > Download CSV)",
-             "  va dat vao thu muc tren, giu nguyen ten file.")
+        fail(f"No file matches {FILE_PATTERN!r} in {folder}.",
+             "  Download the exports from Cloud Console (Billing > Reports > Download CSV)",
+             "  and put them in the folder above, keeping their file names.")
     return files
 
 
@@ -172,20 +172,20 @@ def display_name(f: Path) -> str:
                                                                ^^^^^^^^^^^^
     """
     if "," not in f.stem:
-        fail(f"Ten file khong theo dinh dang Console: {f.name}",
-             "  Cho doi dang '... , <khoang ngay>,<ten hien thi>.csv'.")
+        fail(f"File name does not follow the Console format: {f.name}",
+             "  Expected '... , <date range>,<display name>.csv'.")
     return f.stem.rsplit(",", 1)[1].strip()
 
 
 def lookup_project(f: Path) -> str:
     name = display_name(f)
     if name not in PROJECT_MAP:
-        fail(f"Ten hien thi la: {name!r}",
+        fail(f"Unknown display name: {name!r}",
              f"  File   : {f}",
-             "  Dang khai bao trong ANH_XA_PROJECT:",
+             "  Declared in PROJECT_MAP:",
              *[f"    {k!r} -> {v}" for k, v in sorted(PROJECT_MAP.items())],
-             "  KHONG doan project ID tu ten hien thi. Mo Cloud Console, lay dung",
-             "  project ID cua project nay roi them mot dong vao ANH_XA_PROJECT.")
+             "  Do NOT guess the project ID from the display name. Open Cloud Console, take",
+             "  the real project ID of this project and add a line to PROJECT_MAP.")
     return PROJECT_MAP[name]
 
 
@@ -217,11 +217,11 @@ def crosscheck_dim_agent(dsn: str) -> None:
     present = project_ids_in_dim_agent(dsn)
     missing = sorted(set(PROJECT_MAP.values()) - present)
     if missing:
-        fail("Project ID trong ANH_XA_PROJECT khong tra duoc trong dim_agent:",
+        fail("Project IDs in PROJECT_MAP not found in dim_agent:",
              *[f"    {p}" for p in missing],
              f"  Database: {connect.mask_dsn(dsn)}",
-             "  Hoac bang anh xa gõ sai, hoac dim_agent chua co agent nay.",
-             "  Doi chieu: SELECT agent_id, ten, gcp_project_id FROM dim_agent;")
+             "  Either the map has a typo, or dim_agent does not have this agent yet.",
+             "  Cross-check: SELECT agent_id, name, gcp_project_id FROM dim_agent;")
 
 
 def read_file(f: Path, project: str) -> list[dict]:
@@ -231,22 +231,22 @@ def read_file(f: Path, project: str) -> list[dict]:
         reader = csv.DictReader(h)
         missing = [c for _, c in MONEY_COLS if c not in (reader.fieldnames or [])]
         if missing:
-            fail(f"File thieu cot: {f.name}",
-                 f"  Thieu   : {missing}",
-                 f"  Dang co : {reader.fieldnames}",
-                 "  Ban xuat Console phai giu du 5 cot tien. Tai lai file.")
+            fail(f"File is missing columns: {f.name}",
+                 f"  Missing : {missing}",
+                 f"  Present : {reader.fieldnames}",
+                 "  A Console export must keep all 5 money columns. Download the file again.")
         for i, r in enumerate(reader, start=2):  # dong 1 la header
-            where = f"{f.name} dong {i}"
+            where = f"{f.name} row {i}"
             sku_name = r["SKU description"]
             kind = guess_kind(sku_name)
             if kind is None:
-                fail(f"SKU chua phan loai duoc tai {where}:",
-                     f"  Ma SKU : {r['SKU ID']}",
-                     f"  Ten SKU: {sku_name}",
-                     f"  Tien   : ${r['Unrounded subtotal ($)']}",
-                     "  guess_kind() trong db/rules.py khong thay tu khoa nao trong",
-                     "  cached / output / input. Them quy tac vao do, KHONG viet ban",
-                     "  thu hai o day.")
+                fail(f"Unclassified SKU at {where}:",
+                     f"  SKU ID  : {r['SKU ID']}",
+                     f"  SKU name: {sku_name}",
+                     f"  Cost    : ${r['Unrounded subtotal ($)']}",
+                     "  guess_kind() in db/rules.py found none of the keywords",
+                     "  cached / output / input. Add the rule there, do NOT write a",
+                     "  second copy here.")
             d = {
                 "day": r["Date"],
                 "project": project,
@@ -255,10 +255,10 @@ def read_file(f: Path, project: str) -> list[dict]:
                 "sku_name": sku_name,
                 "kind": kind,
                 "quantity": to_int(r["Usage amount"], where),
-                "_o_dau": where,
+                "_where": where,
             }
             for out_name, raw_name in MONEY_COLS:
-                d[out_name] = money(r[raw_name], f"{where}, cot {raw_name!r}")
+                d[out_name] = money(r[raw_name], f"{where}, column {raw_name!r}")
             records.append(d)
     return records
 
@@ -279,8 +279,8 @@ def check_tier1(records: list[dict]) -> None:
     no la cot Google tinh ra, khong phai vi ta chung minh duoc no.
     """
     def detail_lines(d: dict) -> list[str]:
-        return [f"  Vi tri : {d['_o_dau']}",
-                f"  Khoa   : ngay={d['day']} project={d['project']} sku_id={d['sku_id']}",
+        return [f"  Where  : {d['_where']}",
+                f"  Key    : day={d['day']} project={d['project']} sku_id={d['sku_id']}",
                 f"  Cost              = {fmt_money(d['cost_list_usd'])}",
                 f"  Savings programs  = {fmt_money(d['discount_commit_usd'])}",
                 f"  Other savings     = {fmt_money(d['discount_other_usd'])}",
@@ -291,36 +291,36 @@ def check_tier1(records: list[dict]) -> None:
         remainder = (d["cost_list_usd"] - d["discount_commit_usd"]
                    - d["discount_other_usd"]).quantize(ONE_CENT, rounding=ROUND_HALF_UP)
         if remainder != d["cost_invoiced_usd"]:
-            fail("TANG 1 TRUOT - dang thuc gia sai:",
+            fail("LAYER 1 FAILED - the price identity does not hold:",
                  f"  round(Cost - Savings - Other, 2) = {fmt_money(remainder)}",
-                 f"  nhung Subtotal                   = {fmt_money(d['cost_invoiced_usd'])}",
+                 f"  but Subtotal                     = {fmt_money(d['cost_invoiced_usd'])}",
                  *detail_lines(d),
-                 "  Hai kha nang: (a) Google doi cach trinh bay cot giam gia - kiem",
-                 "  xem khoan giam ghi so AM hay DUONG, (b) file bi sua tay. Doi",
-                 "  chieu voi hoa don tren Console truoc khi sua bat ky dong nao.")
+                 "  Two possibilities: (a) Google changed how the discount columns look - check",
+                 "  whether discounts are NEGATIVE or POSITIVE, (b) the file was edited by hand.",
+                 "  Compare with the invoice on the Console before editing any row.")
 
         # Chi kiem khi dong nay khong co giam gia. Co giam gia thi Cost la gia
         # TRUOC giam con Unrounded la tien SAU giam - hai ve tach nhau la DUNG.
         if d["discount_commit_usd"] == 0 and d["discount_other_usd"] == 0:
             if d["cost_list_usd"] != d["cost_usd"].quantize(
                     ONE_CENT, rounding=ROUND_HALF_UP):
-                fail("TANG 1 TRUOT - Cost khong khop Unrounded (dong khong co giam gia):",
+                fail("LAYER 1 FAILED - Cost does not match Unrounded (row without discount):",
                      f"  Cost                = {fmt_money(d['cost_list_usd'])}",
                      f"  round(Unrounded, 2) = "
                      f"{fmt_money(d['cost_usd'].quantize(ONE_CENT, rounding=ROUND_HALF_UP))}",
                      *detail_lines(d),
-                     "  Dong khong co khoan giam nao thi hai ve phai bang nhau. Lech",
-                     "  nghia la co khoan giam KHONG duoc ghi vao hai cot savings -",
-                     "  doi chieu voi hoa don Gimasys.")
+                     "  A row with no discount must have both sides equal. A gap means",
+                     "  a discount was NOT recorded in the two savings columns -",
+                     "  compare with the Gimasys invoice.")
 
         if d["cost_usd"].quantize(ONE_CENT, rounding=ROUND_HALF_UP) != d["cost_invoiced_usd"]:
-            fail("TANG 1 TRUOT - dang thuc lam tron sai:",
+            fail("LAYER 1 FAILED - the rounding identity does not hold:",
                  f"  round(Unrounded, 2) = "
                  f"{fmt_money(d['cost_usd'].quantize(ONE_CENT, rounding=ROUND_HALF_UP))}",
-                 f"  nhung Subtotal      = {fmt_money(d['cost_invoiced_usd'])}",
+                 f"  but Subtotal        = {fmt_money(d['cost_invoiced_usd'])}",
                  *detail_lines(d),
-                 "  Co the Google doi quy tac lam tron (dang gia dinh ROUND_HALF_UP,",
-                 "  da do khop 2.259/2.259 dong tren ban export 05/08).")
+                 "  Google may have changed its rounding rule (ROUND_HALF_UP is assumed,",
+                 "  measured to match 2,259/2,259 rows on the 05/08 export).")
 
 
 def warn_discount(records: list[dict]) -> None:
@@ -333,7 +333,7 @@ def warn_discount(records: list[dict]) -> None:
     print("")
     print("  " + "!" * 68)
     print(f"  !! A DISCOUNT APPEARS FOR THE FIRST TIME: {len(present)} rows, ${fmt_money(total_by_project)} in total")
-    print("  !! From now on chi_phi_usd is the cost AFTER the discount, unlike chi_phi_niem_yet_usd.")
+    print("  !! From now on cost_usd is the cost AFTER the discount, unlike cost_list_usd.")
     print("  !! Every cost figure downstream changes meaning. Review the existing reports.")
     print("  " + "!" * 68)
     print("")
@@ -355,14 +355,14 @@ def check_tier2(by_file: dict[Path, list[dict]], records: list[dict]) -> None:
         n_raw = len(raw_rows)
         t_raw = sum((d["cost_usd"] for d in raw_rows), Decimal(0))
         if count_by_project[project] != n_raw or total_by_project[project] != t_raw:
-            fail("TANG 2 TRUOT - project khong khop file tho cua no:",
+            fail("LAYER 2 FAILED - a project does not match its own raw file:",
                  f"  Project  : {project}",
-                 f"  File tho : {f.name}",
-                 f"  So dong  : ket qua {count_by_project[project]}  |  file tho {n_raw}",
-                 f"  Tong tien: ket qua ${fmt_money(total_by_project[project])}  |  "
-                 f"file tho ${fmt_money(t_raw)}",
-                 "  Kha nang: hai file cung anh xa ve mot project ID, hoac bo loc",
-                 "  o buoc doc da bo dong. Kiem ANH_XA_PROJECT truoc.")
+                 f"  Raw file : {f.name}",
+                 f"  Rows     : result {count_by_project[project]}  |  raw file {n_raw}",
+                 f"  Total    : result ${fmt_money(total_by_project[project])}  |  "
+                 f"raw file ${fmt_money(t_raw)}",
+                 "  Likely: two files map to the same project ID, or a filter in the",
+                 "  read step dropped rows. Check PROJECT_MAP first.")
 
 
 def recon_key(d: dict) -> tuple:
@@ -377,13 +377,13 @@ def fmt_key(k: tuple) -> str:
 def reconcile(records: list[dict], ref_path: Path) -> None:
     """Tang 3: trung khit ban gop tay - khong dong thua, khong thieu, khong lech."""
     if not ref_path.is_file():
-        fail(f"Khong thay file moc doi chieu: {ref_path}")
+        fail(f"Reference file not found: {ref_path}")
     with open(ref_path, encoding="utf-8-sig", newline="") as h:
         old_rows = list(csv.DictReader(h))
 
     old_side = collections.Counter(
         (r["date"], r["project"], r["sku_id"],
-         to_int(r["amount"], f"{ref_path.name} (ban gop tay)"),
+         to_int(r["amount"], f"{ref_path.name} (hand-merged file)"),
          Decimal(r["cost"]))
         for r in old_rows)
     new_side = collections.Counter(recon_key(d) for d in records)
@@ -396,30 +396,31 @@ def reconcile(records: list[dict], ref_path: Path) -> None:
         print(f"  layer 3: EXACT MATCH on {len(records)} rows")
         return
 
-    examples = ([f"    THUA  {fmt_key(k)}" for k in sorted(extra, key=str)[:5]]
-          + [f"    THIEU {fmt_key(k)}" for k in sorted(missing, key=str)[:5]])
-    fail("TANG 3 TRUOT - khong trung khit ban gop tay:",
-         f"  Moc      : {ref_path}",
-         f"  Dong thua: {sum(extra.values())}   Dong thieu: {sum(missing.values())}",
-         "  Toi da 10 vi du (THUA = chi co o ket qua moi, THIEU = chi co o ban gop tay):",
+    examples = ([f"    EXTRA   {fmt_key(k)}" for k in sorted(extra, key=str)[:5]]
+          + [f"    MISSING {fmt_key(k)}" for k in sorted(missing, key=str)[:5]])
+    fail("LAYER 3 FAILED - does not match the hand-merged file exactly:",
+         f"  Reference   : {ref_path}",
+         f"  Extra rows  : {sum(extra.values())}   Missing rows: {sum(missing.values())}",
+         "  Up to 10 examples (EXTRA = only in the new result, MISSING = only in the hand-merged file):",
          *examples,
-         "  Neu chi thieu ma khong thua: dang tai thieu file tho. Doi chieu danh",
-         "  sach file da chon o dau ban in nay.")
+         "  Missing rows but no extra ones: raw files are missing. Compare with the",
+         "  list of files chosen at the top of this output.")
 
 
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # console Windows mac dinh cp1252
     p = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--thu-muc", dest="folder", default=str(RAW_DIR),
-                   help="Thu muc chua file tho (mac dinh data/billing)")
-    p.add_argument("--ra", dest="out_path", default=None,
-                   help="Duong dan file dau ra (mac dinh "
-                        "data/da_xu_ly/billing/billing_<hom-nay>.csv)")
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False)
+    p.add_argument("--folder", dest="folder", default=str(RAW_DIR),
+                   help="Folder holding the raw files (default data/billing)")
+    p.add_argument("--out", dest="out_path", default=None,
+                   help="Output file path (default "
+                        "data/da_xu_ly/billing/billing_<today>.csv)")
     p.add_argument("--db", default=connect.DEFAULT_DSN,
-                   help="DSN de kiem cheo ANH_XA_PROJECT voi dim_agent (chi doc)")
-    p.add_argument("--doi-chieu", dest="reconcile", default=None, metavar="DUONG_DAN",
-                   help="TANG 3 (tuy chon): so trung khit voi ban gop tay")
+                   help="DSN used to cross-check PROJECT_MAP against dim_agent (read-only)")
+    p.add_argument("--reconcile", dest="reconcile", default=None, metavar="PATH",
+                   help="LAYER 3 (optional): match the hand-merged file exactly")
     args = p.parse_args()
 
     try:
@@ -436,13 +437,13 @@ def main() -> int:
 
         records = [d for rows in by_file.values() for d in rows]
         if not records:
-            fail("Khong doc duoc dong nao. Cac file tho deu rong?")
+            fail("No rows read. Are all the raw files empty?")
 
         check_tier1(records)
         n_discounted = sum(1 for d in records
                      if d["discount_commit_usd"] != 0 or d["discount_other_usd"] != 0)
         print(f"  layer 1: PASS ({len(records)} rows, {len(records) - n_discounted} rows "
-              f"kiem du 3 dang thuc, {n_discounted} dong co giam gia kiem 2)")
+              f"checked on all 3 identities, {n_discounted} discounted rows on 2)")
         warn_discount(records)
         check_tier2(by_file, records)
         print(f"  layer 2: PASS ({len(by_file)} projects)")

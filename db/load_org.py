@@ -47,7 +47,7 @@ def _latest(parent: Path, *required: str) -> Path:
 
     KHÔNG lấy thẳng thư mục cuối. Nhiều script pull_* cùng ghi vào cây này,
     mỗi cái theo NGÀY KÉO của riêng nó, nên thư mục mới nhất hoàn toàn có thể
-    chỉ chứa đúng một file của một script (pull_hd_usage.py là ví dụ). Lấy bừa
+    chỉ chứa đúng một file của một script (pull_tla_contract_usage.py là ví dụ). Lấy bừa
     thư mục đó thì hỏng giữa khâu nạp bằng FileNotFoundError - đúng chỗ khó
     đoán nhất. Đòi đủ file thì nó lùi về đợt kéo đầy đủ gần nhất, và nếu không
     có đợt nào đủ thì nói thẳng thiếu file gì.
@@ -55,15 +55,15 @@ def _latest(parent: Path, *required: str) -> Path:
     children = sorted((p for p in parent.glob("*") if p.is_dir()), reverse=True)
     if not children:
         raise SystemExit(f"no collection batch in {parent}."
-                         f" Chay scripts/pull_web_apps.py truoc.")
+                         f" Run scripts/pull_web_apps.py first.")
     for p in children:
         if all((p / f).exists() for f in required):
             return p
     missing = [f for f in required if not (children[0] / f).exists()]
     raise SystemExit(
         f"no batch in {parent} has every required file."
-        f" Dot moi nhat ({children[0].name}) thieu: {', '.join(missing)}."
-        f" Chay scripts/pull_web_apps.py truoc.")
+        f" The newest batch ({children[0].name}) is missing: {', '.join(missing)}."
+        f" Run scripts/pull_web_apps.py first.")
 
 
 # Nguồn cũ là data/ctda và data/tla-hd - bản cào TAY ngày 05/08, không cập nhật
@@ -75,17 +75,17 @@ RALLI_DIR = _latest(ROOT / "data" / "raw_web" / "ralli",
 TLA_DIR = _latest(ROOT / "data" / "raw_web" / "tla-hd",
                   "units-tree.json", "units-members.json",
                   "token-usage-year.json", "token-usage-filter-options.json")
-# Do scripts/pull_hd_usage.py sinh ra. Nó ghi vào thư mục theo NGÀY KÉO của
+# Do scripts/pull_tla_contract_usage.py sinh ra. Nó ghi vào thư mục theo NGÀY KÉO của
 # riêng nó, nên thường KHÁC thư mục đợt kéo đầy đủ ở trên - đó là lý do phải
 # tra bằng tên file chứ không lấy bừa thư mục mới nhất.
-HD_USAGE_DIR = _latest(ROOT / "data" / "raw_web" / "tla-hd",
+CONTRACT_USAGE_DIR = _latest(ROOT / "data" / "raw_web" / "tla-hd",
                        "usage-day-user-model.json")
 
-RALLI, TLA_HD = 8, 5
+RALLI, TLA_CONTRACT = 8, 5
 SINGLE_USER_AGENTS = (1, 2, 3, 4, 6, 7)      # quyết định A1
 
 # Nhãn tiếng Việt đã biết, phát hiện khi đối chiếu giao diện web 07/08
-FUNCTION_LABELS = {"analyze": "Phân tích hợp đồng", "chat": "Hỏi đáp AI"}
+FUNCTION_LABELS = {"analyze": "Phân tích hợp đồng", "chat": "Hỏi đáp AI"}  # vi-ok: labels shown on the dashboard
 
 # ─── Tài khoản DÙNG CHUNG ────────────────────────────────────────────────
 # Không đại diện cho một người. Vẫn nạp đủ token và tiền - lưu lượng của chúng
@@ -116,7 +116,7 @@ FUNCTION_LABELS = {"analyze": "Phân tích hợp đồng", "chat": "Hỏi đáp 
 SHARED_IN_DIRECTORY = {
     # 1.796 lượt / 34,9 triệu token, dùng cả Ralli lẫn TLA HĐ. Họ tên khai là
     # "Quản trị viên" - một chức danh, không phải tên người. Không có email.
-    "admin": "tai khoan quan tri dung chung",
+    "admin": "shared administrator account",
 }
 
 
@@ -154,7 +154,7 @@ def walk_up(nid: str, parent: dict[str, str], name: dict[str, str]) -> list[str]
     cur = parent.get(nid) or None
     while cur:
         if cur in seen:                       # vòng lặp trong dữ liệu
-            raise SystemExit(f"Cay don vi co vong lap tai {cur}")
+            raise SystemExit(f"The unit tree has a cycle at {cur}")
         if cur not in name:
             raise SystemExit(f"unit {nid} points at a parent {cur} that does not exist")
         seen.add(cur)
@@ -185,9 +185,9 @@ def walk_up(nid: str, parent: dict[str, str], name: dict[str, str]) -> list[str]
 # thật về tổ chức công ty sống trong mã giao diện.
 CANONICAL_UNIT_PAIRS = [
     ("TT C4LED", "C4LED"),
-    ("Phòng BH1", "PBH1"),
-    ("Phòng BH2", "PBH2"),
-    ("Phòng BH3", "PBH3"),
+    ("Phòng BH1", "PBH1"),  # vi-ok: unit name as the app declares it
+    ("Phòng BH2", "PBH2"),  # vi-ok: unit name as the app declares it
+    ("Phòng BH3", "PBH3"),  # vi-ok: unit name as the app declares it
 ]
 
 # Hai cấp gom thuần tuý trong cây Trợ lý ảo Ralli. Báo cáo bắt đầu từ BÊN DƯỚI
@@ -203,8 +203,8 @@ CANONICAL_UNIT_PAIRS = [
 # nghe tương tự: nó có 2 tài khoản của riêng mình, tức là một hàng có nội dung
 # chứ không phải một cấp gom rỗng.
 REPORT_AGGREGATE_UNITS = [
-    (RALLI, "Toàn công ty"),
-    (RALLI, "Tổng công ty Rạng Đông"),
+    (RALLI, "Toàn công ty"),  # vi-ok: unit name as the app declares it
+    (RALLI, "Tổng công ty Rạng Đông"),  # vi-ok: unit name as the app declares it
 ]
 
 
@@ -223,12 +223,12 @@ def resolve_canonical(rows: list[tuple]) -> dict[str, str]:
                if r[1] == agent and r[2].strip() == unit_name and not r[6]]
         if len(hit) != 1:
             raise SystemExit(
-                f"CANONICAL_UNIT_PAIRS: tim '{unit_name}' trong cay agent"
-                f" {agent} ra {len(hit)} ket qua, phai dung 1."
-                f" App co the da doi ten don vi - xem lai cap nay.")
+                f"CANONICAL_UNIT_PAIRS: looking up '{unit_name}' in the tree of agent"
+                f" {agent} gave {len(hit)} results, exactly 1 expected."
+                f" The app may have renamed the unit - check this pair.")
         return hit[0]
 
-    return {find(TLA_HD, hd): find(RALLI, ralli)
+    return {find(TLA_CONTRACT, hd): find(RALLI, ralli)
             for hd, ralli in CANONICAL_UNIT_PAIRS}
 
 
@@ -240,9 +240,9 @@ def resolve_report_aggregates(rows: list[tuple]) -> list[str]:
                if r[1] == agent and r[2].strip() == unit_name and not r[6]]
         if len(hit) != 1:
             raise SystemExit(
-                f"REPORT_AGGREGATE_UNITS: tim '{unit_name}' trong cay agent"
-                f" {agent} ra {len(hit)} ket qua, phai dung 1."
-                f" App co the da doi ten don vi.")
+                f"REPORT_AGGREGATE_UNITS: looking up '{unit_name}' in the tree of agent"
+                f" {agent} gave {len(hit)} results, exactly 1 expected."
+                f" The app may have renamed the unit.")
         out.append(hit[0])
     return out
 
@@ -270,13 +270,13 @@ def collect_units() -> list[tuple]:
                      " > ".join(ancestors_walked + [x["name"]]), False))
     if path_mismatch:
         raise SystemExit(
-            f"parent_id va ancestors cho ra duong dan KHAC NHAU o {path_mismatch}"
-            f" don vi - mot trong hai sai, phai lam ro truoc khi nap")
+            f"parent_id and ancestors give DIFFERENT paths for {path_mismatch}"
+            f" units - one of them is wrong, resolve it before loading")
 
     # --- TLA HĐ: cây lồng nhau ---
     def descend(nodes: list, depth: int, ancestors: list[str]) -> None:
         for n in nodes:
-            rows.append((n["id"], TLA_HD, n["name"], n.get("parent_id") or None,
+            rows.append((n["id"], TLA_CONTRACT, n["name"], n.get("parent_id") or None,
                          depth, " > ".join(ancestors + [n["name"]]), False))
             descend(n.get("children") or [], depth + 1, ancestors + [n["name"]])
 
@@ -290,7 +290,8 @@ def main() -> None:
     # xảy ra ở CUỐI bước, sau khi đã làm hết việc, nên rất khó chịu.
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     args = p.parse_args()
 
@@ -309,11 +310,11 @@ def main() -> None:
     # 6 dòng kỹ thuật + 2 dòng 'Chưa quy được'
     for aid in SINGLE_USER_AGENTS:
         unit_rows.append((f"__technical_{aid}__", aid,
-                          f"Đơn vị sử dụng {agent_name[aid]}", None, 1,
-                          f"Đơn vị sử dụng {agent_name[aid]}", True))
-    for aid in (TLA_HD, RALLI):
-        unit_rows.append((f"__unattributed_{aid}__", aid, "Chưa quy được",
-                          None, 0, "Chưa quy được", True))
+                          f"Đơn vị sử dụng {agent_name[aid]}", None, 1,  # vi-ok: unit name shown on the dashboard
+                          f"Đơn vị sử dụng {agent_name[aid]}", True))  # vi-ok: unit name shown on the dashboard
+    for aid in (TLA_CONTRACT, RALLI):
+        unit_rows.append((f"__unattributed_{aid}__", aid, "Chưa quy được",  # vi-ok: unit name shown on the dashboard
+                          None, 0, "Chưa quy được", True))  # vi-ok: unit name shown on the dashboard
 
     # Thứ tự xoá ngược với thứ tự khoá ngoại: con trước, cha sau.
     #
@@ -376,9 +377,9 @@ def main() -> None:
     # người dùng nhưng không có email, nạp từ đó là mất trường mà không ai báo.
     for block in read_json(TLA_DIR / "units-members.json"):
         raw_unit = block.get("unit_id")
-        unit = raw_unit if raw_unit in known_units else f"__unattributed_{TLA_HD}__"
+        unit = raw_unit if raw_unit in known_units else f"__unattributed_{TLA_CONTRACT}__"
         for r in block.get("members") or []:
-            user_rows.append((r["id"], TLA_HD, r["username"],
+            user_rows.append((r["id"], TLA_CONTRACT, r["username"],
                               r.get("full_name") or None, r.get("email") or None,
                               unit, None, None, False, "directory",
                               r.get("role") or None))
@@ -390,19 +391,19 @@ def main() -> None:
     #
     # Chỉ dùng filter-options để VÁ chỗ thiếu, không dùng thay: nó không có
     # email, nạp từ đó cho tất cả là mất email của 43 người kia mà không ai báo.
-    existing = {d[0] for d in user_rows if d[1] == TLA_HD}
+    existing = {d[0] for d in user_rows if d[1] == TLA_CONTRACT}
     for r in read_json(TLA_DIR / "token-usage-filter-options.json").get("users") or []:
         if r["id"] in existing:
             continue
         raw_unit = r.get("unit_id")
-        unit = raw_unit if raw_unit in known_units else f"__unattributed_{TLA_HD}__"
-        user_rows.append((r["id"], TLA_HD, r["username"],
+        unit = raw_unit if raw_unit in known_units else f"__unattributed_{TLA_CONTRACT}__"
+        user_rows.append((r["id"], TLA_CONTRACT, r["username"],
                           r.get("full_name") or None, None,
                           unit, None, None, False, "directory", None))
 
     for aid in SINGLE_USER_AGENTS:
         user_rows.append((f"__technical_{aid}__", aid,
-                          f"Người dùng sử dụng {agent_name[aid]}", None, None,
+                          f"Người dùng sử dụng {agent_name[aid]}", None, None,  # vi-ok: user name shown on the dashboard
                           f"__technical_{aid}__", None, None, True, "technical", None))
 
     # ================================================== (4) bổ sung từ nhật ký
@@ -442,21 +443,21 @@ def main() -> None:
     # 'Nghiệp vụ BH1' (không còn user_id, tức đã bị xoá khỏi danh bạ).
     # Nhờ tách riêng found_in mà chỉ tiêu tỷ lệ áp dụng lọc được họ ra, trong
     # khi tổng token vẫn đủ.
-    hd_names = {(d[2] or "").strip().lower() for d in user_rows if d[1] == TLA_HD}
-    hd_ids = {d[0] for d in user_rows if d[1] == TLA_HD}
-    hd_extra: dict[str, str] = {}
-    for r in read_json(HD_USAGE_DIR / "usage-day-user-model.json")["rows"]:
+    contract_names = {(d[2] or "").strip().lower() for d in user_rows if d[1] == TLA_CONTRACT}
+    contract_ids = {d[0] for d in user_rows if d[1] == TLA_CONTRACT}
+    contract_extra: dict[str, str] = {}
+    for r in read_json(CONTRACT_USAGE_DIR / "usage-day-user-model.json")["rows"]:
         name = (r.get("username") or "").strip()
-        if not name or name.lower() in hd_names:
+        if not name or name.lower() in contract_names:
             continue
         # Không có user_id thì lấy chính username làm khoá - đúng cách Ralli đã
         # xử lý cho các bản ghi cũ ghi username vào ô user_id.
-        hd_extra[r.get("user_id") or name] = name
-    for uid, display in sorted(hd_extra.items()):
-        if uid in hd_ids:
+        contract_extra[r.get("user_id") or name] = name
+    for uid, display in sorted(contract_extra.items()):
+        if uid in contract_ids:
             continue
-        user_rows.append((uid, TLA_HD, display, None, None,
-                          f"__unattributed_{TLA_HD}__", None, None, False, "log", None))
+        user_rows.append((uid, TLA_CONTRACT, display, None, None,
+                          f"__unattributed_{TLA_CONTRACT}__", None, None, False, "log", None))
 
     # ============================================ (3b) bảng `account`
     # Mỗi nguồn trước đây ghi "ai dùng" theo kiểu riêng: Ralli ghi ObjectId của
@@ -528,7 +529,7 @@ def main() -> None:
             conflicts.append(
                 f"{u}  " + " | ".join(f"{agent_name[a]}: {unit_name[v]}"
                                       for a, v in claims)
-                + f"  -> chon: {unit_name[chosen[5]]}")
+                + f"  -> chosen: {unit_name[chosen[5]]}")
         # d[9] = found_in. Có mặt trong danh bạ của BẤT KỲ app nào là đủ:
         # một người dùng hai app chỉ cần một bên khai là đã được cấp quyền.
         in_directory = any(d[9] == "directory" for d in group)
@@ -558,8 +559,8 @@ def main() -> None:
     for r in unit_rows:
         if r[6]:
             if r[1] in technical_unit:
-                raise SystemExit(f"agent {r[1]} co >1 don vi ky thuat:"
-                                 f" {technical_unit[r[1]]} va {r[0]}")
+                raise SystemExit(f"agent {r[1]} has more than one technical unit:"
+                                 f" {technical_unit[r[1]]} and {r[0]}")
             technical_unit[r[1]] = r[0]
 
     i = len(by_username)
@@ -568,8 +569,8 @@ def main() -> None:
         for slot in ("whole_agent", "unattributed"):
             i += 1
             technical_account[(slot, aid)] = i
-            label = (f"Cả {agent_name[aid]}" if slot == "whole_agent"
-                     else "Chưa quy được")
+            label = (f"Cả {agent_name[aid]}" if slot == "whole_agent"  # vi-ok: account name shown on the dashboard
+                     else "Chưa quy được")  # vi-ok: account name shown on the dashboard
             # `slot` là CHỖ NGỒI trong khoá của fact_usage_daily; `kind` là điều
             # ta NÓI VỚI người đọc về dòng đó. Hai chuyện này chỉ khác nhau ở
             # đúng một trường hợp - agent một-người-dùng:
@@ -638,7 +639,7 @@ def main() -> None:
     # Nguồn cũ là by-function-2026.csv (phái sinh). Nay lấy từ chính phần
     # `by_function` của stats cả năm, là thứ API trả về trực tiếp.
     for r in read_json(TLA_DIR / "token-usage-year.json").get("by_function") or []:
-        function_rows.append((TLA_HD, r["function"],
+        function_rows.append((TLA_CONTRACT, r["function"],
                               FUNCTION_LABELS.get(r["function"]), None))
     cur.executemany(
         f"INSERT INTO dim_function (agent_id, code, label, is_user_facing)"
@@ -682,19 +683,19 @@ def main() -> None:
     # trượt, executemany nuốt dòng). Nó không còn kêu khi tổ chức thay đổi.
     errors = []
     if n_units != len(unit_rows):
-        errors.append(f"dim_unit {n_units} != {len(unit_rows)} dong dung tu nguon")
+        errors.append(f"dim_unit {n_units} != {len(unit_rows)} rows built from the source")
     if n_users != len(user_rows):
-        errors.append(f"dim_user {n_users} != {len(user_rows)} dong dung tu nguon")
+        errors.append(f"dim_user {n_users} != {len(user_rows)} rows built from the source")
     if n_tech != len(SINGLE_USER_AGENTS):
-        errors.append(f"dong ky thuat {n_tech} != {len(SINGLE_USER_AGENTS)}")
+        errors.append(f"technical rows {n_tech} != {len(SINGLE_USER_AGENTS)}")
     if n_funcs != len(function_rows):
-        errors.append(f"dim_function {n_funcs} != {len(function_rows)} dong tu nguon")
+        errors.append(f"dim_function {n_funcs} != {len(function_rows)} rows from the source")
     if orphans:
-        errors.append(f"{len(orphans)} user_id trong nhat ky khong co trong dim_user:"
+        errors.append(f"{len(orphans)} user_ids in the log are not in dim_user:"
                       f" {sorted(orphans)[:3]}")
     n_accounts = connect.query_one(cn, "SELECT COUNT(*) FROM account")[0]
     if n_accounts != len(accounts):
-        errors.append(f"account {n_accounts} != {len(accounts)} dong dung tu nguon")
+        errors.append(f"account {n_accounts} != {len(accounts)} rows built from the source")
     # Không dòng dim_user nào được để trống account_id: để trống là một người dùng
     # biến mất khỏi mọi thống kê theo tài khoản mà không có gì báo.
     dangling = connect.query_one(

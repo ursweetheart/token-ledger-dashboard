@@ -137,7 +137,7 @@ SOURCE = "gateway"
 # Hậu tố LiteLLM gắn vào `request_id` của dòng trúng cache. Đặt tên MỘT chỗ vì nó
 # được dùng ở hai nơi phải khớp nhau tuyệt đối: chỗ bỏ dòng (vòng lặp nạp) và chỗ
 # đếm dòng đã bỏ (phép đối chiếu toàn sổ). Hai chỗ lệch nhau là bộ nạp dừng.
-HAU_TO_CACHE = "_cache_hit"
+CACHE_HIT_SUFFIX = "_cache_hit"
 
 BASE_SQL = """
     SELECT request_id,
@@ -251,52 +251,52 @@ def resolve_agent(tags, agent_by_code):
     if len(hits) == 1:
         return agent_by_code[hits[0]], None
     if not hits:
-        return None, "khong co tag dinh danh"
-    return None, "nhieu tag dinh danh"
+        return None, "no identity tag"
+    return None, "several identity tags"
 
 
 def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
     """Ánh xạ dòng sổ -> dòng `fact_call`, kèm bộ đếm mọi thứ bị bỏ hoặc hụt."""
     rows = []
     stats = {
-        "doc_tu_so": len(ledger),
-        "bo_khong_co_tag": 0,
-        "bo_nhieu_tag": 0,
-        "bo_ban_sao_cache": 0,
-        "model_chua_khai": 0,
-        "hong_truoc_khi_chot_tuyen": 0,
-        "nap_luot_hong": 0,
-        "trang_thai_la": 0,
+        "read_from_ledger": len(ledger),
+        "dropped_no_tag": 0,
+        "dropped_many_tags": 0,
+        "dropped_cache_duplicate": 0,
+        "model_not_declared": 0,
+        "failed_before_routing": 0,
+        "failed_loaded": 0,
+        "unknown_status": 0,
         "duration_null": 0,
-        "end_user_rong": 0,
-        "danh_tinh_khong_noi_duoc": 0,
+        "end_user_empty": 0,
+        "identity_unresolvable": 0,
         "cached_null": 0,
         "cost_null": 0,
-        "khoa_tong": 0,
-        "trung_cache": 0,
-        "bi_danh": 0,
-        "cache_hit_la": 0,
-        "khong_ro_don_vi": 0,
-        "modality_la": 0,
+        "master_key_calls": 0,
+        "cache_hits": 0,
+        "alias_model_names": 0,
+        "cache_hit_unknown": 0,
+        "unit_unknown": 0,
+        "modality_unknown": 0,
         "modality_null": 0,
         "thinking_null": 0,
-        "co_suy_luan": 0,
+        "reasoning_seen": 0,
     }
     # Token của những dòng BỊ BỎ, tách theo lý do. Đếm số dòng thôi là chưa đủ:
     # "bỏ 6 dòng" nghe như chuyện nhỏ, "bỏ 6 dòng mang 760 token" thì không.
-    bo_token = {"bo_khong_co_tag": 0, "bo_nhieu_tag": 0, "bo_ban_sao_cache": 0}
-    bo_ma = {"bo_khong_co_tag": [], "bo_nhieu_tag": [], "bo_ban_sao_cache": []}
+    dropped_tokens = {"dropped_no_tag": 0, "dropped_many_tags": 0, "dropped_cache_duplicate": 0}
+    dropped_ids = {"dropped_no_tag": [], "dropped_many_tags": [], "dropped_cache_duplicate": []}
 
-    def bo(khoa: str, ma: str, tong) -> None:
-        stats[khoa] += 1
-        bo_token[khoa] += int(tong or 0)
-        bo_ma[khoa].append(ma)
+    def drop(key: str, dropped_id: str, tokens) -> None:
+        stats[key] += 1
+        dropped_tokens[key] += int(tokens or 0)
+        dropped_ids[key].append(dropped_id)
 
     for (call_id, ts_raw, model, end_user, tags,
          prompt_tokens, completion_tokens, total_tokens,
          cached_tokens, cost_usd, outcome, duration_ms, error_code,
-         virtual_key_id, cache_hit, cache_hit_la,
-         output_modality, modality_la, thinking_enabled) in ledger:
+         virtual_key_id, cache_hit, cache_hit_unknown,
+         output_modality, modality_unknown, thinking_enabled) in ledger:
 
         # BẪY 7: BẢN SAO CỦA CÚ CACHE HIT. Bỏ TRƯỚC mọi bước khác, và bỏ CÓ TÊN.
         #
@@ -314,16 +314,16 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         # cảnh báo cuối hàm này), bản sao sẽ theo cửa đó mà vào, và không phép
         # kiểm nào hiện có bắt được: tổng token vẫn "khớp sổ nguồn", chỉ có điều
         # sổ nguồn tự nó đã đếm đôi.
-        if HAU_TO_CACHE in call_id:
-            bo("bo_ban_sao_cache", call_id, total_tokens)
+        if CACHE_HIT_SUFFIX in call_id:
+            drop("dropped_cache_duplicate", call_id, total_tokens)
             continue
 
-        agent_id, ly_do = resolve_agent(tags, agent_by_code)
+        agent_id, reason = resolve_agent(tags, agent_by_code)
         if agent_id is None:
             # `fact_call.agent_id` là NOT NULL, nên đây không chỉ là chính sách -
             # schema cưỡng chế. Đếm rồi bỏ, không nuốt lặng.
-            bo("bo_khong_co_tag" if ly_do == "khong co tag dinh danh"
-               else "bo_nhieu_tag", call_id, total_tokens)
+            drop("dropped_no_tag" if reason == "no identity tag"
+                 else "dropped_many_tags", call_id, total_tokens)
             continue
 
         # BẪY 4: tra theo tên upstream ở cột `model`. Dòng nào chưa khai trong
@@ -337,18 +337,18 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
             # tuyen -> binh thuong, khong phai loi. Gop hai thu vao mot bo dem la
             # de mot con so dang bao dong chim trong tieng on thuong ngay.
             if outcome == "failure":
-                stats["hong_truoc_khi_chot_tuyen"] += 1
+                stats["failed_before_routing"] += 1
             else:
-                stats["model_chua_khai"] += 1
+                stats["model_not_declared"] += 1
 
         # BẪY 2: chuỗi rỗng, không phải NULL.
         user_id = end_user or None
         if user_id is None:
-            stats["end_user_rong"] += 1
+            stats["end_user_empty"] += 1
 
         # `account_id` nằm trong khoá chính của fact_usage_daily nên KHÔNG được
         # NULL. Neo tra theo (kind, unit_agent_id) - xem anchor_account_lookup().
-        neo = anchors.get(agent_id)
+        anchor = anchors.get(agent_id)
 
         # ĐỊNH DANH PHẢI THUỘC ĐÚNG AGENT GỬI REQUEST.
         #
@@ -374,13 +374,13 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         # Quy ước 20/08: 6/8 agent được coi là chỉ có MỘT người dùng, và người đó
         # là tài khoản dịch vụ `svc.<code>` (kind='service_account'). Với chúng,
         # neo CHÍNH LÀ đáp án đúng, không phải giải pháp tạm.
-        tra_ra = accounts.get(user_id) if user_id else None
-        if tra_ra is not None and tra_ra[1] == agent_id:
-            account_id = tra_ra[0]
+        found = accounts.get(user_id) if user_id else None
+        if found is not None and found[1] == agent_id:
+            account_id = found[0]
         else:
             if user_id is not None:
-                stats["danh_tinh_khong_noi_duoc"] += 1
-            account_id = neo
+                stats["identity_unresolvable"] += 1
+            account_id = anchor
 
         # PHONG BAN tra tu TAI KHOAN da quy duoc, KHONG tu tag cua request.
         # Tag noi agent nao gui, khong noi nguoi gui thuoc phong ban nao - xem
@@ -388,20 +388,20 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         # chu khong bia mot don vi.
         unit_id = units.get(account_id)
         if unit_id is None:
-            stats["khong_ro_don_vi"] += 1
+            stats["unit_unknown"] += 1
 
         if cached_tokens is None:
             stats["cached_null"] += 1
         if cost_usd is None:
             stats["cost_null"] += 1
         if outcome == "failure":
-            stats["nap_luot_hong"] += 1
+            stats["failed_loaded"] += 1
         elif outcome != "success":
             # LiteLLM hom nay chi dat hai gia tri. Nhung neu mot ban sau them
             # gia tri thu ba (vi du 'timeout'), dong do se nap vao roi bi bo loc
             # `outcome = 'success'` o tang tong hop loai IM LANG. Dem o day de
             # no keu, thay vi mat du lieu ma khong ai biet.
-            stats["trang_thai_la"] += 1
+            stats["unknown_status"] += 1
         # `duration_ms` da duoc NULLIF(...,0) o tang SQL: Gateway ghi 0 cho MOI
         # luot hong, ke ca luot DA goi toi nha cung cap va bi tu choi - nen 0 la
         # su vang mat cua phep do, khong phai phep do.
@@ -412,16 +412,16 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
             # nen no NAM LAN trong luu luong that cua agent - va truoc change nay
             # khong co cach nao tach ra. Con so phai giam ve 0 khi 8 agent deu co
             # khoa rieng.
-            stats["khoa_tong"] += 1
+            stats["master_key_calls"] += 1
         if cache_hit is True:
-            stats["trung_cache"] += 1
-        if cache_hit_la:
-            stats["cache_hit_la"] += 1
-        if modality_la:
+            stats["cache_hits"] += 1
+        if cache_hit_unknown:
+            stats["cache_hit_unknown"] += 1
+        if modality_unknown:
             # Phan hoi mang token audio/image/video. Hom nay 0/42, nhung ngay no
             # xuat hien thi cot `output_modality` de NULL - va bo dem nay la thu
             # duy nhat noi ra rang co mot loai phan hoi ta chua biet dat ten.
-            stats["modality_la"] += 1
+            stats["modality_unknown"] += 1
         if output_modality is None:
             stats["modality_null"] += 1
         if thinking_enabled is None:
@@ -429,12 +429,12 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
             # xem ghi chu o BASE_SQL.
             stats["thinking_null"] += 1
         elif thinking_enabled:
-            stats["co_suy_luan"] += 1
+            stats["reasoning_seen"] += 1
         if "/" not in (model or ""):
             # Ten KHONG mang tien to nha cung cap = `model_name` khai trong
             # config.gateway.yaml, tuc BI DANH. Router chi thay ten upstream vao
             # sau khi da chot tuyen, nen dong mang bi danh la dong chet TRUOC do.
-            stats["bi_danh"] += 1
+            stats["alias_model_names"] += 1
 
         rows.append((
             call_id, agent_id, ts_raw, True, ts_raw + VN_OFFSET,
@@ -444,23 +444,23 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
             model, virtual_key_id, cache_hit,
             output_modality, thinking_enabled,
         ))
-    # Tra ca `bo_token` / `bo_ma`: bao cao phai noi duoc BO BAO NHIEU TOKEN va
+    # Tra ca `dropped_tokens` / `dropped_ids`: bao cao phai noi duoc BO BAO NHIEU TOKEN va
     # BO DONG NAO, khong chi bo bao nhieu dong.
-    stats["bo_token"] = bo_token
-    stats["bo_ma"] = bo_ma
+    stats["dropped_tokens"] = dropped_tokens
+    stats["dropped_ids"] = dropped_ids
     return rows, stats
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__)
+    p = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN,
-                   help="Chuoi ket noi dashboard. Mac dinh: connect.DEFAULT_DSN")
+                   help="Dashboard connection string. Default: connect.DEFAULT_DSN")
     p.add_argument("--gateway-db", default=connect.GATEWAY_DSN,
-                   help="Chuoi ket noi so Gateway. Mac dinh: connect.GATEWAY_DSN")
+                   help="Gateway ledger connection string. Default: connect.GATEWAY_DSN")
     p.add_argument("--full", action="store_true",
-                   help="Bo qua moc nap, doc lai toan bo so")
+                   help="Ignore the load watermark, read the whole ledger again")
     p.add_argument("--dry-run", action="store_true",
-                   help="In ra so se nap, khong ghi gi")
+                   help="Print what would be loaded, write nothing")
     args = p.parse_args()
 
     cn, ph = connect.open_db(args.db)
@@ -515,11 +515,11 @@ def main() -> int:
     rows, stats = build_rows(ledger, agent_by_code, models, accounts, anchors,
                              units)
 
-    truoc = connect.query_one(
+    before = connect.query_one(
         cn, f"SELECT COUNT(*) FROM fact_call WHERE source = '{SOURCE}'")[0]
     if args.dry_run:
         log.info("  --dry-run: nothing written")
-        sau = truoc
+        after = before
     else:
         # DO UPDATE cho BA COT MOI, khong phai DO NOTHING.
         #
@@ -550,63 +550,63 @@ def main() -> int:
                         " output_modality  = EXCLUDED.output_modality,"
                         " thinking_enabled = EXCLUDED.thinking_enabled")
         cn.commit()
-        sau = connect.query_one(
+        after = connect.query_one(
             cn, f"SELECT COUNT(*) FROM fact_call WHERE source = '{SOURCE}'")[0]
 
     gw_cur = gw_cn.cursor()
 
-    # `sau - truoc` la so dong CHEN MOI. Tu khi dung DO UPDATE (31/08), lan chay
+    # `after - before` la so dong CHEN MOI. Tu khi dung DO UPDATE (31/08), lan chay
     # nao cung ghi de ba cot duration_ms/outcome/error_code len dong da co - nen
     # "chen them 0" KHONG co nghia la "khong lam gi".
     log.info("  read %d rows | usable %d | inserted %d | overwritten %d",
-             stats["doc_tu_so"], len(rows), sau - truoc,
-             len(rows) - (sau - truoc))
+             stats["read_from_ledger"], len(rows), after - before,
+             len(rows) - (after - before))
     # BỎ BAO NHIÊU DÒNG là nửa câu trả lời; nửa còn lại là BỎ BAO NHIÊU TOKEN và
     # BỎ DÒNG NÀO. "bỏ 6 dòng" nghe như chuyện nhỏ; "bỏ 6 dòng mang 760 token,
     # trong đó một dòng THÀNH CÔNG 25 token" thì không ai bỏ qua được nữa.
-    for khoa, nhan in (("bo_khong_co_tag",  "no identity tag"),
-                       ("bo_nhieu_tag",     "several identity tags"),
-                       ("bo_ban_sao_cache", "cache-hit duplicate row")):
-        n = stats[khoa]
+    for key, label in (("dropped_no_tag",          "no identity tag"),
+                       ("dropped_many_tags",       "several identity tags"),
+                       ("dropped_cache_duplicate", "cache-hit duplicate row")):
+        n = stats[key]
         if not n:
             continue
-        ma = stats["bo_ma"][khoa]
+        ids = stats["dropped_ids"][key]
         log.info("  dropped %d rows (%s) carrying %s tokens: %s%s",
-                 n, nhan, f"{stats['bo_token'][khoa]:,}",
-                 ", ".join(m[:28] for m in ma[:5]),
-                 f" ... +{len(ma) - 5}" if len(ma) > 5 else "")
-    if not any(stats[k] for k in ("bo_khong_co_tag", "bo_nhieu_tag",
-                                  "bo_ban_sao_cache")):
+                 n, label, f"{stats['dropped_tokens'][key]:,}",
+                 ", ".join(m[:28] for m in ids[:5]),
+                 f" ... +{len(ids) - 5}" if len(ids) > 5 else "")
+    if not any(stats[k] for k in ("dropped_no_tag", "dropped_many_tags",
+                                  "dropped_cache_duplicate")):
         log.info("  dropped: nothing - every source row in range was loaded")
-    if stats["trang_thai_la"]:
+    if stats["unknown_status"]:
         log.warning("  %d rows carry a status other than success/failure -"
                     " the rollup would drop them silently",
-                    stats["trang_thai_la"])
+                    stats["unknown_status"])
     log.info("  failed calls loaded %d | model not declared %d"
              " | failed before routing %d",
-             stats["nap_luot_hong"], stats["model_chua_khai"],
-             stats["hong_truoc_khi_chot_tuyen"])
+             stats["failed_loaded"], stats["model_not_declared"],
+             stats["failed_before_routing"])
     log.info("  end_user empty %d | identity unresolvable %d",
-             stats["end_user_rong"], stats["danh_tinh_khong_noi_duoc"])
+             stats["end_user_empty"], stats["identity_unresolvable"])
     log.info("  cached_tokens NULL %d | cost_usd NULL %d | duration_ms NULL %d",
              stats["cached_null"], stats["cost_null"], stats["duration_null"])
     log.info("  via MASTER KEY %d/%d | cache hits %d | alias model names %d"
              " | unit unknown %d",
-             stats["khoa_tong"], len(rows), stats["trung_cache"],
-             stats["bi_danh"], stats["khong_ro_don_vi"])
-    if stats["cache_hit_la"]:
+             stats["master_key_calls"], len(rows), stats["cache_hits"],
+             stats["alias_model_names"], stats["unit_unknown"])
+    if stats["cache_hit_unknown"]:
         log.warning("  %d rows have a cache_hit outside True/False/None -"
                     " mapped to NULL, check the LiteLLM version",
-                    stats["cache_hit_la"])
+                    stats["cache_hit_unknown"])
     log.info("  output_modality NULL %d | thinking reported %d/%d"
              " | reasoning tokens seen %d",
              stats["modality_null"],
              len(rows) - stats["thinking_null"], len(rows),
-             stats["co_suy_luan"])
-    if stats["modality_la"]:
+             stats["reasoning_seen"])
+    if stats["modality_unknown"]:
         log.warning("  %d rows carry audio/image/video tokens - output_modality"
                     " left NULL because we have no label for them yet",
-                    stats["modality_la"])
+                    stats["modality_unknown"])
 
     # Phân bố mã lỗi của những dòng ĐÃ NẠP. Không in ra thì không ai biết Gateway
     # đang hỏng vì cái gì - mà câu trả lời nằm sẵn trong sổ.
@@ -619,9 +619,9 @@ def main() -> int:
             WHERE status = %s
             GROUP BY 1 ORDER BY 2 DESC''',
         ("failure",))
-    phan_bo = ", ".join(f"{m}={n}" for m, n in gw_cur.fetchall())
+    error_breakdown = ", ".join(f"{m}={n}" for m, n in gw_cur.fetchall())
     log.info("  error codes of failed calls in the ledger: %s",
-             phan_bo or "(no failed calls)")
+             error_breakdown or "(no failed calls)")
 
     # SỐ LƯỢT HỎNG KHÔNG ĐỦ - PHẢI IN KÈM TOKEN SỔ GHI CHO CHÚNG
     # ---------------------------------------------------------
@@ -645,17 +645,17 @@ def main() -> int:
                   COUNT(*) FILTER (WHERE COALESCE(total_tokens, 0) = 0)
              FROM "LiteLLM_SpendLogs" WHERE status = %s''',
         ("failure",))
-    n_hong, h_vao, h_ra, h_tong, h_khong = gw_cur.fetchone()
+    n_failed, failed_in, failed_out, failed_total, failed_zero = gw_cur.fetchone()
     log.info("  failed calls in the ledger: %d rows | the ledger DECLARES"
              " %s in + %s out = %s tokens for them (%d of them declare zero)",
-             n_hong, f"{h_vao:,}", f"{h_ra:,}", f"{h_tong:,}", h_khong)
-    if h_khong:
+             n_failed, f"{failed_in:,}", f"{failed_out:,}", f"{failed_total:,}", failed_zero)
+    if failed_zero:
         log.warning("  %d failed rows declare ZERO tokens - that is what the"
                     " LEDGER SAYS, not what was SPENT. A call the provider"
                     " served and then the proxy lost still burned tokens."
                     " Check scripts/audit_db.py group I against"
                     " fact_provider_daily before believing the zero.",
-                    h_khong)
+                    failed_zero)
 
     # Đối chiếu với chính sổ gốc, không với số ghim. So trên TOÀN BỘ sổ chứ không
     # riêng vùng vừa đọc: đó mới là câu hỏi thật - "mọi thứ Gateway ghi đã vào
@@ -700,22 +700,22 @@ def main() -> int:
         '              FROM jsonb_array_elements_text('
         "                     COALESCE(request_tags, '[]'::jsonb)) AS t"
         '             WHERE t = ANY(%s)) <> 1)',
-        (HAU_TO_CACHE, HAU_TO_CACHE, HAU_TO_CACHE, list(agent_by_code)))
-    bo_qua_ca_so, token_bo_qua, bo_cache_ca_so, token_bo_cache = gw_cur.fetchone()
+        (CACHE_HIT_SUFFIX, CACHE_HIT_SUFFIX, CACHE_HIT_SUFFIX, list(agent_by_code)))
+    skipped_rows, skipped_tokens, cache_dup_rows, cache_dup_tokens = gw_cur.fetchone()
     log.info("  skipped across the ledger: %d rows, %d tokens"
              " (of which cache-hit duplicates: %d rows, %d tokens)",
-             bo_qua_ca_so, token_bo_qua, bo_cache_ca_so, token_bo_cache)
+             skipped_rows, skipped_tokens, cache_dup_rows, cache_dup_tokens)
 
     # Đối chiếu HAI chiều, không chỉ số dòng. Số dòng khớp mà token lệch nghĩa là
     # ánh xạ cột hỏng - đúng loại lỗi mà phép đếm dòng không thấy.
     errors = []
     if not args.dry_run:
-        if dst_rows + bo_qua_ca_so != src_rows:
-            errors.append(f"rows: target {dst_rows} + skipped {bo_qua_ca_so}"
-                          f" != nguon {src_rows}")
-        if int(dst_tokens) + int(token_bo_qua) != int(src_tokens):
-            errors.append(f"tokens: target {dst_tokens} + skipped {token_bo_qua}"
-                          f" != nguon {src_tokens}")
+        if dst_rows + skipped_rows != src_rows:
+            errors.append(f"rows: target {dst_rows} + skipped {skipped_rows}"
+                          f" != source {src_rows}")
+        if int(dst_tokens) + int(skipped_tokens) != int(src_tokens):
+            errors.append(f"tokens: target {dst_tokens} + skipped {skipped_tokens}"
+                          f" != source {src_tokens}")
 
     gw_cn.close()
     cn.close()

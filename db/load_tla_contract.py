@@ -1,7 +1,7 @@
 """Nap so lieu su dung TLA Hop Dong vao fact_app_daily. Chi doc file.
 
 Nguon: data/raw_web/tla-hd/<ngay>/usage-day-user-model.json
-       do scripts/pull_hd_usage.py sinh ra.
+       do scripts/pull_tla_contract_usage.py sinh ra.
 
 VI SAO KHONG VAO fact_call
 --------------------------
@@ -28,9 +28,12 @@ TEN MODEL KHONG UNG VOI MODEL NAO
 ---------------------------------
 API tra ve 'none' cho vai luot khong ghi duoc model (2 luot, 0 token - trung voi
 `legacy_calls: 2` trong khoi costs). Day KHONG phai model. No nam trong
-KHONG_PHAI_MODEL duoi day, tuc bo mot cach CO GHI CHEP: so luot bi bo duoc in ra
+NOT_A_MODEL duoi day, tuc bo mot cach CO GHI CHEP: so luot bi bo duoc in ra
 moi lan chay. Ten la khong nam trong danh sach do thi khau nap DUNG HAN - dung
 tinh than cua dim_model_alias, hong on ao chu khong tra ve rong.
+
+KEY JSON TIENG VIET (`tu_ngay`, `den_ngay`, `keo_luc`, `tong_luot`) LA TEN DU LIEU
+TREN DIA: cac file da keo ve deu mang chung. Doi ten o day thi file cu doc khong ra.
 """
 
 from __future__ import annotations
@@ -45,10 +48,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import connect  # noqa: E402
 import logs  # noqa: E402
 
-log = logs.get_logger("load_hd")
+log = logs.get_logger("load_tla_contract")
 
 ROOT = Path(__file__).resolve().parents[1]
-TLA_HD = 5
+TLA_CONTRACT = 5
 SRC_FILE = "usage-day-user-model.json"
 
 # Ten API tra ve nhung KHONG phai model. Bo, nhung bo co ghi chep.
@@ -68,13 +71,14 @@ def _latest(parent: Path, filename: str) -> Path:
             return p
     raise SystemExit(
         f"no batch in {parent} contains {filename}."
-        f" Chay scripts/pull_hd_usage.py truoc.")
+        f" Run scripts/pull_tla_contract_usage.py first.")
 
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     args = p.parse_args()
 
@@ -90,14 +94,14 @@ def main() -> None:
     # ── ba bang tra cuu ───────────────────────────────────────────────
     by_uid = dict(connect.query(
         cn, f"SELECT user_id, account_id FROM dim_user WHERE agent_id = {ph}",
-        (TLA_HD,)))
+        (TLA_CONTRACT,)))
     by_name = {(u or "").strip().lower(): a for u, a in connect.query(
         cn, "SELECT username, account_id FROM account")}
     model_of = dict(connect.query(
         cn, "SELECT raw_name, model_id FROM dim_model_alias WHERE source = 'app'"))
     unmapped = connect.query_one(
         cn, f"SELECT account_id FROM account WHERE username = {ph}",
-        (f"__unattributed_{TLA_HD}__",))[0]
+        (f"__unattributed_{TLA_CONTRACT}__",))[0]
 
     # ── kiem TEN MODEL truoc khi nap dong nao ────────────────────────
     # `model` = None nghia la app khong noi model - da biet va chap nhan duoc,
@@ -108,9 +112,9 @@ def main() -> None:
                  and r["model"] not in NOT_A_MODEL})
     if unknown_models:
         raise SystemExit(
-            f"Ten model la, chua co trong dim_model_alias (source='app'): {unknown_models}\n"
-            f"  Them vao db/gen_catalog.py neu day la model that,\n"
-            f"  hoac them vao KHONG_PHAI_MODEL trong file nay neu khong phai.")
+            f"Unknown model name, not in dim_model_alias (source='app'): {unknown_models}\n"
+            f"  Add it to db/gen_catalog.py if it is a real model,\n"
+            f"  or to NOT_A_MODEL in this file if it is not.")
 
     # ── dung dong ────────────────────────────────────────────────────
     # Sap xep TRUOC roi danh so: row_id phai giong nhau giua SQLite va Postgres,
@@ -123,8 +127,8 @@ def main() -> None:
         acc = by_uid.get(r.get("user_id")) or by_name.get(name.lower())
         if acc is None:
             acc = unmapped
-            unmappable[name or "(khong ten)"] = \
-                unmappable.get(name or "(khong ten)", 0) + (r["calls"] or 0)
+            unmappable[name or "(no name)"] = \
+                unmappable.get(name or "(no name)", 0) + (r["calls"] or 0)
 
         raw = r.get("model")
         if raw in NOT_A_MODEL:
@@ -133,7 +137,7 @@ def main() -> None:
         else:
             mid = model_of.get(raw)          # None khi app khong noi model
 
-        out_rows.append((i, r["day"], TLA_HD, acc, mid, raw, r["calls"],
+        out_rows.append((i, r["day"], TLA_CONTRACT, acc, mid, raw, r["calls"],
                    r["total_tokens"], r.get("prompt_tokens"),
                    r.get("completion_tokens")))
 
@@ -147,14 +151,15 @@ def main() -> None:
     actual = connect.query_one(cn, "SELECT COUNT(*), SUM(calls), SUM(total_tokens)"
                                " FROM fact_app_daily")
     if actual[0] != len(rows):
-        errors.append(f"nap {actual[0]} dong != {len(rows)} dong trong file")
+        errors.append(f"loaded {actual[0]} rows != {len(rows)} rows in the file")
     if int(actual[1] or 0) != want_calls:
         errors.append(f"calls {actual[1]} != {want_calls} in the file")
     if int(actual[2] or 0) != want_tokens:
-        errors.append(f"token {actual[2]} != {want_tokens} trong file")
-    if want_calls != payload["tong_luot"]:
+        errors.append(f"tokens {actual[2]} != {want_tokens} in the file")
+    file_total = payload["tong_luot"]  # vi-ok: on-disk JSON key
+    if want_calls != file_total:
         errors.append(f"the file contradicts itself: summing rows gives {want_calls}"
-                   f" != tong_luot {payload['tong_luot']}")
+                   f" != its own total of {file_total}")
 
     # Khoa tu nhien phai duy nhat, du khoa chinh la so thu tu. Trung o day nghia
     # la mot nguoi co hai dong cung ngay cung model - tuc da gop hut o khau keo.

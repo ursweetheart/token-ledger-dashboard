@@ -44,11 +44,11 @@ Truoc 14/09 bo nap chi doc lan keo MOI NHAT. Buoc dung lai xoa sach bang nay, ne
 lan keo thu hai se lam mat moi ngay chi lan keo dau con giu - dung loai mat phan
 dau ma viec giu lan keo cu tren dia sinh ra de chan.
 
-Nay doc MOI thu muc khop `KHUON_LAN_KEO`. `chon_nhanh` chay TRONG tung lan keo, de
-nhanh PerDay cua lan keo nay khong bi so voi nhanh PerMinute cua lan keo khac. Giua
-cac lan keo, cung (ngay, project, model, dai luong) thi giu SO LON HON va log ca
-lech: mot ngay bi cat o mep cua lan keo nay van co the day du o lan keo khac. Xem
-change `stop-a-later-pull-from-shrinking-an-earlier-one`.
+Nay doc MOI thu muc khop `PULL_FOLDER_PATTERN`. `pick_branch` chay TRONG tung lan
+keo, de nhanh PerDay cua lan keo nay khong bi so voi nhanh PerMinute cua lan keo
+khac. Giua cac lan keo, cung (ngay, project, model, dai luong) thi giu SO LON HON
+va log ca lech: mot ngay bi cat o mep cua lan keo nay van co the day du o lan keo
+khac. Xem change `stop-a-later-pull-from-shrinking-an-earlier-one`.
 """
 
 from __future__ import annotations
@@ -73,16 +73,20 @@ log = logging.getLogger("load_provider")
 # dat ten khong theo mot khuon nao.
 ALIAS_OUTPUT = "generate_content_usage_output_token_count"
 
+# Gia tri GHI VAO `fact_provider_daily.raw_model` khi dong khong mang model. La du
+# lieu, nam trong khoa chinh: doi chu o day la tach mot dong thanh hai.
+NO_MODEL = "(khong khai)"
 
-def la_token_vao(alias: str) -> bool:
+
+def is_input_tokens(alias: str) -> bool:
     return "input_token_count" in alias and not rules.is_quota_limit(alias)
 
 
-def la_so_luot(alias: str) -> bool:
+def is_requests(alias: str) -> bool:
     return alias.endswith("_requests") and not rules.is_quota_limit(alias)
 
 
-def nhanh(limit_name: str) -> str:
+def branch_of(limit_name: str) -> str:
     """'PerDay' / 'PerMinute' / '' - hai nhanh cua CUNG mot phep do quota."""
     if "PerDay" in limit_name:
         return "PerDay"
@@ -91,23 +95,23 @@ def nhanh(limit_name: str) -> str:
     return ""
 
 
-def ngay_vn(ts_ict: str) -> str:
+def vn_day(ts_ict: str) -> str:
     """Tem la CUOI o, nen o 00:00 thuoc ngay hom truoc. Lui mot giay roi cat."""
     t = datetime.strptime(ts_ict, "%Y-%m-%d %H:%M:%S") - timedelta(seconds=1)
     return t.date().isoformat()
 
 
-def doc_mot_file(path: Path) -> tuple[dict, dict, list[str]]:
-    """-> {(day, project, model, dai_luong, nhanh): tong}, {(day, project): luot}, canh bao.
+def read_one_file(path: Path) -> tuple[dict, dict, list[str]]:
+    """-> {(day, project, model, measure, branch): total}, {(day, project): requests}, warnings.
 
     Dict thu hai la `api_request_count`. KHONG nap vao bang - no khong co nhan
     `model` nen khong co cho trong khoa - ma chi de KIEM CHEO so luot lay tu
     metric quota bang mot phep do doc lap.
     """
-    tong: dict[tuple, float] = collections.defaultdict(float)
-    luot_api: dict[tuple, float] = collections.defaultdict(float)
-    theo_gio: dict[tuple, list] = collections.defaultdict(list)
-    canh_bao: list[str] = []
+    totals: dict[tuple, float] = collections.defaultdict(float)
+    api_requests: dict[tuple, float] = collections.defaultdict(float)
+    by_time: dict[tuple, list] = collections.defaultdict(list)
+    warnings: list[str] = []
 
     with open(path, encoding="utf-8-sig") as fh:
         for r in csv.DictReader(fh):
@@ -116,16 +120,16 @@ def doc_mot_file(path: Path) -> tuple[dict, dict, list[str]]:
                 continue                        # bay 3
             if alias == "api_request_count":
                 try:
-                    luot_api[(ngay_vn(r["ts_ict"]), r["gcp_project_id"])] += float(r["value"])
+                    api_requests[(vn_day(r["ts_ict"]), r["gcp_project_id"])] += float(r["value"])
                 except (TypeError, ValueError):
                     pass
                 continue
             if alias == ALIAS_OUTPUT:
-                dai_luong = "output_tokens"
-            elif la_token_vao(alias):
-                dai_luong = "input_tokens"
-            elif la_so_luot(alias):
-                dai_luong = "requests"
+                measure = "output_tokens"
+            elif is_input_tokens(alias):
+                measure = "input_tokens"
+            elif is_requests(alias):
+                measure = "requests"
             else:
                 continue
 
@@ -136,185 +140,188 @@ def doc_mot_file(path: Path) -> tuple[dict, dict, list[str]]:
             if not v:
                 continue
 
-            khoa = (ngay_vn(r["ts_ict"]), r["gcp_project_id"], r["model"],
-                    dai_luong, nhanh(r["limit_name"]))
-            tong[khoa] += v
-            theo_gio[khoa].append((r["ts_ict"], v))
+            key = (vn_day(r["ts_ict"]), r["gcp_project_id"], r["model"],
+                   measure, branch_of(r["limit_name"]))
+            totals[key] += v
+            by_time[key].append((r["ts_ict"], v))
 
     # bay: neu Google doi sang bao LUY KE thi cong don se sai. Day don dieu
     # khong giam tren >= 4 diem la dau hieu. Chi canh bao, khong tu suy dien.
-    for khoa, diem in theo_gio.items():
-        if len(diem) < 4:
+    for key, points in by_time.items():
+        if len(points) < 4:
             continue
-        gt = [v for _, v in sorted(diem)]
-        if all(b > a for a, b in zip(gt, gt[1:])):
-            canh_bao.append(
-                "day don dieu khong giam (%d diem) o %s - kiem xem Google co doi "
-                "sang bao LUY KE khong; cong don luy ke se ra so sai" % (len(gt), khoa))
-    return tong, luot_api, canh_bao
+        values = [v for _, v in sorted(points)]
+        if all(b > a for a, b in zip(values, values[1:])):
+            warnings.append(
+                "series keeps increasing (%d points) at %s - check whether Google "
+                "switched to CUMULATIVE reporting; summing cumulative values gives "
+                "wrong numbers" % (len(values), key))
+    return totals, api_requests, warnings
 
 
-def chon_nhanh(tong: dict) -> tuple[dict, list[str]]:
+def pick_branch(totals: dict) -> tuple[dict, list[str]]:
     """Lay nhanh PerDay, SO voi PerMinute. Lech thi dung - xem bay 1."""
-    ket: dict[tuple, float] = {}
-    loi: list[str] = []
-    khoa_khong_nhanh = {k for k in tong if k[4] == ""}
-    for k in khoa_khong_nhanh:
-        ket[k[:4]] = tong[k]
+    result: dict[tuple, float] = {}
+    errors: list[str] = []
+    keys_without_branch = {k for k in totals if k[4] == ""}
+    for k in keys_without_branch:
+        result[k[:4]] = totals[k]
 
-    goc = {k[:4] for k in tong if k[4]}
-    for g in sorted(goc):
-        ngay_, du_an, model, dai_luong = g
-        d = tong.get((*g, "PerDay"))
-        m = tong.get((*g, "PerMinute"))
+    bases = {k[:4] for k in totals if k[4]}
+    for base in sorted(bases):
+        day, project, model, measure = base
+        d = totals.get((*base, "PerDay"))
+        m = totals.get((*base, "PerMinute"))
         if d is not None and m is not None and d != m:
-            loi.append(
-                "%s %s %s %s: nhanh PerDay = %s nhung PerMinute = %s. Hai nhanh "
-                "phai bao cung mot luong; lech nghia la gia dinh cua bo nap sai, "
-                "KHONG duoc tu chon mot ben."
-                % (ngay_, du_an, model, dai_luong, f"{d:,.0f}", f"{m:,.0f}"))
+            errors.append(
+                "%s %s %s %s: PerDay branch = %s but PerMinute = %s. Both branches "
+                "must report the same quantity; a mismatch means the loader's "
+                "assumption is wrong, do NOT pick one side."
+                % (day, project, model, measure, f"{d:,.0f}", f"{m:,.0f}"))
             continue
-        ket[g] = d if d is not None else m
-    return ket, loi
+        result[base] = d if d is not None else m
+    return result, errors
 
 
 # `<ngay>-<do min>-<tai khoan>`. Hau to tai khoan la thu phan biet lan keo cua nha
 # cung cap voi lan keo san xuat; KHONG dua vao do min, vi do min doi duoc bang --align.
-KHUON_LAN_KEO = re.compile(r"^\d{4}-\d{2}-\d{2}-\d+[mh]-.+$")
+PULL_FOLDER_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-\d+[mh]-.+$")
 
 
-def chon_lan_keo(goc: Path) -> list[Path]:
+def pick_pulls(root: Path) -> list[Path]:
     """Moi thu muc keo mang ten tai khoan, CU TRUOC MOI SAU (ten bat dau bang ngay)."""
-    return sorted(d for d in goc.glob("*") if d.is_dir() and KHUON_LAN_KEO.match(d.name))
+    return sorted(d for d in root.glob("*") if d.is_dir() and PULL_FOLDER_PATTERN.match(d.name))
 
 
-def gop_cac_lan_keo(lan_keo: list[Path]) -> tuple[dict, dict, list[str], list[str]]:
-    """-> (ket, luot_api, canh_bao, loi). Doc tung lan keo, giu so lon hon giua cac lan."""
-    ket: dict[tuple, float] = {}
-    nguon: dict[tuple, str] = {}
-    luot_api: dict[tuple, float] = {}
-    canh_bao: list[str] = []
-    loi: list[str] = []
-    so_lech = 0
-    for thu_muc in lan_keo:
-        tong: dict[tuple, float] = collections.defaultdict(float)
+def merge_pulls(pulls: list[Path]) -> tuple[dict, dict, list[str], list[str]]:
+    """-> (result, api_requests, warnings, errors). Doc tung lan keo, giu so lon hon giua cac lan."""
+    result: dict[tuple, float] = {}
+    source_of: dict[tuple, str] = {}
+    api_requests: dict[tuple, float] = {}
+    warnings: list[str] = []
+    errors: list[str] = []
+    clash_count = 0
+    for folder in pulls:
+        totals: dict[tuple, float] = collections.defaultdict(float)
         api: dict[tuple, float] = collections.defaultdict(float)
-        for f in sorted(thu_muc.glob("*.csv")):
-            t, la, c = doc_mot_file(f)
+        for f in sorted(folder.glob("*.csv")):
+            t, a, w = read_one_file(f)
             for k, v in t.items():
-                tong[k] += v
-            for k, v in la.items():
+                totals[k] += v
+            for k, v in a.items():
                 api[k] += v
-            canh_bao += [f"{thu_muc.name}: {x}" for x in c]
+            warnings += [f"{folder.name}: {x}" for x in w]
 
-        ket_lan, loi_lan = chon_nhanh(tong)
-        loi += [f"{thu_muc.name}: {e}" for e in loi_lan]
-        for k, v in ket_lan.items():
-            cu = ket.get(k)
-            if cu is None:
-                ket[k], nguon[k] = v, thu_muc.name
+        pull_result, pull_errors = pick_branch(totals)
+        errors += [f"{folder.name}: {e}" for e in pull_errors]
+        for k, v in pull_result.items():
+            old = result.get(k)
+            if old is None:
+                result[k], source_of[k] = v, folder.name
                 continue
-            if cu == v:
+            if old == v:
                 continue
-            so_lech += 1
-            log.warning("  LECH %s %s %s %s: lan keo %s = %s, lan keo %s = %s -> giu %s",
-                        k[0], k[1][:28], k[2], k[3], nguon[k], f"{cu:,.0f}",
-                        thu_muc.name, f"{v:,.0f}", f"{max(cu, v):,.0f}")
-            if v > cu:
-                ket[k], nguon[k] = v, thu_muc.name
+            clash_count += 1
+            log.warning("  CLASH %s %s %s %s: pull %s = %s, pull %s = %s -> keep %s",
+                        k[0], k[1][:28], k[2], k[3], source_of[k], f"{old:,.0f}",
+                        folder.name, f"{v:,.0f}", f"{max(old, v):,.0f}")
+            if v > old:
+                result[k], source_of[k] = v, folder.name
         for k, v in api.items():
-            luot_api[k] = max(luot_api.get(k, 0.0), v)
+            api_requests[k] = max(api_requests.get(k, 0.0), v)
 
-    if so_lech:
-        log.warning("  ca lech: %d (giu so lon hon o moi ca)", so_lech)
+    if clash_count:
+        log.warning("  clashes: %d (kept the larger value in each)", clash_count)
     else:
-        log.info("  ca lech: 0")
-    return ket, luot_api, canh_bao, loi
+        log.info("  clashes: 0")
+    return result, api_requests, warnings, errors
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
-    p.add_argument("--dir", default="", help="Thu muc mot lan keo Monitoring. "
-                                            "De rong = MOI lan keo co ten mang tai khoan.")
-    p.add_argument("--account", default="", help="Tai khoan da dung de keo, chi de ghi lai")
-    p.add_argument("--kho", action="store_true", help="Chi in, khong ghi database")
-    p.add_argument("--tuy-chon", action="store_true",
-                   help="Chua co lan keo nao thi CANH BAO roi thoat 0, thay vi hong. "
-                        "Dung cho rebuild_db.py: khong phai ngay nao cung co du lieu "
-                        "nha cung cap, nhung thieu no thi phep doi chieu se bao "
-                        "'chua kiem duoc' chu khong bao dat.")
+    p.add_argument("--dir", default="", help="Folder of one Monitoring pull. "
+                                            "Empty = EVERY pull whose name carries an account.")
+    p.add_argument("--account", default="", help="Account used for the pull, recorded only")
+    p.add_argument("--dry-run", action="store_true", help="Print only, do not write to the database")
+    p.add_argument("--optional", action="store_true",
+                   help="With no pull at all, WARN and exit 0 instead of failing. "
+                        "For rebuild_db.py: provider data is not there every day, "
+                        "and without it the reconciliation reports 'not checked' "
+                        "rather than 'pass'.")
     args = p.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    goc = Path(__file__).resolve().parents[1] / "data" / "raw_google_console" / "du_lieu_giam_sat"
-    lan_keo = [Path(args.dir)] if args.dir else chon_lan_keo(goc)
-    lan_keo = [d for d in lan_keo if d.is_dir() and any(d.glob("*.csv"))]
-    if not lan_keo:
-        noi = args.dir or goc
-        if args.tuy_chon:
+    pulls_root = (Path(__file__).resolve().parents[1] / "data" / "raw_google_console"
+                  / "du_lieu_giam_sat")  # vi-ok: on-disk path
+    pulls = [Path(args.dir)] if args.dir else pick_pulls(pulls_root)
+    pulls = [d for d in pulls if d.is_dir() and any(d.glob("*.csv"))]
+    if not pulls:
+        where = args.dir or pulls_root
+        if args.optional:
             # KHONG im lang. Thieu du lieu nha cung cap khong phai loi, nhung
             # no co hau qua doc duoc: phep doi chieu se bao 'chua kiem duoc'.
-            log.warning("khong co lan keo nha cung cap nao (%s)", noi)
-            log.warning("  -> fact_provider_daily giu nguyen, phep doi chieu se bao CHUA KIEM DUOC")
-            log.warning("  -> muon co: scripts/pull_monitoring.py --account <tai khoan> --projects <project>")
+            log.warning("no provider pull at all (%s)", where)
+            log.warning("  -> fact_provider_daily unchanged, the reconciliation will report NOT CHECKED")
+            log.warning("  -> to get one: scripts/pull_monitoring.py --account <account> --projects <project>")
             return
-        raise SystemExit("khong co lan keo nao co file .csv (%s)" % noi)
-    log.info("doc %d lan keo: %s", len(lan_keo), ", ".join(d.name for d in lan_keo))
+        raise SystemExit("no pull has a .csv file (%s)" % where)
+    log.info("reading %d pulls: %s", len(pulls), ", ".join(d.name for d in pulls))
 
-    ket, luot_api, canh_bao, loi = gop_cac_lan_keo(lan_keo)
-    for c in canh_bao:
-        log.warning("  CANH BAO: %s", c)
-    if loi:
-        for e in loi:
-            log.error("  HONG: %s", e)
-        raise SystemExit("Dung. Hai nhanh han muc khong khop - xem bay 1 trong docstring.")
+    result, api_requests, warnings, errors = merge_pulls(pulls)
+    for w in warnings:
+        log.warning("  WARNING: %s", w)
+    if errors:
+        for e in errors:
+            log.error("  FAILED: %s", e)
+        raise SystemExit("Stopping. The two quota branches disagree - see trap 1 in the docstring.")
 
     # gop ba dai luong ve mot dong moi (ngay, project, model)
-    dong: dict[tuple, dict] = collections.defaultdict(dict)
-    for (ngay_, du_an, model, dai_luong), v in ket.items():
-        dong[(ngay_, du_an, model)][dai_luong] = int(round(v))
+    rows: dict[tuple, dict] = collections.defaultdict(dict)
+    for (day, project, model, measure), v in result.items():
+        rows[(day, project, model)][measure] = int(round(v))
 
-    if not dong:
-        raise SystemExit("khong nap duoc dong nao - kiem lai thu muc keo")
+    if not rows:
+        raise SystemExit("no row could be loaded - check the pull folder")
 
     # KIEM CHEO: so luot lay tu metric quota phai khop `api_request_count`. Hai
     # phep do doc lap nhau, nen khop la bang chung ta doc DUNG nhanh quota.
     # KHONG bao hong khi lech: api_request_count dem MOI phuong thuc API chu
     # khong rieng GenerateContent, nen lech co the la that. Nhung phai NOI RA.
-    luot_quota: dict[tuple, float] = collections.defaultdict(float)
-    for (ngay_, du_an, _model), v in dong.items():
+    quota_requests: dict[tuple, float] = collections.defaultdict(float)
+    for (day, project, _model), v in rows.items():
         if "requests" in v:
-            luot_quota[(ngay_, du_an)] += v["requests"]
-    for k in sorted(set(luot_quota) | set(luot_api)):
-        a, b = int(luot_quota.get(k, 0)), int(luot_api.get(k, 0))
+            quota_requests[(day, project)] += v["requests"]
+    for k in sorted(set(quota_requests) | set(api_requests)):
+        a, b = int(quota_requests.get(k, 0)), int(api_requests.get(k, 0))
         if a != b:
-            log.warning("  KIEM CHEO %s %s: quota bao %d luot, api_request_count bao %d",
+            log.warning("  CROSS-CHECK %s %s: quota says %d requests, api_request_count says %d",
                         k[0], k[1][:28], a, b)
         else:
-            log.info("  kiem cheo %s %s: %d luot, hai phep do khop", k[0], k[1][:28], a)
+            log.info("  cross-check %s %s: %d requests, both measures agree", k[0], k[1][:28], a)
 
     cn, _ = connect.open_db(args.db)
     try:
         cur = cn.cursor()
         cur.execute("SELECT raw_name, model_id FROM dim_model_alias WHERE source = 'monitoring'")
-        anh_xa = dict(cur.fetchall())
+        alias_to_model = dict(cur.fetchall())
 
-        thieu = collections.Counter()
-        ban = []
-        for (ngay_, du_an, model), v in sorted(dong.items()):
-            mid = anh_xa.get(model)
+        unmapped = collections.Counter()
+        records = []
+        for (day, project, model), v in sorted(rows.items()):
+            mid = alias_to_model.get(model)
             if model and mid is None:
-                thieu[model] += 1
-            ban.append((ngay_, du_an, model or "(khong khai)", mid,
-                        v.get("requests"), v.get("input_tokens"), v.get("output_tokens"),
-                        args.account or None))
+                unmapped[model] += 1
+            records.append((day, project, model or NO_MODEL, mid,
+                            v.get("requests"), v.get("input_tokens"), v.get("output_tokens"),
+                            args.account or None))
 
-        if args.kho:
-            for b in ban:
-                log.info("  %s %s %-24s req=%s vao=%s ra=%s",
+        if args.dry_run:
+            for b in records:
+                log.info("  %s %s %-24s req=%s in=%s out=%s",
                          b[0], b[1][:28], b[2], b[4], b[5], b[6])
         else:
             cur.executemany("""
@@ -329,16 +336,16 @@ def main() -> None:
                     output_tokens  = EXCLUDED.output_tokens,
                     pulled_account = EXCLUDED.pulled_account,
                     pulled_at      = EXCLUDED.pulled_at
-            """, ban)
+            """, records)
             cn.commit()
 
-        log.info("%d dong | %d ngay | %d project%s",
-                 len(ban), len({b[0] for b in ban}), len({b[1] for b in ban}),
-                 "  (KHO - khong ghi)" if args.kho else "")
-        if thieu:
+        log.info("%d rows | %d days | %d project%s",
+                 len(records), len({b[0] for b in records}), len({b[1] for b in records}),
+                 "  (DRY RUN - nothing written)" if args.dry_run else "")
+        if unmapped:
             # KHONG im lang. Model chua anh xa thi model_id de NULL va phai noi ra.
-            for m, n in thieu.most_common():
-                log.warning("  model chua co bi danh cho nguon 'monitoring': %s (%d dong)", m, n)
+            for m, n in unmapped.most_common():
+                log.warning("  model has no alias for source 'monitoring': %s (%d rows)", m, n)
     finally:
         cn.close()
 

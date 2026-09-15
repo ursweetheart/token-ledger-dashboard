@@ -47,11 +47,14 @@ Mac dinh chi doc thu muc khop `PULL_DIR` - dung khuon ma scripts/pull_monitoring
 dat cho lan keo san xuat (do min 1 phut, tai khoan mac dinh). Lan keo 1 gio hay
 bang tai khoan khac bi BO QUA va duoc in ten ra. Ngay 12/09 thu muc
 `2026-09-04-1h-dinhthinhan18111971` lot vao ban gop, mang theo project la
-`project-e62bad30-*`, va phai xoa tay. `--dot` van doc dung danh sach duoc goi
+`project-e62bad30-*`, va phai xoa tay. `--batches` van doc dung danh sach duoc goi
 ten, kem canh bao cho ten khong khop khuon.
 
 Chi doc thu muc keo tho. Ghi ra mot thu muc moi - NHUNG neu thu muc dich da co thi
 tep cung ten bi ghi de va tep khac ten van nam lai; doi ten thu muc cu truoc.
+
+TEN TREN DIA GIU NGUYEN: hau to thu muc gop `-gop` va tep ca lech `.lech.csv` duoc
+db/load_monitoring.py va nguoi van hanh doc lai.
 """
 
 from __future__ import annotations
@@ -64,8 +67,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RAW_DIR = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"
-RA = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"
+RAW_DIR = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"  # vi-ok: on-disk path
+OUT_ROOT = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"  # vi-ok: on-disk path
 
 # Cot mang gia tri do duoc. Moi cot con lai la dinh danh cua phep do.
 VALUE_COL = "value"
@@ -87,8 +90,8 @@ def merge_project(name: str, paths: list[Path], dest: Path) -> dict:
     """Gop cac file cua mot project. `paths` da sap xep MOI TRUOC CU SAU."""
     # khoa -> (gia tri so, gia tri chuoi, chi so dot, so thu tu dong, gia tri cua dot moi nhat)
     best: dict[bytes, tuple[float, str, int, int, str]] = {}
-    stats = {"project": name, "vao": 0, "ra": 0, "trung": 0, "lech": 0,
-             "cols": [], "lech_chi_tiet": []}
+    stats = {"project": name, "rows_in": 0, "rows_out": 0, "duplicates": 0, "clashes": 0,
+             "cols": [], "clash_rows": []}
     cols: list[str] | None = None
 
     # ---- LUOT 1: chon ben thang cho moi khoa
@@ -101,17 +104,17 @@ def merge_project(name: str, paths: list[Path], dest: Path) -> dict:
                 cols = list(reader.fieldnames or [])
             elif list(reader.fieldnames or []) != cols:
                 raise SystemExit(
-                    f"DUNG: {p} co bo cot khac cac file truoc.\n"
-                    f"  truoc: {cols}\n  file nay: {reader.fieldnames}")
+                    f"STOP: {p} has different columns from the files before it.\n"
+                    f"  before:    {cols}\n  this file: {reader.fieldnames}")
             for i, row in enumerate(reader):
-                stats["vao"] += 1
+                stats["rows_in"] += 1
                 k = row_key(row, cols)
                 v_str = row.get(VALUE_COL, "")
                 cur = best.get(k)
                 if cur is None:
                     best[k] = (float(v_str), v_str, idx, i, v_str)
                     continue
-                stats["trung"] += 1
+                stats["duplicates"] += 1
                 if cur[1] == v_str:
                     continue
                 v = float(v_str)
@@ -120,8 +123,8 @@ def merge_project(name: str, paths: list[Path], dest: Path) -> dict:
                 # nghia day du hon; 4/14 ca phan vi hom nay chon dung la do trung hop.
                 # Nang cap: lay gia tri tu dot co api_request_count lon hon o cung phut.
                 larger = v > cur[0]
-                stats["lech"] += 1
-                stats["lech_chi_tiet"].append({
+                stats["clashes"] += 1
+                stats["clash_rows"].append({
                     **{c: row.get(c, "") for c in cols if c != VALUE_COL},
                     "pull_a": paths[cur[2]].parent.name, "value_a": cur[1],
                     "pull_b": p.parent.name, "value_b": v_str,
@@ -143,14 +146,14 @@ def merge_project(name: str, paths: list[Path], dest: Path) -> dict:
                     won = best.get(row_key(row, cols))
                     if won is not None and won[2] == idx and won[3] == i:
                         writer.writerow(row)
-                        stats["ra"] += 1
+                        stats["rows_out"] += 1
     return stats
 
 
-def select_batches(base: Path, dot: str) -> tuple[list[Path], list[str], list[str]]:
+def select_batches(base: Path, names: str) -> tuple[list[Path], list[str], list[str]]:
     """(thu muc se doc, ten bi bo qua, ten duoc goi tuong minh ma khong khop khuon)."""
-    if dot:
-        batches = [base / t.strip() for t in dot.split(",") if t.strip()]
+    if names:
+        batches = [base / t.strip() for t in names.split(",") if t.strip()]
         return batches, [], [d.name for d in batches if not PULL_DIR.match(d.name)]
     dirs = sorted(d for d in base.glob("*") if d.is_dir())
     return ([d for d in dirs if PULL_DIR.match(d.name)],
@@ -167,40 +170,40 @@ def write_clash_file(path: Path, clashes: list[dict], key_cols: list[str]) -> No
         writer.writerows(clashes)
 
 
-def run(raw: Path, ra: Path, dot: str = "", out_name: str = "") -> dict:
+def run(raw: Path, out_root: Path, batches: str = "", out_name: str = "") -> dict:
     base = Path(raw)
-    batches, skipped, odd = select_batches(base, dot)
-    missing = [d for d in batches if not d.is_dir()]
+    selected, skipped, odd = select_batches(base, batches)
+    missing = [d for d in selected if not d.is_dir()]
     if missing:
-        raise SystemExit(f"Khong thay thu muc: {[str(t) for t in missing]}")
-    if not batches:
+        raise SystemExit(f"Folders not found: {[str(t) for t in missing]}")
+    if not selected:
         raise SystemExit(f"no pull batch matching {PULL_DIR.pattern} in {base}")
 
     # MOI TRUOC CU SAU: khi hai dot BANG nhau thi dong cua dot moi duoc ghi.
-    batches = sorted(batches, key=lambda d: d.name, reverse=True)
-    out_name = out_name or (batches[0].name + "-gop")
-    dest = Path(ra) / out_name
-    clash_file = Path(ra) / f"{out_name}.lech.csv"
+    selected = sorted(selected, key=lambda d: d.name, reverse=True)
+    out_name = out_name or (selected[0].name + "-gop")
+    dest = Path(out_root) / out_name
+    clash_file = Path(out_root) / f"{out_name}.lech.csv"
 
-    print(f"merging {len(batches)} batches (newest first; on a value clash the LARGER value is kept):")
-    for d in batches:
+    print(f"merging {len(selected)} batches (newest first; on a value clash the LARGER value is kept):")
+    for d in selected:
         print(f"    {d.name}")
     if skipped:
         print(f"skipped {len(skipped)} folders (name does not match {PULL_DIR.pattern}):")
         for n in skipped:
             print(f"    {n}")
     for n in odd:
-        print(f"  WARNING: {n} does not match {PULL_DIR.pattern} - merged anyway because it was listed in --dot")
+        print(f"  WARNING: {n} does not match {PULL_DIR.pattern} - merged anyway because --batches listed it")
     print(f"writing to: {dest}\n")
 
     projects: dict[str, list[Path]] = {}
-    for d in batches:
+    for d in selected:
         for f in sorted(d.glob("*.csv")):
             if f.name == "_tat-ca.csv":
                 continue
             projects.setdefault(f.stem, []).append(f)
 
-    total = {"vao": 0, "ra": 0, "trung": 0, "lech": 0}
+    total = {"rows_in": 0, "rows_out": 0, "duplicates": 0, "clashes": 0}
     clashes: list[dict] = []
     key_cols: list[str] = []
     for name in sorted(projects):
@@ -210,40 +213,43 @@ def run(raw: Path, ra: Path, dot: str = "", out_name: str = "") -> dict:
         for c in tk["cols"]:
             if c != VALUE_COL and c not in key_cols:
                 key_cols.append(c)
-        clashes.extend({"project": name, **row} for row in tk["lech_chi_tiet"])
-        print(f"  {name:<28} {tk['vao']:>8,} in -> {tk['ra']:>8,} out"
-              f" | dup {tk['trung']:>7,} | value clash {tk['lech']:,}")
-        for example in tk["lech_chi_tiet"][:5]:
+        clashes.extend({"project": name, **row} for row in tk["clash_rows"])
+        print(f"  {name:<28} {tk['rows_in']:>8,} in -> {tk['rows_out']:>8,} out"
+              f" | dup {tk['duplicates']:>7,} | value clash {tk['clashes']:,}")
+        for example in tk["clash_rows"][:5]:
             print(f"        MISMATCH {example.get('metric_alias', '')} @ {example.get('ts_utc', '')}:"
                   f" {example['pull_a']}={example['value_a']}  {example['pull_b']}={example['value_b']}"
                   f"  -> kept {example['kept']}")
 
     write_clash_file(clash_file, clashes, key_cols)
 
-    print(f"\n  TOTAL {total['vao']:,} in -> {total['ra']:,} out"
-          f" | dup {total['trung']:,} | value clash {total['lech']:,}")
-    if total["lech"]:
+    print(f"\n  TOTAL {total['rows_in']:,} in -> {total['rows_out']:,} out"
+          f" | dup {total['duplicates']:,} | value clash {total['clashes']:,}")
+    if total["clashes"]:
         print("\n  WARNING: some keys repeat with different values across pull batches.")
         print("  Kept the LARGER value. Every case is listed in the clash file below.")
     print(f"  clash file: {clash_file}")
     print(f"\ndone. Next: db/load_monitoring.py reads {out_name} when rebuilding the database")
-    return {"batches": [d.name for d in batches], "skipped": skipped, "odd": odd,
+    return {"batches": [d.name for d in selected], "skipped": skipped, "odd": odd,
             "dest": dest, "clash_file": clash_file, **total}
 
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--dot", dest="batch", default="",
-                   help="Danh sach ten thu muc dot keo, ngan cach dau phay. De trong = moi thu muc"
-                        " khop khuon lan keo san xuat trong data/raw_google_console/du_lieu_giam_sat")
-    p.add_argument("--ra", dest="out_path", default="", help="Ten thu muc dau ra. Mac dinh <dot moi nhat>-gop")
-    p.add_argument("--tho", dest="raw", default=str(RAW_DIR))
-    p.add_argument("--dich", dest="ra_root", default=str(RA),
-                   help="Thu muc cha cua ban gop va tep ca lech (mac dinh data/da_xu_ly/du_lieu_giam_sat)")
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
+    p.add_argument("--batches", dest="batch", default="",
+                   help="Comma-separated pull batch folder names. Empty = every folder"
+                        " matching the production pull pattern in data/raw_google_console/du_lieu_giam_sat")  # vi-ok: on-disk path
+    p.add_argument("--out", dest="out_path", default="",
+                   help="Output folder name. Default <newest batch>-gop")
+    p.add_argument("--raw", dest="raw", default=str(RAW_DIR))
+    p.add_argument("--out-root", dest="out_root", default=str(OUT_ROOT),
+                   help="Parent folder of the merged batch and the clash file"
+                        " (default data/da_xu_ly/du_lieu_giam_sat)")  # vi-ok: on-disk path
     args = p.parse_args()
-    run(raw=Path(args.raw), ra=Path(args.ra_root), dot=args.batch, out_name=args.out_path)
+    run(raw=Path(args.raw), out_root=Path(args.out_root), batches=args.batch, out_name=args.out_path)
 
 
 if __name__ == "__main__":

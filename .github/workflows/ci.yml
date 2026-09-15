@@ -138,7 +138,9 @@ jobs:
       # Mốc đo 14/09/2026: 11 → 37 sau change stop-a-later-pull-from-shrinking-an-earlier-one
       # (bỏ 2 phép kiểm rebuild cũ, thêm 6 phép kiểm rebuild, 9 gộp Monitoring,
       # 9 gộp độ trễ, 4 nạp nhà cung cấp).
-      EXPECTED_PY: "37"
+      # Mốc đo 15/09/2026: 37 → 58, thêm 21 phép kiểm của tools/check_english_names.py
+      # (change name-the-code-in-english). Lần đẩy e3a214b đỏ vì quên sửa số này.
+      EXPECTED_PY: "58"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

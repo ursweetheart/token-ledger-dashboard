@@ -36,28 +36,28 @@ class ProviderPullsTests(unittest.TestCase):
                                                         ("2026-08-30 11:00:00", "50")])
         b = write_pull(self.root, "2026-09-10-1h-acc", [("2026-08-30 11:00:00", "50")])
         with self.assertLogs("load_provider", level="WARNING") as logs:
-            ket, _luot_api, _canh_bao, loi = load_provider.gop_cac_lan_keo([a, b])
-        self.assertEqual(loi, [])
-        self.assertEqual(ket[KEY], 150)
+            result, _api_requests, _warnings, errors = load_provider.merge_pulls([a, b])
+        self.assertEqual(errors, [])
+        self.assertEqual(result[KEY], 150)
         self.assertTrue(any("2026-08-30" in m and "150" in m and "50" in m for m in logs.output),
                         logs.output)
-        self.assertTrue(any("ca lech: 1" in m for m in logs.output), logs.output)
+        self.assertTrue(any("clashes: 1" in m for m in logs.output), logs.output)
 
     def test_day_only_in_the_older_pull_survives(self):
         a = write_pull(self.root, "2026-09-04-1h-acc", [("2026-08-20 10:00:00", "7")])
         b = write_pull(self.root, "2026-09-10-1h-acc", [("2026-08-30 10:00:00", "9")])
-        ket, _, _, _ = load_provider.gop_cac_lan_keo([a, b])
-        self.assertEqual(ket[("2026-08-20", "proj", "gemini-3-flash", "input_tokens")], 7)
-        self.assertEqual(ket[KEY], 9)
+        result, _, _, _ = load_provider.merge_pulls([a, b])
+        self.assertEqual(result[("2026-08-20", "proj", "gemini-3-flash", "input_tokens")], 7)
+        self.assertEqual(result[KEY], 9)
 
     def test_branch_check_still_runs_inside_each_pull(self):
         a = write_pull(self.root, "2026-09-04-1h-acc", [("2026-08-30 10:00:00", "10", "XPerDay"),
                                                         ("2026-08-30 10:00:00", "12", "XPerMinute")])
-        _, _, _, loi = load_provider.gop_cac_lan_keo([a])
-        self.assertTrue(loi and "2026-09-04-1h-acc" in loi[0], loi)
+        _, _, _, errors = load_provider.merge_pulls([a])
+        self.assertTrue(errors and "2026-09-04-1h-acc" in errors[0], errors)
 
     def test_only_account_suffixed_folders_are_provider_pulls(self):
         for name in ("2026-09-12-1m", "2026-09-04-1h", "2026-09-04-1h-acc", "2026-09-10-1m-other"):
             (self.root / name).mkdir()
-        chosen = [d.name for d in load_provider.chon_lan_keo(self.root)]
+        chosen = [d.name for d in load_provider.pick_pulls(self.root)]
         self.assertEqual(chosen, ["2026-09-04-1h-acc", "2026-09-10-1m-other"])
