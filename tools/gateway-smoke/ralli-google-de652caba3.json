@@ -1,0 +1,296 @@
+{
+  "run_id": "ralli-google-de652caba3",
+  "result": "PASS",
+  "calls": [
+    {
+      "stage": "baseline",
+      "user": "ralli-google-de652caba3.user-0",
+      "elapsed": 1.110000000000582,
+      "usage": {
+        "actor_type": "user",
+        "user_id": "id-0",
+        "username": "ralli-google-de652caba3.user-0",
+        "function": "gemini_generate_text",
+        "model": "ralli-google-real",
+        "route": "gateway",
+        "agent_code": "ralli",
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "cached_tokens": 0,
+        "pricing_mode": "standard",
+        "input_tokens_by_modality": {},
+        "output_tokens_by_modality": {},
+        "cached_tokens_by_modality": {},
+        "event_type": "model_call",
+        "provider_response_id": "rJ6naqebMPqnvr0Pi6Sj2AQ"
+      }
+    },
+    {
+      "stage": "two_users_parallel",
+      "user": "ralli-google-de652caba3.user-2",
+      "elapsed": 0.7030000000013388,
+      "usage": {
+        "actor_type": "user",
+        "user_id": "id-2",
+        "username": "ralli-google-de652caba3.user-2",
+        "function": "gemini_generate_text",
+        "model": "ralli-google-real",
+        "route": "gateway",
+        "agent_code": "ralli",
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "cached_tokens": 0,
+        "pricing_mode": "standard",
+        "input_tokens_by_modality": {},
+        "output_tokens_by_modality": {},
+        "cached_tokens_by_modality": {},
+        "event_type": "model_call",
+        "provider_response_id": "rZ6natzxI8q81e8Pu4af-A8"
+      }
+    },
+    {
+      "stage": "two_users_parallel",
+      "user": "ralli-google-de652caba3.user-1",
+      "elapsed": 0.9530000000013388,
+      "usage": {
+        "actor_type": "user",
+        "user_id": "id-1",
+        "username": "ralli-google-de652caba3.user-1",
+        "function": "gemini_generate_text",
+        "model": "ralli-google-real",
+        "route": "gateway",
+        "agent_code": "ralli",
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "cached_tokens": 0,
+        "pricing_mode": "standard",
+        "input_tokens_by_modality": {},
+        "output_tokens_by_modality": {},
+        "cached_tokens_by_modality": {},
+        "event_type": "model_call",
+        "provider_response_id": "rZ6nasKRL9vlrfcPr7uIkAM"
+      }
+    },
+    {
+      "stage": "one_proxy_down",
+      "user": "ralli-google-de652caba3.user-3",
+      "elapsed": 0.7970000000022992,
+      "usage": {
+        "actor_type": "user",
+        "user_id": "id-3",
+        "username": "ralli-google-de652caba3.user-3",
+        "function": "gemini_generate_text",
+        "model": "ralli-google-real",
+        "route": "gateway",
+        "agent_code": "ralli",
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "cached_tokens": 0,
+        "pricing_mode": "standard",
+        "input_tokens_by_modality": {},
+        "output_tokens_by_modality": {},
+        "cached_tokens_by_modality": {},
+        "event_type": "model_call",
+        "provider_response_id": "sZ6natibD6ON1e8Pysa9kQY"
+      }
+    },
+    {
+      "stage": "lb_down_direct_fallback",
+      "user": "ralli-google-de652caba3.user-4",
+      "elapsed": 2.9069999999992433,
+      "usage": {
+        "actor_type": "user",
+        "user_id": "id-4",
+        "username": "ralli-google-de652caba3.user-4",
+        "function": "gemini_generate_text",
+        "model": "gemini-3.5-flash-lite",
+        "route": "direct_fallback",
+        "agent_code": "ralli",
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "cached_tokens": 0,
+        "pricing_mode": "standard",
+        "input_tokens_by_modality": {
+          "text": 10
+        },
+        "output_tokens_by_modality": {},
+        "cached_tokens_by_modality": {},
+        "event_type": "model_call",
+        "fallback_reason": "connection_error",
+        "operation_id": "27db8dbc-2b5e-4c2e-ad17-c638039a349b"
+      }
+    },
+    {
+      "stage": "lb_recovery",
+      "user": "ralli-google-de652caba3.user-5",
+      "elapsed": 1.0629999999982829,
+      "usage": {
+        "actor_type": "user",
+        "user_id": "id-5",
+        "username": "ralli-google-de652caba3.user-5",
+        "function": "gemini_generate_text",
+        "model": "ralli-google-real",
+        "route": "gateway",
+        "agent_code": "ralli",
+        "prompt_tokens": 10,
+        "completion_tokens": 5,
+        "total_tokens": 15,
+        "cached_tokens": 0,
+        "pricing_mode": "standard",
+        "input_tokens_by_modality": {},
+        "output_tokens_by_modality": {},
+        "cached_tokens_by_modality": {},
+        "event_type": "model_call",
+        "provider_response_id": "uJ6navCeCt6M1e8Px5zckAY"
+      }
+    }
+  ],
+  "negative": {
+    "missing_scope": "blocked",
+    "invalid_key": "blocked; no direct HTTP",
+    "lb_down_fallback_disabled": "blocked; no direct HTTP"
+  },
+  "scope": "real gemini_generate_text -> temporary nginx -> two LiteLLM -> Google; real fallback",
+  "limitations": [
+    "synthetic principal, not authenticated FastAPI E2E",
+    "application insert intercepted in memory, not persisted MongoDB",
+    "no ETL or dashboard verification",
+    "SMTP disabled",
+    "not load/capacity test",
+    "test-injected provider timeout/send budget"
+  ],
+  "spend_logs": [
+    {
+      "request_id": "rZ6nasKRL9vlrfcPr7uIkAM",
+      "end_user": "ralli-google-de652caba3.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 5,
+      "total_tokens": 15,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "gemini/gemini-3.5-flash-lite",
+      "status": "success"
+    },
+    {
+      "request_id": "rJ6naqebMPqnvr0Pi6Sj2AQ",
+      "end_user": "ralli-google-de652caba3.user-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 5,
+      "total_tokens": 15,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "gemini/gemini-3.5-flash-lite",
+      "status": "success"
+    },
+    {
+      "request_id": "rZ6natzxI8q81e8Pu4af-A8",
+      "end_user": "ralli-google-de652caba3.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 5,
+      "total_tokens": 15,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "gemini/gemini-3.5-flash-lite",
+      "status": "success"
+    },
+    {
+      "request_id": "sZ6natibD6ON1e8Pysa9kQY",
+      "end_user": "ralli-google-de652caba3.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 5,
+      "total_tokens": 15,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "gemini/gemini-3.5-flash-lite",
+      "status": "success"
+    },
+    {
+      "request_id": "uJ6navCeCt6M1e8Px5zckAY",
+      "end_user": "ralli-google-de652caba3.user-5",
+      "prompt_tokens": 10,
+      "completion_tokens": 5,
+      "total_tokens": 15,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "gemini/gemini-3.5-flash-lite",
+      "status": "success"
+    }
+  ],
+  "lb_trace": [
+    {
+      "user": "ralli-google-de652caba3.user-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.2:4000",
+      "upstream_status": "200"
+    },
+    {
+      "user": "ralli-google-de652caba3.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.2:4000",
+      "upstream_status": "200"
+    },
+    {
+      "user": "ralli-google-de652caba3.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200"
+    },
+    {
+      "user": "ralli-google-de652caba3.invalid",
+      "path": "/v1/chat/completions",
+      "status": 401,
+      "upstream": "172.22.0.2:4000",
+      "upstream_status": "401"
+    },
+    {
+      "user": "ralli-google-de652caba3.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.2:4000",
+      "upstream_status": "200"
+    },
+    {
+      "user": "ralli-google-de652caba3.user-5",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.2:4000",
+      "upstream_status": "200"
+    }
+  ],
+  "upstreams": [
+    "172.22.0.2:4000",
+    "172.22.0.3:4000"
+  ],
+  "gateway_successes": 5,
+  "direct_http_sends": 1,
+  "application_rows": 6,
+  "successful_generations": 6,
+  "key_cleanup": {
+    "delete": 200,
+    "readback": 404
+  },
+  "cleanup_errors": []
+}

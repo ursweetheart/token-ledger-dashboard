@@ -1,0 +1,40 @@
+{
+  "run_id": "6f2ce026-b619-44cd-8737-84d752a7b2bc",
+  "scope": "real Ralli gemini_generate_text; real Google; LB outage",
+  "key_source": "Ralli .env GEMINI_API (in-memory only)",
+  "application_storage": "real row builder, insert intercepted in memory",
+  "smtp": "disabled",
+  "result": "PASS",
+  "lb_stopped": true,
+  "provider_http_attempts": 1,
+  "provider_http_statuses": [
+    200
+  ],
+  "exact_response_match": true,
+  "usage_rows": [
+    {
+      "actor_type": "user",
+      "user_id": "ralli-real-test-id",
+      "username": "ralli-real-test-user",
+      "function": "gemini_generate_text",
+      "model": "gemini-3.5-flash-lite",
+      "route": "direct_fallback",
+      "agent_code": "ralli",
+      "prompt_tokens": 17,
+      "completion_tokens": 12,
+      "total_tokens": 29,
+      "cached_tokens": 0,
+      "pricing_mode": "standard",
+      "input_tokens_by_modality": {
+        "text": 17
+      },
+      "output_tokens_by_modality": {},
+      "cached_tokens_by_modality": {},
+      "event_type": "model_call",
+      "fallback_reason": "connection_error",
+      "operation_id": "56af9a55-9777-4510-b236-cc95d9471bbe"
+    }
+  ],
+  "lb_recovered_readiness_200": true,
+  "provider_errors": []
+}
