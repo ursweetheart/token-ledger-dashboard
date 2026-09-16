@@ -3,6 +3,11 @@
 Ghi trong lúc làm change `run-every-check-on-every-push`. Change đó **chỉ làm phần CI**; bốn luật
 dưới đây thuộc về phần CD sẽ làm sau, và được đo trong lúc khảo sát để không phải đo lại.
 
+> **Hoãn 16/09/2026.** Chặng 3 — triển khai tự động lên máy chủ, runner nội bộ — **chưa cần làm**.
+> Không có change nào được mở cho nó. Chặng 1 (CI kiểm tra) và chặng 2 (đóng gói image, đẩy lên
+> kho) đã xong và đã archive. Giữ tài liệu này vì bốn luật dưới đây là **số đo thật**, không phải
+> phỏng đoán; khi nào làm CD thì dùng lại, không phải đo lại từ đầu.
+
 > **Sửa 14/09/2026.** Bản 13/09 ghi nguyên nhân mất 3.462 token là "cửa sổ Monitoring trượt", và
 > ghi ở mức *suy luận*. Đo lại thì **sai**. Nguyên nhân thật là luật gộp "bản mới thắng" gặp một lần
 > kéo bị cụt ở mép cửa sổ. Mục 2 đã viết lại theo số đo mới. Luật 1 vẫn đứng, nhưng giờ đứng vì lý
