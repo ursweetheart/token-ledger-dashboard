@@ -36,10 +36,10 @@ test("Compose publishes only the edge port on loopback and keeps gateway-lb priv
 
   assert.match(compose, /gateway-edge:/);
   assert.match(compose, /\$\{LLM_GATEWAY_EDGE_BIND:-127\.0\.0\.1\}:\$\{LLM_GATEWAY_EDGE_PORT:-8088\}:8080/);
-  assert.match(compose, /LLM_GATEWAY_DOMAIN:\s+\$\{LLM_GATEWAY_DOMAIN:-llm\.rangdong\.com\.vn\}/);
+  assert.match(compose, /LLM_GATEWAY_DOMAIN:\s+\$\{LLM_GATEWAY_DOMAIN:-apigateway\.rangdong\.com\.vn\}/);
   assert.doesNotMatch(compose, /\$\{GATEWAY_PORT:-4000\}:4000/);
   assert.doesNotMatch(compose, /\$\{LITELLM_[12]_PORT:-400[12]\}:4000/);
-  assert.match(example, /LLM_GATEWAY_DOMAIN=llm\.rangdong\.com\.vn/);
+  assert.match(example, /LLM_GATEWAY_DOMAIN=apigateway\.rangdong\.com\.vn/);
   assert.match(example, /LLM_GATEWAY_EDGE_BIND=127\.0\.0\.1/);
   assert.match(example, /LLM_GATEWAY_EDGE_PORT=8088/);
 });

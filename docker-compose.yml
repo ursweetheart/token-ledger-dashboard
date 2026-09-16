@@ -17,7 +17,7 @@
 #     docker compose --profile gateway logs -f litellm-1
 #     docker compose --profile gateway down       # chi ha Gateway
 #
-#     Gateway edge      http://127.0.0.1:8088 (Host: llm.rangdong.com.vn)
+#     Gateway edge      http://127.0.0.1:8088 (Host: apigateway.rangdong.com.vn)
 #     Gateway LB        chi trong mang Docker, khong publish host
 #     Redis             127.0.0.1:6379
 #
@@ -643,7 +643,7 @@ services:
     profiles: ["gateway"]
     restart: unless-stopped
     environment:
-      LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-llm.rangdong.com.vn}
+      LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
       NGINX_ENVSUBST_FILTER: ^LLM_GATEWAY_DOMAIN$
     volumes:
       - ./docker/gateway/edge.conf.template:/etc/nginx/templates/default.conf.template:ro
