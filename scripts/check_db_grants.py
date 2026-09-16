@@ -4,8 +4,8 @@
 
 VI SAO CO SCRIPT NAY
 --------------------
-`scripts/rebuild_db.py` buoc 1 goi `load_billing --rebuild`, ma buoc do goi
-`db/connect.py:251`:
+Truoc 14/09/2026, `scripts/rebuild_db.py` buoc 1 goi `load_billing --rebuild`, ma
+buoc do goi:
 
     DROP SCHEMA public CASCADE; CREATE SCHEMA public;
 
@@ -15,6 +15,11 @@ Lenh do xoa MOI GRANT - tren schema, tren moi bang, moi view, VA ca cac dong
 (`restart: "no"`), tuc chi khi ai do goi `docker compose up -d`.
 
 Nen: cu dung lai database la vai doc cua API mat sach quyen.
+
+Tu 14/09/2026 `connect.rebuild()` chi TRUNCATE, nen duong dung lai KHONG con xoa
+quyen (change `stop-a-later-pull-from-shrinking-an-earlier-one`). Script nay VAN
+o lai: quyen con mat duoc theo duong khac - mot database moi chua chay
+`read-only-api.sql`, hay ai do DROP bang tay - va bao dong thi re.
 
 DO THAT NGAY 02/09/2026
 -----------------------
@@ -70,89 +75,95 @@ log = logs.get_logger("check_grants")
 # `-v api_role=api_readonly` cho docker/read-only-api.sql.
 DEFAULT_ROLE = "api_readonly"
 
+# Chu danh dau mot vai khong ton tai. main() tim dung chuoi nay de tach hai nguyen
+# nhan, nen hai cho phai dung CHUNG hang so.
+ROLE_MISSING = "DOES NOT EXIST"
 
-def kiem(cn, role: str) -> list[str]:
+
+def check_grants(cn, role: str) -> list[str]:
     """Tra ve danh sach mo ta cac cho THIEU quyen. Rong = day du."""
-    thieu: list[str] = []
+    missing: list[str] = []
 
-    co_vai = connect.query_one(
+    role_exists = connect.query_one(
         cn, "SELECT COUNT(*) FROM pg_catalog.pg_roles WHERE rolname = %s",
         (role,))[0]
-    if not co_vai:
+    if not role_exists:
         # Khong co vai thi moi phep kiem duoi deu vo nghia - dung han o day, dung
         # de nguoi doc phai suy tu 24 dong "thieu SELECT".
-        return [f"vai `{role}` KHONG TON TAI trong database"]
+        return [f"role `{role}` {ROLE_MISSING} in the database"]
 
     if not connect.query_one(
             cn, "SELECT has_schema_privilege(%s, 'public', 'USAGE')", (role,))[0]:
-        thieu.append(f"vai `{role}` khong co USAGE tren schema `public`")
+        missing.append(f"role `{role}` has no USAGE on schema `public`")
 
-    # TUNG bang va TUNG view, khong phai "thu mot bang". `DROP SCHEMA` xoa tat,
+    # TUNG bang va TUNG view, khong phai "thu mot bang". Mot lan `DROP SCHEMA` xoa tat,
     # nhung mot migration hong nua chung co the de lai quyen KHONG DEU - va do
     # moi la truong hop kho thay nhat.
-    doi_tuong = connect.query(cn, """
+    objects = connect.query(cn, """
         SELECT table_name, table_type FROM information_schema.tables
          WHERE table_schema = 'public' ORDER BY table_type, table_name""")
-    khong_doc_duoc = [
-        (t, k) for t, k in doi_tuong
+    unreadable = [
+        (t, k) for t, k in objects
         if not connect.query_one(
             cn, "SELECT has_table_privilege(%s, %s, 'SELECT')",
             (role, f"public.{t}"))[0]]
-    if khong_doc_duoc:
-        bang = [t for t, k in khong_doc_duoc if k == "BASE TABLE"]
-        view = [t for t, k in khong_doc_duoc if k != "BASE TABLE"]
-        thieu.append(
-            f"vai `{role}` khong doc duoc {len(khong_doc_duoc)}/{len(doi_tuong)}"
-            f" doi tuong ({len(bang)} bang, {len(view)} view):"
-            f" {', '.join(t for t, _ in khong_doc_duoc[:8])}"
-            + (" ..." if len(khong_doc_duoc) > 8 else ""))
-    return thieu
+    if unreadable:
+        tables = [t for t, k in unreadable if k == "BASE TABLE"]
+        views = [t for t, k in unreadable if k != "BASE TABLE"]
+        missing.append(
+            f"role `{role}` cannot read {len(unreadable)}/{len(objects)}"
+            f" objects ({len(tables)} tables, {len(views)} views):"
+            f" {', '.join(t for t, _ in unreadable[:8])}"
+            + (" ..." if len(unreadable) > 8 else ""))
+    return missing
 
 
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN,
-                   help="DSN cua vai QUAN TRI (chu schema), khong phai vai doc")
+                   help="DSN of the ADMIN role (schema owner), not the read role")
     p.add_argument("--role", default=DEFAULT_ROLE)
     args = p.parse_args()
 
     cn, _ = connect.open_db(args.db)
-    thieu = kiem(cn, args.role)
-    tong = connect.query_one(
+    missing = check_grants(cn, args.role)
+    total = connect.query_one(
         cn, "SELECT COUNT(*) FROM information_schema.tables"
             " WHERE table_schema = 'public'")[0]
     cn.close()
 
-    if not thieu:
-        log.info("  vai `%s` doc duoc %d/%d bang+view, co USAGE tren schema",
-                 args.role, tong, tong)
+    if not missing:
+        log.info("  role `%s` can read %d/%d tables+views, has USAGE on the schema",
+                 args.role, total, total)
         return 0
 
-    for d in thieu:
+    for d in missing:
         log.error("  %s", d)
     log.error("  ")
     # HAI NGUYEN NHAN KHAC HAN NHAU, va chung doi hai cach chua khac nhau.
     # Gop chung mot thong diep la chi sai cho cho nguoi doc - `DROP SCHEMA`
     # xoa GRANT chu KHONG xoa vai.
-    if any("KHONG TON TAI" in d for d in thieu):
-        log.error("  Vai chua duoc tao bao gio, hoac ten vai truyen vao sai.")
-        log.error("  `DROP SCHEMA` xoa GRANT chu KHONG xoa vai, nen day KHONG"
-                  " phai dau vet cua rebuild_db.py.")
+    if any(ROLE_MISSING in d for d in missing):
+        log.error("  The role was never created, or the role name passed in is wrong.")
+        log.error("  `DROP SCHEMA` removes GRANTs but NOT roles, so this is NOT"
+                  " the trace of a DROP SCHEMA.")
         log.error("  ")
-        log.error("  Kiem lai ten:  docker-compose.yml khai `-v"
-                  " api_role=api_readonly` cho docker/read-only-api.sql")
+        log.error("  Check the name:  docker-compose.yml passes `-v"
+                  " api_role=api_readonly` to docker/read-only-api.sql")
     else:
-        log.error("  Vai co that nhung da mat quyen. `DROP SCHEMA public"
-                  " CASCADE` (db/connect.py:251) xoa moi GRANT,")
-        log.error("  va cho cap lai la docker/read-only-api.sql - no CHI chay"
-                  " qua container `api-db-init` (`restart: \"no\"`).")
+        log.error("  The role exists but has lost its grants. Since 14/09/2026 rebuild_db.py"
+                  " only TRUNCATEs and does NOT drop GRANTs - so suspect a new database")
+        log.error("  that never ran read-only-api.sql, or a manual DROP SCHEMA,")
+        log.error("  and grants come back only from docker/read-only-api.sql, which runs"
+                  " ONLY through the `api-db-init` container (`restart: \"no\"`).")
     log.error("  ")
-    log.error("  CHUA:  docker compose up -d api")
+    log.error("  FIX:  docker compose up -d api")
     log.error("  ")
-    log.error("  KHONG tu cap lai o day - CO Y. Van de khong phai quyen bi xoa,"
-              " ma la KHONG AI DUOC BAO.")
+    log.error("  Grants are NOT restored here - ON PURPOSE. The problem is not that grants"
+              " were removed, it is that NOBODY WAS TOLD.")
     return 1
 
 

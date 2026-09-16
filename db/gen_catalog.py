@@ -53,7 +53,7 @@ def _latest_file(parent: Path, pattern: str) -> Path:
 # Ba nguồn cũ đều đã lạc hậu: bản gộp tay bị xoá, đợt kéo Monitoring 06/08 không
 # còn phủ hết dải ngày, và data/ctda là bản cào tay 05/08. Nay lấy bản mới nhất.
 BILLING = _latest_file(ROOT / "data" / "da_xu_ly" / "billing", "billing_*.csv")
-MONITORING = _latest_dir(ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat", "-gop")
+MONITORING = _latest_dir(ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat", "-gop")  # vi-ok: on-disk path
 RALLI_DIR = _latest_dir(ROOT / "data" / "raw_web" / "ralli")
 TLA_DIR = _latest_dir(ROOT / "data" / "raw_web" / "tla-hd")
 RALLI_RAW = RALLI_DIR / "db-token_usage-raw.json"
@@ -105,16 +105,16 @@ AGENTS = [
     (2, "sale-agent", "Sale Agent", "tranquil-post-471401-c1", False, "2025-09-07", True, True),
     (3, "invoice", "Multi modal AI Invoice", "multimodal-invoice", False, "2025-09-15", False, True),
     (4, "tools-quizzer", "Tools Quizzer", "tools-quizz", False, "2026-04-10", False, True),
-    (5, "tla-hd", "Trợ Lý Ảo Hợp Đồng", "ai-chatbot-contract", True, "2026-06-20", True, True),
-    (6, "dms-feedback", "Phân Loại Phản Hồi Tiếp Thị", "feedback-dms-tiep-thi", False, "2026-06-25", True, True),
-    (7, "crm-feedback", "Phân Loại Dữ Liệu CRM", "crm-500509", False, "2026-06-25", True, True),
-    (8, "ralli", "Trợ lý ảo Ralli", "tla-ralli", True, None, True, False),
+    (5, "tla-hd", "Trợ Lý Ảo Hợp Đồng", "ai-chatbot-contract", True, "2026-06-20", True, True),  # vi-ok: agent name shown on the dashboard
+    (6, "dms-feedback", "Phân Loại Phản Hồi Tiếp Thị", "feedback-dms-tiep-thi", False, "2026-06-25", True, True),  # vi-ok: agent name shown on the dashboard
+    (7, "crm-feedback", "Phân Loại Dữ Liệu CRM", "crm-500509", False, "2026-06-25", True, True),  # vi-ok: agent name shown on the dashboard
+    (8, "ralli", "Trợ lý ảo Ralli", "tla-ralli", True, None, True, False),  # vi-ok: agent name shown on the dashboard
 ]
 
 # Catalog SKU chính chủ, do scripts/pull_sku_catalog.py kéo về.
 SKU_CATALOG = ROOT / "data" / "raw_google_console" / "danh_muc" / "sku-gemini-api.json"
 # Thư mục kéo monitoring THÔ - nơi chứa {project}.descriptors.json.
-MONITORING_RAW = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"
+MONITORING_RAW = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"  # vi-ok: on-disk path
 
 # Hạn mức USD theo cấu hình Google Cloud. ĐÂY là nguồn sự thật: nó vào
 # 02_catalog.sql -> ref_budget -> /api/catalog -> dashboard.
@@ -127,8 +127,8 @@ MONITORING_RAW = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"
 # dưới). Cả hai vẫn XUẤT HIỆN đầy đủ trong báo cáo - không có hạn mức USD khác
 # với bị loại khỏi báo cáo.
 BUDGET_USD = {
-    "Trợ Lý Ảo Hợp Đồng": 20, "Chatbot Contact Center": 30, "Phân Loại Dữ Liệu CRM": 20,
-    "Phân Loại Phản Hồi Tiếp Thị": 20, "Multi modal AI Invoice": 20, "Sale Agent": 50,
+    "Trợ Lý Ảo Hợp Đồng": 20, "Chatbot Contact Center": 30, "Phân Loại Dữ Liệu CRM": 20,  # vi-ok: agent names, keys into AGENTS
+    "Phân Loại Phản Hồi Tiếp Thị": 20, "Multi modal AI Invoice": 20, "Sale Agent": 50,  # vi-ok: agent names, keys into AGENTS
 }
 VND_RATE = 25200                    # quyet dinh M-F, khong keo tu API
 RALLI_BUDGET_TOKENS = 50_000_000    # data/ctda/token-usage-budget.json
@@ -241,7 +241,7 @@ def _classify_metric(metric_type: str) -> tuple[str, str | None]:
             or tail.endswith("requests_per_model"):
         return "calls", None
     raise SystemExit(f"cannot classify the metric '{metric_type}'.\n"
-                     "  Them nhanh moi vao _classify_metric() roi chay lai.")
+                     "  Add a new branch to _classify_metric() and run again.")
 
 
 def _descriptors() -> dict[str, dict]:
@@ -280,9 +280,9 @@ def metric_aliases() -> list[tuple]:
         metric_kind, value_type = d.get("metricKind"), d.get("valueType")
         # Đối chiếu chéo: metadata phải đồng ý với tên ở hai nhánh nó biết.
         if metric_kind and (metric_kind == "GAUGE") != (measures == "quota_limit"):
-            mismatch.append(f"{mt}: ten noi '{measures}' nhung metricKind={metric_kind}")
+            mismatch.append(f"{mt}: the name says '{measures}' but metricKind={metric_kind}")
         if value_type and (value_type == "DISTRIBUTION") != (measures == "latency"):
-            mismatch.append(f"{mt}: ten noi '{measures}' nhung valueType={value_type}")
+            mismatch.append(f"{mt}: the name says '{measures}' but valueType={value_type}")
         out.append(("monitoring", mt, (d.get("description") or "").strip() or None,
                     measures, kind, metric_kind, value_type))
     if mismatch:
@@ -293,8 +293,8 @@ def metric_aliases() -> list[tuple]:
 
 def _catalog() -> dict[str, dict]:
     if not SKU_CATALOG.exists():
-        raise SystemExit(f"Chua co {SKU_CATALOG.relative_to(ROOT)}.\n"
-                         "  Chay: python scripts/pull_sku_catalog.py")
+        raise SystemExit(f"{SKU_CATALOG.relative_to(ROOT)} does not exist yet.\n"
+                         "  Run: python scripts/pull_sku_catalog.py")
     return {s["skuId"]: s for s in json.loads(SKU_CATALOG.read_text(encoding="utf-8"))}
 
 
@@ -383,7 +383,7 @@ def price_table(cat: dict[str, dict]) -> list[tuple]:
     # DA DOI CHIEU DOC LAP: gia catalog cho model do la $0,30 vao / $2,50 ra, va
     # don gia suy nguoc tu 40/40 dong that cua LiteLLM cung ra dung hai so do.
     # Hai nguon khong lien quan gi nhau, khop den tung xu.
-    BIEN_THE = ("flex", "priority", "batch", "caching", "storage")
+    VARIANT_WORDS = ("flex", "priority", "batch", "caching", "storage")
     # CHI ap dung cho model KHONG CO MOT DONG GIA NAO tu hoa don.
     #
     # Ban dau dieu kien la `if k in best` - tuc la vá theo TUNG LOAI gia. Sai:
@@ -391,20 +391,20 @@ def price_table(cat: dict[str, dict]) -> list[tuple]:
     # cached, va cach do lang le dien `price_cached` cho ca ba. Chung DA CO hoa
     # don; dien them gia cached la mot quyet dinh khac, phai lam co chu dich chu
     # khong phai roi ra tu day.
-    da_co_hoa_don = {mid for (mid, _kind) in best}
+    models_with_invoice = {mid for (mid, _kind) in best}
     for sid, s_ in cat.items():
         description = s_.get("description", "")
         model, kind = guess_model(description), guess_kind(description)
         if not model or not kind:
             continue
         mid = MODEL_ID[model]
-        if mid in da_co_hoa_don:
+        if mid in models_with_invoice:
             continue
         k = (mid, kind)
         if k in best:
             continue
         t = description.lower()
-        if " text" not in t or any(v in t for v in BIEN_THE):
+        if " text" not in t or any(v in t for v in VARIANT_WORDS):
             continue
         pi = (s_.get("pricingInfo") or [{}])[0]
         tiers = pi.get("pricingExpression", {}).get("tieredRates") or []
@@ -434,11 +434,11 @@ def main() -> None:
     out: list[str] = []
     A = out.append
     A("-- ==============================================================")
-    A("-- SINH TU DONG boi db/gen_catalog.py - dung sua tay.")
-    A("-- Sua quy tac trong db/rules.py hoac trong script do roi chay lai.")
+    A("-- AUTO-GENERATED by db/gen_catalog.py - do not edit by hand.")
+    A("-- Change the rules in db/rules.py or in that script, then run it again.")
     A("-- ==============================================================")
     A("")
-    A("-- 8 agent. Khoang ngay TINH TU DU LIEU; is_running go tay theo muc C3.")
+    A("-- 8 agents. Date range DERIVED FROM THE DATA; is_running set by hand (item C3).")
     A("INSERT INTO dim_agent (agent_id, code, name, gcp_project_id, has_org_tree,")
     A("                       project_created_at, data_from, data_to,")
     A("                       is_running, has_google_source) VALUES")
@@ -452,28 +452,28 @@ def main() -> None:
                     f"{str(running).upper()}, {str(google).upper()})")
     A(",\n".join(rows) + ";")
     A("")
-    A(f"-- {len(MODELS)} model, ten chuan dang gach ngang.")
+    A(f"-- {len(MODELS)} models, canonical hyphenated names.")
     A("INSERT INTO dim_model (model_id, name, family, provider) VALUES")
     A(",\n".join(f"  ({i}, {q(t)}, {q(f)}, 'Google')" for i, t, f in MODELS) + ";")
     A("")
-    A(f"-- {len(aliases)} anh xa. Ba nguon goi ten model theo ba kieu khac nhau:")
+    A(f"-- {len(aliases)} mappings. The three sources name models in three different ways:")
     A("--   billing 'gemini-embedding-001'  <->  monitoring 'gemini-embedding-1.0'")
     A("INSERT INTO dim_model_alias (source, raw_name, model_id) VALUES")
     A(",\n".join(f"  ({q(s)}, {q(t)}, {m})" for s, t, m in aliases) + ";")
     A("")
-    A(f"-- {len(metrics) + len(skus)} bi danh do dac: {len(metrics)} phep do")
-    A(f"-- monitoring + {len(skus)} SKU hoa don. Thay cho viec doan ten bang")
-    A("-- regex va LIKE '%token_count'. Nguon: descriptor + Cloud Billing Catalog.")
+    A(f"-- {len(metrics) + len(skus)} measurement aliases: {len(metrics)} monitoring")
+    A(f"-- measures + {len(skus)} invoice SKUs. Replaces guessing names with")
+    A("-- regex and LIKE '%token_count'. Source: descriptor + Cloud Billing Catalog.")
     A("INSERT INTO dim_metric_alias (source, raw_name, label, measures, kind,"
       " metric_kind, value_type) VALUES")
     A(",\n".join(f"  ({q(s)}, {q(t)}, {q(lb)}, {q(me)}, {q(k)}, {q(mk)}, {q(vt)})"
                  for s, t, lb, me, k, mk, vt in metrics + skus) + ";")
     A("")
-    A(f"-- {len(prices)} bang gia CHINH CHU tu Cloud Billing Catalog (USD / 1 trieu token).")
-    A("-- Truoc day bang nay RONG. Moi model lay gia cua SKU co khoi luong lon nhat")
-    A("-- trong hoa don. Catalog chi co gia HIEN HANH, khong co lich su.")
-    A("-- Model CHUA CO HOA DON thi khong co khoi luong de chon -> lay SKU TEXT")
-    A("-- TIEU CHUAN (khong flex/priority/batch/caching). Xem price_table().")
+    A(f"-- {len(prices)} OFFICIAL prices from Cloud Billing Catalog (USD / 1 million tokens).")
+    A("-- This table used to be EMPTY. Each model takes the price of the SKU with the")
+    A("-- largest volume in the invoice. The catalog has CURRENT prices only, no history.")
+    A("-- Models WITH NO INVOICE have no volume to choose by -> take the STANDARD TEXT")
+    A("-- SKU (no flex/priority/batch/caching). See price_table().")
     A("INSERT INTO ref_price (model_id, effective_from, price_input, price_output,"
       " price_cached, source) VALUES")
     A(",\n".join(f"  ({m}, {q(d)}, {'NULL' if i is None else f'{i:.8f}'},"
@@ -481,12 +481,12 @@ def main() -> None:
                  f" {'NULL' if c is None else f'{c:.8f}'}, 'google')"
                  for m, d, i, o, c in prices) + ";")
     A("")
-    A("-- Ty gia go cung (quyet dinh M-F). Keo API sau, cau truc khong phai doi.")
+    A("-- Hard-coded FX rate (decision M-F). Pull it from an API later; the structure stays.")
     A(f"INSERT INTO ref_fx (day, vnd_per_usd, source) VALUES "
       f"({q(FX_DAY)}, {VND_RATE}, 'hardcoded (app.js)');")
     A("")
-    A("-- Ralli chan theo TOKEN, sau agent kia theo TIEN. Khong quy doi.")
-    A("-- Tools Quizzer khong co ngan sach: app.js da loai khoi danh sach.")
+    A("-- Ralli is capped by TOKENS, six other agents by MONEY. No conversion.")
+    A("-- Tools Quizzer has no budget: app.js already dropped it from the list.")
     A("INSERT INTO ref_budget (agent_id, month, budget_usd, budget_tokens) VALUES")
     budgets = []
     for aid, code, name, proj, tree, created, running, google in AGENTS:
@@ -501,10 +501,10 @@ def main() -> None:
     n = collections.Counter(x[0] for x in aliases)
     print(f"wrote {OUT}")
     print(f"  {len(AGENTS)} agents | {len(MODELS)} models | {len(aliases)} aliases {dict(n)} "
-          f"| 1 ty gia | {len(budgets)} ngan sach")
+          f"| 1 FX rate | {len(budgets)} budgets")
     nm = collections.Counter(x[3] for x in metrics)
     print(f"  {len(metrics)} metric aliases {dict(nm)} | {len(skus)} SKU aliases"
-          f" | {len(prices)} dong bang gia")
+          f" | {len(prices)} price rows")
 
 
 if __name__ == "__main__":

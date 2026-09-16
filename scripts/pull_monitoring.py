@@ -32,7 +32,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUT = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"
+DEFAULT_OUT = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"  # vi-ok: on-disk path
 
 API = "https://monitoring.googleapis.com/v3"
 ICT = timezone(timedelta(hours=7))
@@ -91,7 +91,7 @@ def gcloud_path() -> str:
             return found
     raise SystemExit(
         "gcloud not found on PATH.\n"
-        "Mo terminal moi sau khi cai, hoac chi duong dan bang --gcloud."
+        "Open a new terminal after installing it, or give its path with --gcloud."
     )
 
 
@@ -111,11 +111,11 @@ def access_token(gcloud: str, account: str = "") -> str:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise SystemExit(
-            "gcloud auth print-access-token that bai"
-            + (f" cho tai khoan {account}:\n" if account else ":\n")
+            "gcloud auth print-access-token failed"
+            + (f" for account {account}:\n" if account else ":\n")
             + f"{result.stderr.strip()}\n"
-            + (f"Chay `gcloud auth login {account}` roi thu lai."
-               if account else "Chay `gcloud auth login` roi thu lai.")
+            + (f"Run `gcloud auth login {account}` and try again."
+               if account else "Run `gcloud auth login` and try again.")
         )
     return result.stdout.strip()
 
@@ -127,7 +127,7 @@ def get(url: str, token: str) -> dict:
             return json.load(response)
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", "replace")[:800]
-        raise SystemExit(f"HTTP {error.code} khi goi\n  {url}\n{body}") from error
+        raise SystemExit(f"HTTP {error.code} calling\n  {url}\n{body}") from error
 
 
 def paged(url: str, token: str, key: str) -> list[dict]:
@@ -276,28 +276,29 @@ def pull_project(project: str, token: str, out_dir: Path,
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     allow_abbrev=False)
     parser.add_argument("--projects", default=",".join(PROJECTS),
-                        help="Danh sach project_id, ngan cach bang dau phay")
+                        help="Comma-separated project_id list")
     parser.add_argument("--days", type=int, default=60,
-                        help="So ngay lui ve. De rong hon muc nghi la con giu (mac dinh 60)")
+                        help="Days to go back. Wider than you think is retained is fine (default 60)")
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--all-genlang", action="store_true",
-                        help="Keo MOI phep do generativelanguage, khong chi token/request")
+                        help="Pull EVERY generativelanguage metric, not only token/request")
     parser.add_argument("--align", type=int, default=3600,
-                        help="Do min, tinh bang giay. 60 = min nhat Google co (mac dinh 3600)")
-    parser.add_argument("--gcloud", default="", help="Duong dan gcloud neu khong co trong PATH")
+                        help="Grain in seconds. 60 = the finest Google has (default 3600)")
+    parser.add_argument("--gcloud", default="", help="Path to gcloud if it is not on PATH")
     parser.add_argument("--account", default="",
-                        help="Tai khoan Google dung de keo. De rong = tai khoan dang hoat "
-                             "dong cua gcloud (hanh vi cu). Project ma Gateway goi toi nam "
-                             "tren tai khoan KHAC bay project san xuat nen phai goi ten.")
+                        help="Google account used for the pull. Empty = gcloud's active "
+                             "account (old behaviour). The project the Gateway calls lives "
+                             "on a DIFFERENT account from the seven production ones, so name it.")
     args = parser.parse_args()
 
     if args.align < 60:
         raise SystemExit(
-            f"--align {args.align} nho hon 60s.\n"
-            "Google chi luu o muc 60s (samplePeriod trong descriptor). Xin min hon\n"
-            "khong cho them thong tin, chi lam phong so dong."
+            f"--align {args.align} is below 60s.\n"
+            "Google only stores 60s resolution (samplePeriod in the descriptor). Asking finer\n"
+            "adds no information, it only inflates the row count."
         )
 
     gcloud = args.gcloud or gcloud_path()
@@ -312,10 +313,10 @@ def main() -> None:
     # voi cung do min se ghi de nhau - dung loai mat du lieu ma quy uoc "khong
     # bao gio ghi de thu muc keo cu" sinh ra de chan. Tai khoan mac dinh KHONG
     # them hau to, de moi thu muc cu va moi script cu doc duoc nguyen ven.
-    hau_to = ""
+    suffix = ""
     if args.account:
-        hau_to = "-" + re.sub(r"[^A-Za-z0-9]+", "-", args.account.split("@")[0]).strip("-")
-    out_dir = Path(args.out) / f"{end:%Y-%m-%d}-{label}{hau_to}"
+        suffix = "-" + re.sub(r"[^A-Za-z0-9]+", "-", args.account.split("@")[0]).strip("-")
+    out_dir = Path(args.out) / f"{end:%Y-%m-%d}-{label}{suffix}"
 
     # Xac thuc TRUOC khi tao thu muc. Tao truoc thi mot lan chay hong o khau dang
     # nhap van de lai mot thu muc rong mang ten hop le, va lan sau se doc no nhu

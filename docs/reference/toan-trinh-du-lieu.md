@@ -148,7 +148,23 @@ lần tải lại là một bộ mới. Script gộp thành một file, khử tr
 **đợt mới KHÔNG chứa hết đợt cũ**. Phải chồng các đợt lên nhau mới ra chuỗi đầy
 đủ. Ra `data/da_xu_ly/du_lieu_giam_sat/<ngày>-gop/`.
 
-**`merge_latency_daily.py`** — đây là script đáng chú ý nhất.
+Từ 14/09/2026, hai đợt cho **cùng khoá mà khác giá trị** thì giữ **số lớn hơn**. Trước đó đợt mới
+thắng, và luật đó đã bỏ 11.262 token: đợt kéo sau hay bị cụt ở mép cửa sổ nên báo thiếu. Mọi ca lệch
+được ghi ra `<ngày>-gop.lech.csv`, nằm **cạnh** thư mục gộp chứ không nằm trong. Chỉ gộp thư mục có tên
+dạng `YYYY-MM-DD-1m`. Lần kéo 1 giờ hay lần kéo bằng tài khoản khác bị bỏ qua, và tên được in ra.
+
+**Hai điều bước gộp KHÔNG lo được** (đo 14/09/2026):
+
+1. **Phải kéo đều.** Cửa sổ của token quota và histogram độ trễ hôm nay rộng 91–114 ngày. Hai lần kéo
+   xa nhau nhất hiện cách 12 ngày. Nếu hai lần kéo cách nhau lâu hơn độ rộng cửa sổ, những ngày ở giữa
+   **mất vĩnh viễn**. Độ rộng này từng dao động từ 91 tới 195 ngày, nên đừng chờ tới sát ngưỡng.
+2. **Phải sao lưu `data/`.** Thư mục này không theo git và là bản duy nhất. Mọi ngày token trước
+   11/06/2026 giờ chỉ còn trên đĩa.
+
+**`merge_latency_daily.py`** — đây là script đáng chú ý nhất. Từ 14/09/2026 nó đọc **mọi** lần kéo có
+tên dạng `YYYY-MM-DD-<số>d-1m`. Mỗi điểm chỉ được tính một lần; hai lần kéo khác `count` thì giữ số
+lớn hơn, và ghi ca lệch ra `latency-daily.lech.csv`. Trước đó script đòi đúng một lần kéo, nên
+`update_dashboard.py` bước 7 thoát 1, và `latency-daily.csv` chỉ còn dữ liệu từ 09/06.
 
 ### Vì sao độ trễ phải gộp bằng histogram
 
@@ -175,7 +191,7 @@ Ba cái bẫy script này đã xử:
 
 ```bash
 docker compose up -d                            # PHẢI lên trước
-python scripts/rebuild_db.py                    # xoá sạch, tự chạy migrations rồi nạp data/
+python scripts/rebuild_db.py                    # migrations tại chỗ, xoá dòng mọi bảng (KHÔNG xoá schema), rồi nạp data/
 ```
 
 Đích mặc định lấy từ `connect.DEFAULT_DSN` — **một** chỗ duy nhất, dựng từ `PG*` khớp
@@ -192,7 +208,7 @@ database đang có dữ liệu cần giữ và chỉ cần nhận schema mới, 
 
 | # | Script | Dựng bảng | Vì sao ở vị trí này |
 |---|---|---|---|
-| 1 | `load_billing.py --rebuild` | migrations + danh mục + `fact_billing_daily` | `--rebuild` **xoá sạch**, nên phải đầu tiên |
+| 1 | `load_billing.py --rebuild` | migrations + danh mục + `fact_billing_daily` | `--rebuild` **xoá dòng mọi bảng**, nên phải đầu tiên. Từ 14/09/2026 không còn `DROP SCHEMA`, nên quyền đọc của `api_readonly` được giữ |
 | 2 | `load_org.py` | `dim_unit`, `dim_user`, `account`, `dim_function` | Xoá `fact_call`; đảo với bước 3 là mất cái vừa nạp |
 | 3 | `load_ralli.py` | `fact_call` | Cần `account` của bước 2 |
 | 4 | `load_hd.py` | `fact_app_daily` | Cần `account` và `dim_user` của bước 2 |

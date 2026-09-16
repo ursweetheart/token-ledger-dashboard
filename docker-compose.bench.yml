@@ -19,7 +19,9 @@
 
 services:
   litellm-bench:
-    image: litellm_tuan_test:gateway
+    # PHAI giong het dong `image:` cua x-litellm trong docker-compose.yml (CI kiem):
+    # do tai tren mot image khac image dang chay thi so do khong noi len dieu gi.
+    image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:4373a32c2a2608cdbd732ba47ba057615e5e2846}
     container_name: token-ledger-litellm-bench
     profiles: ["bench"]
     restart: "no"
@@ -38,6 +40,9 @@ services:
       # entrypoint.sh doi bien nay khac rong. Gia tri co y sai - xem chu thich
       # trong config.bench.yaml muc 4.
       KEY_GOOGLE_AI_STU: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
+      # Cung ly do, them 10/09/2026 khi entrypoint.sh bat dau doi ca khoa CRM.
+      # Bench KHONG duoc goi ra ngoai nen gia tri o day co y sai.
+      KEY_BENCH_CRM_TEST_GG_AIA_STU: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
     # GIOI HAN BO NHO - co y, khong phai cho chat che.
     #

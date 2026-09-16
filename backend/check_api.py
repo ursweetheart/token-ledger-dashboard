@@ -98,7 +98,6 @@ PATHS = [
     f"/api/usage?start={START}&end={END}",
     f"/api/usage-by-account?start={START}&end={END}",
     f"/api/performance?start={START}&end={END}",
-    f"/api/thinking?start={START}&end={END}",
 ]
 
 
@@ -116,16 +115,16 @@ class Check:
             self.failures.append(f"{label}: {detail}")
             print(f"[ FAIL ] {label}\n         {detail}")
 
-    def expect_tren(self, quan_sat: int, ok: bool, label: str,
-                    detail: str = "") -> None:
+    def expect_observed(self, observed: int, ok: bool, label: str,
+                        detail: str = "") -> None:
         """Như `expect()`, nhưng KHAI CẢ MẪU SỐ - số dòng đã quan sát.
 
-        Cùng lý lẽ với `Audit.check_tren()` ở scripts/audit_db.py: một phép kiểm
+        Cùng lý lẽ với `Audit.check_observed()` ở scripts/audit_db.py: một phép kiểm
         `khong dong nao xau` chạy trên **0 dòng** sẽ báo ĐẠT, và nó không phân biệt
         *"nguồn ghi đúng"* với *"nguồn không ghi gì cả"*.
 
         BA KẾT CỤC:
-            quan sat 0 dong             -> CHUA KIEM DUOC (khong tinh la dat,
+            quan sat 0 dong             -> NOT CHECKED (khong tinh la dat,
                                            va KHONG lam script that bai)
             quan sat n > 0, khong loi   -> DAT, nhan kem "(n rows)"
             quan sat n > 0, co loi      -> HONG
@@ -133,13 +132,13 @@ class Check:
         Không làm script thất bại vì kỳ chưa có lưu lượng của nguồn đó là trạng
         thái HỢP LỆ. Nhưng nó phải HIỆN RA - hôm nay nó vô hình.
         """
-        if quan_sat == 0:
+        if observed == 0:
             self.notes.append(f"{label}: {detail}")
-            print(f"[ note ] {label}\n         CHUA KIEM DUOC - 0 dong de quan sat."
-                  f" Day KHONG phai ket qua dat."
+            print(f"[ note ] {label}\n         NOT CHECKED - 0 rows to observe."
+                  f" This is NOT a pass."
                   + (f"\n         {detail}" if detail else ""))
             return
-        self.expect(ok, f"{label} ({quan_sat} rows)", detail)
+        self.expect(ok, f"{label} ({observed} rows)", detail)
 
 
 def _headers(auth: bool) -> dict:
@@ -199,13 +198,13 @@ def against_database(c: Check, base: str) -> None:
     rows = get(base, f"/api/usage?start={START}&end={END}")["rows"]
     api_cost = sum(x["cost_usd"] or 0 for x in rows)
     api_tokens = sum(x["total_tokens"] or 0 for x in rows)
-    c.expect(abs(float(db_cost) - api_cost) < 1e-4, "Tien API == database",
+    c.expect(abs(float(db_cost) - api_cost) < 1e-4, "API cost == database",
              f"api ${api_cost:.6f} != db ${float(db_cost):.6f}")
-    c.expect(int(db_tokens) == api_tokens, "Token API == database",
+    c.expect(int(db_tokens) == api_tokens, "API tokens == database",
              f"api {api_tokens:,} != db {int(db_tokens):,}")
 
     cat = get(base, "/api/catalog")
-    c.expect(len(cat["units"]) == n_units, "So don vi khop",
+    c.expect(len(cat["units"]) == n_units, "Unit count matches",
              f"{len(cat['units'])} != {n_units}")
     # Mẫu số lấy từ `kind='real'` - CÙNG điều kiện mà store.accounts() dùng.
     # Nghĩa là phép kiểm này soi gương chính bản cài đặt: sửa cả hai chỗ cho
@@ -213,7 +212,7 @@ def against_database(c: Check, base: str) -> None:
     # directory_is_people_only() bên dưới, và đó là chỗ nói rõ dòng nào lọt.
     n_api = len(get(base, "/api/accounts")["rows"])
     c.expect(n_api == n_accounts, "Account count matches",
-             f"api {n_api} != db {n_accounts} (db dem kind='real')")
+             f"api {n_api} != db {n_accounts} (db counts kind='real')")
 
     # Cột "số này từ đâu ra" phải có thật, không chỉ có trong tài liệu.
     missing = [k for k in ("token_source", "call_source", "token_estimated")
@@ -227,14 +226,15 @@ def against_database(c: Check, base: str) -> None:
     ad = get(base, "/api/adoption")["rows"]
     c.expect(len(ad) == len(cat["agents"]), "Adoption: one row per agent",
              f"{len(ad)} rows / {len(cat['agents'])} agents")
-    sai = [r["agent"] for r in ad
-           if r["provisioned"] <= 0
-           or r["active"] > r["provisioned"]
-           or abs(r["rate_pct"] - 100.0 * r["active"] / r["provisioned"]) > 0.06]
-    c.expect(not sai, "Ty le ap dung khop tu so / mau so", f"differs at: {sai}")
+    mismatched = [r["agent"] for r in ad
+                  if r["provisioned"] <= 0
+                  or r["active"] > r["provisioned"]
+                  or abs(r["rate_pct"] - 100.0 * r["active"] / r["provisioned"]) > 0.06]
+    c.expect(not mismatched, "Adoption rate matches numerator / denominator",
+             f"differs at: {mismatched}")
 
     h = get(base, "/api/health")
-    c.expect(bool(h.get("warnings")), "/api/health co canh bao do phu",
+    c.expect(bool(h.get("warnings")), "/api/health carries a coverage warning",
              "no warning at all - the coverage figure is probably wrong")
     acct = get(base, f"/api/usage-by-account?start={START}&end={END}")
     c.expect(any(w["code"] == "user_coverage" for w in acct.get("warnings", [])),
@@ -246,14 +246,14 @@ def bad_params(c: Check, base: str) -> None:
     for junk in ("hom-qua", "2026-13-99", "2026-02-30", "01/01/2026", ""):
         code = status(base, f"/api/usage?start={junk}")
         c.expect(code == 400 or (junk == "" and code == 200),
-                 f"Tham so rac bi tu choi: start={junk!r}",
+                 f"Junk parameter is refused: start={junk!r}",
                  f"returned {code}, expected 400")
     d = get(base, "/api/usage?start=2026-08-13&end=2026-08-01")
     c.expect(d["start"] == "2026-08-01" and d["end"] == "2026-08-13",
              "A reversed date range is re-ordered", f"{d['start']} .. {d['end']}")
 
 
-def theo_gio(c: Check, base: str) -> None:
+def hourly_endpoint(c: Check, base: str) -> None:
     """Endpoint theo GIO: bat buoc khoang thoi gian, va KHONG duoc co `billing`.
 
     Hai loai loi khac han nhau:
@@ -267,28 +267,28 @@ def theo_gio(c: Check, base: str) -> None:
           moi con so tien theo gio deu la bia. Bo dung da chan o tang NAP; phep
           kiem nay chan them o tang DOC, vi hai tang co the lech nhau.
     """
-    for thieu in ("", "?start=2026-08-31", "?end=2026-08-31"):
-        code = status(base, "/api/usage-hourly" + thieu)
+    for missing in ("", "?start=2026-08-31", "?end=2026-08-31"):
+        code = status(base, "/api/usage-hourly" + missing)
         c.expect(code == 400,
-                 f"Endpoint theo gio doi khoang thoi gian: {thieu or '(goi tran)'}",
+                 f"The hourly endpoint requires a time range: {missing or '(bare call)'}",
                  f"returned {code}, expected 400")
 
     d = get(base, "/api/usage-hourly?start=2026-08-31&end=2026-08-31")
     c.expect("billing" not in (d.get("sources") or {}),
-             "Bang theo gio KHONG co nguon `billing`",
+             "The hourly table has NO `billing` source",
              f"sources = {d.get('sources')}")
     c.expect(all(len(r["hour"]) == 19 and r["hour"][13:] == ":00:00"
                  for r in d["rows"]),
-             "Moi dong theo gio cat dung ve dau gio",
+             "Every hourly row is truncated to the start of the hour",
              f"{[r['hour'] for r in d['rows'][:3]]}")
     # 31/08 la ngay DUY NHAT co Gateway. Phep kiem nay hong nghia la hoac bo
     # dung khong chay, hoac khoang ngay bi hieu lech mot ngay.
     c.expect(d["count"] > 0,
-             "Ngay 31/08/2026 co du lieu theo gio",
+             "31/08/2026 has hourly data",
              f"count = {d['count']}")
 
 
-def nguon_gateway(c: Check, base: str) -> None:
+def gateway_source(c: Check, base: str) -> None:
     """Nguon `gateway` co len toi API khong - HOI QUA ENDPOINT.
 
     KHONG CHEP CAU SQL CUA audit_db.py SANG DAY
@@ -309,19 +309,19 @@ def nguon_gateway(c: Check, base: str) -> None:
     # (1) /api/usage - dong nao mang token_source = 'gateway'
     rows = get(base, "/api/usage" + P)["rows"]
     gw = [r for r in rows if r.get("token_source") == "gateway"]
-    c.expect_tren(len(gw), all((r.get("total_tokens") or 0) > 0 for r in gw),
-                  "Nguon gateway len toi /api/usage va mang token",
-                  "co dong gateway nhung total_tokens bang 0 hoac rong")
+    c.expect_observed(len(gw), all((r.get("total_tokens") or 0) > 0 for r in gw),
+                      "The gateway source reaches /api/usage and carries tokens",
+                      "gateway rows exist but total_tokens is 0 or empty")
 
     # (2) /api/usage-hourly - nguon gateway co mat, va KHONG duoc co billing
     d = get(base, "/api/usage-hourly"
             + f"?start={START}&end={END}")
-    theo_nguon = d.get("sources") or {}
-    c.expect_tren(theo_nguon.get("gateway", 0), True,
-                  "Nguon gateway co mat trong bang theo gio")
-    c.expect("billing" not in theo_nguon,
-             "Bang theo gio van KHONG co nguon `billing`",
-             f"sources = {theo_nguon}")
+    by_source = d.get("sources") or {}
+    c.expect_observed(by_source.get("gateway", 0), True,
+                      "The gateway source is present in the hourly table")
+    c.expect("billing" not in by_source,
+             "The hourly table still has NO `billing` source",
+             f"sources = {by_source}")
 
     # (3) /api/performance - ngay Gateway phu phai co phan vi, va la SO THO.
     #
@@ -329,15 +329,15 @@ def nguon_gateway(c: Check, base: str) -> None:
     # mang o nghia la ai do da dan sai so cua phep do KHAC len mot con so von
     # khong co - va no trong y nhu that.
     lat = get(base, "/api/performance" + P)["latency"]
-    tho = [r for r in lat
-           if r.get("p95_bucket_from") is None and r.get("p95_bucket_to") is None]
-    c.expect_tren(len(tho),
-                  all((r.get("p95_seconds") or 0) > 0 for r in tho),
-                  "Phan vi tu so tho len toi /api/performance, khong mang o histogram",
-                  "co dong khong mang o nhung p95 rong")
+    raw_rows = [r for r in lat
+                if r.get("p95_bucket_from") is None and r.get("p95_bucket_to") is None]
+    c.expect_observed(len(raw_rows),
+                      all((r.get("p95_seconds") or 0) > 0 for r in raw_rows),
+                      "Raw-value percentiles reach /api/performance without a histogram bucket",
+                      "rows without a bucket have an empty p95")
 
 
-def xac_thuc(c: Check, base: str) -> None:
+def authentication(c: Check, base: str) -> None:
     """Gọi KHÔNG khoá phải bị từ chối.
 
     Đây là phép kiểm giữ cho cả bộ này khỏi nói dối. MỌI phép kiểm khác đều
@@ -355,12 +355,12 @@ def xac_thuc(c: Check, base: str) -> None:
     # nhưng máy chủ có thể đã được khởi động từ một cửa sổ khác với biến môi
     # trường khác. Khi đó thông báo tự tin chỉ sai chỗ, và người đọc đi sửa
     # đúng thứ không hỏng.
-    vi_sao = ("Three possibilities: (1) the server started with DASHBOARD_OPEN=1"
-              " - authentication is OFF; (2) the endpoint is missing Depends(nguoi_goi);"
+    causes = ("Three possibilities: (1) the server started with DASHBOARD_OPEN=1"
+              " - authentication is OFF; (2) the endpoint is missing Depends(caller);"
               " (3) HTTPBearer has auto_error=True so it returns 403, not 401."
               f" [this process reads DASHBOARD_OPEN={DASHBOARD_OPEN}]")
     c.expect(code == 401, "Calling /api/accounts without a key is refused with 401",
-             f"returned {code}. {vi_sao}")
+             f"returned {code}. {causes}")
 
     # Điểm thăm dò PHẢI mở. Nếu ai đó gắn khoá vào /healthz thì giám sát sẽ báo
     # máy chủ chết trong khi nó vẫn sống - và không ai biết vì sao.
@@ -384,15 +384,15 @@ def directory_is_people_only(c: Check, base: str) -> None:
     đều kín.
     """
     rows = get(base, "/api/accounts")["rows"]
-    la = [r for r in rows if r.get("kind") != "real"]
+    strays = [r for r in rows if r.get("kind") != "real"]
     # Nói RÕ dòng nào lọt. "unexpected rows" thì người đọc phải tự đi tìm.
-    ten = ", ".join(f"{r.get('username')}({r.get('kind')})" for r in la[:5])
-    c.expect(not la, "The /api/accounts directory holds only real people",
-             f"{len(la)} rows are not kind='real': {ten}"
-             + (" ..." if len(la) > 5 else ""))
+    names = ", ".join(f"{r.get('username')}({r.get('kind')})" for r in strays[:5])
+    c.expect(not strays, "The /api/accounts directory holds only real people",
+             f"{len(strays)} rows are not kind='real': {names}"
+             + (" ..." if len(strays) > 5 else ""))
 
 
-def con_doc_duoc(c: Check, base: str) -> None:
+def server_can_read(c: Check, base: str) -> None:
     """MAY CHU co con doc duoc database khong. Hoi QUA HTTP, khong hoi ket noi cua
     chinh tien trinh nay.
 
@@ -427,34 +427,36 @@ def con_doc_duoc(c: Check, base: str) -> None:
           loi          -         may chu chua bat
     """
     label = "The API server can still READ the database"
-    ma_healthz = status(base, "/healthz", auth=False)
-    if ma_healthz != 200:
+    healthz_code = status(base, "/healthz", auth=False)
+    if healthz_code != 200:
         c.expect(False, label,
-                 f"/healthz tra {ma_healthz} - may chu chua bat, chua ket luan"
-                 f" duoc gi ve quyen doc")
+                 f"/healthz returned {healthz_code} - the server is not up,"
+                 f" nothing can be concluded about read access")
         return
 
-    ma = status(base, "/api/health")
-    if ma == 200:
+    code = status(base, "/api/health")
+    if code == 200:
         c.expect(True, label, "")
         return
-    if ma == 401:
+    if code == 401:
         c.expect(False, label,
-                 "/api/health tra 401 - khoa sai. Day KHONG phai van de quyen doc.")
+                 "/api/health returned 401 - wrong key. This is NOT a read-access problem.")
         return
     c.expect(False, label,
-             f"/healthz tra 200 nhung /api/health tra {ma}:"
-             f" MAY CHU SONG MA KHONG DOC DUOC DATABASE.\n"
-             f"         Gan nhu chac chan `rebuild_db.py` vua chay - buoc 1 goi"
-             f" DROP SCHEMA, xoa sach GRANT.\n"
-             f"         Kiem:  python scripts/check_db_grants.py\n"
-             f"         Chua:  docker compose up -d api")
+             f"/healthz returned 200 but /api/health returned {code}:"
+             f" THE SERVER IS UP BUT CANNOT READ THE DATABASE.\n"
+             f"         The read role has most likely lost its grants. Since 14/09/2026"
+             f" `rebuild_db.py` only TRUNCATEs and no longer drops GRANTs -\n"
+             f"         so suspect: a new database that never ran read-only-api.sql,"
+             f" or a manual DROP.\n"
+             f"         Check:  python scripts/check_db_grants.py\n"
+             f"         Fix:    docker compose up -d api")
 
 
-def _ket_noi_cuc_bo_doc_duoc(c: Check) -> None:
+def _local_connection_can_read(c: Check) -> None:
     """Ket noi cua CHINH tien trinh nay co doc duoc khong.
 
-    PHEP PHU, KHONG thay the `con_doc_duoc()`.
+    PHEP PHU, KHONG thay the `server_can_read()`.
 
     No noi ve DSN ma TIEN TRINH NAY dang cam, chu khong phai DSN cua may chu. Do
     03/09: chay tu shell thi `backend/store.py` lay `token` (vai QUAN TRI, chu
@@ -479,20 +481,21 @@ def _ket_noi_cuc_bo_doc_duoc(c: Check) -> None:
             cur = cn.cursor()
             # `ref_source` la bang nho nhat co that trong schema (4 dong). Doc no
             # doi CA `USAGE` tren schema LAN `SELECT` tren bang - dung hai quyen
-            # ma DROP SCHEMA xoa mat.
+            # ma mot lan DROP SCHEMA xoa mat (rebuild truoc 14/09/2026, hay chay tay).
             cur.execute("SELECT COUNT(*) FROM ref_source")
             n = cur.fetchone()[0]
-            vai = connect.query_one(cn, "SELECT current_user")[0]
+            role = connect.query_one(cn, "SELECT current_user")[0]
             ok = True
             # NEU RO VAI: doc "DAT" ma khong biet no thu vai nao la doc nham.
-            label = f"{label} (vai `{vai}`, ref_source: {n} rows)"
+            label = f"{label} (role `{role}`, ref_source: {n} rows)"
     except Exception as e:
         detail = (f"CANNOT READ ({type(e).__name__}): {e}\n"
-                  f"         Vai doc da mat quyen. Gan nhu chac chan la"
-                  f" `rebuild_db.py` vua chay: buoc 1 goi DROP SCHEMA, xoa sach"
-                  f" GRANT.\n"
-                  f"         Chua: `docker compose up -d api` (keo theo"
-                  f" api-db-init, cap lai quyen).")
+                  f"         The read role has lost its grants. Since 14/09/2026 `rebuild_db.py`"
+                  f" only TRUNCATEs and no longer drops GRANTs - so suspect: a database\n"
+                  f"         that never ran read-only-api.sql, or a manual"
+                  f" DROP.\n"
+                  f"         Fix: `docker compose up -d api` (brings"
+                  f" api-db-init along, which grants again).")
     c.expect(ok, label, detail)
 
 
@@ -500,7 +503,7 @@ def read_only(c: Check) -> None:
     """Thử GHI thật sự qua chính kết nối của backend. Phải bị từ chối.
 
     CHI tra loi cau "lenh ghi co bi chan khong". Cau "vai con doc duoc khong"
-    nam o `con_doc_duoc()` ngay tren - HAI cau hoi khac nhau, va truoc 03/09
+    nam o `server_can_read()` ngay tren - HAI cau hoi khac nhau, va truoc 03/09
     chung dung chung mot phep kiem nen mot trang thai hong bao DAT.
     """
     label = "The backend connection is read-only"
@@ -553,7 +556,8 @@ def compare_engines(c: Check, a: str, b: str) -> None:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--base", default="http://127.0.0.1:8000")
     p.add_argument("--compare", default=None,
                    help="URL of the second server (running on a different admin system)")
@@ -574,27 +578,27 @@ def main() -> None:
                          f"  Start the server first:"
                          f"  python -m uvicorn backend.main:app --port 8000")
     if status_healthz != 200:
-        raise SystemExit(f"Cannot reach {args.base}: /healthz tra {status_healthz}")
+        raise SystemExit(f"Cannot reach {args.base}: /healthz returned {status_healthz}")
 
-    ma = status(args.base, "/api/health")
-    if ma == 401:
+    code = status(args.base, "/api/health")
+    if code == 401:
         # 401 KHÁC HẲN "chưa bật máy chủ": máy chủ đang chạy và đang trả lời.
         # Gộp hai cái vào một câu là chỉ sai chỗ cho người đọc.
         raise SystemExit(
             f"Server {args.base} returned 401 - wrong key.\n"
             f"  The check key comes from DASHBOARD_KEY (this process's"
-            f" hoac .env).\n"
+            f" environment or .env).\n"
             f"  The server must have been started with THAT SAME key.")
-    if ma != 200:
-        # KHONG thoat o day. Chay THANG toi nhom "Read-only" de con_doc_duoc()
+    if code != 200:
+        # KHONG thoat o day. Chay THANG toi nhom "Read-only" de server_can_read()
         # chan doan va bao dung nguyen nhan - do la ly do no ton tai.
-        print(f"\n!! /healthz tra 200 nhung /api/health tra {ma}."
-              f" May chu SONG ma khong doc duoc database.")
-        print("   Bo qua cac phep can du lieu, chay thang phep chan doan.\n")
+        print(f"\n!! /healthz returned 200 but /api/health returned {code}."
+              f" The server is UP but cannot read the database.")
+        print("   Skipping the data checks, running the diagnosis directly.\n")
         c = Check()
         print("Read-only\n" + "─" * 72)
-        con_doc_duoc(c, args.base)
-        _ket_noi_cuc_bo_doc_duoc(c)
+        server_can_read(c, args.base)
+        _local_connection_can_read(c)
         read_only(c)
         print("\n" + "═" * 72)
         print(f"{c.passed + len(c.failures)} checks | {c.passed} passed"
@@ -609,19 +613,18 @@ def main() -> None:
     print("\nParameters\n" + "─" * 72)
     bad_params(c, args.base)
     print("\nHourly endpoint\n" + "─" * 72)
-    theo_gio(c, args.base)
+    hourly_endpoint(c, args.base)
     print("\nGateway source\n" + "─" * 72)
-    nguon_gateway(c, args.base)
+    gateway_source(c, args.base)
     print("\nAuthentication\n" + "─" * 72)
-    xac_thuc(c, args.base)
+    authentication(c, args.base)
     print("\nExposed data scope\n" + "─" * 72)
     directory_is_people_only(c, args.base)
     print("\nRead-only\n" + "─" * 72)
-    # HAI phep, HAI cau hoi. Ca hai dat moi la ky luat chi-doc con nguyen ven -
-    # xem docstring cua con_doc_duoc().
     # BA phep, ba cau hoi. Phep DAU la phep THAT - no hoi MAY CHU.
-    con_doc_duoc(c, args.base)
-    _ket_noi_cuc_bo_doc_duoc(c)
+    # Xem docstring cua server_can_read().
+    server_can_read(c, args.base)
+    _local_connection_can_read(c)
     read_only(c)
     if args.compare:
         print("\nTwo admin systems\n" + "─" * 72)
@@ -630,8 +633,8 @@ def main() -> None:
     print("\n" + "═" * 72)
     # Dem CA `notes`: mot phep kiem "chua kiem duoc" van la mot phep kiem da chay,
     # va giau no khoi tong so la lam dung cai viec ma no sinh ra de chong.
-    tong = c.passed + len(c.notes) + len(c.failures)
-    print(f"{tong} checks | {c.passed} passed | {len(c.notes)} notes"
+    total = c.passed + len(c.notes) + len(c.failures)
+    print(f"{total} checks | {c.passed} passed | {len(c.notes)} notes"
           f" | {len(c.failures)} failed")
     if c.failures:
         sys.exit(1)

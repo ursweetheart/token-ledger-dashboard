@@ -42,7 +42,7 @@ def _latest_billing() -> Path:
     candidates = sorted(folder.glob("billing_*.csv"))
     if not candidates:
         raise SystemExit(f"no merged file in {folder}."
-                         f" Chay scripts/merge_billing.py truoc.")
+                         f" Run scripts/merge_billing.py first.")
     return candidates[-1]
 
 
@@ -57,17 +57,19 @@ BILLING = _latest_billing()
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN,
-                   help="Chuoi ket noi PostgreSQL. Mac dinh: connect.DEFAULT_DSN")
+                   help="PostgreSQL connection string. Default: connect.DEFAULT_DSN")
     p.add_argument("--file", default=str(BILLING))
     p.add_argument("--rebuild", action="store_true",
-                   help="Xoa sach va dung lai schema + danh muc truoc khi nap")
+                   help="Migrate in place, empty every table, reload the catalog before loading. "
+                        "Does NOT drop the schema, so granted privileges stay")
     args = p.parse_args()
 
     if args.rebuild:
         cn, ph = connect.rebuild(args.db)
-        log.info("schema + catalog rebuilt on %s", connect.mask_dsn(args.db))
+        log.info("migrated, rows emptied, catalog reloaded on %s", connect.mask_dsn(args.db))
     else:
         cn, ph = connect.open_db(args.db)
 
@@ -106,9 +108,9 @@ def main() -> None:
     if no_model or no_kind or no_agent:
         raise SystemExit(
             "not in the catalog yet - re-run python db/gen_catalog.py:\n"
-            f"  khong ra model: {dict(no_model)}\n"
-            f"  khong ra kind : {dict(no_kind)}\n"
-            f"  project la    : {dict(no_agent)}"
+            f"  no model       : {dict(no_model)}\n"
+            f"  no kind        : {dict(no_kind)}\n"
+            f"  unknown project: {dict(no_agent)}"
         )
 
     cur = cn.cursor()
@@ -136,7 +138,7 @@ def main() -> None:
     if n != src_rows:
         errors.append(f"row count {n} != {src_rows} counted from the source file")
     if abs(float(total) - src_total) > 0.0001:
-        errors.append(f"tong ${float(total):.6f} != ${src_total:.6f} trong file nguon")
+        errors.append(f"total ${float(total):.6f} != ${src_total:.6f} in the source file")
     if errors:
         raise SystemExit("ACCEPTANCE FAILED: " + " | ".join(errors))
     log.info("  acceptance passed (checked against the source file itself)")

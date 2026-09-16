@@ -71,4 +71,3 @@ trôi khỏi nhau.
 #### Scenario: Bộ kiểm cấu trúc và bộ kiểm API bất đồng
 - **WHEN** bộ kiểm cấu trúc báo đạt còn bộ kiểm API báo hỏng
 - **THEN** kết quả SHALL giữ nguyên cả hai, và MUST NOT bị hoà làm một
-

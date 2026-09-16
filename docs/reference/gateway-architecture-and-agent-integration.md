@@ -36,6 +36,12 @@ Ba điều làm nên kiến trúc này:
 không gọi thẳng Google được — đi qua Gateway trở thành **bắt buộc về mặt kỹ thuật**, không
 phải một thoả thuận.
 
+> ⚠️ **KHÔNG CÒN ĐÚNG CHO AGENT CRM, từ 12/09/2026.** Change
+> `keep-the-crm-agent-running-when-the-gateway-dies` cho CRM một đường dự phòng dùng
+> `sa-key.json`, nên nó **đi thẳng Google được**. Đổi lại là hệ thống không đứng khi
+> `gateway-lb` chết — điểm hỏng đơn của kiến trúc này. Chốt bởi lead 10/09. Bảy agent còn lại
+> vẫn giữ tính chất ①. Chi tiết ở [`fallback-crm-12-09.md`](fallback-crm-12-09.md).
+
 **② Agent gọi bằng bí danh, không gọi bằng tên model thật.** Agent xin `gemini-flash-lite`;
 Gateway mới dịch sang `gemini/gemini-3.5-flash-lite`. Đổi model upstream không phải sửa agent.
 
@@ -46,6 +52,44 @@ Gateway mới dịch sang `gemini/gemini-3.5-flash-lite`. Đổi model upstream 
 > Thiếu dòng đó trong `router_settings` thì `tags` bị **bỏ qua hoàn toàn và im lặng** — mọi
 > phép kiểm vẫn đạt, câu trả lời vẫn đúng, chỉ có tiền là rơi sai project. Đã đo bằng phép
 > kiểm mồi: có tag filtering thì 10/10 đúng tuyến; không có tag thì **12,5% rơi nhầm tuyến**.
+
+### Cửa chặn khởi động — `docker/gateway/entrypoint.sh`
+
+Ghi mục này ngày 10/09/2026 vì file này **chưa từng có trong tài liệu nào**, dù nó đã nằm
+trong repo từ 27/08 (commit `73bd36e`). Nó chỉ dài 31 dòng và lọt vào giữa một commit 612
+dòng, nên không ai nhớ là có nó — và hôm nay nó đã lặng lẽ để lọt một lỗi.
+
+**Nó làm gì.** Nó chạy **trước** LiteLLM. Nó kiểm một danh sách biến bắt buộc; thiếu bất kỳ
+biến nào thì in `STOP: <tên biến> is missing.` rồi thoát với mã `1`, không giao quyền lại cho
+LiteLLM. Nó cũng chặn master key sai dạng và chặn khoá ví dụ.
+
+**Vì sao nó tồn tại** (lý do ghi ngay trong file): `LITELLM_MASTER_KEY` rỗng **không** làm
+LiteLLM dừng. LiteLLM khởi động với "không có master key", tức mở cổng `4000` cho bất kỳ ai
+gọi được. Nguyên tắc đặt ra là **chế độ hỏng phải là "không chạy", tuyệt đối không phải
+"chạy mở"**.
+
+**Vì sao không dùng `${VAR:?}` của compose.** Compose nội suy biến cho **cả file** trước khi
+lọc profile. Nên `:?` sẽ làm `docker compose up -d` của dashboard gãy theo, dù người dùng
+không hề định bật Gateway. Đây là lý do có hẳn một file thay vì một dòng cấu hình.
+
+**Bench dùng chung file này.** `docker-compose.bench.yml` phải tự cấp giá trị **cố ý sai** cho
+mọi biến trong danh sách, vì bench không được gọi ra ngoài. Thêm một biến vào vòng kiểm thì
+**phải** thêm giá trị giả tương ứng ở bench, nếu không bench không lên được.
+
+**Lỗ hổng đã tìm ra và vá ngày 10/09.** Danh sách kiểm thiếu khoá của tuyến CRM, trong khi
+ghi chú ở `docker-compose.yml` **đã ghi là có**. Hệ quả: `.env` đổi tên biến, `${...:-}` biến
+khoá thiếu thành chuỗi rỗng, container lên bình thường, `/health/liveliness` trả `200`, và
+tuyến CRM **chết im lặng** cho tới khi có người gọi thật (`HTTP 500 Missing Gemini API key`).
+Nay khoá đó đã nằm trong vòng kiểm.
+
+> **CHƯA XONG — quyết định của lead ngày 10/09.** Cửa chặn cứng này hợp với **giai đoạn dev**:
+> hỏng thì thấy ngay, dễ tìm. Nhưng lead đã chốt hướng khác cho **production**: *"phải fall
+> back"*, *"nếu mà báo lỗi hệ thống bị gián đoạn"*, *"cái việc mình track không được ưu tiên
+> trước hệ thống ổn định"*.
+> Trước mắt **giữ nguyên như hiện tại**. Khi triển khai lên server thì phải sửa. Xem
+> `docs/decisions/che-do-hong-cua-gateway-2026-09-10.md`.
+
+---
 
 ---
 
@@ -381,6 +425,43 @@ crash, không ai thấy. Bản đầu của đề xuất đã trỏ nhầm khố
 > `'false'` (11.440 / 3.589, NULL 636.624) — vì nó là bảng hạ cánh của nhãn Google gửi sang.
 > `fact_call` là bảng của ta nên dùng **BOOLEAN** thật. Mọi phép so hai bảng **phải dịch kiểu
 > tường minh**.
+
+> **ĐO LẠI 10/09/2026 — điều kiện mà mục này chờ đã xảy ra, và có thêm hai điều mới.**
+>
+> Mục trên viết: *"sẽ chưa có cho tới khi một agent CÓ TAG sinh token suy luận"*. Hôm nay bốn
+> lượt gọi trên tuyến `gemini-2.5-flash` đã làm đúng việc đó — cả bốn mang
+> `request_tags = ["crm-feedback", …]` và `end_user = svc.crm-feedback`, nên chúng **giải ra
+> được agent 7** và sẽ không bị loại ở khâu nạp như hai dòng cũ.
+>
+> ```
+>    luc        ra   reasoning   text
+>    08:22:32   12      12        0     <- max_tokens = 16
+>    08:22:58   23      22        1     <- max_tokens = 64
+>    08:23:00   23      22        1     <- max_tokens = 256
+>    08:27:40   24      23        1
+> ```
+>
+> **Điều mới ①: `reasoning_tokens` nằm TRONG `completion_tokens`, không phải ngăn thứ ba.**
+> `22 + 1 = 23`, đúng bằng `completion_tokens`. Sổ cũng vậy: `total = prompt + completion`,
+> lệch `0` trên cả bốn dòng.
+> Điều này **không mâu thuẫn** với bốn phép đo trên đường gọi thẳng, nơi Google trả
+> `thoughts_token_count` tách riêng và `tổng ≠ vào + ra`. LiteLLM chuẩn hoá về hình dạng
+> OpenAI nên nó **gộp** lại. Hai tầng, hai hình dạng, cùng đúng. **Mọi con số về token phải
+> kèm tầng đo được nó**, không thì hai kết quả đúng sẽ trông như cãi nhau.
+>
+> **Điều mới ②: Gateway TÍNH TIỀN token suy luận theo giá token ra.** Kiểm bằng số học, khớp
+> tới 8 chữ số thập phân, 2/2 dòng:
+>
+> ```
+>    6 vao, 23 ra :  6/1e6 x 0,30  +  23/1e6 x 2,50  =  0,00005930   so ghi 0,00005930
+>    6 vao, 12 ra :  6/1e6 x 0,30  +  12/1e6 x 2,50  =  0,00003180   so ghi 0,00003180
+> ```
+>
+> **Hệ quả vận hành, đo được chứ không suy:** dòng `08:22:32` có `reasoning 12` và **`text 0`**,
+> tức lượt gọi đó **trả về nội dung rỗng** trong khi vẫn bị tính tiền. Suy luận ăn chung ngân
+> sách `max_tokens` với chữ. Đặt ngân sách quá chặt thì **mất câu trả lời mà vẫn mất tiền**, và
+> `HTTP` vẫn là `200` nên không phép kiểm nào kêu.
+> Chưa giải thích được vì sao lượt đó dừng ở `12` chứ không phải `16`. Ghi CẢNH BÁO.
 
 ---
 

@@ -54,7 +54,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT_DIR = ROOT / "data" / "raw_web"
 
 # (ten file dau ra, duong dan GET, bat buoc, nang)
-# "nang" = bo qua khi chay --lat-mong, de vong lap tu soat quay trong vai giay.
+# "nang" = bo qua khi chay --thin-slice, de vong lap tu soat quay trong vai giay.
 RALLI = [
     ("db-collections.json",          "/api/database/collections",                           True,  False),
     ("db-token_usage-schema.json",   "/api/database/collections/token_usage/schema",        True,  False),
@@ -76,7 +76,7 @@ RALLI = [
     ("logs-recent-365.json",         "/logs/recent?days_back=365&limit=100000",             True,  True),
 ]
 
-TLA_HD = [
+TLA_CONTRACT = [
     ("permissions-me.json",          "/api/permissions/me",                                 True,  False),
     ("token-usage-filter-options.json", "/api/admin/token-usage/filter-options",            True,  False),
     ("token-usage-day.json",         "/api/admin/token-usage/stats?period=day",             True,  False),
@@ -95,19 +95,19 @@ TLA_HD = [
 
 SOURCES = {
     "ralli": {
-        "goc": "https://ralliai.rangdong.com.vn:9001",
-        "bien": "RALLI_JWT", "bien_user": "RALLI_USER", "bien_pass": "RALLI_PASS",
+        "base_url": "https://ralliai.rangdong.com.vn:9001",
+        "token_env": "RALLI_JWT", "user_env": "RALLI_USER", "pass_env": "RALLI_PASS",
         # openapi noi ro: application/x-www-form-urlencoded, truong username/password
-        "dang_nhap": "/auth/login", "kieu_body": "form",
-        "diem": RALLI,
+        "login_path": "/auth/login", "body_kind": "form",
+        "endpoints": RALLI,
     },
     "tla-hd": {
-        "goc": "https://chatbothd.rangdong.com.vn:10001",
-        "bien": "HD_JWT", "bien_user": "HD_USER", "bien_pass": "HD_PASS",
+        "base_url": "https://chatbothd.rangdong.com.vn:10001",
+        "token_env": "HD_JWT", "user_env": "HD_USER", "pass_env": "HD_PASS",
         # GET tra 405 => duong dan dung, chi nhan POST. App khong phoi openapi
         # nen kieu body chua chac chan; thu json truoc roi form.
-        "dang_nhap": "/api/auth/login", "kieu_body": "json",
-        "diem": TLA_HD,
+        "login_path": "/api/auth/login", "body_kind": "json",
+        "endpoints": TLA_CONTRACT,
     },
 }
 
@@ -145,12 +145,12 @@ def expires_in(token: str) -> str:
         body += "=" * (-len(body) % 4)
         exp = json.loads(base64.urlsafe_b64decode(body)).get("exp")
         if not exp:
-            return "khong co exp"
+            return "no exp"
         remaining = exp - time.time()
         deadline = datetime.fromtimestamp(exp).strftime("%H:%M %d/%m")
-        return f"het han {deadline} (con {remaining / 3600:.1f} gio)" if remaining > 0 else f"DA HET HAN luc {deadline}"
+        return f"expires {deadline} ({remaining / 3600:.1f} h left)" if remaining > 0 else f"EXPIRED at {deadline}"
     except Exception:
-        return "khong doc duoc exp"
+        return "could not read exp"
 
 
 def login(config: dict, username: str, password: str) -> str:
@@ -160,8 +160,8 @@ def login(config: dict, username: str, password: str) -> str:
     openapi nen kieu body la suy doan, va 422 chi co nghia "sai dang", khong co
     nghia "sai mat khau".
     """
-    url = config["goc"] + config["dang_nhap"]
-    body_order = [config["kieu_body"]] + [k for k in ("json", "form") if k != config["kieu_body"]]
+    url = config["base_url"] + config["login_path"]
+    body_order = [config["body_kind"]] + [k for k in ("json", "form") if k != config["body_kind"]]
     last_error = ""
 
     for body_kind in body_order:
@@ -184,7 +184,7 @@ def login(config: dict, username: str, password: str) -> str:
             body = e.read(300).decode("utf-8", "replace")
             # 401/403 = sai tai khoan. Doi kieu body cung vo ich, dung ngay.
             if e.code in (401, 403):
-                raise PullError(f"HTTP {e.code} khi dang nhap - sai tai khoan/mat khau") from e
+                raise PullError(f"HTTP {e.code} on login - wrong account/password") from e
             last_error = f"HTTP {e.code} ({body_kind}): {body[:160]}"
             continue
         except Exception as e:
@@ -197,27 +197,27 @@ def login(config: dict, username: str, password: str) -> str:
         for key in ("access_token", "token", "accessToken"):
             if isinstance(inner.get(key), str):
                 return inner[key]
-        last_error = f"dang nhap OK ({body_kind}) nhung khong tim thay token; khoa: {list(payload)}"
+        last_error = f"login OK ({body_kind}) but no token found; keys: {list(payload)}"
 
-    raise PullError(last_error or "khong dang nhap duoc")
+    raise PullError(last_error or "could not log in")
 
 
 def get_token(name: str, config: dict, env: dict) -> tuple[str, str]:
     """Tra (token, mo ta nguon). Khong bao gio tra ve chuoi rong."""
-    ready_token = env.get(config["bien"], "").strip()
+    ready_token = env.get(config["token_env"], "").strip()
     if ready_token:
-        return ready_token, f"{config['bien']} co san"
+        return ready_token, f"{config['token_env']} is set"
 
-    username = env.get(config["bien_user"], "").strip()
-    password = env.get(config["bien_pass"], "").strip()
+    username = env.get(config["user_env"], "").strip()
+    password = env.get(config["pass_env"], "").strip()
     if not (username and password):
         raise SystemExit(
             f"[{name}] no token and no account to log in with.\n"
-            f"  set {config['bien']} in the environment,\n"
-            f"  HOAC dien {config['bien_user']} va {config['bien_pass']} vao {ENV_FILE}.\n"
-            f"  Xem .env.example."
+            f"  set {config['token_env']} in the environment,\n"
+            f"  OR fill in {config['user_env']} and {config['pass_env']} in {ENV_FILE}.\n"
+            f"  See .env.example."
         )
-    return login(config, username, password), f"dang nhap {config['dang_nhap']}"
+    return login(config, username, password), f"logged in via {config['login_path']}"
 
 
 def http_get(base: str, path: str, token: str, attempts: int = 3) -> bytes:
@@ -240,7 +240,7 @@ def http_get(base: str, path: str, token: str, attempts: int = 3) -> bytes:
             if attempt == attempts:
                 raise PullError(f"{type(e).__name__}: {e}") from e
             time.sleep(2 * attempt)
-    raise PullError("khong toi day duoc")
+    raise PullError("unreachable")
 
 
 def describe(obj: object) -> str:
@@ -261,16 +261,16 @@ def pull_one_app(name: str, folder: Path, thin_slice: bool, token: str) -> list[
     folder.mkdir(parents=True, exist_ok=True)
     result: list[dict] = []
 
-    for filename, path, required, heavy in config["diem"]:
+    for filename, path, required, heavy in config["endpoints"]:
         if thin_slice and heavy:
-            result.append({"file": filename, "trang_thai": "BO QUA (lat mong)",
-                            "bat_buoc": required, "byte": 0, "noi_dung": "-"})
+            result.append({"file": filename, "status": "SKIPPED (thin slice)",
+                            "required": required, "bytes": 0, "content": "-"})
             continue
         try:
-            body = http_get(config["goc"], path, token)
+            body = http_get(config["base_url"], path, token)
         except PullError as e:
-            result.append({"file": filename, "trang_thai": f"FAILED: {e}",
-                            "bat_buoc": required, "byte": 0, "noi_dung": "-"})
+            result.append({"file": filename, "status": f"FAILED: {e}",
+                            "required": required, "bytes": 0, "content": "-"})
             print(f"  {'X':<2} {filename:<34} {e}")
             continue
 
@@ -279,16 +279,16 @@ def pull_one_app(name: str, folder: Path, thin_slice: bool, token: str) -> list[
         except json.JSONDecodeError:
             # Tra ve HTML (thuong la trang SPA) nghia la duong dan khong ton tai
             # that su, du ma tra ve 200. Day la loi, khong duoc luu.
-            result.append({"file": filename, "trang_thai": "FAILED: not JSON",
-                            "bat_buoc": required, "byte": len(body), "noi_dung": "-"})
+            result.append({"file": filename, "status": "FAILED: not JSON",
+                            "required": required, "bytes": len(body), "content": "-"})
             print(f"  {'X':<2} {filename:<34} did not return JSON ({len(body):,} bytes)")
             continue
 
         (folder / filename).write_text(
             json.dumps(obj, ensure_ascii=False, indent=1), encoding="utf-8")
         described = describe(obj)
-        result.append({"file": filename, "trang_thai": "OK", "bat_buoc": required,
-                        "byte": len(body), "noi_dung": described})
+        result.append({"file": filename, "status": "OK", "required": required,
+                        "bytes": len(body), "content": described})
         print(f"  {'v':<2} {filename:<34} {len(body):>10,} byte  {described}")
 
     return result
@@ -304,11 +304,11 @@ def pull_tla_members(folder: Path, token: str) -> str:
     """
     f_units = folder / "units.json"
     if not f_units.exists():
-        return "khong co units.json de duyet thanh vien"
+        return "no units.json to walk the members of"
 
     units = json.loads(f_units.read_text(encoding="utf-8"))
     unit_list = units.get("units") if isinstance(units, dict) else units
-    base = SOURCES["tla-hd"]["goc"]
+    base = SOURCES["tla-hd"]["base_url"]
     merged: list[dict] = []
     failed: list[str] = []
 
@@ -323,8 +323,8 @@ def pull_tla_members(folder: Path, token: str) -> str:
         json.dumps(merged, ensure_ascii=False, indent=1), encoding="utf-8")
     total = sum(len(x.get("members") or []) for x in merged)
     print(f"  {'v':<2} {'units-members.json':<34} {len(merged)}/{len(unit_list)} units,"
-          f" {total} thanh vien")
-    return f"khong keo duoc thanh vien cua {len(failed)} don vi: {failed[:3]}" if failed else ""
+          f" {total} members")
+    return f"could not pull the members of {len(failed)} units: {failed[:3]}" if failed else ""
 
 
 def crosscheck_ralli(folder: Path) -> list[str]:
@@ -338,7 +338,7 @@ def crosscheck_ralli(folder: Path) -> list[str]:
     f_collections = folder / "db-collections.json"
     f_raw = folder / "db-token_usage-raw.json"
     if not (f_collections.exists() and f_raw.exists()):
-        return ["khong du file de kiem cheo so ban ghi token_usage"]
+        return ["not enough files to cross-check the token_usage record count"]
 
     collections_json = json.loads(f_collections.read_text(encoding="utf-8"))
     declared = None
@@ -351,7 +351,7 @@ def crosscheck_ralli(folder: Path) -> list[str]:
     if declared is None:
         warnings.append("token_usage not found in the collection list")
     elif declared != actual:
-        warnings.append(f"token_usage: API khai {declared:,} ban ghi nhung export tra ve {actual:,}")
+        warnings.append(f"token_usage: the API declares {declared:,} records but the export returned {actual:,}")
     else:
         print(f"  CROSS-CHECK PASSED: token_usage {actual:,} records, matches what the API reports")
     return warnings
@@ -360,20 +360,21 @@ def crosscheck_ralli(folder: Path) -> list[str]:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--app", default="ralli,tla-hd", help="ralli | tla-hd | ca hai")
-    p.add_argument("--ra", dest="out_path", default=str(OUT_DIR))
-    p.add_argument("--lat-mong", dest="thin_slice", action="store_true",
-                   help="Bo qua cac endpoint nang, de tu soat quay vong nhanh")
-    p.add_argument("--chi-kiem-token", action="store_true",
-                   help="Chi lay token roi thoat. De goi truoc cac buoc dai.")
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
+    p.add_argument("--app", default="ralli,tla-hd", help="ralli | tla-hd | both")
+    p.add_argument("--out", dest="out_path", default=str(OUT_DIR))
+    p.add_argument("--thin-slice", dest="thin_slice", action="store_true",
+                   help="Skip the heavy endpoints, so the self-check loop turns fast")
+    p.add_argument("--token-only", action="store_true",
+                   help="Only obtain the token, then exit. Call before the long steps.")
     args = p.parse_args()
 
     day = date.today().isoformat()
     apps = [a.strip() for a in args.app.split(",") if a.strip()]
     unknown = [a for a in apps if a not in SOURCES]
     if unknown:
-        raise SystemExit(f"App khong biet: {unknown}. Chi co: {list(SOURCES)}")
+        raise SystemExit(f"Unknown app: {unknown}. Available: {list(SOURCES)}")
 
     # Bien moi truong thang duoc uu tien hon .env, de dan tay van de.
     env = {**read_env(ENV_FILE), **{k: v for k, v in os.environ.items() if v}}
@@ -386,7 +387,7 @@ def main() -> None:
         tk, source = get_token(app, SOURCES[app], env)
         token_of[app] = tk
         print(f"[{app}] token: {source} | {expires_in(tk)}")
-    if args.chi_kiem_token:
+    if args.token_only:
         print("token check only - stopping here.")
         return
 
@@ -407,13 +408,13 @@ def main() -> None:
     print("\n" + "=" * 70)
     failed_required = []
     for app, rows in all_rows.items():
-        ok = sum(1 for r in rows if r["trang_thai"] == "OK")
+        ok = sum(1 for r in rows if r["status"] == "OK")
         print(f"{app:<10} {ok}/{len(rows)} endpoints fetched")
-        # "BO QUA (lat mong)" la lua chon co chu dinh, khong phai that bai.
-        failed_required += [f"{app}/{r['file']}: {r['trang_thai']}"
-                          for r in rows if r["bat_buoc"]
-                          and r["trang_thai"] != "OK"
-                          and not r["trang_thai"].startswith("BO QUA")]
+        # "SKIPPED (thin slice)" la lua chon co chu dinh, khong phai that bai.
+        failed_required += [f"{app}/{r['file']}: {r['status']}"
+                          for r in rows if r["required"]
+                          and r["status"] != "OK"
+                          and not r["status"].startswith("SKIPPED")]
 
     for c in warnings:
         print(f"WARNING: {c}")

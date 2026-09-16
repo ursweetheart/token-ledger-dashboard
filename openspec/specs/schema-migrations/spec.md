@@ -8,17 +8,31 @@ TBD - created by archiving change change-the-schema-without-dropping-it. Update 
 Mọi thay đổi cấu trúc database SHALL áp dụng được lên một database **đang có dữ liệu**,
 giữ nguyên dữ liệu đó. MUST NOT đòi `DROP SCHEMA`, `DROP DATABASE`, hay nạp lại từ `data/`.
 
-Yêu cầu này nói về **đổi schema**, không cấm bản thân thao tác xoá sạch. Đường *"dựng lại
-toàn bộ từ `data/`"* (`connect.rebuild()` → `rebuild_db.py`) vẫn được phép `DROP SCHEMA`,
-vì `load_billing.py --rebuild` cần một schema trắng để nạp lại danh mục mà không đụng khoá
-chính. Hai đường dùng chung một chuỗi migration; điều bị cấm là **bắt buộc phải xoá thì mới
-đổi được schema**.
+Đường *"dựng lại toàn bộ từ `data/`"* (`connect.rebuild()` → `rebuild_db.py`) được phép xoá
+**dòng**, vì nó nạp lại mọi thứ từ `data/`. Nhưng nó MUST NOT xoá **schema**. Nó SHALL đưa
+schema lên bản mới nhất bằng chính chuỗi migration, tại chỗ, rồi xoá dòng của mọi bảng dữ liệu
+trong **một** giao dịch, trước khi nạp danh mục. Bảng, view, schema, và mọi quyền đã cấp SHALL
+còn nguyên sau khi dựng lại.
 
-Lý do: hôm nay `db/connect.py:132-154` là **cách duy nhất** đổi schema, và nó bắt đầu bằng
-`DROP SCHEMA public CASCADE`. Điều đó vô hại chừng nào mọi dòng còn dựng lại được từ
-`data/` — và hết vô hại vào ngày Gateway ghi dòng đầu tiên, vì dòng Gateway không có bản
-sao ở `data/`. Master Plan giai đoạn 4 và quyết định A1-2 (20/08, *"CÓ ghi `fact_attempt`"*)
-đều dẫn tới ngày đó.
+Bảng mà **chính migration ghi dòng** (hôm nay là `alembic_version` và `ref_source`) MUST NOT bị xoá
+dòng. Database đã có sẵn không chạy lại migration, nên xoá những dòng đó là mất vĩnh viễn. Đo ngày
+14/09/2026 trên database diễn tập: bản đầu của change này xoá cả `ref_source`, và bước nạp Ralli
+chết với `fact_call_source_fkey`. Danh sách bảng giữ lại SHALL được một phép kiểm canh, bằng cách quét
+mọi migration tìm câu ghi dòng.
+
+Lý do bản trước cho phép `DROP SCHEMA` là `load_billing.py --rebuild` cần bảng danh mục **trống**
+để nạp mà không đụng khoá chính. Xoá dòng cũng cho bảng trống, mà không kéo theo schema.
+
+Lý do cấm, đo được: `DROP SCHEMA public CASCADE` xoá mọi GRANT, kể cả quyền đọc của vai mà
+container `api` dùng. Ngày 02/09/2026, sau một lần dựng lại, `api_readonly` đọc được 0/20 bảng và
+0/3 view, và container `api` chạy 38 phút trên một database nó không đọc nổi. Hơn nữa, đường
+dựng lại này đang bị chặn bởi một lỗi khác ở bước 7 của `scripts/update_dashboard.py`. Sửa lỗi đó mà
+còn giữ `DROP SCHEMA` thì sẽ mở lại đúng sự cố trên.
+
+Lý do gốc của yêu cầu này vẫn giữ: trước change `change-the-schema-without-dropping-it`,
+`db/connect.py` là **cách duy nhất** đổi schema, và nó bắt đầu bằng `DROP SCHEMA public CASCADE`.
+Điều đó vô hại chừng nào mọi dòng còn dựng lại được từ `data/`, và hết vô hại vào ngày Gateway ghi
+dòng đầu tiên, vì dòng Gateway không có bản sao ở `data/`.
 
 #### Scenario: Thêm một cột vào bảng đang có dữ liệu
 
@@ -31,6 +45,28 @@ sao ở `data/`. Master Plan giai đoạn 4 và quyết định A1-2 (20/08, *"C
 - **WHEN** một người clone repo về và chưa có database nào
 - **THEN** chạy migration từ đầu SHALL cho ra schema giống hệt database đang chạy
 - **AND** MUST NOT cần `db/01_schema.sql` — file đó không còn tồn tại
+
+#### Scenario: Dựng lại toàn bộ từ data/ không làm mất quyền đọc
+
+- **WHEN** chạy `python scripts/rebuild_db.py` trên một database mà `api_readonly` đang đọc được mọi bảng và view
+- **THEN** sau khi dựng lại, `api_readonly` SHALL vẫn đọc được mọi bảng và view
+- **AND** bước `scripts/check_db_grants.py` SHALL đạt mà không cần chạy lại `docker/read-only-api.sql`
+
+#### Scenario: Dựng lại giữ dòng do migration gieo
+
+- **WHEN** chạy `connect.rebuild()` trên một database đã có sẵn, mà `ref_source` đang có 4 dòng
+- **THEN** sau khi dựng lại, `ref_source` SHALL vẫn có đúng 4 dòng đó
+- **AND** mọi bước nạp của `scripts/rebuild_db.py` SHALL đạt
+
+#### Scenario: Có migration mới gieo dữ liệu vào một bảng khác
+
+- **WHEN** một migration mới ghi dòng vào một bảng chưa nằm trong danh sách giữ lại
+- **THEN** phép kiểm quét migration SHALL đỏ trước khi code đó tới được database thật
+
+#### Scenario: Dựng lại không xoá schema
+
+- **WHEN** `connect.rebuild()` chạy
+- **THEN** không câu lệnh nào nó gửi đi SHALL chứa `DROP SCHEMA` hoặc `DROP DATABASE`
 
 ### Requirement: Chỉ có MỘT chỗ mô tả schema
 
@@ -126,17 +162,29 @@ cộng thẳng `fact_usage_daily` là đếm ba lần):
 - **THEN** quá trình SHALL dừng lại và điều tra nguyên nhân
 - **AND** MUST NOT nới phép so cho vừa ý, MUST NOT xoá database cũ
 
-#### Scenario: Hai database được giữ song song
+#### Scenario: Xoá database cũ sau khi đã chứng minh bằng số
 
-- **WHEN** `token_ledger_v2` đã qua nghiệm thu và trở thành runtime ledger
-- **THEN** `token_ledger` SHALL được giữ nguyên làm bản legacy để đối chiếu và rollback
-- **AND** hệ thống MUST NOT yêu cầu xoá database cũ hoặc rename database mới
-- **AND** ingestion Gateway mới SHALL chỉ ghi vào `token_ledger_v2`, MUST NOT ghi cùng một
-  dòng nghiệp vụ vào cả hai ledger
+Ngày 27/08/2026, `token_ledger` được giữ song song làm bản đối chiếu và quay lui. Ngày 14/09/2026
+nó bị xoá, sau khi so **mọi bảng** với `token_ledger_v2`:
+
+- 0 khoá bị mất.
+- Số liệu của v2 không nhỏ hơn bản cũ ở bất kỳ khoá nào: Monitoring, hoá đơn, `fact_usage_daily`,
+  độ trễ, hiệu năng.
+- Chỗ khác còn lại là danh bạ và cây tổ chức mới hơn (`unit_id`, `role` của 3 người), mà trạng thái
+  cũ vẫn nằm trong `data/raw_web/ralli/2026-08-13` và `2026-08-17`.
+
+Chính phép so này đã bắt được lỗi cộng đôi độ trễ trước khi xoá: một khoá của v2 nhỏ hơn bản cũ.
+
+- **WHEN** muốn xoá một database ledger cũ
+- **THEN** SHALL so mọi bảng của nó với database đang chạy trước khi xoá
+- **AND** MUST NOT xoá khi còn khoá bị mất, hoặc còn khoá mà database đang chạy nhỏ hơn
+- **AND** mọi thông tin chỉ còn ở database cũ SHALL được chứng minh là vẫn còn trong `data/`
+- **AND** việc xoá MUST NOT diễn ra khi còn phiên nào đang kết nối vào database đó
+- **AND** ingestion Gateway SHALL chỉ ghi vào `token_ledger_v2`
 
 #### Scenario: Database vận hành của LiteLLM
 
 - **WHEN** Gateway LiteLLM khởi động và ghi SpendLogs
 - **THEN** LiteLLM SHALL dùng database riêng tên `litellm`
-- **AND** `token_ledger` và `token_ledger_v2` MUST NOT chứa bảng vận hành `LiteLLM_*`
+- **AND** `token_ledger_v2` MUST NOT chứa bảng vận hành `LiteLLM_*`
 

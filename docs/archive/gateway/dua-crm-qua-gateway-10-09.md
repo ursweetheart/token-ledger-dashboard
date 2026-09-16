@@ -93,7 +93,7 @@ Bốn chỗ khác, và cả bốn đều ảnh hưởng tới cách tích hợp:
 ### 3.1 Tầng Gateway
 
 - Tuyến Vertex express chạy: `model_name: gemini-2.5-flash` → `model:
-  gemini/gemini-2.5-flash`, khoá bằng `api_key: os.environ/KEY_BENCH_CRM_TEST`, `api_base:
+  gemini/gemini-2.5-flash`, khoá bằng `api_key: os.environ/KEY_BENCH_CRM_TEST_GG_AIA_STU`, `api_base:
   https://aiplatform.googleapis.com/v1/publishers/google`. 200 trong 0,80 giây
 - `api_base` **phải** kết thúc ở `/publishers/google`, vì `_check_custom_proxy` nối thêm
   `/models/{model}:{endpoint}`. Không khai `vertex_project` / `vertex_location` — express tự
@@ -446,7 +446,7 @@ nạp, trễ 0s/ngưỡng 420s*, 467 dòng nguồn được soát.
 
 - `docker/gateway/config.gateway.yaml` — thêm tuyến CRM; **xoá** `model_group_alias`; **gỡ**
   tag `crm-feedback` khỏi tuyến `gemini-flash`
-- `docker-compose.yml` — truyền `KEY_BENCH_CRM_TEST` vào khối `x-litellm`
+- `docker-compose.yml` — truyền `KEY_BENCH_CRM_TEST_GG_AIA_STU` vào khối `x-litellm`
 - `db/rules.py` — thêm `gemini/gemini-2.5-flash` vào `GATEWAY_MODELS`; cứu 4 dòng chú thích
 - `db/02_catalog.sql` — sinh lại
 - `scripts/refresh_gateway.py` — in lại bộ đếm đáng chú ý
@@ -492,15 +492,34 @@ nào đứng sau một lượt gọi. Bịa một cái tên người vào đó s
 
 ---
 
-## 7. Bốn việc đáng báo lại nhóm CRM
+## 7. Chín việc đáng báo lại nhóm CRM
 
 1. **`GEMINI_BATCH_SIZE=40` không có tác dụng.** `.env.example` khuyến nghị `40`, nhưng
    `config.py:32` là `min(25, ...)` nên bị cắt xuống 25 **mà không báo**. Ai đọc
    `.env.example` sẽ tin lô là 40
-2. **`config.CKPT_JSON` là cấu hình chết.** Khai ở `config.py:25`
-   (`llm_fills_checkpoint.json`) nhưng **không nơi nào dùng**. `docs/HANDOVER.md` vẫn mô tả nó
-   là file cho phép chạy lại. Điểm lưu thật là `save_history_db_atomic` ghi
-   `classified_history_db.json` sau mỗi lô (`pipeline.py:688`)
+2. **`config.CKPT_JSON` là cấu hình chết, và cả mục cứu hộ dựng trên nó cũng chết.** Khai ở
+   `config.py:25` (`llm_fills_checkpoint.json`) nhưng **không nơi nào trong `src/` đọc hay ghi
+   nó**. Điểm lưu thật là `save_history_db_atomic` ghi `classified_history_db.json` sau mỗi lô
+   (`pipeline.py:688`).
+
+   Đo lại ngày 10/09 thì việc này nặng hơn một dòng cấu hình bỏ quên:
+
+   - **Bảy chỗ trong `tests/test_automation.py` gán `config.CKPT_JSON`** (dòng 120, 202, 310,
+     387, 466, 541, 633) và **không chỗ nào đọc lại**. Nên bộ test làm nó *trông như* còn sống:
+     ai đọc test sẽ tin đây là đường cứu hộ có người canh
+   - **Mục `11.2 Step 3 Bị Crash Giữa Chừng` của `docs/HANDOVER.md` không làm theo được.** Nó
+     mở đầu bằng câu **"Không mất dữ liệu! Hệ thống có checkpoint"**, rồi bảo người vận hành
+     `type output\llm_fills_checkpoint.json` để xem đã xử lý bao nhiêu, và
+     `python run_pipeline.py 3` để chạy tiếp. Cả ba đều không tồn tại: file không ai ghi,
+     **`run_pipeline.py` và `step3_call_llm.py` không có trong repo** (`src/` chỉ có
+     `pipeline.py`, `classifier.py`, `config.py`, `db_init.py`, `llm.py`, `notification.py`,
+     `sharepoint.py`)
+   - Cùng cái tên đó còn được dặn ở ba chỗ khác — dòng 360, 584, 800 — trong đó dòng 584 và
+     800 bảo `del` file để chạy lại từ đầu. Lệnh đó **không có tác dụng gì**, mà người chạy lại
+     tưởng mình đã xoá trạng thái cũ
+
+   Hệ quả thật: pipeline hỏng giữa lô, người vận hành làm đúng tài liệu, và tin là đã dọn sạch
+   trong khi trạng thái cũ vẫn nằm nguyên trong `classified_history_db.json`
 3. **`docs/HANDOVER.md` lệch code trên mọi con số.** Không phải một chỗ — mọi chỗ:
 
    | HANDOVER.md nói | code thật là | ở đâu |
@@ -519,6 +538,352 @@ nào đứng sau một lượt gọi. Bịa một cái tên người vào đó s
 
 4. **Không có cờ dry-run.** Xem 5.3. Bất kỳ ai muốn thử pipeline sẽ tải SharePoint thật và
    gửi email thật. Một cờ tắt tác dụng phụ sẽ đáng giá hơn mọi tài liệu
+
+5. **Nhánh 429 ngủ 30 giây cho một lần thử lại không bao giờ xảy ra.** Đây là lỗi lệch giữa
+   hai nhánh trong cùng một vòng, `src/llm.py:283-291`:
+
+   ```python
+   for attempt in range(1, max_retry + 1):          # max_retry = 3 -> 1, 2, 3
+       ...
+       if "429" in low or ...:
+           wait = min(120, 10 * attempt) + random.random() * 2
+           time.sleep(wait)
+           continue                                  # <-- KHONG co chot
+       if attempt < max_retry:                       # <-- nhanh chung CO chot
+           time.sleep(4.0 * attempt)
+           continue
+       raise RuntimeError(...)
+   ```
+
+   Nhánh chung có chốt `if attempt < max_retry` nên tới lượt 3 là ném lỗi ngay, không ngủ.
+   Nhánh 429 **không có chốt đó**: lượt 3 vẫn ngủ `30` giây (cộng ≤2s ngẫu nhiên) rồi `continue`,
+   `range` hết, và rơi xuống `raise` ở sau vòng. Không có lượt 4 nào để chờ.
+
+   Giá phải trả: **mỗi lần 429 dứt điểm tốn thêm 30-32 giây ngủ vô ích**. Với lô 25 dòng thì
+   đây là 30 giây thêm vào trước khi lô đó được báo hỏng. Sửa bằng cách đưa `continue` của
+   nhánh 429 vào trong cùng một chốt `attempt < max_retry`.
+
+   Kèm theo, hai nhánh ném ra **hai câu lỗi khác nhau**, và đây là thứ dùng được:
+
+   | nhánh | câu lỗi cuối |
+   |---|---|
+   | 429 | `Failed calling Gemini API due to exhausted retries.` |
+   | chung | `Failed calling Gemini API after 3 retries. Error: ...` |
+
+   Câu lỗi phân biệt được hai nhánh **mà không cần bấm giờ**, nên nó là mốc đối chiếu độc lập
+   cho phép đo của change `prove-the-crm-path-survives-refusal-and-outage`
+
+6. **NẶNG NHẤT — `max_output_tokens = 8192` bị token suy nghĩ ăn hết 96%, và cả lô bị cắt cụt
+   trong im lặng.** Đo ngày 10/09 trên **dữ liệu thật**, câu nhắc production đầy đủ, 5 bản ghi
+   một lô, đi qua Gateway tới `gemini-2.5-flash`:
+
+   | | |
+   |---|---|
+   | token vào | 5.189 |
+   | token ra | **8.178** trên trần **8.192** — chạm trần, thiếu đúng 14 |
+   | trong đó **suy nghĩ** | **7.860, tức 96%** |
+   | còn lại cho câu trả lời | **318, tức 4%** |
+   | gửi đi | **5** bản ghi |
+   | nhận về | **1** bản ghi |
+   | có báo lỗi không | **không** |
+
+   Chuỗi che lỗi có **bốn tầng**, mỗi tầng giấu thêm một ít:
+
+   ```
+   1. gemini-2.5-flash bat suy nghi MAC DINH, va suy nghi an chung ngan sach
+      max_output_tokens voi cau tra loi   ->  JSON bi cat cut giua chung
+   2. _parse_llm_json goi json_repair (CO trong image)  ->  va lai duoc 1 object
+   3. Va thanh cong nen KHONG ghi failed_llm_response.txt, KHONG canh bao
+   4. call_llm_batch tra ve binh thuong, khong nem loi
+   ```
+
+   Chỉ vòng thử lại trong `pipeline.py` mới đếm được thiếu item, và nó sẽ **thử lại 4 bản ghi
+   kia với cùng ngân sách**, tức nhiều khả năng đâm vào đúng bức tường đó lần nữa. Lô production
+   là **25** bản ghi chứ không phải 5, nên tỷ lệ hụt sẽ tệ hơn hẳn.
+
+   **ĐÃ SỬA VÀ ĐÃ CHỨNG MINH — 10/09, sau khi anh Tuấn hỏi lại lead.**
+
+   Trước hết phải đính chính một điều đang được hiểu sai. Câu hỏi đặt ra là *"quota thinking có
+   tính chung với input không"*, và câu trả lời nhận được là *"nó tính vào rồi, không phải thêm"*.
+   **Vế "không phải thêm" đúng, nhưng nó tính vào OUTPUT chứ không phải input.** Đo ba lượt cùng
+   một câu nhắc, khác nhau đúng một tham số:
+
+   | cách gọi | vào | ra | suy nghĩ | chữ |
+   |---|---|---|---|---|
+   | mặc định | 19 | 296 | 285 | 11 |
+   | `reasoning_effort: "disable"` | 19 | **107** | **không có** | 107 |
+   | `thinking: {"type":"disabled"}` | 19 | 296 | 285 | 11 |
+
+   Cột **vào đứng yên ở 19 cả ba lượt**. Chỗ này quan trọng vì hai lẽ: token ra **đắt hơn token
+   vào khoảng 8 lần**, và nó ăn vào `max_output_tokens` — đúng thứ làm cả lô bị cắt cụt.
+   Dòng thứ ba là một cái bẫy phải nhớ: `thinking: {"type":"disabled"}` bị `drop_params: true`
+   **bỏ im lặng**, số token y hệt lúc không khai gì. Chỉ `reasoning_effort` mới ăn.
+
+   **Sửa ở TUYẾN GATEWAY, không sửa repo CRM.** Thêm `reasoning_effort: "disable"` vào
+   `litellm_params` của tuyến `gemini-2.5-flash`. Cách này không phải đụng code của nhóm khác, và
+   nó áp cho mọi lượt gọi của CRM mà agent không cần khai gì.
+
+   **Đo lại đúng phép thử cũ, cùng 5 bản ghi, cùng câu nhắc — `prompt_tokens` bằng nhau tuyệt đối
+   ở cả hai lượt nên đây là phép so sạch:**
+
+   | | suy nghĩ BẬT | suy nghĩ TẮT |
+   |---|---|---|
+   | token vào | 5.189 | 5.189 |
+   | token ra | **8.178** (chạm trần 8.192) | **2.031** |
+   | trong đó suy nghĩ | 7.860 | **0** |
+   | trong đó chữ | 318 | **2.031** |
+   | thời gian | 42,6 s | **20,3 s** |
+   | tiền một lượt | $0,022002 | **$0,006634** |
+   | gửi 5 bản ghi, nhận về | **1** | **5** |
+   | số cột LLM điền được | — | **57** |
+
+   Rẻ hơn **3,3 lần**, nhanh hơn **2,1 lần**, và phần chữ thật tăng **6,4 lần**. Số cột mà file có
+   còn ta không có tụt từ **26 xuống 7**.
+
+   **Một tác dụng phụ ngoài dự tính, và nó tốt:** hai cột ngày nay ra **đúng** `dd/mm/yyyy` như câu
+   nhắc bắt buộc — `01/01/2026`, `01/04/2026`, `15/10/2026` — trong khi giá trị cũ trong file là
+   `01/01/26`, `01/04/26`, `15/10/26`. Nên các dòng lệch ở cột ngày là **ta đúng, file sai** (xem
+   ý 8). Suy luận bật không làm model tuân thủ định dạng tốt hơn; ở đây nó còn kém hơn.
+
+   **ĐÃ ĐO LÔ 25 — TẮT SUY NGHĨ LÀ CẦN, NHƯNG CHƯA ĐỦ.** Chạy đúng cỡ lô production:
+
+   | lô | vào | ra | suy nghĩ | chữ | gửi → nhận |
+   |---|---|---|---|---|---|
+   | 5 bản ghi | 5.189 | 2.031 | 0 | 2.031 | 5 → **5** |
+   | 25 bản ghi | 10.271 | **8.177** (trần 8.192) | 0 | 8.177 | 25 → **20** |
+
+   Suy nghĩ đã về `0` và toàn bộ ngân sách nay dành cho câu trả lời thật. Nhưng **25 bản ghi cần
+   nhiều hơn `8.192` token**, nên nó lại chạm trần và mất 5 bản ghi cuối.
+
+   **Con số dùng được ngay, và hai cách đo độc lập cho ra gần bằng nhau:**
+
+   ```
+     lo 5  :  2.031 / 5  = 406,2 token ra moi ban ghi
+     lo 25 :  8.177 / 20 = 408,9 token ra moi ban ghi   <- 20 la so ban ghi THUC su tra ve
+   ```
+
+   Lấy tròn **~407 token ra cho mỗi bản ghi**. Từ đó:
+
+   ```
+     so ban ghi toi da lot vao 8.192 token  =  8.192 / 407  ≈  20,1
+   ```
+
+   **Con số `20,1` này giải thích đúng quan sát `20`**, nên đây là mô hình mô tả được thực tế chứ
+   không phải trùng hợp.
+
+   **Hai đường sửa, phải chọn một:**
+
+   1. **Nâng `max_output_tokens`.** `call_llm_batch` (`llm.py:274`) ghi cứng `8192`.
+      `gemini-2.5-flash` cho tới `65.536` token ra. Đặt `12.000` là đủ chỗ cho lô 25 kèm biên an
+      toàn. Đây là cách tốt hơn, nhưng **phải sửa repo CRM** — và đó là chỗ duy nhất đặt giá trị
+      này; không có biến môi trường nào chỉnh được.
+
+      > **ĐÃ THỬ ĐƯỜNG TRÁNH VÀ ĐƯỜNG ĐÓ KHÔNG ĐI ĐƯỢC.** Câu hỏi tự nhiên là: có đặt được ở
+      > tuyến Gateway để khỏi đụng repo của nhóm khác không, giống cách đã làm với
+      > `reasoning_effort`? **Không.**
+      > Thêm `max_tokens: 12000` vào `litellm_params` của tuyến rồi chạy lại đúng lô 25:
+      >
+      > ```
+      >   khong khai o tuyen :  ra = 8.177,  25 -> 20 ban ghi
+      >   khai 12000 o tuyen :  ra = 8.177,  25 -> 19 ban ghi
+      > ```
+      >
+      > Token ra **y hệt**, vẫn dừng ở trần `8.192`. Tham số client tự khai **thắng** mặc định
+      > của tuyến.
+      > Lý do khác với `reasoning_effort` nằm ở chỗ: CRM **không bao giờ gửi** `reasoning_effort`,
+      > nên tuyến điền vào chỗ trống. Còn `max_tokens` thì CRM **có gửi** — lớp đứng thay Gateway
+      > đọc `max_output_tokens` (`llm.py:50`) rồi đặt thẳng vào `body["max_tokens"]`
+      > (`llm.py:72-73`) ở mọi lượt gọi.
+      > **Quy tắc rút ra, dùng được cho mọi tuyến sau này:** tuyến Gateway chỉ đặt được những tham
+      > số mà agent **không** gửi. Tham số agent có gửi thì phải sửa ở agent.
+
+      **ĐÃ THỬ `12000` VÀ NÓ GIẢI QUYẾT ĐƯỢC.** Thử mà **không sửa file trong repo CRM**: chép
+      `llm.py` ra ngoài, đổi đúng một dòng ở bản chép, rồi mount đè vào container. File gốc của
+      nhóm CRM không bị chạm.
+
+      Ba lượt cùng cỡ lô **25**, cùng `10.271` token vào nên so được trực tiếp:
+
+      | lượt | cấu hình | token ra | gửi → nhận | giây | tiền |
+      |---|---|---|---|---|---|
+      | 09:20 | `8192`, tuyến không khai | 8.177 (chạm trần) | 25 → **20** | 40,0 | $0,023524 |
+      | 09:30 | `8192`, tuyến khai `12000` | 8.192 (chạm trần) | 25 → **19** | 23,5 | $0,023561 |
+      | 09:44 | **`12000` trong code CRM** | **11.020** | 25 → **25** | 50,0 | $0,030631 |
+
+      Lượt cuối **không chạm trần** — nó dừng vì viết xong, không phải vì hết chỗ. Đây là lần đầu
+      một lô cỡ production trả về đủ.
+
+      **Nhưng biên an toàn mỏng, và phải nói rõ.** Dùng `11.020` trên trần `12.000` chỉ còn **8%**
+      chỗ thừa. Đo lại theo lô đủ thì mỗi bản ghi tốn `11.020 / 25 = 440,8` token ra, **cao hơn**
+      con số `407` ước từ các lô bị cắt cụt — vì lô cụt không đếm được phần bản ghi dở dang. Lấy
+      `440,8` làm chuẩn thì lô 25 cần `11.020`, và chỉ cần vài bản ghi dài hơn trung bình là tràn
+      tiếp. **Đề nghị đặt `16.000` chứ không phải `12.000`**; model cho tới `65.536` nên chỗ thừa
+      không tốn gì — chỉ token thực sinh mới bị tính tiền.
+
+      **Giá mỗi bản ghi, tính cho đủ:**
+
+      ```
+        suy nghi BAT, lo 5  : $0,022002 / 5  = $0,0044   moi ban ghi
+        suy nghi TAT, lo 25 : $0,030631 / 25 = $0,001225 moi ban ghi
+      ```
+
+      Rẻ hơn **3,6 lần** mỗi bản ghi, và đó là so **sau khi** đã tính cả phần token ra tăng lên do
+      nay viết đủ 25 bản ghi thay vì 20.
+   2. **Hạ cỡ lô xuống 18.** Không phải sửa code, chỉ đặt `GEMINI_BATCH_SIZE=18` trong `.env`.
+      Đổi lại là số lượt gọi tăng, và mỗi lượt vẫn phải trả lại **toàn bộ** câu nhắc `10.181` ký
+      tự, nên tổng token vào sẽ tăng theo.
+
+   **Nối với ý 1 của mục này:** ý đó ghi `GEMINI_BATCH_SIZE=40` bị `min(25, ...)` cắt xuống 25 mà
+   không báo. Nay biết thêm rằng **chính con số 25 cũng đã quá lớn**. Cái chốt `min(25, ...)` được
+   đặt ra để chặn lô quá to, nhưng nó chặn ở một mức vẫn tràn.
+
+   **Và phải biết cái giá của việc tràn:** vòng thử lại trong `pipeline.py` sẽ gọi lại 5 bản ghi
+   thiếu, mà mỗi lượt gọi đều phải gửi lại **toàn bộ** câu nhắc. Nên một lô tràn tốn gần gấp đôi
+   token vào so với một lô vừa khít.
+
+7. **Câu nhắc hứa `allowed` và `locked_labels`, code KHÔNG BAO GIỜ gửi.** Câu nhắc ghi rõ ở mục
+   RÀNG BUỘC TAXONOMY: *"Với mỗi cột trong missing_cols, bạn sẽ được cung cấp danh sách
+   allowed[cột] trong item."* Đã tìm bằng máy: chuỗi `allowed` và `locked` **không xuất hiện ở
+   bất kỳ đâu trong `src/`**. Payload thật (`pipeline.py:582`) chỉ có 5 trường văn bản,
+   `row_idx` và `missing_cols`.
+   Hệ quả: ràng buộc taxonomy chỉ còn dựa vào **danh sách tĩnh viết trong thân câu nhắc**. Và
+   lúc ghép kết quả về (`pipeline.py:670`), code làm `fills[col] = str(val).strip()` — **không
+   kiểm giá trị có nằm trong danh sách hợp lệ hay không**.
+   **Tin tốt, đã đo:** quét toàn bộ 298 dòng có nội dung, **không có một tag bịa nào** trong 14
+   cột phân loại. Chỉ 1 giá trị ngoài danh sách, ở cột hãng đối thủ: `'Kimin'` — nhiều khả năng
+   là hãng thật mà bảng từ khoá còn thiếu, không phải model bịa. Nên đây là **rủi ro chưa nổ**,
+   không phải thiệt hại đã xảy ra.
+
+8. **Hai cột ngày sai định dạng ở 100% số ô.** Câu nhắc ghi `FORMAT BẮT BUỘC: dd/mm/yyyy`.
+   Thực tế trong file: `01/10/25`, `01/09/25`, `01/04/26`, `15/10/26`… — **9 trên 9 ô** dùng năm
+   2 chữ số. Không ô nào đúng định dạng bắt buộc.
+   Đáng chú ý là tầng từ khoá **không đụng** hai cột này: `load_and_index_keywords` loại chúng
+   vì danh sách từ khoá rỗng, nên chúng **hoàn toàn do LLM sinh ra**. Ai đọc `dd/mm/yy` rồi
+   parse bằng `%d/%m/%Y` sẽ hỏng.
+
+9. **Tầng từ khoá gánh ít hơn tên gọi gợi ra rất nhiều.** Câu nhắc mở đầu bằng *"Chỉ xử lý các ô
+   keyword đánh dấu mơ hồ hoặc trống"*, nghe như LLM chỉ vá chỗ trống. Đo trên **cả 220 bản ghi
+   có dữ liệu**:
+
+   | | |
+   |---|---|
+   | cột từ khoá tự chốt | 349 |
+   | cột phải nhờ LLM | **2.731** |
+   | LLM gánh | **88,7%** |
+   | trung bình từ khoá chốt được | **1,59 / 14 cột** |
+   | bản ghi từ khoá chốt được 0 cột | **63, tức 28,6%** |
+
+   Nên đây **không** phải hệ thống từ khoá có LLM vá lỗ. Đây là hệ thống LLM có vài luật từ khoá
+   chặn trước. Điều đó đổi hẳn cách đánh giá rủi ro và cách đọc hoá đơn.
+
+---
+
+## 7b. Rà soát lại chính code ta sắp bàn giao — 10/09
+
+Mục 7 nói về code **của nhóm CRM**. Mục này soi **code của chính ta**: 133 dòng thêm vào
+`src/llm.py` (`_GatewayResponse`, `_GatewayModels`, `_GatewayClient`, `init_llm_client` viết lại).
+Đây là thứ sắp giao cho người khác nên không được để lỗi ẩn.
+
+### Ba nghi ngờ đọc bằng mắt, cả ba đều LOẠI được bằng máy
+
+| Nghi ngờ | Kiểm | Kết quả |
+|---|---|---|
+| `httpx`, `os` chưa import | đọc `llm.py:1-9` | có ở đầu file, **không phải lỗi** |
+| `config.API_KEY` lấy từ biến khác → gửi nhầm khoá Google làm Bearer | `config.py:28` | `API_KEY = os.getenv("GEMINI_API_KEY")`, **cùng một biến**, không có rủi ro |
+| Có bí mật lọt vào file thay đổi | quét 5 mẫu khoá trên `llm.py` và `docker-compose.override.yml` | **0 kết quả**; `.env` và `sa-key.json` đều bị `.gitignore` chặn |
+
+### LỖI THẬT tìm được: không kiểm `finish_reason`
+
+`_GatewayModels.generate_content` đọc `d["choices"][0]["message"]["content"]` rồi trả về ngay. Nó
+**vứt bỏ `finish_reason`** — đúng cái trường nói rằng phản hồi chưa viết xong. Bản gốc có **0** lần
+nhắc tới `finish_reason`.
+
+Đo cho thấy trường này phân biệt sạch:
+
+```
+   max_tokens du   ->  finish_reason = "stop"
+   max_tokens thieu ->  finish_reason = "length"
+```
+
+Hậu quả **đo được trên lô 25 thật**, không phải suy luận:
+
+```
+   gui 25 dong  ->  cham tran 8.192 token ra
+                ->  JSON cut, nhung van con mot ']' o cuoi (vi tri 23.046/23.079)
+                ->  _parse_llm_json goi json_repair, va lai duoc mot mang NGAN HON
+                ->  tra ve 19 dong, KHONG loi, KHONG log
+```
+
+**Một chi tiết làm nó khó phát hiện hơn nữa:** bản ghi cuối trong 19 dòng đó có **13 fills**, cao
+hơn mức trung bình **11,4** của các bản ghi trước. Nghĩa là `json_repair` cắt **gọn ở ranh giới
+object**, không để lại bản ghi dở dang. Nên nhìn kết quả thì **không có dấu hiệu nào** cho thấy vừa
+mất 6 dòng.
+
+Kèm theo, quét 83 ô có giá trị trong 19 bản ghi đó: **2 ô (2,4%) nằm ngoài danh sách tag hợp lệ** —
+`[Kế Hoạch] Kế hoạch lần tới` nhận `'Sản phẩm'` (tag của cột khác), và `[AETT] Đối tượng` nhận
+`'chủ nhà'` viết thường trong khi danh sách ghi `'Chủ nhà'` và câu nhắc bắt buộc phân biệt hoa
+thường. Nối với ý 7 mục 7: không gửi `allowed`, và lúc ghép cũng không kiểm.
+
+### Bản vá đề nghị, đã thử cả hai chiều
+
+Thêm vào ngay trước `return _GatewayResponse(content)`:
+
+```python
+if finish_reason == "length":
+    usage = (d.get("usage") or {})
+    raise RuntimeError(
+        "Gateway tra 200 nhung phan hoi BI CAT CUT (finish_reason=length): "
+        "da dung " + str(usage.get("completion_tokens")) + " token ra tren tran "
+        + str(max_output_tokens) + ". Ket qua se THIEU dong. "
+        "Tang max_output_tokens hoac giam GEMINI_BATCH_SIZE.")
+```
+
+Câu lỗi **cố ý không chứa chuỗi `429`**, để nó rơi vào nhánh lùi lịch chung chứ không bị nhận nhầm
+là quá hạn mức.
+
+Đã thử bằng cách chép `llm.py` ra ngoài rồi mount đè vào container — **file trong repo CRM không bị
+chạm một dòng nào**:
+
+| phép thử | kết quả |
+|---|---|
+| lô 25, trần `8192` (ép cắt cụt) | ném đúng lỗi: `da dung 8177 token ra tren tran 8192` |
+| lô 25, trần `16000` (đủ chỗ) | **25/25 dòng**, không lỗi, `10.534` token ra, 49,3 giây |
+
+Chiều thành công **không** bị bản vá làm hỏng. Hai việc cần giao cho nhóm CRM gộp lại thành một
+lần sửa `src/llm.py`: **nâng `max_output_tokens` lên `16000`** và **thêm khối kiểm trên**.
+
+### Hai điều ghi nhận, chưa đủ mức gọi là lỗi
+
+- **`usage` bị vứt bỏ.** Lớp đứng thay không đọc `usage` từ phản hồi, nên CRM không tự ghi được
+  token nó tiêu. Không sai, nhưng nghĩa là mọi số liệu chỉ tồn tại ở phía Gateway
+- **`httpx.Timeout(300.0)` áp cho cả bốn loại timeout, kể cả `connect`. TÔI ĐÃ LO SAI — đã đo và
+  RÚT LẠI.** Câu cũ tôi viết là *"nếu gói tin bị rơi im lặng thì một lượt gọi có thể treo tới 300
+  giây"*. Đo bằng chính lớp `_GatewayModels`, bốn kiểu hỏng mạng, không tốn lượt gọi nào:
+
+  | kiểu hỏng | `Timeout(300.0)` | `Timeout(300, connect=5)` | lỗi hệ thống |
+  |---|---|---|---|
+  | cổng đóng, host còn sống | **0,04**s | — | `ECONNREFUSED` |
+  | tên miền không phân giải | **0,09**s | — | DNS |
+  | IP `192.0.2.1` (TEST-NET-1) | **21,07**s | 5,01s | `ECONNREFUSED` |
+  | IP trong mạng Docker, không ai đáp ARP | **3,11**s | 3,07s | `EHOSTUNREACH` |
+
+  **Lâu nhất đo được là `21,07` giây, không phải 300.** Nhân đây cũng ghi lại một lỗi phương pháp
+  của chính tôi: lần thử đầu tôi dùng `192.0.2.1` và gọi nó là "gói tin rơi im lặng", nhưng lỗi trả
+  về là `Connection refused` — tức **có thứ gì đó đã trả lời**, nên phép thử đó không dựng đúng
+  cảnh cần dựng. Phải đổi sang một địa chỉ nằm trong dải Docker mà không container nào giữ, để ARP
+  không ai đáp, mới là im lặng thật. Và cảnh đó lại hỏng **nhanh hơn** (`3,11`s).
+
+  Lý do: hạt nhân hệ điều hành **tự bỏ cuộc trước** trong mọi kiểu hỏng dựng được, nên trần 300 giây
+  không bao giờ tới lượt. Tách `connect` xuống 5 giây chỉ ăn thua ở đúng một ô của bảng, và ăn có
+  `16` giây. **Không đáng sửa.**
+
+  **Nhưng phần `read` thì khác, và nó vẫn đúng như tác giả đặt:** nếu Gateway nhận kết nối rồi im,
+  client sẽ chờ đủ 300 giây. Đó là **cố ý** — một lô 25 dòng mất 40 tới 50 giây, và đã quan sát một
+  lượt 81 giây chưa giải thích được (mục 8.2). Không được hạ con số này.
+
+  **Ích lợi mang sang mục 3 của change `prove-the-crm-path-survives-refusal-and-outage`:** khi diễn
+  tập dừng `gateway-lb`, CRM sẽ thấy `ECONNREFUSED` trong **0,04 giây**, không phải treo. Nên nhánh
+  chạy sẽ là lùi lịch chung `4, 8` giây, KHÔNG phải nhánh 429. Ô 3.1 lo timeout ngắn bị đọc nhầm
+  thành treo — theo phép đo này thì lo đó không xảy ra với kiểu hỏng "dừng container"
 
 ---
 

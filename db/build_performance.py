@@ -41,7 +41,7 @@ import logs  # noqa: E402
 log = logs.get_logger("build_performance")
 
 ROOT = Path(__file__).resolve().parents[1]
-LATENCY_CSV = (ROOT / "data" / "raw_google_console" / "do_tre_phan_bo"
+LATENCY_CSV = (ROOT / "data" / "raw_google_console" / "do_tre_phan_bo"  # vi-ok: on-disk path
                / "latency-daily.csv")
 
 # Duoi nguong nay thi phan vi khong noi len dieu gi - 3 luot goi thi "p95" chi la
@@ -100,8 +100,8 @@ def load_latency(cn, dc) -> tuple[int, list[str]]:
     if not LATENCY_CSV.exists():
         raise SystemExit(
             f"{LATENCY_CSV} not found\n"
-            f"  Chay truoc: python scripts/pull_latency_distribution.py\n"
-            f"              python scripts/merge_latency_daily.py")
+            f"  Run first: python scripts/pull_latency_distribution.py\n"
+            f"             python scripts/merge_latency_daily.py")
 
     agents = connect.agent_lookup(cn)          # gcp_project_id -> agent_id
     rows, unknown = [], []
@@ -187,7 +187,7 @@ def load_gateway_latency(cn, dc) -> int:
                          "p99_seconds", "enough_samples", "source"], out)
 
 
-def chi_gateway(cn, dc) -> None:
+def gateway_only(cn, dc) -> None:
     """Dung lai CHI phan `gateway` cua fact_latency_daily. Khong doc CSV.
 
     VI SAO CO CHE DO NAY (them 03/09/2026)
@@ -219,51 +219,52 @@ def chi_gateway(cn, dc) -> None:
     phu thuoc dung cai file ma ham nay sinh ra de tranh phu thuoc.
     Ham tu dem CA HAI nguon truoc/sau va dung han neu monitoring doi.
     """
-    truoc = {k: v for k, v in connect.query(
+    before = {k: v for k, v in connect.query(
         cn, "SELECT source, COUNT(*) FROM fact_latency_daily GROUP BY 1")}
 
     cur = cn.cursor()
     cur.execute("DELETE FROM fact_latency_daily WHERE source = 'gateway'")
     n_gw = load_gateway_latency(cn, dc)
 
-    sau = {k: v for k, v in connect.query(
+    after = {k: v for k, v in connect.query(
         cn, "SELECT source, COUNT(*) FROM fact_latency_daily GROUP BY 1")}
 
     # Dem MOI nguon, khong chi nguon vua dung lai. Chi dem gateway thi mot lenh
     # DELETE quen WHERE VAN cho ket qua "dung" - gateway van ra dung so dong sau
     # khi nap lai, trong khi monitoring da bien mat.
-    khac = {k: (truoc.get(k, 0), sau.get(k, 0))
-            for k in set(truoc) | set(sau)
-            if k != "gateway" and truoc.get(k, 0) != sau.get(k, 0)}
-    if khac:
+    changed = {k: (before.get(k, 0), after.get(k, 0))
+               for k in set(before) | set(after)
+               if k != "gateway" and before.get(k, 0) != after.get(k, 0)}
+    if changed:
         cn.rollback()
         raise SystemExit(
-            "ACCEPTANCE FAILED - rolled back: che do --chi-gateway da dung vao"
-            f" nguon khac: {khac}")
+            "ACCEPTANCE FAILED - rolled back: --gateway-only touched"
+            f" other sources: {changed}")
 
     cn.commit()
-    log.info("  --chi-gateway: fact_latency_daily gateway %d -> %d dong"
-             " | cac nguon khac KHONG doi (%s)",
-             truoc.get("gateway", 0), n_gw,
-             ", ".join(f"{k}={v}" for k, v in sorted(sau.items()) if k != "gateway"))
+    log.info("  --gateway-only: fact_latency_daily gateway %d -> %d rows"
+             " | other sources UNCHANGED (%s)",
+             before.get("gateway", 0), n_gw,
+             ", ".join(f"{k}={v}" for k, v in sorted(after.items()) if k != "gateway"))
     cn.close()
 
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
-    p.add_argument("--chi-gateway", action="store_true",
-                   help="CHI dung lai phan `gateway` cua fact_latency_daily."
-                        " Khong doc CSV, khong dung fact_perf_daily, khong dung"
-                        " dong `monitoring`. Danh cho scripts/refresh_gateway.py.")
+    p.add_argument("--gateway-only", action="store_true",
+                   help="Rebuild ONLY the `gateway` part of fact_latency_daily."
+                        " Reads no CSV, does not touch fact_perf_daily or"
+                        " `monitoring` rows. Used by scripts/refresh_gateway.py.")
     args = p.parse_args()
 
     cn, dc = connect.open_db(args.db)
 
-    if args.chi_gateway:
-        return chi_gateway(cn, dc)
+    if args.gateway_only:
+        return gateway_only(cn, dc)
 
     cur = cn.cursor()
     cur.execute("DELETE FROM fact_perf_daily")
@@ -282,8 +283,8 @@ def main() -> None:
     log.info("  by response code   %s", by_code)
     log.info("  fact_latency_daily %5d rows | %d days without enough samples"
              " (<%d calls)", n_latency + n_gw, few_samples, MIN_SAMPLES)
-    log.info("  ... of which  monitoring %d (histogram, co o sai so)"
-             " | gateway %d (so tho, o = NULL)", n_latency, n_gw)
+    log.info("  ... of which  monitoring %d (histogram, with bucket error)"
+             " | gateway %d (raw values, bucket = NULL)", n_latency, n_gw)
 
     # ================================================== nghiem thu
     # Doi chieu voi CHINH nguon o moi lan chay, khong ghim so.
@@ -296,8 +297,8 @@ def main() -> None:
 
     errors = []
     if int(total_calls or 0) != int(src_calls or 0):
-        errors.append(f"so luot {int(total_calls or 0):,} != {int(src_calls or 0):,}"
-                   f" trong fact_monitoring")
+        errors.append(f"calls {int(total_calls or 0):,} != {int(src_calls or 0):,}"
+                   f" in fact_monitoring")
     if unknown_projects:
         errors.append(f"projects missing from dim_agent: {unknown_projects}")
     if n_latency == 0:
@@ -305,21 +306,21 @@ def main() -> None:
     # Phan vi tu so THO khong duoc mang o histogram. Mot dong gateway co
     # p95_bucket_* khac NULL nghia la ai do da dan sai so cua phep do KHAC len
     # mot con so von khong co sai so do - va no se trong y nhu that.
-    gw_co_o = connect.query_one(cn, """
+    gateway_with_bucket = connect.query_one(cn, """
         SELECT COUNT(*) FROM fact_latency_daily
         WHERE source = 'gateway'
           AND (p95_bucket_from IS NOT NULL OR p95_bucket_to IS NOT NULL)""")[0]
-    if gw_co_o:
-        errors.append(f"{gw_co_o} gateway rows carry a histogram bucket -"
+    if gateway_with_bucket:
+        errors.append(f"{gateway_with_bucket} gateway rows carry a histogram bucket -"
                       f" raw percentiles have no interpolation error to describe")
     # Moi (ngay, agent, nguon) dung MOT dong. Hai dong nghia la khoa chinh cua
     # migration 008 khong lam viec, va mot trong hai nguon dang bi ghi de.
-    trung_khoa = connect.query_one(cn, """
+    duplicate_keys = connect.query_one(cn, """
         SELECT COUNT(*) FROM (
             SELECT day, agent_id, source FROM fact_latency_daily
             GROUP BY 1, 2, 3 HAVING COUNT(*) > 1) t""")[0]
-    if trung_khoa:
-        errors.append(f"{trung_khoa} (day, agent, source) keys appear twice")
+    if duplicate_keys:
+        errors.append(f"{duplicate_keys} (day, agent, source) keys appear twice")
     # p95 phai nam trong chinh o chua no. Lech nghia la doc nham cot khi anh xa
     # CSV - loi khong the thay bang mat vi moi so deu trong nhu that.
     outside_bucket = connect.query_one(cn, """

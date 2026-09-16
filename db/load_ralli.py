@@ -46,7 +46,7 @@ def _latest_ralli() -> Path:
     remaining = sorted(p for p in parent_dir.glob("*") if p.is_dir())
     if not remaining:
         raise SystemExit(f"no pull batch in {parent_dir}."
-                         f" Chay scripts/pull_web_apps.py truoc.")
+                         f" Run scripts/pull_web_apps.py first.")
     return remaining[-1]
 
 
@@ -69,7 +69,8 @@ RECORD_FORMATS = {8: 1, 14: 2, 16: 3}          # so truong -> ma dinh dang
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
     args = p.parse_args()
 
@@ -127,8 +128,8 @@ def main() -> None:
     if unknown_format or missing_model:
         raise SystemExit(
             "the data has an unknown shape - stopping, nothing loaded:\n"
-            f"  so truong la : {dict(unknown_format)}\n"
-            f"  model chua co: {dict(missing_model)}")
+            f"  unknown field count: {dict(unknown_format)}\n"
+            f"  model not yet known: {dict(missing_model)}")
 
     cur.execute("DELETE FROM fact_call")
     cur.executemany(
@@ -162,23 +163,23 @@ def main() -> None:
     # thich o load_org.py.
     unattributed_app = None
     for u in json.loads(YEAR_STATS.read_text(encoding="utf-8-sig")).get("by_unit", []):
-        if str(u.get("unit_name", "")).strip().lower() in ("không xác định", "khong xac dinh"):
+        if str(u.get("unit_name", "")).strip().lower() in ("không xác định", "khong xac dinh"):  # vi-ok: the app's own label
             unattributed_app = u.get("calls")
 
     errors = []
     if n != src_rows:
         errors.append(f"row count {n} != {src_rows} counted from the raw table")
     if tok != src_tokens:
-        errors.append(f"token {tok} != {src_tokens} trong bang tho")
+        errors.append(f"tokens {tok} != {src_tokens} in the raw table")
     if missing_cached != src_missing_cached:
         errors.append(f"cached NULL {missing_cached} != {src_missing_cached} records missing the field")
     if by_format != dict(src_by_format):
-        errors.append(f"dinh dang {by_format} != {dict(src_by_format)} dem tu bang tho")
+        errors.append(f"record format {by_format} != {dict(src_by_format)} counted from the raw table")
     if unattributed_app is None:
-        errors.append(f"could not find the 'Khong xac dinh' entry in {YEAR_STATS.name}"
+        errors.append(f"could not find the 'Khong xac dinh' entry in {YEAR_STATS.name}"  # vi-ok: the app's own label
                    f" - the independent cross-check is gone, refusing to load blind")
     elif unattributed_calls != unattributed_app:
-        errors.append(f"khong quy duoc {unattributed_calls} != {unattributed_app} (so app tu tinh doc lap)")
+        errors.append(f"unresolvable {unattributed_calls} != {unattributed_app} (the app's own independent count)")
     if errors:
         cn.rollback()
         raise SystemExit("ACCEPTANCE FAILED - rolled back:\n  "

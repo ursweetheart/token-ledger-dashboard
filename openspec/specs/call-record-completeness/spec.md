@@ -50,4 +50,3 @@ phép đo.
 - **WHEN** một phép đối chiếu đã lên kế hoạch cần trường đang rỗng
 - **THEN** hệ thống SHALL ghi lại rằng phép đối chiếu đó chưa thực hiện được, kèm lý do đo được,
   và MUST NOT báo là đã đối chiếu xong
-

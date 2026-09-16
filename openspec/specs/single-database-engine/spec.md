@@ -24,8 +24,10 @@ người đọc tin rằng có đường lui.
 #### Scenario: Dựng lại database
 
 - **WHEN** `connect.rebuild()` được gọi
-- **THEN** nó SHALL chỉ có một đường: `DROP SCHEMA public CASCADE` rồi chạy migration
+- **THEN** nó SHALL chỉ có một đường: chạy migration tại chỗ, rồi xoá dòng của mọi bảng dữ liệu trong một giao dịch (trừ bảng mà migration ghi dòng), rồi nạp danh mục
 - **AND** MUST NOT còn nhánh xoá file
+- **AND** MUST NOT gọi `DROP SCHEMA` (xem `schema-migrations`)
+- **AND** SHALL vẫn trả về `(connection, placeholder)` như trước, để mọi chỗ gọi `rebuild()` không phải đổi
 
 ### Requirement: Migration được phép dùng cú pháp riêng của PostgreSQL
 

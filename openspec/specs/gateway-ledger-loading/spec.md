@@ -149,4 +149,3 @@ cung cấp.
 #### Scenario: Bảng giá có chiết khấu hoặc phụ phí
 - **WHEN** số tiền của Gateway đã bị áp thêm chiết khấu hoặc phụ phí khác không
 - **THEN** bộ nạp SHALL dừng và báo, vì khi đó giá trị tổng không còn là giá gốc của nhà cung cấp
-

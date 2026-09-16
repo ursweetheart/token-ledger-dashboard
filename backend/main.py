@@ -6,14 +6,14 @@
     http://127.0.0.1:8000/docs     tài liệu tự sinh, bấm thử được từng endpoint
 
 Đổi database:
-    set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger
+    set TOKEN_LEDGER_DSN=postgresql://token:token_local@127.0.0.1:5432/token_ledger_v2
 
 PHẢI CÓ KHOÁ MỚI CHẠY ĐƯỢC
 --------------------------
     python -c "import secrets; print(secrets.token_urlsafe(32))"   # sinh khoá
     DASHBOARD_KEY=<khoá vừa sinh>            # vào .env, HOẶC set/export
 
-Thiếu biến này thì máy chủ KHÔNG khởi động - xem khối `nguoi_goi()` bên dưới.
+Thiếu biến này thì máy chủ KHÔNG khởi động - xem khối `caller()` bên dưới.
 Đó là chủ ý: chế độ hỏng phải là "không chạy", tuyệt đối không phải "chạy mở".
 
 TRƯỚC 21/08/2026 chỗ này ghi "VÌ SAO CHỈ CHẠY TRÊN 127.0.0.1" và dựa vào đúng
@@ -73,7 +73,7 @@ from . import store
 # bấm thử từ /docs mà không dán khoá thì vẫn nhận 401. Để mở là có ích: đó là
 # chỗ người mới học được cách gửi khoá. Ngày máy chủ ra khỏi 127.0.0.1 thì cân
 # nhắc lại, vì khi đó lược đồ là thứ giúp người lạ dò nhanh hơn.
-def _doc_env(ten: str) -> str:
+def _read_env(name: str) -> str:
     """Đọc một biến: môi trường thật trước, rồi tới file `.env` ở gốc repo.
 
     VÌ SAO PHẢI ĐỌC `.env` Ở ĐÂY
@@ -92,19 +92,19 @@ def _doc_env(ten: str) -> str:
     thuộc vào scripts/. Cả hai đều chỉ tách `KEY=VALUE` nên khó trôi, nhưng
     sửa một bên thì ngó sang bên kia.
     """
-    gia_tri = os.environ.get(ten, "").strip()
-    if gia_tri:
-        return gia_tri
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
     env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                        ".env")
     try:
         with open(env, encoding="utf-8-sig", errors="replace") as f:
-            for dong in f:
-                dong = dong.strip()
-                if not dong or dong.startswith("#") or "=" not in dong:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
                     continue
-                k, v = dong.split("=", 1)
-                if k.strip() == ten:
+                k, v = line.split("=", 1)
+                if k.strip() == name:
                     return v.strip().strip('"').strip("'")
     except OSError:
         pass
@@ -116,8 +116,8 @@ def _doc_env(ten: str) -> str:
     return ""
 
 
-DASHBOARD_KEY = _doc_env("DASHBOARD_KEY")
-DASHBOARD_OPEN = _doc_env("DASHBOARD_OPEN") == "1"
+DASHBOARD_KEY = _read_env("DASHBOARD_KEY")
+DASHBOARD_OPEN = _read_env("DASHBOARD_OPEN") == "1"
 
 # Thiếu cấu hình thì KHÔNG khởi động. `raise SystemExit` ở mức module nên uvicorn
 # vấp ngay lúc nạp `backend.main:app` - đối tượng `app` chưa kịp tồn tại, không
@@ -160,7 +160,7 @@ class Principal:
     """AI đang gọi. Trả về ĐỐI TƯỢNG, không trả True/False.
 
     Hôm nay chỉ có một giá trị thật (`shared_key`), nên nhìn thì thừa. Nó không
-    thừa vì ngày lên JWT theo người, `nguoi_goi()` trả
+    thừa vì ngày lên JWT theo người, `caller()` trả
     `Principal(kind='user', name='bh1.longnt')` và 8 endpoint không phải sửa
     một chữ. Trả boolean thì ngày đó phải mở lại từng endpoint để lấy tên người
     - tức là sửa 8 chỗ thay vì 1.
@@ -176,17 +176,17 @@ class Principal:
 # 401 - và spec đòi 401. Để mặc định thì phép kiểm "gọi không khoá phải nhận
 # 401" sẽ trượt vì một lý do chẳng liên quan gì tới xác thực.
 _bearer = HTTPBearer(auto_error=False,
-                     description="Khoa dashboard. Dan vao o 'Value', khong kem"
-                                 " chu 'Bearer'.")
+                     description="Dashboard key. Paste it into the 'Value' box,"
+                                 " without the word 'Bearer'.")
 
 
-def nguoi_goi(cred: HTTPAuthorizationCredentials | None
+def caller(cred: HTTPAuthorizationCredentials | None
               = Depends(_bearer)) -> Principal:
     """Kiểm chứng danh. Đây là hàm DUY NHẤT phải sửa khi lên JWT."""
     if DASHBOARD_OPEN:
-        return Principal(kind="open_mode", name="khong-kiem")
+        return Principal(kind="open_mode", name="unchecked")
     if cred is None or not cred.credentials:
-        raise HTTPException(401, "Thieu header 'Authorization: Bearer <khoa>'",
+        raise HTTPException(401, "Missing header 'Authorization: Bearer <key>'",
                             headers={"WWW-Authenticate": "Bearer"})
     # compare_digest chứ không phải `==`: phép so bằng của Python thoát ra ngay
     # ký tự đầu khác nhau, nên thời gian trả lời rò rỉ số ký tự đầu đã đoán đúng.
@@ -198,7 +198,7 @@ def nguoi_goi(cred: HTTPAuthorizationCredentials | None
     # sập gọi được mà không cần biết khoá. Với `bytes` thì không có giới hạn đó.
     if not secrets.compare_digest(cred.credentials.encode("utf-8"),
                                   DASHBOARD_KEY.encode("utf-8")):
-        raise HTTPException(401, "Khoa khong dung",
+        raise HTTPException(401, "Wrong key",
                             headers={"WWW-Authenticate": "Bearer"})
     return Principal(kind="shared_key", name="dashboard")
 
@@ -206,8 +206,8 @@ def nguoi_goi(cred: HTTPAuthorizationCredentials | None
 app = FastAPI(
     title="Token Ledger API",
     version="1.0",
-    description="Doc du lieu chi phi / token / hieu nang cua cac AI agent."
-                " Chi doc, khong ghi.",
+    description="Reads cost / token / performance data of the AI agents."
+                " Read-only, never writes.",
 )
 
 # Dashboard mở bằng file:// (origin 'null') hoặc từ một cổng khác.
@@ -248,17 +248,17 @@ def date_range(start: str | None, end: str | None) -> tuple[str, str]:
         # có regex \d{4}-\d{2}-\d{2} và '2026-13-99' lọt qua hết - trả về bảng
         # rỗng, không lỗi nào. Người gọi sẽ tưởng kỳ đó không có dữ liệu.
         if not DATE_RE.match(x):
-            raise HTTPException(400, f"Ngay phai dang YYYY-MM-DD, nhan duoc {x!r}")
+            raise HTTPException(400, f"Date must look like YYYY-MM-DD, got {x!r}")
         try:
             date.fromisoformat(x)
         except ValueError:
-            raise HTTPException(400, f"Khong phai ngay co that: {x!r}")
+            raise HTTPException(400, f"Not a real date: {x!r}")
     if start > end:
         start, end = end, start
     return start, end
 
 
-@app.get("/healthz", summary="May chu con song khong - KHONG tra du lieu nghiep vu")
+@app.get("/healthz", summary="Is the server alive - returns NO business data")
 def healthz():
     """Điểm thăm dò sống-chết. Endpoint DUY NHẤT không đòi khoá.
 
@@ -276,33 +276,33 @@ def healthz():
     return {"status": "ok"}
 
 
-@app.get("/api/health", summary="Du lieu co gi, moi den dau, thieu cho nao")
-def health(who: Principal = Depends(nguoi_goi)):
+@app.get("/api/health", summary="What data there is, how fresh, where the gaps are")
+def health(who: Principal = Depends(caller)):
     with store.open_db() as (cn, _):
         return store.health(cn)
 
 
-@app.get("/api/catalog", summary="Agent, model, don vi, ty gia - doi rat it")
-def catalog(who: Principal = Depends(nguoi_goi)):
+@app.get("/api/catalog", summary="Agents, models, units, FX rate - rarely change")
+def catalog(who: Principal = Depends(caller)):
     with store.open_db() as (cn, _):
         return {"agents": store.agents(cn), "models": store.models(cn),
                 "units": store.units(cn), "fx_rate": store.fx_rate(cn)}
 
 
-@app.get("/api/usage", summary="Token va chi phi theo ngay/agent/model")
+@app.get("/api/usage", summary="Tokens and cost by day/agent/model")
 def usage(start: str | None = Query(None, description="YYYY-MM-DD"),
           end: str | None = Query(None, description="YYYY-MM-DD"),
-          who: Principal = Depends(nguoi_goi)):
+          who: Principal = Depends(caller)):
     start, end = date_range(start, end)
     with store.open_db() as (cn, ph):
         rows = store.usage(cn, ph, start, end)
     return {"start": start, "end": end, "count": len(rows), "rows": rows}
 
 
-@app.get("/api/usage-hourly", summary="Token theo GIO - bat buoc neu khoang ngay")
-def usage_hourly(start: str | None = Query(None, description="YYYY-MM-DD, BAT BUOC"),
-                 end: str | None = Query(None, description="YYYY-MM-DD, BAT BUOC"),
-                 who: Principal = Depends(nguoi_goi)):
+@app.get("/api/usage-hourly", summary="Tokens by HOUR - a date range is required")
+def usage_hourly(start: str | None = Query(None, description="YYYY-MM-DD, REQUIRED"),
+                 end: str | None = Query(None, description="YYYY-MM-DD, REQUIRED"),
+                 who: Principal = Depends(caller)):
     """BAT BUOC co `start` va `end` - khong nhu cac endpoint khac.
 
     Cac endpoint theo ngay mac dinh 30 ngay gan nhat khi goi tran. O day thi
@@ -314,12 +314,12 @@ def usage_hourly(start: str | None = Query(None, description="YYYY-MM-DD, BAT BU
     hoa don Google chi tinh theo ngay. Doc cot `source` de biet nguon nao co
     mat, dung gia dinh bang nay phu het luu luong.
     """
-    thieu = [t for t, v in (("start", start), ("end", end)) if not v]
-    if thieu:
+    missing = [t for t, v in (("start", start), ("end", end)) if not v]
+    if missing:
         raise HTTPException(
             400,
-            f"Endpoint theo gio BAT BUOC co khoang thoi gian. Thieu: "
-            f"{', '.join(thieu)}. Vi du: /api/usage-hourly"
+            f"The hourly endpoint REQUIRES a time range. Missing: "
+            f"{', '.join(missing)}. Example: /api/usage-hourly"
             f"?start=2026-08-31&end=2026-08-31")
     start, end = date_range(start, end)
     with store.open_db() as (cn, ph):
@@ -331,14 +331,14 @@ def usage_hourly(start: str | None = Query(None, description="YYYY-MM-DD, BAT BU
             "sources": by_source, "rows": rows}
 
 
-@app.get("/api/accounts", summary="Danh ba nhan vien kem don vi")
-def accounts(who: Principal = Depends(nguoi_goi)):
+@app.get("/api/accounts", summary="Staff directory with units")
+def accounts(who: Principal = Depends(caller)):
     with store.open_db() as (cn, _):
         return {"rows": store.accounts(cn)}
 
 
-@app.get("/api/adoption", summary="Ty le tai khoan duoc cap co phat sinh request")
-def adoption(who: Principal = Depends(nguoi_goi)):
+@app.get("/api/adoption", summary="Share of provisioned accounts that made requests")
+def adoption(who: Principal = Depends(caller)):
     """KHONG nhan khoang ngay - day la chi tieu TICH LUY.
 
     Xem ghi chu o store.adoption(): ep no theo thanh truot ngay thi cung mot
@@ -349,9 +349,9 @@ def adoption(who: Principal = Depends(nguoi_goi)):
         return {"rows": store.adoption(cn)}
 
 
-@app.get("/api/usage-by-account", summary="Su dung quy ve tung nguoi")
+@app.get("/api/usage-by-account", summary="Usage attributed to each person")
 def usage_by_account(start: str | None = None, end: str | None = None,
-                     who: Principal = Depends(nguoi_goi)):
+                     who: Principal = Depends(caller)):
     start, end = date_range(start, end)
     with store.open_db() as (cn, ph):
         rows = store.usage_by_account(cn, ph, start, end)
@@ -364,18 +364,16 @@ def usage_by_account(start: str | None = None, end: str | None = None,
             "warnings": coverage}
 
 
-@app.get("/api/performance", summary="Ma tra ve va do tre - hai do min khac nhau")
+@app.get("/api/performance", summary="Response codes and latency - two different grains")
 def performance(start: str | None = None, end: str | None = None,
-                who: Principal = Depends(nguoi_goi)):
+                who: Principal = Depends(caller)):
     start, end = date_range(start, end)
     with store.open_db() as (cn, ph):
         result = store.performance(cn, ph, start, end)
     return {"start": start, "end": end, **result}
 
 
-@app.get("/api/thinking", summary="Token co bat che do thinking (chi Monitoring)")
-def thinking(start: str | None = None, end: str | None = None,
-             who: Principal = Depends(nguoi_goi)):
-    start, end = date_range(start, end)
-    with store.open_db() as (cn, ph):
-        return {"start": start, "end": end, "rows": store.thinking(cn, ph, start, end)}
+# `/api/thinking` GỠ 12/09/2026. Token suy luận và token ra là MỘT biến: hoá đơn
+# không có SKU riêng cho suy nghĩ, nó nằm trong SKU output và tính theo giá output.
+# Endpoint này trả về một lát cắt nằm sẵn trong `output_tokens` và không nơi nào
+# đọc ra màn hình. Ghi chú đầy đủ ở `backend/store.py`, chỗ hàm `thinking()` cũ.

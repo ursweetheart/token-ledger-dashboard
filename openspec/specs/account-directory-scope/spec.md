@@ -120,4 +120,3 @@ sự thành công. Cấm nhầm nó là chữa triệu chứng sai.
 
 - **WHEN** harness được gieo khoá khớp với `DASHBOARD_KEY` của máy chủ
 - **THEN** nó SHALL nạp được và in `REAL_ACCOUNTS` = **937**, `USER_ACCOUNTS` = **937**
-

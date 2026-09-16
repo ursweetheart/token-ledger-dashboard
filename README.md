@@ -58,6 +58,20 @@ python scripts/update_dashboard.py        # 9 bước, ~15 phút, có 1 bước 
 
 Chi tiết từng chặng: [`docs/reference/toan-trinh-du-lieu.md`](docs/reference/toan-trinh-du-lieu.md)
 
+## Phép kiểm
+
+```bash
+node --test tests/*.test.js                          # 51 phép
+python -m unittest discover -s tests -p "test_*.py"  # 11 phép
+```
+
+**Không cần cài gì** — không có `package.json`, không có `requirements` cho phần kiểm. Đã đo trong
+container trắng: `node:24-alpine` và `python:3.12-slim` đều chạy đủ, không cài gói nào.
+
+Cả hai lệnh này chạy tự động trên mỗi lần đẩy code, kèm một nhóm canh cấu hình. Xem
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) — đừng chép lại nội dung nó vào đây, hai bản
+sao sẽ trôi khỏi nhau.
+
 ## Thư mục
 
 | | |
@@ -82,6 +96,7 @@ Quy tắc đầy đủ, kèm bảng "thêm file mới thì để đâu":
 - [Mô tả database](docs/reference/mo-ta-database.md) — 18 bảng, 30 phép kiểm
 - [Cây thư mục](docs/reference/cay-thu-muc.md)
 - [API TLA Hợp Đồng](docs/reference/api-map-tla-hd.md)
+- [Luật cho lệnh triển khai tự động](docs/reference/luat-trien-khai-tu-dong-13-09.md) — ba thứ bị cấm, mỗi thứ một lý do đã đo
 
 ---
 

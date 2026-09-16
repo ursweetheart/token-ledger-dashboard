@@ -77,4 +77,3 @@ Số tài khoản hoạt động SHALL là số tài khoản distinct có ít nh
 #### Scenario: Account is provisioned but has no requests
 - **WHEN** tài khoản tồn tại nhưng không có request trong kỳ
 - **THEN** tài khoản được tính vào tổng số cấp nhưng không tính vào số hoạt động
-

@@ -36,6 +36,7 @@ Google Cloud Console khong cho tai bao cao GMSSub bang API voi quyen hien co.
 Buoc 0 kiem ngay lon nhat trong data/billing/*.csv; cu hon hom qua thi dung han
 va in ra viec can lam. Khong tu chay tiep voi hoa don cu, vi khi do dashboard se
 co request cua hom nay nhung token cua tuan truoc - sai ma trong nhu that.
+Co y chay voi hoa don cu thi them --allow-stale-billing.
 """
 
 from __future__ import annotations
@@ -86,9 +87,9 @@ def check_billing(allow_stale: bool) -> str:
     files = sorted(folder.glob("*GMSSub*.csv"))
     if not files:
         raise StepFailed(
-            f"Khong tim thay file hoa don nao trong {folder}\n"
-            f"  Vao Google Cloud Console > Billing > Reports, tai ve 7 file GMSSub\n"
-            f"  (moi project mot file) roi bo vao thu muc tren."
+            f"No billing file found in {folder}\n"
+            f"  Go to Google Cloud Console > Billing > Reports, download the 7 GMSSub files\n"
+            f"  (one per project) and put them in the folder above."
         )
 
     newest = ""
@@ -104,9 +105,9 @@ def check_billing(allow_stale: bool) -> str:
     if newest < yesterday:
         if not allow_stale:
             raise StepFailed(
-                f"Hoa don CU: ngay moi nhat {newest}, dang le phai >= {yesterday}.\n"
-                f"  Tai lai 7 file GMSSub tu Google Cloud Console vao {folder}\n"
-                f"  roi chay lai. Neu co y muon dung hoa don cu, them --hoa-don-cu."
+                f"STALE billing: newest day {newest}, expected >= {yesterday}.\n"
+                f"  Download the 7 GMSSub files again from Google Cloud Console into {folder}\n"
+                f"  and rerun. To use stale billing on purpose, add --allow-stale-billing."
             )
         log.warning("billing data is stale (%s), continuing as requested", newest)
     return newest
@@ -115,13 +116,14 @@ def check_billing(allow_stale: bool) -> str:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--hoa-don-cu", action="store_true",
-                   help="Van chay du hoa don chua duoc tai moi (mac dinh: dung)")
-    p.add_argument("--bo-monitoring", action="store_true",
-                   help="Bo qua buoc keo Monitoring (~10-15 phut). Van gop lai tu cac dot da co.")
-    p.add_argument("--ngay-monitoring", type=int, default=196,
-                   help="So ngay keo ve. Google chi giu mot phan, keo rong khong hai gi.")
+                                formatter_class=argparse.RawDescriptionHelpFormatter,
+                                allow_abbrev=False)
+    p.add_argument("--allow-stale-billing", action="store_true",
+                   help="Run even if billing was not downloaded again (default: stop)")
+    p.add_argument("--skip-monitoring", action="store_true",
+                   help="Skip the Monitoring pull (~10-15 min). Existing batches are still merged.")
+    p.add_argument("--monitoring-days", type=int, default=196,
+                   help="Days to pull. Google keeps only part of them; asking wide does no harm.")
     args = p.parse_args()
 
     total = time.time()
@@ -129,36 +131,36 @@ def main() -> None:
 
     try:
         log.info("[0/9] check billing files")
-        check_billing(args.hoa_don_cu)
+        check_billing(args.allow_stale_billing)
 
         # Buoc nay dang nhap mot lan roi vut token di; buoc 4 dang nhap lai.
         # Doi lai la biet ngay tu giay thu 5 rang xac thuc co chay duoc khong,
         # thay vi biet sau 15 phut. Hai lan dang nhap re hon nhieu so voi mot
         # lan keo Monitoring bi vut bo.
-        run_step("[1/9] Kiem token 2 web app",
-             [PY, "scripts/pull_web_apps.py", "--chi-kiem-token"])
+        run_step("[1/9] check tokens for the 2 web apps",
+             [PY, "scripts/pull_web_apps.py", "--token-only"])
 
-        if args.bo_monitoring:
+        if args.skip_monitoring:
             log.info("[2/9] pull Cloud Monitoring - SKIPPED as requested")
         else:
-            run_step("[2/9] Keo Cloud Monitoring",
+            run_step("[2/9] pull Cloud Monitoring",
                  [PY, "scripts/pull_monitoring.py",
-                  "--days", str(args.ngay_monitoring), "--align", "60"])
+                  "--days", str(args.monitoring_days), "--align", "60"])
 
-        run_step("[3/9] Gop cac dot keo Monitoring", [PY, "scripts/merge_monitoring.py"])
-        run_step("[4/9] Keo Ralli + TLA Hop Dong", [PY, "scripts/pull_web_apps.py"])
+        run_step("[3/9] merge Monitoring batches", [PY, "scripts/merge_monitoring.py"])
+        run_step("[4/9] pull Ralli + TLA Contract", [PY, "scripts/pull_web_apps.py"])
         # pull_web_apps chi lay cac trang tong hop san. Chieu NGAY x NGUOI x MODEL
-        # cua TLA Hop Dong phai keo rieng - xem docstring pull_hd_usage.py.
+        # cua TLA Hop Dong phai keo rieng - xem docstring pull_tla_contract_usage.py.
         # Thieu buoc nay thi db/load_org.py dung han vi khong tim thay
         # usage-day-user-model.json, va do la hong DUNG cho: som va on ao.
-        run_step("[5/9] Keo chieu nguoi dung TLA Hop Dong",
-             [PY, "scripts/pull_hd_usage.py"])
-        run_step("[6/9] Gop hoa don", [PY, "scripts/merge_billing.py"])
-        run_step("[7/9] Gop histogram do tre theo ngay",
+        run_step("[5/9] pull TLA Contract per-user usage",
+             [PY, "scripts/pull_tla_contract_usage.py"])
+        run_step("[6/9] merge billing", [PY, "scripts/merge_billing.py"])
+        run_step("[7/9] merge daily latency histograms",
              [PY, "scripts/merge_latency_daily.py",
-              "--out", "data/raw_google_console/do_tre_phan_bo/latency-daily.csv"])
-        run_step("[8/9] Dung lai database", [PY, "scripts/rebuild_db.py"])
-        run_step("[9/9] Soi database", [PY, "scripts/audit_db.py"])
+              "--out", "data/raw_google_console/do_tre_phan_bo/latency-daily.csv"])  # vi-ok: on-disk path
+        run_step("[8/9] rebuild database", [PY, "scripts/rebuild_db.py"])
+        run_step("[9/9] audit database", [PY, "scripts/audit_db.py"])
 
     except StepFailed as e:
         log.error("STOPPED: %s", e)

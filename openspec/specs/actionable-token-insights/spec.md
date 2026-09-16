@@ -74,4 +74,3 @@ Hệ thống MUST NOT tạo baseline, contributor, forecast hoặc recommendatio
 #### Scenario: Previous period has no data
 - **WHEN** không có dữ liệu kỳ trước
 - **THEN** hệ thống hiển thị chưa đủ dữ liệu so sánh và không tạo phần trăm thay đổi
-

@@ -17,13 +17,13 @@ What it changes, and nothing else:
   * sorts rows chronologically (the API returns newest-first, per metric)
   * writes UTF-8 with BOM so Excel shows Vietnamese text correctly on open
 
-Values are never touched. Rows are never dropped unless --loc is passed, and
+Values are never touched. Rows are never dropped unless --filter is passed, and
 even then the raw file still holds everything.
 
 Usage
     python scripts/make_readable.py                  # ban keo moi nhat
     python scripts/make_readable.py --dir data/raw_google_console/du_lieu_giam_sat/2026-08-06-1m
-    python scripts/make_readable.py --loc            # bo dong rac (xem duoi)
+    python scripts/make_readable.py --filter         # bo dong rac (xem duoi)
 """
 
 from __future__ import annotations
@@ -34,8 +34,8 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-RAW = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"
-DA_XU_LY = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"
+RAW = ROOT / "data" / "raw_google_console" / "du_lieu_giam_sat"  # vi-ok: on-disk path
+PROCESSED = ROOT / "data" / "da_xu_ly" / "du_lieu_giam_sat"  # vi-ok: on-disk path
 
 GEMINI = "generativelanguage.googleapis.com"
 VN_COLUMN = "ts_ict_vn"
@@ -112,12 +112,13 @@ def write(path: Path, rows: list[dict], columns: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     allow_abbrev=False)
     parser.add_argument("--dir", default="",
-                        help="Thu muc mot dot keo trong data/raw_google_console")
-    parser.add_argument("--out", default="", help="Thu muc ghi ra (mac dinh data/da_xu_ly)")
-    parser.add_argument("--loc", action="store_true",
-                        help="Bo dong _limit va dich vu khong phai Gemini")
+                        help="One pull folder inside data/raw_google_console")
+    parser.add_argument("--out", default="", help="Output folder (default data/da_xu_ly)")
+    parser.add_argument("--filter", action="store_true",
+                        help="Drop _limit rows and services other than Gemini")
     args = parser.parse_args()
 
     if args.dir:
@@ -138,7 +139,7 @@ def main() -> None:
     print(f"read  : {source}   ({len(rows):,} rows)")
 
     dropped = 0
-    if args.loc:
+    if args.filter:
         before = len(rows)
         rows = [r for r in rows if not is_junk(r)]
         dropped = before - len(rows)
@@ -159,7 +160,7 @@ def main() -> None:
     tail = [c for c in rest if c not in head]
     ordered = head + [VN_COLUMN] + time_columns + tail
 
-    target = Path(args.out) if args.out else DA_XU_LY / source.name
+    target = Path(args.out) if args.out else PROCESSED / source.name
     projects = sorted({r.get("gcp_project_id", "?") for r in rows})
     for project in projects:
         subset = [r for r in rows if r.get("gcp_project_id") == project]
@@ -170,9 +171,9 @@ def main() -> None:
 
     print(f"wrote : {target}")
     if dropped:
-        print(f"        dropped {dropped:,} junk rows (--loc)")
+        print(f"        dropped {dropped:,} junk rows (--filter)")
     print(f"        {len(projects)} per-project files + _tat-ca.csv ({len(rows):,} rows)")
-    print(f"Khoang: {to_vn(ict_of(rows[0]))}  ->  {to_vn(ict_of(rows[-1]))}  (Vietnam time)")
+    print(f"range : {to_vn(ict_of(rows[0]))}  ->  {to_vn(ict_of(rows[-1]))}  (Vietnam time)")
 
 
 if __name__ == "__main__":
