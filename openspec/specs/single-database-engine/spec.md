@@ -80,7 +80,7 @@ sau.
 
 #### Scenario: So bộ số sau khi gỡ
 
-- **WHEN** `tools/baseline_db.py --compare` chạy sau change
+- **WHEN** `tools/diagnostics/baseline_db.py --compare` chạy sau change
 - **THEN** kết quả SHALL là 23/23 khớp
 - **AND** MUST NOT có khoá nào lệch, kể cả lệch một token
 

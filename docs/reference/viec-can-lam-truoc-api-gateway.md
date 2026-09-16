@@ -1,6 +1,6 @@
 # Việc cần làm để sẵn sàng bước vào phát triển API Gateway
 
-*Soạn 20/08/2026. Nguồn: `Master Plan API Gateway.xlsx` (3 sheet), `Tài_liệu_triển_khai_API_Gateway.docx`, `db/migrations/sql/001_baseline.sql`, `backend/`, `web/js/`, `scripts/`.*
+*Soạn 20/08/2026. Nguồn: `planning/Master Plan API Gateway.xlsx` (3 sheet), `planning/Tài_liệu_triển_khai_API_Gateway.docx`, `db/migrations/sql/001_baseline.sql`, `backend/`, `web/js/`, `scripts/`.*
 
 ---
 
@@ -305,7 +305,7 @@ Lo ngại ban đầu: kiến trúc đích **bỏ hẳn `fact_monitoring`** (Ph�
 
 **Sheet đã sửa 27/08/2026:** cột `Nguồn` của cả hai trường đổi từ `Gateway` sang **`Dẫn xuất từ Gateway`**, kèm quy tắc tính trong `Ghi chú`. Ghi "Nguồn: Gateway" là sai — ai code theo sẽ đi tìm một cột không tồn tại.
 
-Chi tiết: [`doi-chieu-data-out-litellm.md`](doi-chieu-data-out-litellm.md) và [`do-ban-ghi-litellm-24-08.md`](do-ban-ghi-litellm-24-08.md) §6 ④.
+Chi tiết: [`doi-chieu-data-out-litellm.md`](../archive/gateway/doi-chieu-data-out-litellm.md) và [`do-ban-ghi-litellm-24-08.md`](../archive/gateway/do-ban-ghi-litellm-24-08.md) §6 ④.
 
 #### 🟡 A6. Chốt độ mịn thời gian
 
@@ -354,7 +354,7 @@ Việc đúng — và **đã làm xong 21/08**, xem khung ngay dưới: đổi t
 
 > ### ✅ Làm xong 21/08/2026 — change `admit-gateway-as-a-fourth-source`
 >
-> **Nghiệm thu bằng một phép đo, không bằng lời:** `tools/dien_tap_gateway.py` chèn dòng
+> **Nghiệm thu bằng một phép đo, không bằng lời:** `tools/diagnostics/dien_tap_gateway.py` chèn dòng
 > `source='gateway'` mang username THẬT, chạy toàn bộ phép kiểm, so số trước/sau, rồi
 > `ROLLBACK`.
 >
@@ -585,7 +585,7 @@ Hiện tại an toàn **chỉ vì** uvicorn gắn `127.0.0.1`. Đó là một d�
 > | `HTTPBearer` mặc định là đủ | Nó trả **403** khi thiếu header, không phải 401. Phải `auto_error=False` rồi tự ném 401 |
 > | Đặt khoá vào `.env` là chạy | **Không file Python nào của backend đọc `.env`** — chỉ docker-compose và `pull_web_apps.py` đọc. Đồng nghiệp làm đúng theo `.env.example` sẽ vẫn không khởi động được |
 > | Test JS không liên quan | Cả **4 kịch bản** hỏng cũ dừng ở ô nhập khoá và không chạm tới nhánh chúng đang kiểm. Phải gieo khoá vào `localStorage` giả |
-> | Chỉ `tests/` dính bẫy khoá | **Chỗ thứ năm: `tools/chay_dashboard_trong_node.js`.** Đo 22/08: exit **0**, in "nạp OK" hai lần, nhật ký uvicorn **0 lần gọi `/api/`**. Nằm ở `tools/` nên không ai chạy, không ai thấy. Đã vá cùng change `pin-the-directory-to-real-people` |
+> | Chỉ `tests/` dính bẫy khoá | **Chỗ thứ năm: `tools/diagnostics/chay_dashboard_trong_node.js`.** Đo 22/08: exit **0**, in "nạp OK" hai lần, nhật ký uvicorn **0 lần gọi `/api/`**. Nằm ở `tools/` nên không ai chạy, không ai thấy. Đã vá cùng change `pin-the-directory-to-real-people` |
 
 #### ⚪ C3. Base URL của frontend
 
@@ -617,7 +617,7 @@ repo. Đây cùng một bài toán với D2 và D3, không phải một file thi
 22/08) và `check_api.py` (**19 phép**) — cả hai đều cần **database sống + máy chủ đang
 chạy**.
 
-**Tiền đề này đã nhỏ đi một nửa từ 21/08:** `tools/soat_khoa_api.py` dựng uvicorn thật và
+**Tiền đề này đã nhỏ đi một nửa từ 21/08:** `tools/diagnostics/soat_khoa_api.py` dựng uvicorn thật và
 khẳng định 24 kỳ vọng **không cần Docker, không cần database** — nó chạy được vì
 `backend/main.py` import xong mà chưa chạm PostgreSQL. Đó là thứ đầu tiên trong repo chạy
 được trên một máy trắng, và là mẫu để nhân bản. Vẫn chưa có pytest và chưa có CI.
@@ -678,7 +678,7 @@ Một phép thử duy nhất, làm được trong ngày:
 
 **Kết quả mong đợi khi ĐÃ sẵn sàng:** token và tiền của dòng giả **hiện lên** dashboard, tỷ lệ áp dụng **nhúc nhích**, `usage_by_account` **có thêm dòng**, và mọi phép kiểm vẫn xanh.
 
-> ### ✅ Phép thử này ĐÃ CHẠY — 21/08/2026, `tools/dien_tap_gateway.py`
+> ### ✅ Phép thử này ĐÃ CHẠY — 21/08/2026, `tools/diagnostics/dien_tap_gateway.py`
 >
 > Mục này viết ở thì *"dự đoán"* cho tới 22/08. Nó đã được chạy thật, và dự đoán đúng
 > từng chữ.

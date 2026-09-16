@@ -209,7 +209,7 @@ def chi_gateway(cn, dc) -> None:
     GOI LAI CHINH `load_gateway_latency()`, KHONG CHEP PHEP TINH
     -----------------------------------------------------------
     Chep phep tinh percentile sang day la tao ban sao thu hai cua mot phep do, va
-    ban sao SE TROI - dung bay da dinh 21/08 khi tools/dien_tap_gateway.py chep
+    ban sao SE TROI - dung bay da dinh 21/08 khi tools/diagnostics/dien_tap_gateway.py chep
     cau SQL cua store.py roi do bang logic da bi bo.
 
     XOA CO DIEU KIEN - CHO NGUY HIEM NHAT CUA HAM NAY

@@ -61,7 +61,7 @@ from backend import store  # noqa: E402
 # Lấy khoá TỪ CHÍNH backend, không đọc lại biến môi trường ở đây.
 #
 # Đọc lại là tạo bản sao thứ hai của cùng một phép đọc cấu hình, và bản sao sẽ
-# trôi: đúng cái bẫy đã dính ngày 21/08 khi tools/dien_tap_gateway.py tự chép
+# trôi: đúng cái bẫy đã dính ngày 21/08 khi tools/diagnostics/dien_tap_gateway.py tự chép
 # câu SQL của store.py rồi đo bằng logic đã bị bỏ. Import thế này thì khoá mà
 # phép kiểm gửi đi LUÔN bằng khoá mà máy chủ kiểm - không có đường nào lệch.
 #
@@ -296,7 +296,7 @@ def nguon_gateway(c: Check, base: str) -> None:
     `audit_db.py` chay bang vai `token` va soi thang bang. File nay phai soi THU
     API THAT SU TRA RA, qua vai `api_readonly`. Chep cau SQL sang day la tao ban
     sao thu hai cua cung mot phep do, va ban sao SE TROI - dung cai bay da dinh
-    ngay 21/08 khi tools/dien_tap_gateway.py tu chep cau SQL cua store.py roi do
+    ngay 21/08 khi tools/diagnostics/dien_tap_gateway.py tu chep cau SQL cua store.py roi do
     bang logic da bi bo.
 
     Ba endpoint, ba cau hoi khac nhau:

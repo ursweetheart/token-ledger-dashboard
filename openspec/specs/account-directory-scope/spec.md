@@ -97,7 +97,7 @@ hoạt động" 937 → 943.
 
 ### Requirement: Công cụ chạy dashboard phải hỏng to tiếng khi không lấy được dữ liệu
 
-`tools/chay_dashboard_trong_node.js` SHALL thoát khác 0 khi `napTuBackend()` không nạp
+`tools/diagnostics/chay_dashboard_trong_node.js` SHALL thoát khác 0 khi `napTuBackend()` không nạp
 được dữ liệu.
 
 Lý do, đo ngày 22/08/2026 bằng chính file chưa sửa: `localStorage` giả rỗng nên `api.js`

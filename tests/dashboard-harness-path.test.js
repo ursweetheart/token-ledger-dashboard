@@ -8,7 +8,7 @@ const { spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const ROOT = path.resolve(__dirname, "..");
-const HARNESS = path.join(ROOT, "tools", "chay_dashboard_trong_node.js");
+const HARNESS = path.join(ROOT, "tools", "diagnostics", "chay_dashboard_trong_node.js");
 
 test("dashboard harness resolves project files from its own location", () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "dashboard-harness-"));

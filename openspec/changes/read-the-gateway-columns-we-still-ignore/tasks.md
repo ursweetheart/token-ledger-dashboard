@@ -81,5 +81,5 @@ Dòng trúng cache đang có mang tag `User-Agent:` nên bộ nạp bỏ nó. Kh
 ## 8. Tài liệu
 
 - [x] 8.1 Mục 5: thêm `api_key`+`cache_hit` vào bảng, thêm **hai bẫy**, và `cache_hit` **ra khỏi** danh sách "không dùng được" (3→2 cột — ghi chú cũ nói sai). Mục 7: **bốn → năm** quy tắc bộ nạp
-- [x] 8.2 `docs/reference/cot-bi-bo-qua-01-09.md` — 8 mục, 177 dòng
+- [x] 8.2 `docs/archive/gateway/cot-bi-bo-qua-01-09.md` — 8 mục, 177 dòng
 - [x] 8.3 Master Plan ô J11 (STT 4 mục tiêu 1): **19/26 → 21/26**, **0 trường bắt buộc còn thiếu**. Vẫn để VÀNG, không tự chuyển xanh
