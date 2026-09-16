@@ -31,7 +31,7 @@
 ## 4. `tools/`
 
 - [ ] 4.1 `git mv` 18 tệp theo D1
-- [ ] 4.2 Cờ theo D2 ở `tools/verify_datasets.py`, `tools/measure_llm_path.py` (giữ mặc định `--user svc.do-duong-llm`, đánh dấu `vi-ok`)
+- [ ] 4.2 Cờ theo D2 ở `tools/diagnostics/verify_datasets.py`, `tools/diagnostics/measure_llm_path.py` (giữ mặc định `--user svc.do-duong-llm`, đánh dấu `vi-ok`)
 - [ ] 4.3 Chuỗi, định danh ở mọi tệp `tools/`; sửa chỗ các tool gọi nhau theo tên mới
 - [ ] 4.4 `grep` tên cũ trong `tools/gateway-smoke/`; nếu có, sửa và ghi lại để báo Chí Thanh
 - [ ] 4.5 Kiểm theo D6; CI xanh

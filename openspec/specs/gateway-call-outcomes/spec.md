@@ -80,4 +80,3 @@ mặc định coi chúng là thành công.
 #### Scenario: Dữ liệu có từ trước khi thêm cột
 - **WHEN** cột kết cục được thêm vào một bảng đã có sẵn dữ liệu từ nguồn không ghi kết cục
 - **THEN** các dòng cũ SHALL mang giá trị rỗng, và MUST NOT được gán một kết cục suy đoán
-

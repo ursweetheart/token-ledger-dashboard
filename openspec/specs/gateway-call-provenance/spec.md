@@ -83,4 +83,3 @@ không có thông tin. Hệ thống MUST NOT gộp "không có thông tin" thàn
 - **WHEN** nguồn ghi trạng thái bộ nhớ đệm bằng một giá trị quy ước thay cho ô rỗng
 - **THEN** giá trị đó SHALL được quy về rỗng khi nạp, và MUST NOT được lưu như một trạng thái
   thứ tư hay bị nhầm là "không trúng đệm"
-

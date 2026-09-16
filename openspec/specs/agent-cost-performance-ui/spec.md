@@ -86,4 +86,3 @@ Các tab Phòng ban & User, Agent, Chi phí và Hiệu năng SHALL không hiển
 #### Scenario: Reviewed tabs are rendered
 - **WHEN** người dùng mở bất kỳ tab thuộc phạm vi
 - **THEN** không có badge `MỚI` trên KPI, chart hoặc section
-

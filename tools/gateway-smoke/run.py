@@ -11,8 +11,10 @@ import urllib.error
 from concurrent.futures import ThreadPoolExecutor
 
 ROOT = Path(__file__).resolve().parent
+RUNTIME = ROOT / 'runtime'
+ARTIFACTS = ROOT / 'artifacts' / 'current'
 STATE = Path(os.environ['LOCALAPPDATA']) / 'Temp' / 'tla-gateway-smoke-state.json'
-COMPOSE = ['docker', 'compose', '-f', str(ROOT / 'compose.yaml')]
+COMPOSE = ['docker', 'compose', '-f', str(RUNTIME / 'compose.yaml')]
 
 def state():
     if not STATE.exists():
@@ -75,7 +77,8 @@ def main():
         assert 'tla-hd' in row['request_tags'], 'Missing agent tag'
         assert not row['canary_leaked'], 'Prompt redaction failed'
     report = {'result': 'PASS', 'scope': 'single_proxy_mock_not_law_insight_or_ledger', 'run_id': run_id, 'invalid_key_status': bad_status, 'calls': calls, 'spend_logs': rows}
-    (ROOT / 'result.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
+    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    (ARTIFACTS / 'result.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report, indent=2))
 
 if __name__ == '__main__':

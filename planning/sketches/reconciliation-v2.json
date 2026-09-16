@@ -1,0 +1,1428 @@
+{
+  "sourceExcel": "2026.T4.09 DS Đội.xlsx",
+  "report": {
+    "ralli": {
+      "source": 102,
+      "kept": 102,
+      "matchedTeams": 66,
+      "unmatched": [
+        [
+          "TT1",
+          "team"
+        ],
+        [
+          "TT2",
+          "unit"
+        ],
+        [
+          "TT2",
+          "team"
+        ],
+        [
+          "Đội 1 - TT2",
+          "team"
+        ],
+        [
+          "Đội 2 - TT2",
+          "team"
+        ],
+        [
+          "Đội 3 - TT2",
+          "team"
+        ],
+        [
+          "Đội 4 - TT2",
+          "team"
+        ],
+        [
+          "Đội 5 - TT2",
+          "team"
+        ],
+        [
+          "Đội 6 - TT2",
+          "team"
+        ],
+        [
+          "TT3",
+          "unit"
+        ],
+        [
+          "TT4",
+          "unit"
+        ]
+      ]
+    },
+    "tla-hd": {
+      "source": 20,
+      "kept": 20,
+      "matchedTeams": 0,
+      "unmatched": [
+        [
+          "TT3",
+          "unit"
+        ],
+        [
+          "Trung tâm 2",
+          "unit"
+        ]
+      ]
+    }
+  },
+  "excelOnlyVsRalli": [
+    {
+      "row": 33,
+      "dept": "Phòng Bán hàng 2",
+      "unit": "CN Đà Nẵng",
+      "team": "Đội Quảng Ngãi",
+      "kind": "Truyền thống"
+    }
+  ],
+  "nodes": {
+    "ralli": [
+      {
+        "id": "69ee5b13be38bdbf5a8de666",
+        "name": "Toàn công ty",
+        "sourceName": "Toàn công ty",
+        "parent_id": "",
+        "type": "COMPANY",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de667",
+        "name": "Tổng công ty Rạng Đông",
+        "sourceName": "Tổng công ty Rạng Đông",
+        "parent_id": "69ee5b13be38bdbf5a8de666",
+        "type": "COMPANY",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de668",
+        "name": "Phòng Bán hàng 1",
+        "sourceName": "PBH1",
+        "parent_id": "69ee5b13be38bdbf5a8de667",
+        "type": "SALES_DEPT",
+        "role": "dept",
+        "status": "Đối chiếu cấp phòng",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de669",
+        "name": "Truyền thống Vùng 1",
+        "sourceName": "Vùng 1",
+        "parent_id": "69ee5b13be38bdbf5a8de668",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de66a",
+        "name": "Đội Chuyên trách - Vùng 1",
+        "sourceName": "Đội chuyên trách - Vùng 1",
+        "parent_id": "69ee5b13be38bdbf5a8de669",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 9,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de66b",
+        "name": "Đội 1 - Nam Định",
+        "sourceName": "Đội 1 - Nam Định",
+        "parent_id": "69ee5b13be38bdbf5a8de669",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 4,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de66c",
+        "name": "Đội 2 - Thái Bình",
+        "sourceName": "Đội 2 - Thái Bình",
+        "parent_id": "69ee5b13be38bdbf5a8de669",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 5,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de66d",
+        "name": "Đội 3 - Hà Nam-Ninh Bình",
+        "sourceName": "Đội 3 - Hà Nam - Ninh Bình",
+        "parent_id": "69ee5b13be38bdbf5a8de669",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 6,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de66e",
+        "name": "Đội 4 - Thanh Hóa",
+        "sourceName": "Đội 4 - Thanh Hoá",
+        "parent_id": "69ee5b13be38bdbf5a8de669",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 7,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de66f",
+        "name": "Đội 5 - Nghệ An-Hà Tĩnh",
+        "sourceName": "Đội 5 - Nghệ An - Hà Tĩnh",
+        "parent_id": "69ee5b13be38bdbf5a8de669",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 8,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de670",
+        "name": "Truyền thống Vùng 2",
+        "sourceName": "Vùng 2",
+        "parent_id": "69ee5b13be38bdbf5a8de668",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de671",
+        "name": "Đội Chuyên trách - Vùng 2",
+        "sourceName": "Đội chuyên trách - Vùng 2",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 18,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de672",
+        "name": "Đội 1 - Hà Nội",
+        "sourceName": "Đội 1 - Hà Nội",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 10,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de673",
+        "name": "Đội 2 - Hà Nội",
+        "sourceName": "Đội 2 - Hà Nội",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 11,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de674",
+        "name": "Đội 3 - Hà Nội",
+        "sourceName": "Đội 3 - Hà Nội",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 12,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de675",
+        "name": "Đội 4 - Bắc Ninh",
+        "sourceName": "Đội 4 - Bắc Ninh",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 13,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de676",
+        "name": "Đội 5 - Bắc Giang-Lạng Sơn",
+        "sourceName": "Đội 5 - Bắc Giang - Lạng Sơn",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 14,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de677",
+        "name": "Đội 6 - Hưng Yên",
+        "sourceName": "Đội 6 - Hưng Yên",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 15,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de678",
+        "name": "Đội 7 - Hải Dương-Hải Phòng",
+        "sourceName": "Đội 7 - Hải Dương - Hải Phòng",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 16,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de679",
+        "name": "Đội 8 - Quảng Ninh",
+        "sourceName": "Đội 8 - Quảng Ninh",
+        "parent_id": "69ee5b13be38bdbf5a8de670",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 17,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de67a",
+        "name": "Truyền thống Vùng 3",
+        "sourceName": "Vùng 3",
+        "parent_id": "69ee5b13be38bdbf5a8de668",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de67b",
+        "name": "Đội Chuyên trách - Vùng 3",
+        "sourceName": "Đội chuyên trách - Vùng 3",
+        "parent_id": "69ee5b13be38bdbf5a8de67a",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 25,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de67c",
+        "name": "Đội 1 - HN2-Sơn La-Điện Biên",
+        "sourceName": "Đội 1 - HN2 - Sơn La - Điện Biên",
+        "parent_id": "69ee5b13be38bdbf5a8de67a",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 19,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de67d",
+        "name": "Đội 2 - HN2-Hòa Bình",
+        "sourceName": "Đội 2 - HN2 - Hoà Bình",
+        "parent_id": "69ee5b13be38bdbf5a8de67a",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 20,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de67e",
+        "name": "Đội 3 - Vĩnh Phúc",
+        "sourceName": "Đội 3 - Vĩnh Phúc",
+        "parent_id": "69ee5b13be38bdbf5a8de67a",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 21,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de67f",
+        "name": "Đội 4 - Thái Nguyên-Cao Bằng",
+        "sourceName": "Đội 4 - Thái Nguyên - Cao Bằng",
+        "parent_id": "69ee5b13be38bdbf5a8de67a",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 22,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de680",
+        "name": "Đội 5 - Phú Thọ",
+        "sourceName": "Đội 5 - Phú Thọ",
+        "parent_id": "69ee5b13be38bdbf5a8de67a",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 23,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de681",
+        "name": "Đội 6 - Yên Bái-Tuyên Quang-Hà Giang-Lào Cai-Lai Châu",
+        "sourceName": "Đội 6 - Yên Bái - Tuyên Quang - Hà Giang - Lào Cai - Lai Châu",
+        "parent_id": "69ee5b13be38bdbf5a8de67a",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 24,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de682",
+        "name": "Trung tâm 1",
+        "sourceName": "TT1",
+        "parent_id": "69ee5b13be38bdbf5a8de668",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de683",
+        "name": "TT1",
+        "sourceName": "TT1",
+        "parent_id": "69ee5b13be38bdbf5a8de682",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de684",
+        "name": "Đội Chuyên trách 1 - Trung tâm 1",
+        "sourceName": "Đội chuyên trách 1 - trung tâm 1",
+        "parent_id": "69ee5b13be38bdbf5a8de682",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 26,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de685",
+        "name": "Đội Chuyên trách 2 - Trung tâm 1",
+        "sourceName": "Đội Chuyên Trách 2",
+        "parent_id": "69ee5b13be38bdbf5a8de682",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 27,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de686",
+        "name": "Phòng Bán hàng 2",
+        "sourceName": "PBH2",
+        "parent_id": "69ee5b13be38bdbf5a8de667",
+        "type": "SALES_DEPT",
+        "role": "dept",
+        "status": "Đối chiếu cấp phòng",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de687",
+        "name": "CN Đà Nẵng",
+        "sourceName": "CN Đà Nẵng",
+        "parent_id": "69ee5b13be38bdbf5a8de686",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de688",
+        "name": "Đội Bình Định",
+        "sourceName": "Đội Bình Định",
+        "parent_id": "69ee5b13be38bdbf5a8de687",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 28,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de689",
+        "name": "Đội Đà Nẵng",
+        "sourceName": "Đội Đà Nẵng",
+        "parent_id": "69ee5b13be38bdbf5a8de687",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 29,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de68a",
+        "name": "Đội Huế",
+        "sourceName": "Đội Huế",
+        "parent_id": "69ee5b13be38bdbf5a8de687",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 30,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de68b",
+        "name": "Đội Quảng Bình",
+        "sourceName": "Đội Quảng Bình",
+        "parent_id": "69ee5b13be38bdbf5a8de687",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 31,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de68c",
+        "name": "Đội Quảng Nam",
+        "sourceName": "Đội Quảng Nam",
+        "parent_id": "69ee5b13be38bdbf5a8de687",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 32,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de68d",
+        "name": "Đội Quảng Trị",
+        "sourceName": "Đội Quảng Trị",
+        "parent_id": "69ee5b13be38bdbf5a8de687",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 34,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de68e",
+        "name": "Đội Chuyên trách - CN Đà Nẵng",
+        "sourceName": "Đội chuyên trách - CN Đà Nẵng",
+        "parent_id": "69ee5b13be38bdbf5a8de687",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 35,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de68f",
+        "name": "CN Nha Trang",
+        "sourceName": "CN Nha Trang",
+        "parent_id": "69ee5b13be38bdbf5a8de686",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de690",
+        "name": "Đội Khánh Hòa",
+        "sourceName": "Đội Khánh Hòa",
+        "parent_id": "69ee5b13be38bdbf5a8de68f",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 36,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de691",
+        "name": "Đội Lâm Đồng",
+        "sourceName": "Đội Lâm Đồng",
+        "parent_id": "69ee5b13be38bdbf5a8de68f",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 37,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de692",
+        "name": "Đội Ninh Thuận",
+        "sourceName": "Đội Ninh Thuận",
+        "parent_id": "69ee5b13be38bdbf5a8de68f",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 38,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de693",
+        "name": "Đội Phú Yên",
+        "sourceName": "Đội Phú Yên",
+        "parent_id": "69ee5b13be38bdbf5a8de68f",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 39,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de694",
+        "name": "Đội Chuyên trách - CN Nha Trang",
+        "sourceName": "Đội chuyên trách - CN Nha Trang",
+        "parent_id": "69ee5b13be38bdbf5a8de68f",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 40,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de695",
+        "name": "CN Tây Nguyên",
+        "sourceName": "Tây Nguyên",
+        "parent_id": "69ee5b13be38bdbf5a8de686",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de696",
+        "name": "Đội Đắk Lắk",
+        "sourceName": "Đội Đắk Lắk",
+        "parent_id": "69ee5b13be38bdbf5a8de695",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 41,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de697",
+        "name": "Đội Đắk Nông",
+        "sourceName": "Đội Đắk Nông",
+        "parent_id": "69ee5b13be38bdbf5a8de695",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 42,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de698",
+        "name": "Đội Gia Lai",
+        "sourceName": "Đội Gia Lai",
+        "parent_id": "69ee5b13be38bdbf5a8de695",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 43,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de699",
+        "name": "Đội Kon Tum",
+        "sourceName": "Đội Kon Tum",
+        "parent_id": "69ee5b13be38bdbf5a8de695",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 44,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de69a",
+        "name": "Đội Chuyên trách - CN Tây Nguyên",
+        "sourceName": "Đội chuyên trách - Tây Nguyên",
+        "parent_id": "69ee5b13be38bdbf5a8de695",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 45,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de69b",
+        "name": "TT2",
+        "sourceName": "TT2",
+        "parent_id": "69ee5b13be38bdbf5a8de686",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de69c",
+        "name": "TT2",
+        "sourceName": "TT2",
+        "parent_id": "69ee5b13be38bdbf5a8de69b",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de69d",
+        "name": "Đội 1 - TT2",
+        "sourceName": "Đội 1 - TT2",
+        "parent_id": "69ee5b13be38bdbf5a8de69b",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de69e",
+        "name": "Đội 2 - TT2",
+        "sourceName": "Đội 2 - TT2",
+        "parent_id": "69ee5b13be38bdbf5a8de69b",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de69f",
+        "name": "Đội 3 - TT2",
+        "sourceName": "Đội 3 - TT2",
+        "parent_id": "69ee5b13be38bdbf5a8de69b",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a0",
+        "name": "Đội 4 - TT2",
+        "sourceName": "Đội 4 - TT2",
+        "parent_id": "69ee5b13be38bdbf5a8de69b",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a1",
+        "name": "Đội 5 - TT2",
+        "sourceName": "Đội 5 - TT2",
+        "parent_id": "69ee5b13be38bdbf5a8de69b",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a2",
+        "name": "Đội 6 - TT2",
+        "sourceName": "Đội 6 - TT2",
+        "parent_id": "69ee5b13be38bdbf5a8de69b",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a3",
+        "name": "Phòng Bán hàng 3",
+        "sourceName": "PBH3",
+        "parent_id": "69ee5b13be38bdbf5a8de667",
+        "type": "SALES_DEPT",
+        "role": "dept",
+        "status": "Đối chiếu cấp phòng",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a4",
+        "name": "CN Hồ Chí Minh",
+        "sourceName": "CN Hồ Chí Minh",
+        "parent_id": "69ee5b13be38bdbf5a8de6a3",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a5",
+        "name": "Đội 1",
+        "sourceName": "Đội 1",
+        "parent_id": "69ee5b13be38bdbf5a8de6a4",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 46,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a6",
+        "name": "Đội 2",
+        "sourceName": "Đội 2",
+        "parent_id": "69ee5b13be38bdbf5a8de6a4",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 47,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a7",
+        "name": "Đội 3",
+        "sourceName": "Đội 3",
+        "parent_id": "69ee5b13be38bdbf5a8de6a4",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 48,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a8",
+        "name": "Đội 4",
+        "sourceName": "Đội 4",
+        "parent_id": "69ee5b13be38bdbf5a8de6a4",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 49,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6a9",
+        "name": "Đội 5",
+        "sourceName": "Đội 5",
+        "parent_id": "69ee5b13be38bdbf5a8de6a4",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 50,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6aa",
+        "name": "Đội Siêu thị",
+        "sourceName": "Đội Siêu Thị",
+        "parent_id": "69ee5b13be38bdbf5a8de6a4",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 51,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6ab",
+        "name": "Đội Chuyên trách - CN Hồ Chí Minh",
+        "sourceName": "Đội chuyên trách - CN Hồ Chí Minh",
+        "parent_id": "69ee5b13be38bdbf5a8de6a4",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 52,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6ac",
+        "name": "CN Biên Hòa",
+        "sourceName": "CN Biên Hòa",
+        "parent_id": "69ee5b13be38bdbf5a8de6a3",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6ad",
+        "name": "Đội Bình Dương",
+        "sourceName": "Đội Bình Dương",
+        "parent_id": "69ee5b13be38bdbf5a8de6ac",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 53,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6ae",
+        "name": "Đội Bình Phước",
+        "sourceName": "Đội Bình Phước",
+        "parent_id": "69ee5b13be38bdbf5a8de6ac",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 54,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6af",
+        "name": "Đội Bình Thuận",
+        "sourceName": "Đội Bình Thuận",
+        "parent_id": "69ee5b13be38bdbf5a8de6ac",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 55,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b0",
+        "name": "Đội Đồng Nai",
+        "sourceName": "Đội Đồng Nai",
+        "parent_id": "69ee5b13be38bdbf5a8de6ac",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 56,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b1",
+        "name": "Đội Vũng Tàu",
+        "sourceName": "Đội Vũng Tàu",
+        "parent_id": "69ee5b13be38bdbf5a8de6ac",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 57,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b2",
+        "name": "Đội Chuyên trách - CN Biên Hòa",
+        "sourceName": "Đội chuyên trách - CN Biên Hòa",
+        "parent_id": "69ee5b13be38bdbf5a8de6ac",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 58,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b3",
+        "name": "CN Cần Thơ",
+        "sourceName": "CN Cần Thơ",
+        "parent_id": "69ee5b13be38bdbf5a8de6a3",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b4",
+        "name": "Đội An Giang",
+        "sourceName": "Đội An Giang",
+        "parent_id": "69ee5b13be38bdbf5a8de6b3",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 59,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b5",
+        "name": "Đội Kiên Giang",
+        "sourceName": "Đội Kiên Giang",
+        "parent_id": "69ee5b13be38bdbf5a8de6b3",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 60,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b6",
+        "name": "Đội Cần Thơ",
+        "sourceName": "Đội Cần Thơ",
+        "parent_id": "69ee5b13be38bdbf5a8de6b3",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 61,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b7",
+        "name": "Đội Sóc Trăng",
+        "sourceName": "Đội Sóc Trăng",
+        "parent_id": "69ee5b13be38bdbf5a8de6b3",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 62,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b8",
+        "name": "Đội Cà Mau",
+        "sourceName": "Đội Cà Mau",
+        "parent_id": "69ee5b13be38bdbf5a8de6b3",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 63,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6b9",
+        "name": "Đội Bạc Liêu",
+        "sourceName": "Đội Bạc Liêu",
+        "parent_id": "69ee5b13be38bdbf5a8de6b3",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 64,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6ba",
+        "name": "Đội Campuchia",
+        "sourceName": "Đội Campuchia",
+        "parent_id": "69ee5b13be38bdbf5a8de6b3",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 65,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6bb",
+        "name": "Đội Chuyên trách - CN Cần Thơ",
+        "sourceName": "Đội chuyên trách - CN Cần Thơ",
+        "parent_id": "69ee5b13be38bdbf5a8de6b3",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 66,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6bc",
+        "name": "CN Tiền Giang",
+        "sourceName": "CN Tiền Giang",
+        "parent_id": "69ee5b13be38bdbf5a8de6a3",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6bd",
+        "name": "Đội Vĩnh Long",
+        "sourceName": "Đội Vĩnh Long",
+        "parent_id": "69ee5b13be38bdbf5a8de6bc",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 67,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6be",
+        "name": "Đội Đồng Tháp",
+        "sourceName": "Đội Đồng Tháp",
+        "parent_id": "69ee5b13be38bdbf5a8de6bc",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 68,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6bf",
+        "name": "Đội Long An",
+        "sourceName": "Đội Long An",
+        "parent_id": "69ee5b13be38bdbf5a8de6bc",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 69,
+        "kind": "Truyền thống"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c0",
+        "name": "Đội Chuyên trách - CN Tiền Giang",
+        "sourceName": "Đội chuyên trách - CN Tiền Giang",
+        "parent_id": "69ee5b13be38bdbf5a8de6bc",
+        "type": "TEAM",
+        "role": "team",
+        "status": "Đối chiếu tên trong cùng phòng/đơn vị",
+        "excelRow": 70,
+        "kind": "Dự án/ Chuyên trách"
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c1",
+        "name": "TT3",
+        "sourceName": "TT3",
+        "parent_id": "69ee5b13be38bdbf5a8de6a3",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c2",
+        "name": "Xuất khẩu",
+        "sourceName": "Xuất khẩu",
+        "parent_id": "69ee5b13be38bdbf5a8de667",
+        "type": "SALES_DEPT",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c3",
+        "name": "Truyền thông",
+        "sourceName": "Truyền thông",
+        "parent_id": "69ee5b13be38bdbf5a8de667",
+        "type": "SALES_DEPT",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c4",
+        "name": "Kế toán",
+        "sourceName": "Kế toán",
+        "parent_id": "69ee5b13be38bdbf5a8de667",
+        "type": "SALES_DEPT",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c5",
+        "name": "TMĐT",
+        "sourceName": "TMĐT",
+        "parent_id": "69ee5b13be38bdbf5a8de667",
+        "type": "SALES_DEPT",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c6",
+        "name": "C4LED",
+        "sourceName": "C4LED",
+        "parent_id": "69ee5b13be38bdbf5a8de666",
+        "type": "COMPANY",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c7",
+        "name": "Nghiên cứu thị trường",
+        "sourceName": "Nghiên cứu thị trường",
+        "parent_id": "69ee5b13be38bdbf5a8de666",
+        "type": "COMPANY",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b13be38bdbf5a8de6c8",
+        "name": "Kế hoạch",
+        "sourceName": "Kế hoạch",
+        "parent_id": "69ee5b13be38bdbf5a8de666",
+        "type": "COMPANY",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b67ae34fec80d8de666",
+        "name": "Trung tâm R&D",
+        "sourceName": "Trung tâm R&D",
+        "parent_id": "69ee5b13be38bdbf5a8de666",
+        "type": "COMPANY",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b67ae34fec80d8de667",
+        "name": "Quản trị hệ thống",
+        "sourceName": "Quản trị hệ thống",
+        "parent_id": "69ee5b13be38bdbf5a8de666",
+        "type": "COMPANY",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "69ee5b67ae34fec80d8de668",
+        "name": "TT4",
+        "sourceName": "TT4",
+        "parent_id": "69ee5b13be38bdbf5a8de6a3",
+        "type": "BRANCH",
+        "role": "unit",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      }
+    ],
+    "tla-hd": [
+      {
+        "id": "ef5f9f4c-2bbf-4974-8fc9-ade92b67cb52",
+        "name": "Công ty CPBĐ PN Rạng Đông",
+        "sourceName": "Công ty CPBĐ PN Rạng Đông",
+        "parent_id": null,
+        "type": "CONG_TY",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "ceadd40f-1a4f-4a66-a251-cf0d9c755cd0",
+        "name": "TT C4LED",
+        "sourceName": "TT C4LED",
+        "parent_id": null,
+        "type": "PHONG_BAN_HANG",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "b6533bea-514b-440d-8d83-592754fa4dc8",
+        "name": "TT&TMĐT",
+        "sourceName": "TT&TMĐT",
+        "parent_id": null,
+        "type": "PHONG_BAN_HANG",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "622ce6fa-58a4-4100-96a6-2afefc779f62",
+        "name": "TTDL&DHS",
+        "sourceName": "TTDL&DHS",
+        "parent_id": null,
+        "type": "PHONG_BAN_HANG",
+        "role": "dept",
+        "status": "Ngoài phạm vi Excel",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "92a71503-2adb-464a-9a5b-80fc81d8a95f",
+        "name": "Phòng Bán hàng 1",
+        "sourceName": "Phòng BH1",
+        "parent_id": "ef5f9f4c-2bbf-4974-8fc9-ade92b67cb52",
+        "type": "PHONG_BAN_HANG",
+        "role": "dept",
+        "status": "Đối chiếu cấp phòng",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "5969480c-782a-4b81-9c12-d7a008e081fc",
+        "name": "Phòng Bán hàng 2",
+        "sourceName": "Phòng BH2",
+        "parent_id": "ef5f9f4c-2bbf-4974-8fc9-ade92b67cb52",
+        "type": "PHONG_BAN_HANG",
+        "role": "dept",
+        "status": "Đối chiếu cấp phòng",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "6aaa94a1-7c82-474f-bdaa-1f1b68d0c986",
+        "name": "Phòng Bán hàng 3",
+        "sourceName": "Phòng BH3",
+        "parent_id": "ef5f9f4c-2bbf-4974-8fc9-ade92b67cb52",
+        "type": "PHONG_BAN_HANG",
+        "role": "dept",
+        "status": "Đối chiếu cấp phòng",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "017fff4e-61f9-4714-b233-64c7c61afac3",
+        "name": "CN Biên Hòa",
+        "sourceName": "CN Biên Hoà",
+        "parent_id": "6aaa94a1-7c82-474f-bdaa-1f1b68d0c986",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "82a17667-8c05-41e4-ad06-c43e57cc3fc3",
+        "name": "CN Cần Thơ",
+        "sourceName": "CN Cần Thơ",
+        "parent_id": "6aaa94a1-7c82-474f-bdaa-1f1b68d0c986",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "774f7918-4446-445a-8a03-703fbc5b4643",
+        "name": "CN Hồ Chí Minh",
+        "sourceName": "CN HCM",
+        "parent_id": "6aaa94a1-7c82-474f-bdaa-1f1b68d0c986",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "443abdd1-29f4-4ebe-9a7d-1812d4b682af",
+        "name": "CN Nha Trang",
+        "sourceName": "CN Nha Trang",
+        "parent_id": "5969480c-782a-4b81-9c12-d7a008e081fc",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "e79f3787-e466-42d2-91c2-18c091fd12c6",
+        "name": "CN Tiền Giang",
+        "sourceName": "CN Tiền Giang",
+        "parent_id": "6aaa94a1-7c82-474f-bdaa-1f1b68d0c986",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "78f5054b-6541-48b0-9d01-dfab1dbd2e04",
+        "name": "CN Tây Nguyên",
+        "sourceName": "CN Tây Nguyên",
+        "parent_id": "5969480c-782a-4b81-9c12-d7a008e081fc",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "634587a2-e043-4a09-9a5c-b652c9965792",
+        "name": "CN Đà Nẵng",
+        "sourceName": "CN Đà Nẵng",
+        "parent_id": "5969480c-782a-4b81-9c12-d7a008e081fc",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "0183d0c1-fa0a-4978-a434-80e301c9be48",
+        "name": "TT3",
+        "sourceName": "TT3",
+        "parent_id": "6aaa94a1-7c82-474f-bdaa-1f1b68d0c986",
+        "type": "TRUNG_TAM",
+        "role": "unit",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "18bda595-dc5c-49d9-ae7b-b67245abea0d",
+        "name": "Trung tâm 1",
+        "sourceName": "Trung tâm 1",
+        "parent_id": "92a71503-2adb-464a-9a5b-80fc81d8a95f",
+        "type": "TRUNG_TAM",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "515dad4b-030b-4593-87a8-f95e04aed4bc",
+        "name": "Trung tâm 2",
+        "sourceName": "Trung tâm 2",
+        "parent_id": "5969480c-782a-4b81-9c12-d7a008e081fc",
+        "type": "TRUNG_TAM",
+        "role": "unit",
+        "status": "Chưa có trong Excel — giữ nguyên",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "9a3b14c1-b6e3-431d-9ea0-a231f17ad375",
+        "name": "Truyền thống Vùng 1",
+        "sourceName": "Vùng 1",
+        "parent_id": "92a71503-2adb-464a-9a5b-80fc81d8a95f",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "a0de84af-5d5c-4809-9ac0-7cc2fdc5a07d",
+        "name": "Truyền thống Vùng 2",
+        "sourceName": "Vùng 2",
+        "parent_id": "92a71503-2adb-464a-9a5b-80fc81d8a95f",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      },
+      {
+        "id": "6128e976-e3ab-4e09-accb-31755318d461",
+        "name": "Truyền thống Vùng 3",
+        "sourceName": "Vùng 3",
+        "parent_id": "92a71503-2adb-464a-9a5b-80fc81d8a95f",
+        "type": "VUNG",
+        "role": "unit",
+        "status": "Đối chiếu cấp đơn vị",
+        "excelRow": null,
+        "kind": null
+      }
+    ]
+  }
+}

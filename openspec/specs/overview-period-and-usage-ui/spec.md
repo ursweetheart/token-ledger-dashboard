@@ -68,4 +68,3 @@ Heatmap Tổng quan SHALL dùng agent làm hàng, bảy ngày gần nhất trong
 #### Scenario: A day has no requests for an agent
 - **WHEN** agent không có request trong một ngày hiển thị
 - **THEN** ô tương ứng có cường độ zero và tooltip ghi `0 request`
-

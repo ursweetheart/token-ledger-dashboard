@@ -99,7 +99,7 @@ OUT = ROOT / "db" / "02_catalog.sql"
 # ở project nào", KHÔNG trả lời "hôm nay tiền của nó ra từ đâu". Với đường
 # Gateway, câu sau được trả lời bởi sổ Gateway (`fact_call` → `virtual_key_id`
 # / tag `crm-feedback`), không phải bởi cột này. Số cũ và số mới KHÔNG nối
-# liền — đã ghi ở mục 9 của `docs/reference/dua-crm-qua-gateway-10-09.md`.
+# liền — đã ghi ở `docs/archive/gateway/dua-crm-qua-gateway-10-09.md` mục 9.
 AGENTS = [
     (1, "contact-center", "Chatbot Contact Center", "pro-tuner-454203-v3", False, "2025-03-19", True, True),
     (2, "sale-agent", "Sale Agent", "tranquil-post-471401-c1", False, "2025-09-07", True, True),

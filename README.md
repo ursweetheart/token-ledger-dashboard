@@ -81,10 +81,11 @@ sao sẽ trôi khỏi nhau.
 | `scripts/` | Đường ống: kéo → gộp → điều phối |
 | `db/` | Migration, danh mục `.sql`, và các module nạp |
 | `data/` | Dữ liệu thô — mất là mất vĩnh viễn |
-| `var/` | Database nằm trong volume Docker `pgdata`; `var/` chứa bản chụp bộ số bất biến |
+| `var/` | Artifact dựng lại được: `baselines/` và `snapshots/`; database chạy nằm trong volume Docker `pgdata` |
 | `tests/` | Phải luôn xanh |
-| `tools/` | Chẩn đoán một lần — được phép mục |
+| `tools/` | `diagnostics/`, `bench/`, `probes/`, `gateway-smoke/` — không thuộc production pipeline |
 | `docs/` | `reference/` đang là gì · `decisions/` · `archive/` |
+| `planning/` | Tài liệu nghiệp vụ và sketch; không phải runtime input |
 
 Quy tắc đầy đủ, kèm bảng "thêm file mới thì để đâu":
 [`docs/reference/cay-thu-muc.md`](docs/reference/cay-thu-muc.md)

@@ -201,7 +201,7 @@ nghiêm trọng. Script thoát mã 1.
 | `tests/` | 525 | không — `.dockerignore` |
 | `ui/` | 46 | không. Tệp nguồn và tệp test giao diện, chỉ bản build `out/` vào image |
 | `.circleci/`, `.github/`, `cookbook/`, `ci_cd/`, `scripts/`, `db_scripts/`, gốc repo | 32 | không |
-| `litellm/` | 13 | **có** — ví dụ `sk-...` trong docstring, và dòng mở đầu `-----BEGIN PRIVATE KEY-----` làm chữ gợi ý trong ô nhập |
+| `litellm/` | 13 | **có** — ví dụ `sk-...` trong docstring, và dòng mở đầu `-----BEGIN … PRIVATE KEY-----` làm chữ gợi ý trong ô nhập |
 | `litellm-rust/` | 3 | tệp `tests.rs` |
 
 **Người sở hữu duyệt ĐẠT ngày 15/09/2026, dù script không ra 0.** Lý do: CI build từ một bản clone

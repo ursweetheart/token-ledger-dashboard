@@ -1,8 +1,8 @@
 # Cau hinh LiteLLM CHAY THAT cho Gateway.  (Ban CHI-DE-DO nam o
-# tools/probe-gateway/config.probe.yaml -- dung nham hai file nay.)
+# tools/probes/gateway/config.probe.yaml -- dung nham hai file nay.)
 #
 # Bon khoa duoi day quyet dinh cot nao cua LiteLLM_SpendLogs co du lieu. Do duoc
-# 26/08/2026, chi tiet o docs/reference/do-ban-ghi-litellm-24-08.md muc 3.
+# 26/08/2026, chi tiet o docs/archive/gateway/do-ban-ghi-litellm-24-08.md muc 3.
 # Ba khoa BAT, mot khoa TAT. Sua bat ky khoa nao thi phai do lai.
 
 model_list:

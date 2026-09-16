@@ -67,4 +67,3 @@ Ma trận SHALL cho phép đi sâu theo cấp trên trục đơn vị từ phòn
 #### Scenario: Columns have no activity
 - **WHEN** một đơn vị hoặc tài khoản không có request nào trong kỳ
 - **THEN** cột đó bị ẩn, trừ khi tài khoản đó đang được chọn ở bộ lọc user
-

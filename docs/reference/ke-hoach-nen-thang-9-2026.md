@@ -1,6 +1,6 @@
 # Kế hoạch nén — API Gateway về đích 30/09/2026
 
-Soạn 27/08/2026. **Không thay thế** `Master Plan API Gateway.xlsx` — bản kế hoạch gốc giữ
+Soạn 27/08/2026. **Không thay thế** `planning/Master Plan API Gateway.xlsx` — bản kế hoạch gốc giữ
 nguyên lịch 20 tuần. File này là phương án nén, để so sánh và để quyết.
 
 - Mốc gốc: **31/12/2026** (20 tuần)
@@ -80,7 +80,7 @@ Tuần này không dựng gì. Nó chỉ để gỡ ba thứ chặn đường, v
        6/6 container gateway Healthy, /health/liveliness qua load balancer -> HTTP 200
    [x] Go JWT_test_for_header khoi goc repo            -- XONG 27/08
    [x] Che JWT trong 2 file bang chung o ket-qua/      -- XONG 27/08
-   [x] tools/scan_secrets.py: quet bi mat theo HINH DANG, rc=0
+   [x] tools/diagnostics/scan_secrets.py: quet bi mat theo HINH DANG, rc=0
 ```
 
 **Chốt tuần 0:** Gateway lên được ở máy cục bộ, `/health/liveliness` trả 200 qua load
@@ -128,7 +128,7 @@ người, `spend 0,0026954` khác 0, prompt đã bị xoá. Đây là mốc tố
    [x] Loader Gateway -> fact_usage_daily, source='gateway'
        -- XONG 31/08, qua load-the-gateway-ledger-into-the-database
    [x] Doi chieu 26 truong Data Out x 34 cot SpendLogs   -- XONG 27/08
-       -> docs/reference/doi-chieu-data-out-litellm.md
+       -> docs/archive/gateway/doi-chieu-data-out-litellm.md
    [x] Mo rong audit_db.py + check_api.py cho nguon gateway
        -- XONG 03-05/09, qua extend-the-checks-to-gateway-data +
        refresh-every-table-the-gateway-touches + stop-treating-a-failed-call-
@@ -214,7 +214,7 @@ thật khác cái đã đo, và `end_user` có thể **rỗng cho toàn bộ lư
 
 Số Gateway của Ralli lệch so với `app` thì **không có ý kiến thứ ba để phân xử** —
 `billing` chỉ có tổng theo project, không tách được về người. Hợp Đồng thì có `monitoring`
-đứng giữa. Chi tiết và hai hệ quả khác: [`do-ban-ghi-litellm-24-08.md`](do-ban-ghi-litellm-24-08.md) §10.
+đứng giữa. Chi tiết và hai hệ quả khác: [`do-ban-ghi-litellm-24-08.md`](../archive/gateway/do-ban-ghi-litellm-24-08.md) §10.
 
 **Cách gỡ, làm trong tuần 0–1:** trỏ `base_url` của Ralli vào `http://127.0.0.1:4000` rồi
 đọc `proxy_server_request.metadata.headers`. Cái gì đáp xuống chính là cái Ralli thật sự

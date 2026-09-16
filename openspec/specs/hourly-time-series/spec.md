@@ -63,4 +63,3 @@ trả toàn bộ lịch sử theo giờ cho một lời gọi không nêu khoả
 #### Scenario: Truy vấn số liệu theo giờ
 - **WHEN** endpoint theo giờ phục vụ một lời gọi hợp lệ
 - **THEN** mọi câu truy vấn SHALL là chỉ-đọc, đúng kỷ luật đang áp dụng cho các endpoint khác
-

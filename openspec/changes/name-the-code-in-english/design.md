@@ -61,22 +61,22 @@ nhưng chỉ trong comment.
 
 | Cũ | Mới | Việc tệp làm |
 |---|---|---|
-| `tools/chan_doan_loi.py` | `tools/locate_data_defects.py` | chỉ ra chỗ lỗi mà bước kiểm dữ liệu đếm được |
-| `tools/doi_chieu_tla_hd.py` | `tools/reconcile_tla_contract.py` | đối chiếu TLA Hợp Đồng với Google |
-| `tools/doi_chieu_web_vs_file.py` | `tools/reconcile_web_vs_files.py` | so tệp cào với giao diện web |
-| `tools/kiem_ke_de_len_plan.py` | `tools/inventory_datasets.py` | kiểm kê dataset theo nhu cầu database |
-| `tools/kiem_tra_du_lieu.py` | `tools/verify_datasets.py` | kiểm mọi dataset trong `data/` |
-| `tools/kiem_tu_raw.py` | `tools/recheck_from_raw.py` | tính lại kết luận từ dữ liệu raw |
-| `tools/pham_vi_moi.py` | `tools/remaining_scope.py` | phần còn lại sau 3 quyết định phạm vi |
-| `tools/soat_ctda.py` | `tools/audit_ctda.py` | mọi lỗi của dataset CTDA (Ralli) |
-| `tools/trich_yeu_cau_dashboard.py` | `tools/extract_dashboard_requirements.py` | trích thứ dashboard cần |
-| `tools/doi_chieu_cay_don_vi.py` | `tools/reconcile_org_tree.py` | so cây đơn vị cứng với database |
-| `tools/do_tien_suy_ra.py` | `tools/measure_derived_cost.py` | đo tỷ lệ tiền suy ra |
-| `tools/kiem_so_artifact.py` | `tools/verify_artifact_numbers.py` | kiểm từng con số trong artifact |
-| `tools/soat_khoa_api.py` | `tools/audit_api_auth.py` | soát lớp xác thực API |
-| `tools/soat_du_lieu_cao.py` | `tools/audit_scraped_files.py` | soát tệp vừa cào |
-| `tools/do_duong_llm.py` | `tools/measure_llm_path.py` | đo một đường gọi LLM |
-| `tools/dien_tap_gateway.py` | `tools/gateway_drill.py` | diễn tập Gateway |
+| `tools/chan_doan_loi.py` | `tools/diagnostics/locate_data_defects.py` | chỉ ra chỗ lỗi mà bước kiểm dữ liệu đếm được |
+| `tools/doi_chieu_tla_hd.py` | `tools/diagnostics/reconcile_tla_contract.py` | đối chiếu TLA Hợp Đồng với Google |
+| `tools/doi_chieu_web_vs_file.py` | `tools/diagnostics/reconcile_web_vs_files.py` | so tệp cào với giao diện web |
+| `tools/kiem_ke_de_len_plan.py` | `tools/diagnostics/inventory_datasets.py` | kiểm kê dataset theo nhu cầu database |
+| `tools/kiem_tra_du_lieu.py` | `tools/diagnostics/verify_datasets.py` | kiểm mọi dataset trong `data/` |
+| `tools/kiem_tu_raw.py` | `tools/diagnostics/recheck_from_raw.py` | tính lại kết luận từ dữ liệu raw |
+| `tools/pham_vi_moi.py` | `tools/diagnostics/remaining_scope.py` | phần còn lại sau 3 quyết định phạm vi |
+| `tools/soat_ctda.py` | `tools/diagnostics/audit_ctda.py` | mọi lỗi của dataset CTDA (Ralli) |
+| `tools/trich_yeu_cau_dashboard.py` | `tools/diagnostics/extract_dashboard_requirements.py` | trích thứ dashboard cần |
+| `tools/doi_chieu_cay_don_vi.py` | `tools/diagnostics/reconcile_org_tree.py` | so cây đơn vị cứng với database |
+| `tools/do_tien_suy_ra.py` | `tools/diagnostics/measure_derived_cost.py` | đo tỷ lệ tiền suy ra |
+| `tools/kiem_so_artifact.py` | `tools/diagnostics/verify_artifact_numbers.py` | kiểm từng con số trong artifact |
+| `tools/soat_khoa_api.py` | `tools/diagnostics/audit_api_auth.py` | soát lớp xác thực API |
+| `tools/soat_du_lieu_cao.py` | `tools/diagnostics/audit_scraped_files.py` | soát tệp vừa cào |
+| `tools/do_duong_llm.py` | `tools/diagnostics/measure_llm_path.py` | đo một đường gọi LLM |
+| `tools/dien_tap_gateway.py` | `tools/diagnostics/gateway_drill.py` | diễn tập Gateway |
 | `tools/bench/goi_thu_tuyen_that.py` | `tools/bench/probe_live_route.py` | gọi thật để xem hạn mức nào chặn trước |
 | `tools/bench/do_dinh_tuyen_khi_om.py` | `tools/bench/measure_routing_when_unhealthy.py` | nginx có gửi vào instance ốm không |
 | `db/load_hd.py` | `db/load_tla_contract.py` | nạp số liệu TLA Hợp Đồng |
@@ -97,8 +97,8 @@ nhưng chỉ trong comment.
 | `scripts/merge_monitoring.py` | `--dot` → `--batches`; `--ra` → `--out`; `--tho` → `--raw`; `--dich` → `--out-root` |
 | `scripts/merge_latency_daily.py` | `--theo-method` → `--by-method` |
 | `scripts/merge_billing.py` | `--thu-muc` → `--folder`; `--ra` → `--out`; `--doi-chieu` → `--reconcile` |
-| `tools/verify_datasets.py` | `--bo-qua-monitoring` → `--skip-monitoring`; `--bao-cao` → `--report` |
-| `tools/measure_llm_path.py` | `--duong` → `--route` (giá trị `truc-tiep` → `direct`); `--khoa-bien` → `--key-env`; `--so-luot` → `--calls`; `--nguoi-dung` → `--user`; `--cau` → `--prompt`; `--he-thong` → `--system`; `--nhap` → `--prompts-file`; `--nhiet-do` → `--temperature`; `--token-ra-toi-da` → `--max-output-tokens`; `--tat-json` → `--no-json`; `--nghi` → `--pause`; `--rung` → `--jitter`; `--han-giay` → `--timeout`; `--ra` → `--out`; `--thu-kho` → `--dry-run` |
+| `tools/diagnostics/verify_datasets.py` | `--bo-qua-monitoring` → `--skip-monitoring`; `--bao-cao` → `--report` |
+| `tools/diagnostics/measure_llm_path.py` | `--duong` → `--route` (giá trị `truc-tiep` → `direct`); `--khoa-bien` → `--key-env`; `--so-luot` → `--calls`; `--nguoi-dung` → `--user`; `--cau` → `--prompt`; `--he-thong` → `--system`; `--nhap` → `--prompts-file`; `--nhiet-do` → `--temperature`; `--token-ra-toi-da` → `--max-output-tokens`; `--tat-json` → `--no-json`; `--nghi` → `--pause`; `--rung` → `--jitter`; `--han-giay` → `--timeout`; `--ra` → `--out`; `--thu-kho` → `--dry-run` |
 | `db/load_provider.py` | `--kho` → `--dry-run`; `--tuy-chon` → `--optional` |
 | `db/build_performance.py` | `--chi-gateway` → `--gateway-only` |
 

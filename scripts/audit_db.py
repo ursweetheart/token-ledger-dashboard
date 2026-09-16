@@ -946,7 +946,7 @@ def group_g_account_dimension(a: Audit) -> None:
                 f"Account dimension agrees with /api/health ({name})",
                 f"{v:,.0f} != {health_map[name]:,.0f}")
 
-    # View CU phai con nguyen: tools/baseline_db.py va tools/dien_tap_gateway.py
+    # View CU phai con nguyen: tools/diagnostics/baseline_db.py va tools/diagnostics/dien_tap_gateway.py
     # doc no lam moc lich su. Doi no la moi so mo cu khong so lai duoc.
     old_view = a.num("SELECT COUNT(*) FROM usage_by_account")
     a.check(old_view > 0, "The old per-person view is still readable",

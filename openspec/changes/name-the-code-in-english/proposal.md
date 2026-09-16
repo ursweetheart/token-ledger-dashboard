@@ -10,7 +10,7 @@ nửa. Đếm ngày 15/09/2026 trong `backend/`, `db/`, `scripts/`, `tools/`:
 | Cờ dòng lệnh tiếng Việt (`--ra`, `--lat-mong`, `--hoa-don-cu`, `--chi-gateway`…) | khoảng 40 cờ, 13 tệp |
 | Tên tệp tool/script tiếng Việt (`do_duong_llm.py`, `load_hd.py`…) | 20 tệp |
 
-Hệ quả thấy được ngay trong phiên 15/09: cờ `--goc` của `tools/scan_secrets.py` không đoán được nghĩa, và
+Hệ quả thấy được ngay trong phiên 15/09: cờ `--goc` của `tools/diagnostics/scan_secrets.py` không đoán được nghĩa, và
 phần help của cờ `--fork` viết không dấu đã làm người đọc tưởng nó quét nội dung fork. Không có gì chặn
 tiếng Việt quay lại, nên sửa tay một lần rồi sẽ trôi.
 

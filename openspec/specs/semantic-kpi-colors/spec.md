@@ -49,4 +49,3 @@ KPI card chính SHALL dùng giá trị 24px và label tối thiểu 12px; toolti
 #### Scenario: Main KPI card renders
 - **WHEN** card được hiển thị trên tab Tổng quan
 - **THEN** giá trị chính dùng 24px và label/tooltip tuân thủ hierarchy quy định
-

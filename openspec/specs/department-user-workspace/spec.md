@@ -57,4 +57,3 @@ Không gian phòng ban SHALL hỗ trợ cây đơn vị khi metadata `parentId` 
 #### Scenario: Department hierarchy is flat
 - **WHEN** mọi phòng ban không có parentId
 - **THEN** UI ẩn điều khiển drilldown mà không làm mất bảng và biểu đồ phòng ban
-

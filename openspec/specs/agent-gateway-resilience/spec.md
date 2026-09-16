@@ -239,4 +239,3 @@ dừng lại, hoặc làm số liệu biến mất khỏi dashboard mà không a
 - **THEN** project chịu phí SHALL đọc được ngay tại đó
 - **AND** nếu project đó khác project đang khai cho agent trong danh mục, sự khác biệt SHALL được
   ghi thành chú thích chứ không để người đọc tự phát hiện
-

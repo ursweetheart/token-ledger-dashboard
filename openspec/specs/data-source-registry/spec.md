@@ -106,4 +106,3 @@ chứng minh SQL chạy được, không chứng minh Gateway nối được và
 - **WHEN** kịch bản kết thúc, dù đạt hay trượt hay gặp lỗi giữa chừng
 - **THEN** database SHALL trở về đúng trạng thái trước khi chạy
 - **AND** MUST NOT ghi vào database đang phục vụ dashboard mà không hoàn tác
-

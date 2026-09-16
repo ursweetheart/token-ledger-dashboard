@@ -86,4 +86,3 @@ trách nhiệm thử lại. Một request hỏng MUST NOT biến thành tích s�
 - **WHEN** nhà cung cấp trả lỗi cho mọi lượt thử của một request
 - **THEN** tổng số lượt gọi thật tới nhà cung cấp SHALL không vượt quá giới hạn thử lại của
   một lớp duy nhất
-

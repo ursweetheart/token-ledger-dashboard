@@ -90,4 +90,3 @@ hẳn, và một phép báo động không tới nơi thì không khác gì khô
 - **WHEN** nghiệm thu đường gửi thư
 - **THEN** phép nghiệm thu SHALL dựa trên việc người nhận xác nhận đã thấy thư
 - **AND** MUST NOT dựa chỉ vào việc lệnh gửi không báo lỗi
-

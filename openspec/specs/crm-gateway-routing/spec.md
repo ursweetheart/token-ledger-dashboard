@@ -99,4 +99,3 @@ thống bên ngoài hay gửi thông báo cho người thật.
 - **WHEN** agent không có cờ tắt được các tác dụng phụ ấy
 - **THEN** phép nghiệm thu SHALL gọi trực tiếp lớp gọi LLM
 - **AND** MUST NOT chạy toàn bộ tiến trình nghiệp vụ để nghiệm thu
-

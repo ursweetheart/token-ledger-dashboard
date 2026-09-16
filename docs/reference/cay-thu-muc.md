@@ -43,16 +43,21 @@ token-ledger-dashboard/
 │   └── 02_catalog.sql · load_*.py · build_*.py · connect.py · rules.py
 │
 ├── data/                   Kho dữ liệu THÔ — mất là mất vĩnh viễn
-├── var/                    Artifact cục bộ dựng lại được; database chạy nằm trong
-│                           volume Docker `pgdata`, không có đường SQLite sống
+├── var/                    Artifact cục bộ dựng lại được
+│   ├── baselines/          Mốc đối chiếu dữ liệu/database
+│   └── snapshots/          Dấu vết chẩn đoán không phải baseline JSON
 │
 ├── tests/                  Phải LUÔN xanh
-├── tools/                  Chẩn đoán một lần — ĐƯỢC PHÉP mục
+├── tools/
+│   ├── diagnostics/        Chẩn đoán một lần — ĐƯỢC PHÉP mục
+│   ├── bench/              Load/routing probes có chủ đích
+│   ├── probes/             Môi trường đo cô lập + kết quả gốc
+│   └── gateway-smoke/      runtime · harnesses · reports · artifacts
 ├── docs/
 │   ├── reference/          Hệ thống ĐANG là gì  ← file này
 │   ├── decisions/          Quyết định còn hiệu lực
-│   └── archive/            Nhật ký phiên — KHÔNG sửa, kể cả đường dẫn đã cũ
-├── planning/               .xlsx · .docx · ghi chú họp
+│   └── archive/            Nhật ký/diễn tập/bản lưu — KHÔNG sửa nội dung lịch sử
+├── planning/               .xlsx · .docx · ghi chú họp · sketches/
 │
 ├── openspec/  .claude/  .agent/  .codex/       ← công cụ bắt buộc ở gốc
 └── alembic.ini  docker-compose.yml  .env.example  .gitignore  README.md
@@ -203,15 +208,19 @@ nhiêu. Lệch nghĩa là có logic bị thay đổi kèm.
 | File | Đi đâu | Vì sao |
 |---|---|---|
 | Script kéo dữ liệu mới | `scripts/` | Đường ống sản xuất |
-| Script chẩn đoán một lần | `tools/` | Không có nghĩa vụ luôn xanh |
+| Script chẩn đoán một lần | `tools/diagnostics/` | Không có nghĩa vụ luôn xanh |
 | Test phải luôn xanh | `tests/` | |
 | Ảnh, CSS, JS của dashboard | `web/` | Được phục vụ ra mạng |
-| Bảng tính, tài liệu Word | `planning/` | Không phải mã, không phải đầu vào |
+| Bảng tính, tài liệu Word, sketch | `planning/` | Không phải mã, không phải đầu vào |
 | Đầu vào của đường ống | `data/` | Kể cả là `.xlsx` |
 | Bất cứ thứ gì chương trình sinh ra khi chạy | `var/` | Xoá được, dựng lại được |
 
 Một script được `update_dashboard.py` gọi thì **phải** ở `scripts/`. Đường ống sản xuất
 không bao giờ gọi vào `tests/` hay `tools/`.
+
+Ba loại kế hoạch không gộp vào nhau: `.hermes/plans/` là WIP của Hermes,
+`docs/superpowers/plans/` là implementation plan đã publish theo workflow, còn
+`planning/` chứa tài liệu nghiệp vụ và bản phác thảo cho con người.
 
 ⚠️ **`scripts/` chỉ chứa `.py`.** Một file dữ liệu do script sinh ra KHÔNG được nằm cạnh
 script sinh ra nó. Đã dính: `scripts/seed-days-that.js` — 281 KB số liệu nhúng, sinh bởi

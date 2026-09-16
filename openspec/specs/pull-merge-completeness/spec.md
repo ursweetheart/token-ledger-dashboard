@@ -169,4 +169,3 @@ Giới hạn đã biết, và SHALL được ghi lại chứ không giấu: vớ
 - **WHEN** có thêm lần kéo và số ca lệch khác 14
 - **THEN** mốc SHALL được đo lại trên tập lần kéo mới và ghi lại kèm ngày
 - **AND** MUST NOT sửa mốc chỉ để phép so đạt
-

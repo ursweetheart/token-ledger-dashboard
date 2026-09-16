@@ -72,4 +72,3 @@ bằng dấu hiệu xuất hiện **sớm hơn** chênh lệch tổng.
 #### Scenario: Nguồn chưa có dòng nào
 - **WHEN** nguồn chưa có dòng nào để so
 - **THEN** kết quả SHALL là chưa kiểm được, không phải đạt
-

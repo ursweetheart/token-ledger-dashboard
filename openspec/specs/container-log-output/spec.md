@@ -87,4 +87,3 @@ Luồng log của mỗi container SHALL có giới hạn kích thước và số
 #### Scenario: Container chạy dài ngày
 - **WHEN** một container chạy liên tục và ghi log đều đặn
 - **THEN** dung lượng log SHALL dừng ở một mức đã định, và phần cũ nhất SHALL bị loại bỏ trước
-

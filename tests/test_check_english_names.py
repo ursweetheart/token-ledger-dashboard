@@ -9,7 +9,7 @@ def kinds(rel: str, source: str) -> list[str]:
 
 class FileNameCase(unittest.TestCase):
     def test_english_name_passes(self):
-        self.assertEqual(kinds("tools/verify_datasets.py", "x = 1\n"), [])
+        self.assertEqual(kinds("tools/diagnostics/verify_datasets.py", "x = 1\n"), [])
 
     def test_vietnamese_name_fails(self):
         self.assertEqual(kinds("tools/kiem_tra_moi.py", "x = 1\n"), ["file name"])  # vi-ok: fixture

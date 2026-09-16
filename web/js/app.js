@@ -153,7 +153,7 @@ function userFilterLabel(u){
    database-only: đợt đó bỏ được SEED_DAYS, bảng giá và danh bạ, nhưng quên cây
    tổ chức - nên một sự thật về cơ cấu công ty vẫn sống trong mã giao diện.
 
-   Đối chiếu trước khi bỏ (tools/doi_chieu_cay_don_vi.py): KHÔNG đơn vị nào lệch
+   Đối chiếu trước khi bỏ (tools/diagnostics/doi_chieu_cay_don_vi.py): KHÔNG đơn vị nào lệch
    cha - đó là kiểu lệch nguy hiểm nhất vì nó không làm mọc thêm hay mất đi hàng
    nào, chỉ chuyển số sang nhánh khác. 5 đơn vị mọc thêm đều 0 tài khoản/0 token,
    3 đơn vị mất đi là tên cũ thời Excel không có dòng trong database. */

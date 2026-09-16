@@ -732,8 +732,8 @@ Trả lời đúng một câu: *"Lần cuối đường nạp của nguồn này
 
 > ⚠ **Từ 03/09/2026, hỏi `usage_by_account_resolved` (mục ngay dưới) thay cho view này.**
 > View này chỉ phủ **2/8 agent**. Nó trả lời câu *"quy về một CON NGƯỜI"*; câu dashboard cần
-> là *"quy về một TÀI KHOẢN"*. Giữ lại vì `tools/baseline_db.py` và
-> `tools/dien_tap_gateway.py` đọc nó làm mốc lịch sử — đổi nó là mọi số mốc cũ không so lại
+> là *"quy về một TÀI KHOẢN"*. Giữ lại vì `tools/diagnostics/baseline_db.py` và
+> `tools/diagnostics/dien_tap_gateway.py` đọc nó làm mốc lịch sử — đổi nó là mọi số mốc cũ không so lại
 > được.
 
 360 dòng · Lọc nguồn có `ref_source.knows_user` và `kind='real'`
@@ -1082,7 +1082,7 @@ Alembic ghi vào đây migration cuối cùng đã áp. **Không phải dữ li�
 
 | Tài liệu | Vai trò |
 |---|---|
-| `docs/reference/Tài_liệu_triển_khai_API_Gateway.docx` (12/08/2026) | kiến trúc Gateway, luồng xác thực, định dạng dữ liệu trao đổi |
+| `planning/Tài_liệu_triển_khai_API_Gateway.docx` (12/08/2026) | kiến trúc Gateway, luồng xác thực, định dạng dữ liệu trao đổi |
 | `docs/reference/Bao_cao_LiteLLM_Token_Ledger.md` (16/08/2026) | chức năng LiteLLM, phần nào miễn phí phần nào Enterprise |
 | Phần I của chính file này | schema hiện tại, và các bài học đã trả giá để có |
 

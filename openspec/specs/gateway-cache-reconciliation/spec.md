@@ -61,4 +61,3 @@ SHALL ghi rõ nó là ngưỡng chốt trước hay đã hiệu chỉnh theo s�
 #### Scenario: Đổi ngưỡng
 - **WHEN** ngưỡng được thay đổi
 - **THEN** thay đổi SHALL kèm bằng chứng đo đạc cho giá trị mới
-

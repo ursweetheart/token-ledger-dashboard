@@ -94,11 +94,10 @@ không rút lại được, vì ai đã kéo thì đã có.
 
 #### Scenario: Trước khi đặt gói công khai
 - **WHEN** người sở hữu chuẩn bị đặt gói thành công khai
-- **THEN** `tools/scan_secrets.py` trên fork tại commit được đóng gói SHALL đạt
+- **THEN** `tools/diagnostics/scan_secrets.py` trên fork tại commit được đóng gói SHALL đạt
 - **AND** kết quả quét SHALL được ghi lại cùng commit đó
 
 #### Scenario: Khởi động Gateway từ image công khai
 - **WHEN** Gateway khởi động từ image kéo về từ kho
 - **THEN** master key, salt key và khoá nhà cung cấp SHALL đến từ biến môi trường của máy chạy
 - **AND** thiếu bất kỳ khoá bắt buộc nào thì entrypoint SHALL dừng hẳn, như trước change
-

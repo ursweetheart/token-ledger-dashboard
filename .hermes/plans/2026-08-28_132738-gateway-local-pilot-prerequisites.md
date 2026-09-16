@@ -63,7 +63,7 @@ Expected: all checks pass; strict OpenSpec remains valid; no whitespace errors.
 Run:
 ```bash
 git diff -- .env.example db/connect.py docker-compose.yml docker/pgadmin-servers.json docs/reference/ke-hoach-nen-thang-9-2026.md openspec/changes/change-the-schema-without-dropping-it tests/database-defaults.test.js
-python tools/scan_secrets.py
+python tools/diagnostics/scan_secrets.py
 ```
 
 Expected: no actual secret finding; no accidental unrelated edits.
@@ -146,7 +146,7 @@ Expected: the pinned/approved revision used by the recorded probe (historically 
 
 Run:
 ```bash
-python C:/token-ledger-dashboard/tools/scan_secrets.py
+python C:/token-ledger-dashboard/tools/diagnostics/scan_secrets.py
 ```
 
 Expected: zero severe findings across the project worktree. Scan the fork with the same policy before building if it is outside the project scan root.
@@ -181,7 +181,7 @@ Also set non-default `REDIS_PASSWORD` and `GATEWAY_PGPASSWORD` before any deploy
 
 Run:
 ```bash
-python tools/scan_secrets.py
+python tools/diagnostics/scan_secrets.py
 git status --short
 ```
 

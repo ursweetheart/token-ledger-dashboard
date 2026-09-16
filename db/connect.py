@@ -49,7 +49,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DB_DIR = ROOT / "db"                # ma: migration + danh muc .sql
 # VAR_DIR bo 24/08/2026 cung voi SQLite - no chi ton tai de tro toi file .sqlite,
 # va sau khi go thi khong file .py nao con dung toi. Thu muc var/ van con, nay
-# chua ban chup bo so bat bien cua tools/baseline_db.py.
+# chua ban chup bo so bat bien cua tools/diagnostics/baseline_db.py.
 
 # Tên biến VÀ giá trị mặc định KHỚP docker-compose.yml, nên `docker compose up -d`
 # rồi chạy script là nối được ngay, không phải đặt gì. Đặt tên khác sẽ thành hai

@@ -72,4 +72,3 @@ Nội dung định nghĩa trên card SHALL khớp với công thức thực tế
 #### Scenario: Aggregate p95 is unavailable
 - **WHEN** nguồn dữ liệu không cung cấp histogram hoặc p95 đã tổng hợp cho phạm vi
 - **THEN** hệ thống không trình bày giá trị trung bình có trọng số dưới nhãn p95
-

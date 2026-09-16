@@ -130,4 +130,3 @@ chủ thứ ba.
 - **WHEN** máy chủ cần mở dịch vụ ra mạng nội bộ
 - **THEN** việc đó SHALL làm được bằng cấu hình ngoài git
 - **AND** MUST NOT đòi sửa tệp theo git
-

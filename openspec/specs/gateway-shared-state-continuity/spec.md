@@ -106,4 +106,3 @@ Redis đã có tính sẵn sàng cao, rồi bỏ qua rủi ro lớn hơn nhiều
 - **THEN** tài liệu SHALL nêu kịch bản duy nhất được bảo vệ là *tiến trình Redis hỏng vĩnh
   viễn trong khi máy chủ còn sống*
 - **AND** SHALL nêu rõ mất máy chủ vẫn là mất toàn bộ
-

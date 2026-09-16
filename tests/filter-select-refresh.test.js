@@ -8,7 +8,7 @@
    change làm `el.value` bị đồng bộ về theo thuộc tính `selected` vừa dựng, nên
    lần chọn sau không sinh sự kiện change nữa.
 
-   tools/chay_dashboard_trong_node.js KHÔNG bắt được lỗi này: phần tử giả của nó
+   tools/diagnostics/chay_dashboard_trong_node.js KHÔNG bắt được lỗi này: phần tử giả của nó
    có getAttribute() luôn trả null và setAttribute() rỗng, nên nhánh "danh sách
    không đổi thì đừng đụng DOM" không bao giờ chạy. Vì thế phép kiểm ở đây dựng
    phần tử giả riêng, có thuộc tính thật. */

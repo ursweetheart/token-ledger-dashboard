@@ -122,4 +122,3 @@ token = 46,2%**, và là model đông nhất mà khoá hiện có gọi được
 - **WHEN** một model chiếm lưu lượng đáng kể mà khoá không gọi được
 - **THEN** sự việc được ghi lại kèm số token và tỷ lệ phần trăm
 - **AND** MUST NOT bị bỏ qua chỉ vì nó không chặn phép đo hiện tại
-
