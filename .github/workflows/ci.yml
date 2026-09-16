@@ -9,8 +9,8 @@
 #   - repo không có package.json, pytest.ini, pyproject.toml, setup.cfg
 #   - phần JavaScript dùng bộ chạy kiểm có sẵn của Node
 #   - psycopg2 được nạp bên trong hàm (db/connect.py:196), không ở đầu tệp
-# Đã đo 13/09/2026 trong container trắng: python:3.12-slim đạt 11/11 và
-# node:24-alpine đạt 51/51, không cài gói nào. Máy ảo ở đây dựng lại đúng
+# Đã đo 16/09/2026 trong container trắng: python:3.12-slim đạt 58/58 và
+# node:24-alpine đạt 53/53, không cài gói nào. Máy ảo ở đây dựng lại đúng
 # môi trường đó, nên nếu có ai làm mất tính chất này thì nó đỏ ngay.
 
 name: CI
@@ -86,15 +86,15 @@ jobs:
           echo "Gateway image comes from the registry: $MAIN"
 
   # ---------------------------------------------------------------------------
-  # 51 phép kiểm JavaScript. Node có sẵn trên máy ảo, không cài gì thêm.
+  # 53 phép kiểm JavaScript. Node có sẵn trên máy ảo, không cài gì thêm.
   # ---------------------------------------------------------------------------
   test-js:
     name: Phép kiểm JavaScript
     runs-on: ubuntu-latest
     env:
-      # Mốc đo 13/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
+      # Mốc đo 16/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
       # con số đổi trong lịch sử git chính là chỗ nhìn thấy việc đó.
-      EXPECTED_JS: "51"
+      EXPECTED_JS: "53"
     steps:
       - uses: actions/checkout@v4
 
