@@ -4,24 +4,24 @@ Written to answer one question a reviewer will actually ask: "is this data
 correct?" That question has five layers, and the ones that matter are not the
 ones people usually check.
 
-  A  TOAN VEN    file parses, no mojibake, no placeholder junk
-  B  TU NHAT QUAN  sum of the slices == the stated total, within one source
-  C  DOI CHIEU   raw table vs aggregate API, merged file vs its parts
-  D  HOP LY      no negatives, no duplicate ids, no impossible timestamps
-  E  MUI GIO     which clock the stored timestamps are on
-  F  BAY DA BIET the traps documented in docs/uu-tien-thu-thap-du-lieu
+  A  INTEGRITY     file parses, no mojibake, no placeholder junk
+  B  CONSISTENCY   sum of the slices == the stated total, within one source
+  C  CROSS-CHECK   raw table vs aggregate API, merged file vs its parts
+  D  PLAUSIBILITY  no negatives, no duplicate ids, no impossible timestamps
+  E  TIMEZONE      which clock the stored timestamps are on
+  F  KNOWN TRAPS   the traps documented in docs/uu-tien-thu-thap-du-lieu
 
 Layers A-C are the ones a normal check stops at, and this dataset passes them.
 Layer E is where the real risk is: every number can be individually valid while
 the whole report is shifted seven hours. A check that cannot fail on layer E is
 not checking the thing that would actually hurt.
 
-Nothing here writes to data/. The only file written is the report under test/.
+Nothing here writes to data/. The only file written is the report next to this tool.
 
 Usage
     python tools/diagnostics/verify_datasets.py
-    python tools/diagnostics/verify_datasets.py --bo-qua-monitoring   # bo qua 335 MB, chay nhanh
-    python tools/diagnostics/verify_datasets.py --bao-cao ""          # chi in ra man hinh
+    python tools/diagnostics/verify_datasets.py --skip-monitoring   # skip 335 MB, runs fast
+    python tools/diagnostics/verify_datasets.py --report ""         # print to the screen only
 """
 
 from __future__ import annotations
@@ -49,9 +49,9 @@ ICT_OFFSET = timedelta(hours=7)
 USD_TOL = 0.01
 
 
-# ───────────────────────────── ket qua ─────────────────────────────
+# ───────────────────────────── results ─────────────────────────────
 
-DAT, LOI, CANH, TIN = "DAT", "LOI", "CANH BAO", "TIN"
+PASS, FAIL, WARN, INFO = "PASS", "FAIL", "WARN", "INFO"
 
 
 class Report:
@@ -70,24 +70,24 @@ class Report:
         print(f"\n{'=' * 78}\n{title}\n{'=' * 78}")
 
     def add(self, status: str, label: str, detail: str = "") -> None:
-        mark = {DAT: "  DAT ", LOI: "> LOI ", CANH: "! CANH", TIN: "  TIN "}[status]
+        mark = {PASS: "  PASS", FAIL: "> FAIL", WARN: "! WARN", INFO: "  INFO"}[status]
         print(f"{mark}  {label:<52} {detail}")
         self.rows.append((self.section, status, label, detail))
 
     def ok(self, label: str, detail: str = "") -> None:
-        self.add(DAT, label, detail)
+        self.add(PASS, label, detail)
 
     def fail(self, label: str, detail: str = "") -> None:
-        self.add(LOI, label, detail)
+        self.add(FAIL, label, detail)
 
     def warn(self, label: str, detail: str = "") -> None:
-        self.add(CANH, label, detail)
+        self.add(WARN, label, detail)
 
     def info(self, label: str, detail: str = "") -> None:
-        self.add(TIN, label, detail)
+        self.add(INFO, label, detail)
 
     def check(self, cond: bool, label: str, detail: str = "") -> bool:
-        self.add(DAT if cond else LOI, label, detail)
+        self.add(PASS if cond else FAIL, label, detail)
         return cond
 
     def count(self, status: str) -> int:
@@ -97,7 +97,7 @@ class Report:
 R = Report()
 
 
-# ───────────────────────────── doc file ─────────────────────────────
+# ───────────────────────────── reading ─────────────────────────────
 
 def read_json(path: Path):
     """utf-8-sig because half these files carry a BOM and half do not.
@@ -134,7 +134,7 @@ def same(a: float, b: float, tol: float = 0.5) -> bool:
 def gap(a: float, b: float) -> str:
     if same(a, b):
         return f"{a:,.0f} = {b:,.0f}"
-    return f"{a:,.2f} vs {b:,.2f}   lech {a - b:+,.2f}"
+    return f"{a:,.2f} vs {b:,.2f}   off by {a - b:+,.2f}"
 
 
 def naive(text: str) -> datetime | None:
@@ -160,7 +160,7 @@ def naive(text: str) -> datetime | None:
     return parsed.replace(tzinfo=None)
 
 
-# ───────────────────────── A. toan ven file ─────────────────────────
+# ───────────────────────── A. file integrity ─────────────────────────
 
 # Byte pairs that appear when UTF-8 is decoded as cp1252 and re-encoded. Any of
 # these in a Vietnamese file means the text was mangled somewhere upstream.
@@ -169,7 +169,7 @@ JUNK = ("System.Object", "[object Object]", "undefined")
 
 
 def section_a(paths_json: list[Path], paths_csv: list[Path]) -> None:
-    R.open("A. TOAN VEN FILE")
+    R.open("A. FILE INTEGRITY")
 
     broken = []
     for path in paths_json:
@@ -177,8 +177,8 @@ def section_a(paths_json: list[Path], paths_csv: list[Path]) -> None:
             read_json(path)
         except Exception as error:  # noqa: BLE001 - reporting, not handling
             broken.append(f"{path.name}: {type(error).__name__}")
-    R.check(not broken, "moi file JSON doc duoc",
-            f"{len(paths_json)} file" if not broken else "; ".join(broken[:3]))
+    R.check(not broken, "every JSON file parses",
+            f"{len(paths_json)} files" if not broken else "; ".join(broken[:3]))
 
     bad_csv, ragged = [], []
     for path in paths_csv:
@@ -187,19 +187,19 @@ def section_a(paths_json: list[Path], paths_csv: list[Path]) -> None:
                 reader = csv.reader(handle)
                 header = next(reader, None)
                 if header is None:
-                    bad_csv.append(f"{path.name}: rong")
+                    bad_csv.append(f"{path.name}: empty")
                     continue
                 width = len(header)
                 for line, row in enumerate(reader, start=2):
                     if row and len(row) != width:
-                        ragged.append(f"{path.name}:{line} co {len(row)}/{width} cot")
+                        ragged.append(f"{path.name}:{line} has {len(row)}/{width} columns")
                         break
         except Exception as error:  # noqa: BLE001
             bad_csv.append(f"{path.name}: {type(error).__name__}")
-    R.check(not bad_csv, "moi file CSV doc duoc",
-            f"{len(paths_csv)} file" if not bad_csv else "; ".join(bad_csv[:3]))
-    R.check(not ragged, "moi dong CSV du cot",
-            "khong lech" if not ragged else "; ".join(ragged[:3]))
+    R.check(not bad_csv, "every CSV file parses",
+            f"{len(paths_csv)} files" if not bad_csv else "; ".join(bad_csv[:3]))
+    R.check(not ragged, "every CSV row has all columns",
+            "none ragged" if not ragged else "; ".join(ragged[:3]))
 
     hit_mojibake, hit_junk = [], []
     for path in paths_csv:
@@ -210,17 +210,17 @@ def section_a(paths_json: list[Path], paths_csv: list[Path]) -> None:
         found = [sign for sign in JUNK if sign in text]
         if found:
             hit_junk.append(f"{path.name} ({found[0]})")
-    R.check(not hit_mojibake, "khong file nao loi font",
-            "sach" if not hit_mojibake else "; ".join(hit_mojibake[:3]))
-    R.check(not hit_junk, "khong o nao chua gia tri rac",
-            "sach" if not hit_junk else "; ".join(hit_junk[:3]))
+    R.check(not hit_mojibake, "no file has mojibake",
+            "clean" if not hit_mojibake else "; ".join(hit_mojibake[:3]))
+    R.check(not hit_junk, "no cell holds a junk value",
+            "clean" if not hit_junk else "; ".join(hit_junk[:3]))
 
     with_bom = sum(1 for p in paths_json if p.read_bytes()[:3] == b"\xef\xbb\xbf")
-    R.info("BOM cua file JSON khong dong nhat",
-           f"{with_bom}/{len(paths_json)} co BOM - doc bang utf-8-sig la xu ly duoc")
+    R.info("JSON files are inconsistent about BOM",
+           f"{with_bom}/{len(paths_json)} have a BOM - reading with utf-8-sig handles it")
 
 
-# ─────────────────────── B. tu nhat quan mot nguon ───────────────────────
+# ─────────────────────── B. consistency within one source ───────────────────────
 
 def sum_of(rows, *keys) -> float:
     total = 0.0
@@ -244,16 +244,16 @@ def check_costs(agent: str, costs: dict) -> None:
              for key in ("total_cost_usd", "input_cost_usd", "output_cost_usd",
                          "cached_input_cost_usd", "cache_storage_cost_usd")
              if key in costs}
-    R.info(f"{agent}  kieu JSON cua truong tien", ", ".join(sorted(kinds)))
+    R.info(f"{agent}  JSON type of the money fields", ", ".join(sorted(kinds)))
 
     parts = (num(costs["input_cost_usd"]) + num(costs["output_cost_usd"])
              + num(costs["cached_input_cost_usd"]) + num(costs["cache_storage_cost_usd"]))
     stated = num(costs["total_cost_usd"])
-    R.check(same(parts, stated, USD_TOL), f"{agent}  input+output+cached+storage = tong tien",
+    R.check(same(parts, stated, USD_TOL), f"{agent}  input+output+cached+storage = total cost",
             f"${parts:.6f} vs ${stated:.6f}")
 
     by_model = sum_of(costs["by_model"], "total_cost_usd")
-    R.check(same(by_model, stated, USD_TOL), f"{agent}  sum(by_model.cost) = tong tien",
+    R.check(same(by_model, stated, USD_TOL), f"{agent}  sum(by_model.cost) = total cost",
             f"${by_model:.6f} vs ${stated:.6f}")
 
 
@@ -265,7 +265,7 @@ def section_b_ctda(year: dict) -> None:
     halves = totals["prompt_tokens"] + totals["completion_tokens"]
     R.check(same(halves, grand), "CTDA  prompt + completion = total_tokens",
             gap(halves, grand) + ("" if same(halves, grand)
-                                  else "  <= token khong thuoc vao lan ra"))
+                                  else "  <= tokens that are neither in nor out"))
 
     for label, rows, tok_key, call_key, closed in (
         ("by_unit", year["by_unit"], "total_tokens", "calls", True),
@@ -281,13 +281,13 @@ def section_b_ctda(year: dict) -> None:
         got_calls = sum_of(rows, call_key)
         if closed:
             R.check(same(got, grand) and same(got_calls, calls),
-                    f"CTDA  sum({label}) = tong",
-                    f"{gap(got, grand)} | luot {gap(got_calls, calls)}")
+                    f"CTDA  sum({label}) = total",
+                    f"{gap(got, grand)} | calls {gap(got_calls, calls)}")
         else:
             # These two are explicitly top-N, so equality is not expected --
             # but exceeding the total would still be a real error.
             R.check(got <= grand + 0.5 and got_calls <= calls + 0.5,
-                    f"CTDA  sum({label}) <= tong  (top-N)",
+                    f"CTDA  sum({label}) <= total  (top-N)",
                     f"{got:,.0f} / {grand:,.0f} tokens ({100 * got / grand:.1f}%)")
 
     check_costs("CTDA", year["costs"])
@@ -301,7 +301,7 @@ def section_b_tla(year: dict) -> None:
     halves = totals["prompt_tokens"] + totals["completion_tokens"]
     R.check(same(halves, grand), "TLA HD  prompt + completion = total_tokens",
             gap(halves, grand) + ("" if same(halves, grand)
-                                  else "  <= token khong thuoc vao lan ra"))
+                                  else "  <= tokens that are neither in nor out"))
 
     # No raw table exists for this agent, so by_model is the finest grain
     # available for locating the same gap.
@@ -309,7 +309,7 @@ def section_b_tla(year: dict) -> None:
             - num(m["completion_tokens"])) for m in year["costs"]["by_model"]]
     culprits = [f"{model}: {diff:+,.0f}" for model, diff in off if abs(diff) > 0.5]
     if culprits:
-        R.info("TLA HD  cho lech nam o model nao", "; ".join(culprits))
+        R.info("TLA HD  which model carries the gap", "; ".join(culprits))
 
     for label, rows in (("by_unit", year["by_unit"]),
                         ("by_user", year["by_user"]),
@@ -319,13 +319,13 @@ def section_b_tla(year: dict) -> None:
         got = sum_of(rows, "total_tokens")
         got_calls = sum_of(rows, "calls")
         R.check(same(got, grand) and same(got_calls, calls),
-                f"TLA HD  sum({label}) = tong",
-                f"{gap(got, grand)} | luot {gap(got_calls, calls)}")
+                f"TLA HD  sum({label}) = total",
+                f"{gap(got, grand)} | calls {gap(got_calls, calls)}")
 
     check_costs("TLA HD", year["costs"])
 
 
-# ───────────────────── C. doi chieu cheo nguon ─────────────────────
+# ───────────────────── C. cross-source checks ─────────────────────
 
 def compare_csv_json(label: str, csv_path: Path, rows_json: list[dict],
                      numeric: tuple[str, ...]) -> None:
@@ -336,10 +336,10 @@ def compare_csv_json(label: str, csv_path: Path, rows_json: list[dict],
     both count and numbers while losing a whole column.
     """
     if not csv_path.exists():
-        R.warn(f"{label}: thieu file CSV", str(csv_path.relative_to(ROOT)))
+        R.warn(f"{label}: CSV file missing", str(csv_path.relative_to(ROOT)))
         return
     rows_csv = read_csv(csv_path)
-    if not R.check(len(rows_csv) == len(rows_json), f"{label}: so dong",
+    if not R.check(len(rows_csv) == len(rows_json), f"{label}: row count",
                    f"csv {len(rows_csv)} vs json {len(rows_json)}"):
         return
     shared = [key for key in numeric if rows_json and key in rows_json[0]]
@@ -349,13 +349,13 @@ def compare_csv_json(label: str, csv_path: Path, rows_json: list[dict],
         b = sum(num(row.get(key)) for row in rows_json)
         if not same(a, b, USD_TOL if "cost" in key else 0.5):
             bad.append(f"{key}: {a:,.2f} vs {b:,.2f}")
-    R.check(not bad, f"{label}: tong tung cot",
-            f"{len(shared)} cot khop" if not bad else "; ".join(bad[:3]))
+    R.check(not bad, f"{label}: column totals",
+            f"{len(shared)} columns match" if not bad else "; ".join(bad[:3]))
 
 
 def section_c_raw_vs_api(raw: list[dict], year: dict, collections: dict) -> None:
     raw_csv = read_csv(DATA / "ctda" / "db-token_usage-raw.csv")
-    R.check(len(raw) == len(raw_csv), "CTDA  raw JSON = raw CSV (so dong)",
+    R.check(len(raw) == len(raw_csv), "CTDA  raw JSON = raw CSV (row count)",
             f"{len(raw)} = {len(raw_csv)}")
     for key in ("prompt_tokens", "completion_tokens", "total_tokens", "cached_tokens"):
         a = sum(num(r.get(key)) for r in raw)
@@ -365,13 +365,13 @@ def section_c_raw_vs_api(raw: list[dict], year: dict, collections: dict) -> None
     totals = year["totals"]
     cached_api = sum_of(year["costs"]["by_model"], "cached_tokens")
     for label, got, want in (
-        ("so luot goi", len(raw), totals["call_count"]),
+        ("calls", len(raw), totals["call_count"]),
         ("total_tokens", sum(num(r.get("total_tokens")) for r in raw), totals["total_tokens"]),
         ("prompt_tokens", sum(num(r.get("prompt_tokens")) for r in raw), totals["prompt_tokens"]),
         ("completion_tokens", sum(num(r.get("completion_tokens")) for r in raw), totals["completion_tokens"]),
         ("cached_tokens", sum(num(r.get("cached_tokens")) for r in raw), cached_api),
     ):
-        R.check(same(got, want), f"CTDA  bang tho = API tong hop: {label}", gap(got, want))
+        R.check(same(got, want), f"CTDA  raw table = aggregate API: {label}", gap(got, want))
 
     # Field presence, not just field values. A row missing `cached_tokens`
     # entirely reads as zero in every sum here, so the totals can reconcile
@@ -382,25 +382,25 @@ def section_c_raw_vs_api(raw: list[dict], year: dict, collections: dict) -> None
     absent = {field: sum(1 for r in raw if field not in r) for field in expected_fields}
     ragged = {field: count for field, count in absent.items() if count}
     if not ragged:
-        R.ok("CTDA  moi dong tho co du truong", f"{len(expected_fields)} truong")
+        R.ok("CTDA  every raw row has every field", f"{len(expected_fields)} fields")
     else:
-        R.warn("CTDA  bang tho khong dong deu ve so truong",
-               "; ".join(f"{field} thieu o {count}/{len(raw)} dong"
+        R.warn("CTDA  raw rows do not all have the same fields",
+               "; ".join(f"{field} missing in {count}/{len(raw)} rows"
                          for field, count in sorted(ragged.items(), key=lambda x: -x[1])[:4]))
 
     entries = collections.get("collections") or collections.get("data") or []
     found = next((c for c in entries if c.get("name") == "token_usage"), None)
     if found:
-        R.check(len(raw) == found["count"], "CTDA  raw = so dong CSDL bao cao",
+        R.check(len(raw) == found["count"], "CTDA  raw = row count the database reports",
                 f"{len(raw)} = {found['count']}")
     else:
-        R.warn("CTDA  khong thay token_usage trong db-collections", "")
+        R.warn("CTDA  token_usage not found in db-collections", "")
 
 
 def section_c_billing() -> None:
     merged_path = DATA / "billing" / "billing_gop_tru_CTDA.csv"
     if not merged_path.exists():
-        R.warn("billing: thieu file gop", str(merged_path.name))
+        R.warn("billing: merged file missing", str(merged_path.name))
         return
     merged = read_csv(merged_path)
     parts = sorted(p for p in (DATA / "billing").glob("*.csv") if p != merged_path)
@@ -423,16 +423,16 @@ def section_c_billing() -> None:
     merged_cost = sum(num(row.get("cost")) for row in merged)
     merged_usage = sum(num(row.get("amount")) for row in merged)
 
-    R.check(len(merged) == part_rows, "billing  gop = tong cac file roi (so dong)",
-            f"{len(merged)} = {part_rows}  ({len(parts)} file)")
-    R.check(same(merged_cost, part_cost, 0.05), "billing  gop = tong cac file roi (tien)",
+    R.check(len(merged) == part_rows, "billing  merged = sum of the parts (rows)",
+            f"{len(merged)} = {part_rows}  ({len(parts)} files)")
+    R.check(same(merged_cost, part_cost, 0.05), "billing  merged = sum of the parts (cost)",
             f"${merged_cost:,.4f} vs ${part_cost:,.4f}")
-    R.check(same(merged_usage, part_usage, 1.0), "billing  gop = tong cac file roi (token)",
+    R.check(same(merged_usage, part_usage, 1.0), "billing  merged = sum of the parts (tokens)",
             f"{merged_usage:,.0f} vs {part_usage:,.0f}")
-    R.info("billing  tong chi phi", f"${merged_cost:,.4f} tren {len(merged)} dong")
+    R.info("billing  total cost", f"${merged_cost:,.4f} over {len(merged)} rows")
 
 
-# ───────────────────────── D. tinh hop ly ─────────────────────────
+# ───────────────────────── D. plausibility ─────────────────────────
 
 def section_d(raw: list[dict], users: list[dict], units: list[dict],
               ctda_year: dict, tla_year: dict) -> None:
@@ -449,12 +449,12 @@ def section_d(raw: list[dict], users: list[dict], units: list[dict],
                 if key in row and num(row[key]) < 0:
                     negatives.append(f"{label}.{key}")
                     break
-    R.check(not negatives, "khong co gia tri am",
-            "sach" if not negatives else f"{len(negatives)} dong: {negatives[:3]}")
+    R.check(not negatives, "no negative values",
+            "clean" if not negatives else f"{len(negatives)} rows: {negatives[:3]}")
 
     ids = Counter(row.get("_id") for row in raw)
     dup = [key for key, count in ids.items() if count > 1]
-    R.check(not dup, "raw: khong trung _id", f"{len(raw)} id duy nhat" if not dup else str(dup[:3]))
+    R.check(not dup, "raw: no duplicate _id", f"{len(raw)} unique ids" if not dup else str(dup[:3]))
 
     # Where the missing tokens actually live. The year totals are short by 162,
     # so either a few rows carry the whole gap or every row is off by a little;
@@ -463,52 +463,52 @@ def section_d(raw: list[dict], users: list[dict], units: list[dict],
                   if not same(num(r.get("prompt_tokens")) + num(r.get("completion_tokens")),
                               num(r.get("total_tokens")))]
     if not broken_sum:
-        R.ok("raw: prompt + completion = total tung dong", "moi dong khop")
+        R.ok("raw: prompt + completion = total on every row", "every row matches")
     else:
         gaps = Counter(int(num(r.get("total_tokens")) - num(r.get("prompt_tokens"))
                            - num(r.get("completion_tokens"))) for r in broken_sum)
         missing = sum(size * count for size, count in gaps.items())
         models = Counter(r.get("model", "?") for r in broken_sum)
-        R.fail("raw: prompt + completion = total tung dong",
-               f"{len(broken_sum)}/{len(raw)} dong lech, thieu {missing:,.0f} token | "
+        R.fail("raw: prompt + completion = total on every row",
+               f"{len(broken_sum)}/{len(raw)} rows off, {missing:,.0f} tokens missing | "
                f"model: {dict(models.most_common(3))}")
         # A constant per-row gap is a fixed accounting overhead; a scattered one
         # is a rounding or a dropped field. They need different questions asked.
-        R.info("raw: do lon cua tung cho lech",
-               f"{dict(sorted(gaps.items()))} (do lech token: so dong)"
-               + ("  <= LUON bang nhau, la khoan cong them co dinh"
-                  if len(gaps) == 1 else "  <= khong deu"))
+        R.info("raw: size of each gap",
+               f"{dict(sorted(gaps.items()))} (token gap: rows)"
+               + ("  <= ALWAYS the same, a fixed overhead"
+                  if len(gaps) == 1 else "  <= uneven"))
         sample = broken_sum[0]
         prompt = sample.get("prompt_tokens")
         completion = sample.get("completion_tokens")
         total = sample.get("total_tokens")
-        R.info("raw: mot dong lech lam vi du",
+        R.info("raw: one gap row as an example",
                f"prompt {prompt} + completion {completion} != total {total}  "
                f"({sample.get('model')}, {sample.get('function')})")
 
     over_cache = [r.get("_id") for r in raw if num(r.get("cached_tokens")) > num(r.get("prompt_tokens"))]
-    R.check(not over_cache, "raw: cached <= prompt tung dong",
-            "cached la tap con cua prompt" if not over_cache else f"{len(over_cache)} dong sai")
+    R.check(not over_cache, "raw: cached <= prompt on every row",
+            "cached is a subset of prompt" if not over_cache else f"{len(over_cache)} bad rows")
 
     stamps = [naive(r.get("timestamp")) for r in raw]
     missing = sum(1 for s in stamps if s is None)
-    R.check(missing == 0, "raw: moi dong co timestamp doc duoc", f"{missing} dong hong")
+    R.check(missing == 0, "raw: every row has a readable timestamp", f"{missing} bad rows")
     good = [s for s in stamps if s]
     if good:
         floor, ceiling = datetime(2026, 1, 1), datetime.now()
         out = [s for s in good if s < floor or s > ceiling]
-        R.check(not out, "raw: timestamp trong khoang hop ly",
-                f"{min(good)} -> {max(good)}" if not out else f"{len(out)} dong ngoai khoang")
+        R.check(not out, "raw: timestamps within a plausible range",
+                f"{min(good)} -> {max(good)}" if not out else f"{len(out)} rows out of range")
 
     user_ids = Counter(u["id"] for u in users)
     dup_user = [key for key, count in user_ids.items() if count > 1]
-    R.check(not dup_user, "users: khong trung id", f"{len(users)} tai khoan")
+    R.check(not dup_user, "users: no duplicate id", f"{len(users)} accounts")
 
     known_users = set(user_ids)
     unit_ids = {u["id"] for u in units}
     dangling = {u["unit_id"] for u in users if u.get("unit_id") and u["unit_id"] not in unit_ids}
-    R.check(not dangling, "users: unit_id tro toi don vi co that",
-            f"{len(unit_ids)} don vi" if not dangling else f"{len(dangling)} unit_id treo")
+    R.check(not dangling, "users: unit_id points to a real unit",
+            f"{len(unit_ids)} units" if not dangling else f"{len(dangling)} dangling unit_id")
 
     # The vendor's own by_unit says ~97% is unattributed. Confirm that from the
     # raw side so the figure is ours, not theirs. The membership set is built
@@ -517,12 +517,12 @@ def section_d(raw: list[dict], users: list[dict], units: list[dict],
     tok_resolvable = sum(num(r.get("total_tokens")) for r in raw
                          if r.get("user_id") in known_users)
     tok_all = sum(num(r.get("total_tokens")) for r in raw)
-    R.info("raw: dong quy duoc ve mot tai khoan that",
-           f"{resolvable}/{len(raw)} dong ({100 * resolvable / len(raw):.1f}%) | "
-           f"{100 * tok_resolvable / tok_all:.1f}% token")
+    R.info("raw: rows attributable to a real account",
+           f"{resolvable}/{len(raw)} rows ({100 * resolvable / len(raw):.1f}%) | "
+           f"{100 * tok_resolvable / tok_all:.1f}% tokens")
 
 
-# ───────────────────────── E. mui gio ─────────────────────────
+# ───────────────────────── E. timezone ─────────────────────────
 
 def bucket_raw(raw: list[dict], shift: timedelta, shape: str) -> dict[str, list[float]]:
     out: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
@@ -558,9 +558,9 @@ def section_e(raw: list[dict], tla_year: dict) -> None:
     # coarse files are still run, but a tie there is expected, not a warning.
     decided = False
     for name, filename, shape, bucket_key, decisive in (
-        ("theo GIO  (token-usage-day)", "token-usage-day.json", "%Y-%m-%dT%H:00", "bucket", True),
-        ("theo NGAY (token-usage-month)", "token-usage-month.json", "%Y-%m-%d", "bucket", False),
-        ("theo NGAY (token-usage-week)", "token-usage-week.json", "%Y-%m-%d", "bucket", False),
+        ("by HOUR (token-usage-day)", "token-usage-day.json", "%Y-%m-%dT%H:00", "bucket", True),
+        ("by DAY  (token-usage-month)", "token-usage-month.json", "%Y-%m-%d", "bucket", False),
+        ("by DAY  (token-usage-week)", "token-usage-week.json", "%Y-%m-%d", "bucket", False),
     ):
         path = DATA / "ctda" / filename
         if not path.exists():
@@ -570,19 +570,19 @@ def section_e(raw: list[dict], tla_year: dict) -> None:
             continue
         raw_hit, total = test_hypothesis(api_rows, raw, timedelta(0), shape, bucket_key)
         shift_hit, _ = test_hypothesis(api_rows, raw, ICT_OFFSET, shape, bucket_key)
-        score = f"giu nguyen {raw_hit}/{total} | +7h {shift_hit}/{total}"
+        score = f"as stored {raw_hit}/{total} | +7h {shift_hit}/{total}"
         if raw_hit == total and shift_hit < total:
             decided = True
-            R.ok(f"mui gio  API dung nguyen gia tri luu, {name}", score)
+            R.ok(f"timezone  API uses the stored value as-is, {name}", score)
         elif shift_hit == total and raw_hit < total:
             decided = True
-            R.fail(f"mui gio  API CONG THEM 7h, {name}", score)
+            R.fail(f"timezone  API ADDS 7h, {name}", score)
         elif decisive:
-            R.warn(f"mui gio  khong phan biet duoc, {name}", score)
+            R.warn(f"timezone  cannot tell apart, {name}", score)
         else:
-            R.info(f"mui gio  khong phan biet duoc, {name}",
-                   score + ("  (binh thuong: da co ket luan o muc gio)" if decided
-                            else "  (chua muc nao ket luan duoc)"))
+            R.info(f"timezone  cannot tell apart, {name}",
+                   score + ("  (expected: the hourly check already decided)" if decided
+                            else "  (no check has decided yet)"))
 
     # ── E3: the activity profile is the only evidence about the stored clock ──
     hours = Counter()
@@ -595,23 +595,23 @@ def section_e(raw: list[dict], tla_year: dict) -> None:
         work_plus7 = sum(count for hour, count in hours.items() if 1 <= hour <= 11)
         total = sum(hours.values())
         peak = max(hours, key=lambda h: hours[h])
-        R.info("mui gio  gio ban ron nhat cua bang tho",
-               f"{peak:02d}h ({hours[peak]} luot) | doc nguyen: {100 * work_naive / total:.0f}% "
-               f"trong 8-18h | coi la UTC: {100 * work_plus7 / total:.0f}% trong 8-18h ICT")
+        R.info("timezone  busiest hour of the raw table",
+               f"{peak:02d}h ({hours[peak]} calls) | read as-is: {100 * work_naive / total:.0f}% "
+               f"within 8-18h | read as UTC: {100 * work_plus7 / total:.0f}% within 8-18h ICT")
         if work_plus7 > work_naive:
-            R.warn("mui gio  bang tho CTDA nhieu kha nang la UTC",
-                   "cong +7h moi ra gio lam viec VN - CAN HOI NHA CUNG CAP de chac chan")
+            R.warn("timezone  the CTDA raw table is most likely UTC",
+                   "only +7h lands on VN working hours - ASK THE VENDOR to be sure")
         else:
-            R.info("mui gio  bang tho CTDA co ve da la gio VN", "")
+            R.info("timezone  the CTDA raw table looks like VN time already", "")
 
     # ── E4: newest row vs when the file was pulled ──
     stamps = [s for s in (naive(r.get("timestamp")) for r in raw) if s]
     if stamps:
         pulled = datetime.fromtimestamp((DATA / "ctda" / "db-token_usage-raw.json").stat().st_mtime)
         lag = pulled - max(stamps)
-        R.info("mui gio  dong moi nhat vs luc keo file",
-               f"moi nhat {max(stamps):%d/%m %H:%M} | keo luc {pulled:%d/%m %H:%M} | "
-               f"cach {lag.total_seconds() / 3600:.1f}h")
+        R.info("timezone  newest row vs when the file was pulled",
+               f"newest {max(stamps):%d/%m %H:%M} | pulled {pulled:%d/%m %H:%M} | "
+               f"gap {lag.total_seconds() / 3600:.1f}h")
 
     # ── E5: TLA HD states its offset outright, CTDA does not ──
     timeline = tla_year.get("timeline") or []
@@ -619,13 +619,13 @@ def section_e(raw: list[dict], tla_year: dict) -> None:
               if isinstance(row.get("timestamp"), str)
               and ("+" in row.get("timestamp") or row.get("timestamp").endswith("Z"))]
     if marked:
-        R.ok("mui gio  TLA HD khai bao offset ro rang",
-             f"{len(marked)}/{len(timeline)} moc co offset, vd {marked[0]}")
+        R.ok("timezone  TLA HD states its offset explicitly",
+             f"{len(marked)}/{len(timeline)} points carry an offset, e.g. {marked[0]}")
     else:
-        R.warn("mui gio  TLA HD khong khai bao offset", "phai gia dinh nhu CTDA")
+        R.warn("timezone  TLA HD states no offset", "must assume the same as CTDA")
 
 
-# ─────────────── F. gia suy nguoc + cac bay da biet ───────────────
+# ─────────────── F. back-derived prices + known traps ───────────────
 
 def section_f_prices(ctda_year: dict, tla_year: dict) -> None:
     """Recover the unit price each app charged, and check it is a real price.
@@ -671,12 +671,12 @@ def section_f_prices(ctda_year: dict, tla_year: dict) -> None:
 
     bad = [f"{a} {m}" for a, m, _, _, built, stated in rows
            if not same(built, stated, USD_TOL)]
-    R.check(not bad, "gia  dung lai duoc tien tu token va don gia",
-            f"{len(rows)} model khop" if not bad else "; ".join(bad[:3]))
+    R.check(not bad, "price  cost rebuilds from tokens and unit price",
+            f"{len(rows)} models match" if not bad else "; ".join(bad[:3]))
 
     for agent, model, rate_in, rate_out, _, _ in rows:
-        R.info(f"gia  {agent} {model}",
-               f"vao ${rate_in:.4f}/1tr  ra ${rate_out:.4f}/1tr  cached ${rate_in / 10:.4f}/1tr")
+        R.info(f"price  {agent} {model}",
+               f"in ${rate_in:.4f}/1M  out ${rate_out:.4f}/1M  cached ${rate_in / 10:.4f}/1M")
 
 
 def section_f_billing_models() -> None:
@@ -688,13 +688,13 @@ def section_f_billing_models() -> None:
         by_sku[sku] += num(row.get("cost"))
         if "cached" in sku.lower() or "cache" in sku.lower():
             cached_sku.add(sku)
-    R.info("billing  so SKU khac nhau", f"{len(by_sku)} SKU")
-    R.check(bool(cached_sku), "billing  co SKU cached rieng",
-            f"{len(cached_sku)} SKU - PHAI cong vao input khi nap, khong duoc bo")
+    R.info("billing  distinct SKUs", f"{len(by_sku)} SKUs")
+    R.check(bool(cached_sku), "billing  has a separate cached SKU",
+            f"{len(cached_sku)} SKUs - MUST be added to input when loading, never dropped")
 
     embedding = {sku: cost for sku, cost in by_sku.items() if "embed" in sku.lower()}
     if embedding:
-        R.warn("billing  co SKU embedding khong thuoc agent nao",
+        R.warn("billing  has embedding SKUs that belong to no agent",
                f"{len(embedding)} SKU, ${sum(embedding.values()):.4f}")
 
     per_project = defaultdict(lambda: [0.0, set()])
@@ -704,7 +704,7 @@ def section_f_billing_models() -> None:
         entry[1].add(row.get("date", ""))
     for project, (cost, dates) in sorted(per_project.items()):
         span = f"{min(dates)} -> {max(dates)}" if dates else "?"
-        R.info(f"billing  {project}", f"${cost:>10,.4f}  {len(dates):>3} ngay  {span}")
+        R.info(f"billing  {project}", f"${cost:>10,.4f}  {len(dates):>3} days  {span}")
 
 
 def section_f_monitoring(raw_dir: Path, ready_dir: Path) -> None:
@@ -727,7 +727,7 @@ def section_f_monitoring(raw_dir: Path, ready_dir: Path) -> None:
                     entry["junk"] += 1
 
                 if alias == "api_request_count":
-                    entry["services"][service or "(khong nhan)"] += num(row.get("value"))
+                    entry["services"][service or "(no label)"] += num(row.get("value"))
                     code = row.get("response_code", "")
                     if code:
                         entry["codes"][code] += num(row.get("value"))
@@ -748,14 +748,14 @@ def section_f_monitoring(raw_dir: Path, ready_dir: Path) -> None:
                     entry["p95"].add(round(num(row.get("value")), 2))
 
     total_rows = sum(e["rows"] for e in per_project.values())
-    R.info("monitoring  tong dong tho", f"{total_rows:,} dong, {len(per_project)} project")
+    R.info("monitoring  raw rows", f"{total_rows:,} rows, {len(per_project)} projects")
 
     tz_bad = sum(e["tz_bad"] for e in per_project.values())
-    R.check(tz_bad == 0, "monitoring  ts_ict = ts_utc + 7h moi dong",
-            "dung ca bo" if tz_bad == 0 else f"{tz_bad} dong sai lech")
+    R.check(tz_bad == 0, "monitoring  ts_ict = ts_utc + 7h on every row",
+            "all correct" if tz_bad == 0 else f"{tz_bad} rows off")
 
     negative = sum(e["negative"] for e in per_project.values())
-    R.check(negative == 0, "monitoring  khong co gia tri am", f"{negative} dong am")
+    R.check(negative == 0, "monitoring  no negative values", f"{negative} negative rows")
 
     # Trap 1: api_request_count counts every Google API the project touches.
     for project, entry in sorted(per_project.items()):
@@ -764,10 +764,10 @@ def section_f_monitoring(raw_dir: Path, ready_dir: Path) -> None:
         if everything <= 0:
             continue
         share = 100 * gemini / everything
-        detail = (f"Gemini {gemini:,.0f} / tat ca {everything:,.0f} ({share:.1f}%)  "
-                  f"= cao gap {everything / gemini:.1f}x neu quen loc" if gemini
-                  else f"tat ca {everything:,.0f}, KHONG co Gemini")
-        (R.ok if share > 99 else R.warn)(f"monitoring  {project}: phai loc res_service", detail)
+        detail = (f"Gemini {gemini:,.0f} / all {everything:,.0f} ({share:.1f}%)  "
+                  f"= {everything / gemini:.1f}x too high if left unfiltered" if gemini
+                  else f"all {everything:,.0f}, NO Gemini")
+        (R.ok if share > 99 else R.warn)(f"monitoring  {project}: must filter res_service", detail)
 
     # Trap: 499 is a user cancelling, not a system fault.
     codes = Counter()
@@ -775,12 +775,12 @@ def section_f_monitoring(raw_dir: Path, ready_dir: Path) -> None:
         codes.update(entry["codes"])
     if codes:
         shown = "  ".join(f"{code}:{int(count)}" for code, count in sorted(codes.items()))
-        R.info("monitoring  phan bo ma tra ve", shown)
-        R.check(codes.get("429", 0) == 0, "monitoring  chua bao gio bi chan toc do (429)",
+        R.info("monitoring  response code distribution", shown)
+        R.check(codes.get("429", 0) == 0, "monitoring  never rate limited (429)",
                 f"429 = {int(codes.get('429', 0))}")
         if codes.get("499"):
-            R.warn("monitoring  co ma 499 - nguoi dung tu huy, KHONG phai loi he thong",
-                   f"{int(codes['499'])} luot - phai tach khoi nhom 4xx")
+            R.warn("monitoring  has 499 - the user cancelled, NOT a system fault",
+                   f"{int(codes['499'])} calls - must be split out of the 4xx group")
 
     # Trap: percentiles come from exponential buckets, so collisions are normal.
     shared = Counter()
@@ -788,49 +788,50 @@ def section_f_monitoring(raw_dir: Path, ready_dir: Path) -> None:
         shared.update(set(entry["p95"]))
     collided = [value for value, count in shared.items() if count > 1]
     if collided:
-        R.warn("monitoring  p95 trung nhau giua cac project",
-               f"{len(collided)} gia tri chung, vd {sorted(collided)[:3]} "
-               f"- doc p95/p99 nhu KHOANG, khong phai giay chinh xac")
+        R.warn("monitoring  p95 values repeat across projects",
+               f"{len(collided)} shared values, e.g. {sorted(collided)[:3]} "
+               f"- read p95/p99 as a RANGE, not exact seconds")
 
     for project, entry in sorted(per_project.items()):
         low, high = entry["ts"]
-        span = f"{low:%d/%m} -> {high:%d/%m}" if low and high else "khong ro moc thoi gian"
+        span = f"{low:%d/%m} -> {high:%d/%m}" if low and high else "no known time range"
         R.info(f"monitoring  {project}",
-               f"{entry['rows']:>7,} dong  rac {entry['junk']:>7,}  {span}")
+               f"{entry['rows']:>7,} rows  junk {entry['junk']:>7,}  {span}")
 
-    # The readable copy is the raw pull either filtered (--loc) or not. Both are
+    # The readable copy is the raw pull either filtered (--filter) or not. Both are
     # legitimate outputs of make_readable.py, so the check is "does it equal one
     # of the two", not "does it equal the filtered one" -- otherwise an unfiltered
     # copy would be reported as corruption.
     if ready_dir.exists():
         ready_rows = 0
         for path in sorted(ready_dir.glob("*.csv")):
-            if path.name == "_tat-ca.csv":
+            if path.name == "_tat-ca.csv":  # vi-ok: on-disk file name written by make_readable.py
                 continue
             with path.open(encoding="utf-8-sig", newline="") as handle:
                 ready_rows += sum(1 for _ in csv.DictReader(handle))
         junk = sum(e["junk"] for e in per_project.values())
         filtered = total_rows - junk
         if ready_rows == filtered:
-            R.ok("monitoring  ban da xu ly = ban tho da loc",
-                 f"{ready_rows:,} = {total_rows:,} - {junk:,} dong rac")
+            R.ok("monitoring  processed copy = filtered raw pull",
+                 f"{ready_rows:,} = {total_rows:,} - {junk:,} junk rows")
         elif ready_rows == total_rows:
-            R.warn("monitoring  ban da xu ly CHUA loc dong rac",
-                   f"{ready_rows:,} dong, con nguyen {junk:,} dong rac - chay lai voi --loc")
+            R.warn("monitoring  processed copy is NOT filtered",
+                   f"{ready_rows:,} rows, still holding {junk:,} junk rows - rerun with --filter")
         else:
-            R.fail("monitoring  ban da xu ly khong khop ban tho",
-                   f"{ready_rows:,} vs {filtered:,} (da loc) hoac {total_rows:,} (nguyen)")
+            R.fail("monitoring  processed copy does not match the raw pull",
+                   f"{ready_rows:,} vs {filtered:,} (filtered) or {total_rows:,} (unfiltered)")
 
 
-# ───────────────────────────── chay ─────────────────────────────
+# ───────────────────────────── run ─────────────────────────────
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--bo-qua-monitoring", action="store_true",
-                        help="Bo qua 335 MB du lieu Monitoring de chay nhanh")
-    parser.add_argument("--bao-cao", default=str(Path(__file__).parent / "ket-qua-kiem-tra.csv"),
-                        help="Duong dan file bao cao (CSV). De rong de chi in ra man hinh.")
+                                     formatter_class=argparse.RawDescriptionHelpFormatter,
+                                     allow_abbrev=False)
+    parser.add_argument("--skip-monitoring", action="store_true",
+                        help="Skip the 335 MB of Monitoring data to run fast")
+    parser.add_argument("--report", default=str(Path(__file__).parent / "verify-datasets-report.csv"),
+                        help="Report file path (CSV). Leave empty to print to the screen only.")
     args = parser.parse_args()
 
     # The console here is cp1252; without this every section header raises.
@@ -841,9 +842,9 @@ def main() -> None:
     paths_json = sorted(p for p in DATA.rglob("*.json") if not skip & set(p.parts))
     paths_csv = sorted(p for p in DATA.rglob("*.csv") if not skip & set(p.parts))
 
-    print(f"Goc du lieu : {DATA}")
-    print(f"Kiem         : {len(paths_json)} JSON + {len(paths_csv)} CSV"
-          + ("  (bo qua Monitoring)" if args.bo_qua_monitoring else "  + Monitoring"))
+    print(f"Data root : {DATA}")
+    print(f"Checking  : {len(paths_json)} JSON + {len(paths_csv)} CSV"
+          + ("  (Monitoring skipped)" if args.skip_monitoring else "  + Monitoring"))
 
     section_a(paths_json, paths_csv)
 
@@ -854,11 +855,11 @@ def main() -> None:
     units = read_json(DATA / "ctda" / "units.json")["data"]
     collections = read_json(DATA / "ctda" / "db-collections.json")
 
-    R.open("B. TU NHAT QUAN TRONG MOT NGUON")
+    R.open("B. CONSISTENCY WITHIN ONE SOURCE")
     section_b_ctda(ctda_year)
     section_b_tla(tla_year)
 
-    R.open("C. DOI CHIEU CHEO NGUON")
+    R.open("C. CROSS-SOURCE CHECKS")
     section_c_raw_vs_api(raw, ctda_year, collections)
     compare_csv_json("CTDA by-unit", DATA / "ctda" / "by-unit-2026.csv",
                      ctda_year["by_unit"], ("total_tokens", "calls", "total_cost_usd"))
@@ -887,52 +888,52 @@ def main() -> None:
                                             "completion_tokens", "total_cost_usd"))
     section_c_billing()
 
-    R.open("D. TINH HOP LY")
+    R.open("D. PLAUSIBILITY")
     section_d(raw, users, units, ctda_year, tla_year)
 
-    R.open("E. MUI GIO")
+    R.open("E. TIMEZONE")
     section_e(raw, tla_year)
 
-    R.open("F. GIA SUY NGUOC VA CAC BAY DA BIET")
+    R.open("F. BACK-DERIVED PRICES AND KNOWN TRAPS")
     section_f_prices(ctda_year, tla_year)
     section_f_billing_models()
-    if not args.bo_qua_monitoring:
-        raw_dir = DATA / "raw_google_console" / "du_lieu_giam_sat"
+    if not args.skip_monitoring:
+        raw_dir = DATA / "raw_google_console" / "du_lieu_giam_sat"  # vi-ok: on-disk path
         pulls = sorted(p for p in raw_dir.glob("*") if p.is_dir())
         if pulls:
             newest = pulls[-1]
-            print(f"\n  ... dang doc {newest.name} (335 MB, mat khoang 1-2 phut)")
-            section_f_monitoring(newest, DATA / "da_xu_ly" / "du_lieu_giam_sat" / newest.name)
+            print(f"\n  ... reading {newest.name} (335 MB, takes about 1-2 minutes)")
+            section_f_monitoring(newest, DATA / "da_xu_ly" / "du_lieu_giam_sat" / newest.name)  # vi-ok: on-disk path
         else:
-            R.warn("monitoring  khong thay dot keo nao", str(raw_dir))
+            R.warn("monitoring  no pull found", str(raw_dir))
 
-    R.open("TONG KET")
-    print(f"  DAT      {R.count(DAT):>3}")
-    print(f"  LOI      {R.count(LOI):>3}")
-    print(f"  CANH BAO {R.count(CANH):>3}")
-    print(f"  TIN      {R.count(TIN):>3}")
+    R.open("SUMMARY")
+    print(f"  PASS {R.count(PASS):>3}")
+    print(f"  FAIL {R.count(FAIL):>3}")
+    print(f"  WARN {R.count(WARN):>3}")
+    print(f"  INFO {R.count(INFO):>3}")
 
-    failures = [row for row in R.rows if row[1] == LOI]
-    warnings = [row for row in R.rows if row[1] == CANH]
+    failures = [row for row in R.rows if row[1] == FAIL]
+    warnings = [row for row in R.rows if row[1] == WARN]
     if failures:
-        print("\n  --- LOI PHAI SUA ---")
+        print("\n  --- FAILURES TO FIX ---")
         for _, _, label, detail in failures:
             print(f"    {label}  |  {detail}")
     if warnings:
-        print("\n  --- CANH BAO PHAI DOC ---")
+        print("\n  --- WARNINGS TO READ ---")
         for _, _, label, detail in warnings:
             print(f"    {label}  |  {detail}")
     if not failures:
-        print("\n  Khong co loi. Cac muc CANH BAO la dac diem cua du lieu, khong phai loi ky thuat.")
+        print("\n  No failures. WARN entries are properties of the data, not technical faults.")
 
-    if args.bao_cao:
-        target = Path(args.bao_cao)
+    if args.report:
+        target = Path(args.report)
         target.parent.mkdir(parents=True, exist_ok=True)
         with target.open("w", encoding="utf-8-sig", newline="") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["muc", "ket qua", "kiem tra", "chi tiet"])
+            writer.writerow(["section", "result", "check", "detail"])
             writer.writerows(R.rows)
-        print(f"\nBao cao: {target}")
+        print(f"\nReport: {target}")
 
     sys.exit(1 if failures else 0)
 

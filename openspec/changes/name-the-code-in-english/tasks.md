@@ -26,12 +26,12 @@
 
 - [x] 3.1 Cờ theo D2 và `allow_abbrev=False` ở `pull_web_apps`, `pull_sku_catalog`, `make_readable`, `merge_monitoring`, `merge_latency_daily`, `merge_billing` và mọi parser còn lại trong `scripts/`; kiểm riêng `merge_monitoring.py --ra X` phải báo `unrecognized arguments`
 - [x] 3.2 Chuỗi, định danh và key ở các tệp `scripts/` còn lại, gồm tham số `merge_monitoring.run(ra=, dot=)` và key `summary["lech"]`; sửa `tests/test_merge_*.py` theo đúng tên và chuỗi mới, không nới phép so
-- [ ] 3.3 Kiểm theo D6, chỉ `--help` và test; không chạy lệnh kéo thật; CI xanh
+- [x] 3.3 Kiểm theo D6, chỉ `--help` và test; không chạy lệnh kéo thật; CI xanh
 
 ## 4. `tools/`
 
-- [ ] 4.1 `git mv` 18 tệp theo D1
-- [ ] 4.2 Cờ theo D2 ở `tools/diagnostics/verify_datasets.py`, `tools/diagnostics/measure_llm_path.py` (giữ mặc định `--user svc.do-duong-llm`, đánh dấu `vi-ok`)
+- [x] 4.1 `git mv` 18 tệp theo D1
+- [x] 4.2 Cờ theo D2 ở `tools/diagnostics/verify_datasets.py`, `tools/diagnostics/measure_llm_path.py` (giữ mặc định `--user svc.do-duong-llm`, đánh dấu `vi-ok`)
 - [ ] 4.3 Chuỗi, định danh ở mọi tệp `tools/`; sửa chỗ các tool gọi nhau theo tên mới
 - [ ] 4.4 `grep` tên cũ trong `tools/gateway-smoke/`; nếu có, sửa và ghi lại để báo Chí Thanh
 - [ ] 4.5 Kiểm theo D6; CI xanh
