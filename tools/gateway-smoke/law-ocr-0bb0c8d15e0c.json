@@ -1,0 +1,208 @@
+{
+  "run_id": "law-ocr-0bb0c8d15e0c",
+  "result": "PASS",
+  "scope": "actual TLA-HD scanned-PDF OCR helper -> nginx LB -> two mock LiteLLM Proxies -> isolated SpendLogs",
+  "limitations": [
+    "mock upstream, not Google",
+    "application usage rows captured in memory",
+    "no ETL/dashboard"
+  ],
+  "calls": [
+    {
+      "user": "law-ocr-0bb0c8d15e0c.baseline.user-1",
+      "stage": "baseline",
+      "response_id": "chatcmpl-579db29a-1e17-4873-add2-8421a591e39e",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-ocr-0bb0c8d15e0c.baseline.user-2",
+      "stage": "baseline",
+      "response_id": "chatcmpl-f4f65100-4262-49a0-b10d-2ec9415b99ab",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-ocr-0bb0c8d15e0c.one_proxy_down.user-3",
+      "stage": "one_proxy_down",
+      "response_id": "chatcmpl-d5d3f083-2d01-4492-9db1-d0c9b8394cf0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-ocr-0bb0c8d15e0c.recovery.user-4",
+      "stage": "recovery",
+      "response_id": "chatcmpl-3eda3cb0-4634-49c1-bbc4-4ded7e6264fd",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "law-ocr-0bb0c8d15e0c.lb_recovery.user-6",
+      "stage": "lb_recovery",
+      "response_id": "chatcmpl-a0660313-269d-4dbb-8541-bb9368fcbb80",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    }
+  ],
+  "stages": [
+    {
+      "name": "baseline",
+      "user": "law-ocr-0bb0c8d15e0c.baseline.user-1",
+      "pages": 1
+    },
+    {
+      "name": "baseline",
+      "user": "law-ocr-0bb0c8d15e0c.baseline.user-2",
+      "pages": 1
+    },
+    {
+      "name": "one_proxy_down",
+      "user": "law-ocr-0bb0c8d15e0c.one_proxy_down.user-3",
+      "pages": 1
+    },
+    {
+      "name": "recovery",
+      "user": "law-ocr-0bb0c8d15e0c.recovery.user-4",
+      "pages": 1
+    },
+    {
+      "name": "lb_recovery",
+      "user": "law-ocr-0bb0c8d15e0c.lb_recovery.user-6",
+      "pages": 1
+    }
+  ],
+  "lb_outage": {
+    "result": "fail_closed",
+    "error_type": "InternalServerError",
+    "direct_fallback": false
+  },
+  "spend_logs": [
+    {
+      "request_id": "chatcmpl-579db29a-1e17-4873-add2-8421a591e39e",
+      "end_user": "law-ocr-0bb0c8d15e0c.baseline.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-f4f65100-4262-49a0-b10d-2ec9415b99ab",
+      "end_user": "law-ocr-0bb0c8d15e0c.baseline.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-d5d3f083-2d01-4492-9db1-d0c9b8394cf0",
+      "end_user": "law-ocr-0bb0c8d15e0c.one_proxy_down.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-3eda3cb0-4634-49c1-bbc4-4ded7e6264fd",
+      "end_user": "law-ocr-0bb0c8d15e0c.recovery.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-a0660313-269d-4dbb-8541-bb9368fcbb80",
+      "end_user": "law-ocr-0bb0c8d15e0c.lb_recovery.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    }
+  ],
+  "lb_trace": [
+    {
+      "user": "law-ocr-0bb0c8d15e0c.baseline.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.5:4000",
+      "upstream_status": "200",
+      "seconds": 0.087
+    },
+    {
+      "user": "law-ocr-0bb0c8d15e0c.baseline.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.035
+    },
+    {
+      "user": "law-ocr-0bb0c8d15e0c.one_proxy_down.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.5:4000, 172.20.0.4:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.011
+    },
+    {
+      "user": "law-ocr-0bb0c8d15e0c.recovery.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-ocr-0bb0c8d15e0c.lb_recovery.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    }
+  ],
+  "upstreams": [
+    "172.20.0.4:4000",
+    "172.20.0.5:4000"
+  ],
+  "total_requests": 5,
+  "total_tokens": 150,
+  "key_cleanup": {
+    "delete_status": 200,
+    "readback_status": 404
+  }
+}

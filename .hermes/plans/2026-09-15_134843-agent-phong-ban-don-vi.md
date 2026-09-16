@@ -1,4 +1,6 @@
-# Kế hoạch bộ lọc Agent → Phòng ban → Đơn vị → User
+# Kế hoạch bộ lọc — Bản V1 lưu tham khảo
+
+> **Đã được thay thế về thiết kế bởi [V2 — phân cấp theo Excel](agent-phong-ban-don-vi-v2.md).** V2 tách Đơn vị và Đội thành hai dropdown, dùng Excel làm khung nghiệp vụ nhưng giữ toàn bộ node crawl. Các quy tắc dưới đây (gộp Đội vào Đơn vị, giữ nguyên tên nguồn để hiển thị, suy không có phòng từ việc thiếu cây API) là thiết kế V1, không còn là hướng triển khai. Chỉ mockup/tài liệu được duyệt cập nhật; chưa sửa dashboard thật hoặc quyền truy cập.
 
 **Trạng thái:** Đề xuất để duyệt; chưa triển khai. Việc tạo tài liệu không đồng nghĩa đã duyệt sửa code hoặc database.
 

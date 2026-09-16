@@ -1,0 +1,216 @@
+{
+  "run_id": "ralli-ocr-d3b5c0f18909",
+  "result": "PASS",
+  "scope": "actual Ralli DAM form _extract -> nginx LB -> two mock LiteLLM Proxies -> isolated SpendLogs",
+  "fixture": {
+    "mime_type": "image/png",
+    "sha256": "88fa62b4fb8677ecb2c329e576ef4fc2d394116a3d74b2c0fa00da181d167307",
+    "synthetic": true
+  },
+  "limitations": [
+    "mock upstream, not Google",
+    "application usage rows captured in memory",
+    "not authenticated multipart route in this run; covered separately by ASGI test",
+    "no MongoDB/Qdrant persistence or ETL/dashboard"
+  ],
+  "calls": [
+    {
+      "user": "ralli-ocr-d3b5c0f18909.baseline.user-1",
+      "stage": "baseline",
+      "response_id": "chatcmpl-7fe41829-2292-4027-9eec-584ff33190f1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-ocr-d3b5c0f18909.baseline.user-2",
+      "stage": "baseline",
+      "response_id": "chatcmpl-9d38586e-76a0-4c55-85bb-f67f738d6b6a",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-ocr-d3b5c0f18909.one_proxy_down.user-3",
+      "stage": "one_proxy_down",
+      "response_id": "chatcmpl-b627e1a4-d78e-4598-b638-7760c7d91d53",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-ocr-d3b5c0f18909.proxy_recovery.user-4",
+      "stage": "proxy_recovery",
+      "response_id": "chatcmpl-00b027dc-a464-4a2f-9bd6-5e21d47b666f",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    },
+    {
+      "user": "ralli-ocr-d3b5c0f18909.lb_recovery.user-6",
+      "stage": "lb_recovery",
+      "response_id": "chatcmpl-92f59ec3-4223-4c64-ac86-4f8cdfa22338",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30
+    }
+  ],
+  "stages": [
+    {
+      "name": "baseline",
+      "user": "ralli-ocr-d3b5c0f18909.baseline.user-1",
+      "images": 1
+    },
+    {
+      "name": "baseline",
+      "user": "ralli-ocr-d3b5c0f18909.baseline.user-2",
+      "images": 1
+    },
+    {
+      "name": "one_proxy_down",
+      "user": "ralli-ocr-d3b5c0f18909.one_proxy_down.user-3",
+      "images": 1
+    },
+    {
+      "name": "proxy_recovery",
+      "user": "ralli-ocr-d3b5c0f18909.proxy_recovery.user-4",
+      "images": 1
+    },
+    {
+      "name": "lb_recovery",
+      "user": "ralli-ocr-d3b5c0f18909.lb_recovery.user-6",
+      "images": 1
+    }
+  ],
+  "lb_outage": {
+    "result": "fail_closed",
+    "error_type": "GatewayTransportError",
+    "direct_fallback": false,
+    "local_ocr_fallback": false,
+    "usage_rows_created": 0
+  },
+  "spend_logs": [
+    {
+      "request_id": "chatcmpl-7fe41829-2292-4027-9eec-584ff33190f1",
+      "end_user": "ralli-ocr-d3b5c0f18909.baseline.user-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-9d38586e-76a0-4c55-85bb-f67f738d6b6a",
+      "end_user": "ralli-ocr-d3b5c0f18909.baseline.user-2",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-b627e1a4-d78e-4598-b638-7760c7d91d53",
+      "end_user": "ralli-ocr-d3b5c0f18909.one_proxy_down.user-3",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-00b027dc-a464-4a2f-9bd6-5e21d47b666f",
+      "end_user": "ralli-ocr-d3b5c0f18909.proxy_recovery.user-4",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-92f59ec3-4223-4c64-ac86-4f8cdfa22338",
+      "end_user": "ralli-ocr-d3b5c0f18909.lb_recovery.user-6",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "ralli",
+        "User-Agent: python-httpx",
+        "User-Agent: python-httpx/0.28.1"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    }
+  ],
+  "lb_trace": [
+    {
+      "user": "ralli-ocr-d3b5c0f18909.baseline.user-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.5:4000",
+      "upstream_status": "200",
+      "seconds": 0.129
+    },
+    {
+      "user": "ralli-ocr-d3b5c0f18909.baseline.user-2",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.124
+    },
+    {
+      "user": "ralli-ocr-d3b5c0f18909.one_proxy_down.user-3",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.5:4000, 172.20.0.4:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.012
+    },
+    {
+      "user": "ralli-ocr-d3b5c0f18909.proxy_recovery.user-4",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.5:4000",
+      "upstream_status": "200",
+      "seconds": 0.134
+    },
+    {
+      "user": "ralli-ocr-d3b5c0f18909.lb_recovery.user-6",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.20.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.009
+    }
+  ],
+  "upstreams": [
+    "172.20.0.4:4000",
+    "172.20.0.5:4000"
+  ],
+  "total_requests": 5,
+  "total_tokens": 150,
+  "key_cleanup": {
+    "delete_status": 200,
+    "readback_status": 404
+  }
+}
