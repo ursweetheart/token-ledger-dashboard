@@ -17,7 +17,8 @@
 #     docker compose --profile gateway logs -f litellm-1
 #     docker compose --profile gateway down       # chi ha Gateway
 #
-#     Gateway (qua LB)  http://127.0.0.1:4000
+#     Gateway edge      http://127.0.0.1:8088 (Host: llm.rangdong.com.vn)
+#     Gateway LB        chi trong mang Docker, khong publish host
 #     Redis             127.0.0.1:6379
 #
 # `docker compose up -d` KHONG keo Gateway len: dich vu co profile chi chay khi
@@ -599,17 +600,15 @@ services:
     logging: *logging
     <<: *litellm
     container_name: token-ledger-litellm-1
-    ports:
-      # Mo rieng tung instance de dien tap "tat 1 instance" (GD5 dong 15) va de
-      # doc log cua dung mot may. Cua chinh van la load balancer o cong 4000.
-      - "127.0.0.1:${LITELLM_1_PORT:-4001}:4000"
+    expose:
+      - "4000"
 
   litellm-2:
     logging: *logging
     <<: *litellm
     container_name: token-ledger-litellm-2
-    ports:
-      - "127.0.0.1:${LITELLM_2_PORT:-4002}:4000"
+    expose:
+      - "4000"
 
   # Cua vao duy nhat cua Gateway. Chia luot round-robin; loai instance hong khoi
   # vong bang cach dem loi that - nginx ban mo nguon khong co health check chu
@@ -622,10 +621,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./docker/gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    ports:
-      # CHU Y: moi truong DO (tools/probes/gateway) cung dung cong 4000.
-      # Khong bat dong thoi ca hai.
-      - "127.0.0.1:${GATEWAY_PORT:-4000}:4000"
+    expose:
+      - "4000"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:4000/lb-health | grep -q lb-ok"]
       interval: 10s
@@ -635,6 +632,30 @@ services:
       litellm-1:
         condition: service_healthy
       litellm-2:
+        condition: service_healthy
+
+  # Nginx handoff cho reverse proxy/TLS cua may chu. Chi port nay duoc xuat ra
+  # host, va van chi bind loopback; DNS/TLS/public exposure do lop ben ngoai quan ly.
+  gateway-edge:
+    logging: *logging
+    image: nginx:1.27-alpine
+    container_name: token-ledger-gateway-edge
+    profiles: ["gateway"]
+    restart: unless-stopped
+    environment:
+      LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-llm.rangdong.com.vn}
+      NGINX_ENVSUBST_FILTER: ^LLM_GATEWAY_DOMAIN$
+    volumes:
+      - ./docker/gateway/edge.conf.template:/etc/nginx/templates/default.conf.template:ro
+    ports:
+      - "${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- --header \"Host: $$LLM_GATEWAY_DOMAIN\" http://127.0.0.1:8080/edge-health | grep -q edge-ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    depends_on:
+      gateway-lb:
         condition: service_healthy
 
 # Khai ro dai mang de gan duoc IP TINH cho hai Redis.
