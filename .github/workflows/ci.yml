@@ -85,6 +85,109 @@ jobs:
           fi
           echo "Gateway image comes from the registry: $MAIN"
 
+      # Hai tệp nginx trong docker/gateway/ cùng làm một việc. `edge.conf.template`
+      # hỏi lại DNS theo chu kỳ; `nginx.conf` thì không, cho tới 17/09/2026. Chỗ
+      # viết thiếu hỏng IM LẶNG: instance nào đổi IP là biến mất khỏi vòng chia
+      # tải, mà container vẫn `healthy` và /lb-health vẫn trả `lb-ok`.
+      #
+      # Đo được 17/09/2026, ép IP đổi một bậc khi chưa có `resolve`:
+      #     litellm-1    0 / 20 lượt      <- biến mất hẳn
+      #     litellm-2   20 / 20 lượt
+      # Mất một nửa năng lực xử lý, không một dấu hiệu bề mặt nào lệch.
+      #
+      # Canh theo TÍNH CHẤT, không theo tên tệp: khối `upstream` thêm sau cũng bị
+      # xét. Dòng `server` trỏ bằng ĐỊA CHỈ IP thì không bị đòi `resolve` — nó
+      # không phụ thuộc DNS.
+      - name: Every upstream that points by name must re-resolve
+        run: |
+          STATUS=0
+          for f in docker/gateway/*.conf docker/gateway/*.conf.template; do
+            [ -e "$f" ] || continue
+            # Chuẩn hoá trước khi đọc: bỏ chú thích, tách { } ; ra dòng riêng.
+            # Không có bước này thì khối upstream viết gọn trên MỘT dòng lọt hết.
+            NORM=$(sed -e 's/#.*//' "$f" | tr -d '\r' \
+                   | sed -e 's/{/{\n/g' -e 's/}/\n}\n/g' -e 's/;/;\n/g')
+            OUT=$(printf '%s\n' "$NORM" | awk '
+              /^[[:space:]]*upstream[[:space:]]+[A-Za-z0-9_]+[[:space:]]*\{/ { inb=1; zone=0; n=0; next }
+              inb && /^[[:space:]]*\}/ {
+                if (n > 0 && zone == 0) print "  missing zone in an upstream block that points by name"
+                total += n; inb = 0; next
+              }
+              inb && /^[[:space:]]*zone[[:space:]]/ { zone = 1 }
+              inb && /^[[:space:]]*server[[:space:]]+[A-Za-z][A-Za-z0-9_.-]*:[0-9]+/ {
+                n++
+                if ($0 !~ /[[:space:]]resolve([[:space:];]|$)/) print "  missing resolve:" $0
+              }
+              END {
+                if (inb && n > 0 && zone == 0) print "  missing zone in an upstream block that points by name"
+                print "NAMES=" total + (inb ? n : 0)
+              }
+            ')
+            NAMES=$(printf '%s\n' "$OUT" | sed -n 's/^NAMES=//p')
+            PROB=$(printf '%s\n' "$OUT" | grep -v '^NAMES=' || true)
+            if [ "${NAMES:-0}" -gt 0 ] && ! grep -qE '^[[:space:]]*resolver[[:space:]]' "$f"; then
+              PROB="$PROB
+            no resolver directive, but this file has an upstream that points by name"
+            fi
+            if [ -n "$(printf '%s' "$PROB" | tr -d '[:space:]')" ]; then
+              echo "$f"; printf '%s\n' "$PROB"; STATUS=1
+            fi
+          done
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::error::An upstream pointing by name needs: a resolver directive in the file, a zone in the block, and resolve on each server line."
+            echo "::error::Copy the pattern from docker/gateway/edge.conf.template. Without it, an instance that changes IP silently drops out of rotation."
+            exit 1
+          fi
+          echo "Every upstream pointing by name re-resolves."
+
+      # Phép canh này bắt đúng sự cố 10/09/2026. Hôm đó tên một biến khoá đổi ở
+      # .env nhưng config.gateway.yaml và docker-compose.yml vẫn giữ tên cũ. Vì
+      # compose viết ${VAR:-}, dấu :- biến một biến THIẾU thành CHUỖI RỖNG thay vì
+      # một lỗi — nên container lên bình thường, /health/liveliness trả 200, mọi
+      # phép kiểm đạt, và tuyến CRM chỉ chết đúng lúc có người gọi thật
+      # (HTTP 500 "Missing Gemini API key").
+      #
+      # Cửa chặn ở docker/gateway/entrypoint.sh chỉ bảo vệ được những biến NÓ BIẾT
+      # TÊN. Hôm ấy danh sách thiếu đúng khoá CRM, trong khi chú thích ở
+      # docker-compose.yml đã ghi là có — nên không ai soát lại.
+      #
+      # docker-compose.bench.yml phải có mặt trong luật này: bench dùng CHUNG cửa
+      # chặn ấy, nên thêm một biến vào vòng kiểm mà quên cấp giá trị thay thế ở
+      # bench thì phần đo không khởi động được.
+      - name: Every provider key the gateway config uses must be declared everywhere
+        run: |
+          CFG=docker/gateway/config.gateway.yaml
+          ENTRY=docker/gateway/entrypoint.sh
+          COMPOSE=docker-compose.yml
+          BENCH=docker-compose.bench.yml
+          STATUS=0
+
+          # Khoá ghi thẳng vào tệp cấu hình = bí mật nằm trong git.
+          LIT=$(grep -nE '^[[:space:]]*api_key:' "$CFG" | grep -v 'os\.environ/' || true)
+          if [ -n "$LIT" ]; then
+            echo "$LIT"
+            echo "::error::$CFG: api_key must reference an environment variable (os.environ/NAME), never a literal value."
+            STATUS=1
+          fi
+
+          REQ=$(sed -n 's/^for v in \(.*\); do$/\1/p' "$ENTRY")
+          for k in $(grep -oE 'api_key:[[:space:]]*os\.environ/[A-Z_][A-Z0-9_]*' "$CFG" \
+                     | sed -E 's|.*os\.environ/||' | sort -u); do
+            case " $REQ " in *" $k "*) ;; *)
+              echo "::error::$k is used by $CFG but missing from the required-vars loop in $ENTRY."
+              STATUS=1 ;;
+            esac
+            grep -qE "^[[:space:]]+$k:[[:space:]]*\\\$\{$k" "$COMPOSE" || {
+              echo "::error::$k is used by $CFG but not passed to the container in $COMPOSE (x-litellm environment)."
+              STATUS=1; }
+            grep -qE "^[[:space:]]+$k:" "$BENCH" || {
+              echo "::error::$k is used by $CFG but has no stand-in value in $BENCH; bench shares the same startup gate and will not come up."
+              STATUS=1; }
+          done
+
+          [ "$STATUS" -ne 0 ] && exit 1
+          echo "Every provider key referenced by the gateway config is declared in all three places."
+
   # ---------------------------------------------------------------------------
   # 53 phép kiểm JavaScript. Node có sẵn trên máy ảo, không cài gì thêm.
   # ---------------------------------------------------------------------------
