@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gateway Status | Rang Dong</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header><div><p class="eyebrow">RANG DONG · OPERATIONS</p><h1>Gateway status</h1></div><button id="refresh" type="button">Refresh status</button></header>
+  <main>
+    <section class="overview">
+      <p class="eyebrow">CURRENT OBSERVATION</p>
+      <div aria-live="polite" aria-atomic="true">
+        <h2 id="overall" data-state="unknown">Status unknown</h2>
+        <p id="summary">Waiting for the first measurement.</p>
+      </div>
+      <p id="checked" class="muted">No current measurement</p>
+    </section>
+    <section aria-labelledby="components-heading">
+      <div class="section-heading"><h2 id="components-heading">Component checks</h2><span class="muted">Auto-refresh every 10 seconds</span></div>
+      <div class="table-scroll" tabindex="0" role="region" aria-labelledby="components-heading"><table>
+        <thead><tr><th scope="col">Component</th><th scope="col">Status</th><th scope="col">Observation</th><th scope="col">Duration</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Nginx edge<small>Gateway entry point</small></th><td><span id="edge-status" data-state="unknown">Unknown</span></td><td id="edge-detail">Waiting for a fresh check.</td><td id="edge-latency">—</td></tr>
+          <tr><th scope="row">Load balancer<small>Internal routing service</small></th><td><span id="lb-status" data-state="unknown">Unknown</span></td><td id="lb-detail">Waiting for a fresh check.</td><td id="lb-latency">—</td></tr>
+          <tr><th scope="row">LiteLLM 1<small>Proxy liveness</small></th><td><span id="proxy1-status" data-state="unknown">Unknown</span></td><td id="proxy1-detail">Waiting for a fresh check.</td><td id="proxy1-latency">—</td></tr>
+          <tr><th scope="row">LiteLLM 2<small>Proxy liveness</small></th><td><span id="proxy2-status" data-state="unknown">Unknown</span></td><td id="proxy2-detail">Waiting for a fresh check.</td><td id="proxy2-latency">—</td></tr>
+          <tr><th scope="row">LB → proxy route<small>Liveness through the load balancer</small></th><td><span id="route-status" data-state="unknown">Unknown</span></td><td id="route-detail">Waiting for a fresh check.</td><td id="route-latency">—</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+    <section class="notes" aria-labelledby="coverage-heading">
+      <h2 id="coverage-heading">What this tells you</h2>
+      <p id="scope">Liveness checks only. Provider access, credentials, database and Redis readiness are not verified.</p>
+      <p>A failed check reports the observed failure, not an unverified root cause. A connection failure alone cannot distinguish a stopped container from a startup configuration error. Inspect the affected container on the server for the exact cause.</p>
+      <p>No model requests are sent. No API keys or container logs are exposed. If this page stops refreshing, its status is unknown—not healthy.</p>
+    </section>
+    <noscript><p class="noscript">JavaScript is required for live checks. No gateway status has been verified.</p></noscript>
+  </main>
+  <footer>Private operations page · Keep this monitor on the VM; do not expose it publicly.</footer>
+</body>
+</html>

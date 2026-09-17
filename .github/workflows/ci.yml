@@ -94,7 +94,7 @@ jobs:
     env:
       # Mốc đo 16/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
       # con số đổi trong lịch sử git chính là chỗ nhìn thấy việc đó.
-      EXPECTED_JS: "53"
+      EXPECTED_JS: "79"
     steps:
       - uses: actions/checkout@v4
 
