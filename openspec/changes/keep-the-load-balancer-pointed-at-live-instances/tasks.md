@@ -152,11 +152,32 @@ Không sửa trước rồi tin là đã sửa. Phải thấy nó hỏng trướ
 
       **Đã kiểm bản trích từ YAML, không chỉ bản nháp:** trích khối `run:` ra tệp rồi chạy lại cả
       hai chiều → cây thật `0`, ca thử `1`, kết quả trùng khít bản nháp. Khối không chứa ký tự tab
-- [ ] 3.5 Làm đỏ có chủ ý trên nhánh tạm: gỡ `resolve` khỏi một dòng `server`, xác nhận CI đỏ, ghi
+- [x] 3.5 Làm đỏ có chủ ý trên nhánh tạm: gỡ `resolve` khỏi một dòng `server`, xác nhận CI đỏ, ghi
       mã lần chạy, xoá nhánh tạm
 
-      **Chưa làm — cần đẩy code lên GitHub, phải hỏi trước.** Kèm luật trước khi đẩy: trả địa chỉ
-      bind của `web` về `192.168.20.111`
+      17/09/2026, nhánh `ci-red-check`, PR nháp #18 vào `main`:
+
+      ```
+      lan chay 35180632930      Canh cau hinh:       failure   <- dung phep canh nay
+                                Phep kiem JavaScript: success
+                                Phep kiem Python:     success
+                                Gateway image:        skipped
+      ```
+
+      Hai câu `::error::` in ra đúng nguyên văn đã viết. PR đóng, nhánh xoá cả local lẫn remote.
+
+      **Vì sao dùng PR chứ không `workflow_dispatch`:** CI chỉ chạy trên `main`, `Tuan-develop`, PR
+      vào `main`, hoặc bấm tay. Nhánh tạm thường không kích hoạt gì. Mà `workflow_dispatch` **không
+      phải** `pull_request`, nên job `gateway-image` sẽ chạy — nó clone fork, đọc HEAD, và **build +
+      đẩy một image mới lên GHCR** nếu nhãn chưa có. Tác dụng phụ không đáng chuốc để thử một phép
+      canh. PR thì `gateway-image` mang `if: github.event_name != 'pull_request'` nên bị bỏ qua —
+      đã xác nhận `skipped` ở cả hai lần chạy.
+
+      **Luật cũ "trả `WEB_BIND` về `192.168.20.111` trước khi đẩy" đã HẾT HIỆU LỰC.** Kiểm
+      17/09/2026: `.env` không có `WEB_BIND` (0 dòng), và `docker-compose.yml` đọc
+      `${WEB_BIND:-127.0.0.1}`. Địa chỉ nay nằm hoàn toàn trong biến, máy chủ tự đặt trong `.env`
+      của nó, mà `.env` thì nằm trong `.gitignore`. Không còn gì cứng để trả về trước khi đẩy —
+      chính phép canh `WEB_BIND` trong nhóm `guards` đã thay thế luật ấy
 
 ## 4. Tài liệu
 
@@ -170,7 +191,7 @@ Không sửa trước rồi tin là đã sửa. Phải thấy nó hỏng trướ
 - [x] 4.2 Ghi số đo của task 0.3 và 2.3 vào tài liệu đó, dạng "hỏng thế nào / đã sửa ra sao". Đây là
       bằng chứng, không phải lời kể — mục 5 của tài liệu là phần **chứng minh được**, mục 6 là phần
       **suy luận** tách riêng, theo khuôn `ep-429-va-mat-gateway-10-09.md`
-- [ ] 4.3 `openspec validate keep-the-load-balancer-pointed-at-live-instances --strict` đạt
+- [x] 4.3 `openspec validate keep-the-load-balancer-pointed-at-live-instances --strict` đạt
 
 ## Ghi chú vận hành
 

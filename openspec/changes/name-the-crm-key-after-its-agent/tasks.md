@@ -207,7 +207,25 @@ MUST NOT được coi là bằng chứng.
 
       **Đã kiểm bản trích ngược từ YAML**, không chỉ bản nháp: trích khối `run:` ra tệp rồi chạy lại
       cả năm hướng → cây thật `0`, bốn ca thử `1`, trùng khít bản nháp
-- [ ] 4.5 Ghi mã lần chạy CI đỏ có chủ ý ở 4.3, xoá nhánh tạm
+- [x] 4.5 Ghi mã lần chạy CI đỏ có chủ ý ở 4.3, xoá nhánh tạm
+
+      17/09/2026, nhánh `ci-red-check`, PR nháp #18 vào `main`:
+
+      ```
+      lan chay 35180755339      Canh cau hinh:       failure
+                                buoc do: "Every provider key the gateway config
+                                          uses must be declared everywhere"
+                                Gateway image:        skipped
+      ```
+
+      Dựng lại đúng hình dạng sự cố 10/09: `config.gateway.yaml` tham chiếu `KEY_BENCH_CRM_TEST`,
+      biến không có ở cả ba nơi. CI in đủ **ba** câu `::error::`, mỗi nơi một câu.
+
+      **Phải hai lần chạy**, vì hai phép canh nằm cùng job `guards`: cái đầu đỏ thì job dừng, cái
+      sau không tới lượt. Lần chạy của phép canh kia là `35180632930` — xem
+      `keep-the-load-balancer-pointed-at-live-instances` ô 3.5.
+
+      PR đóng, nhánh xoá cả local lẫn remote, `git fetch --prune` xác nhận sạch
 
 ## 5. Tài liệu và bàn giao
 
@@ -231,4 +249,4 @@ MUST NOT được coi là bằng chứng.
       **Câu hỏi đã có đáp án, không còn treo** — xem D3 mục "Đã trả lời 17/09/2026". 17 dòng, 170
       token, master key, 63 giây của một ngày, không agent nào dùng. Ràng buộc đơn giá bản preview
       **vẫn còn** và vẫn phải chốt trước khi có agent dùng thật
-- [ ] 5.4 `openspec validate name-the-crm-key-after-its-agent --strict` đạt
+- [x] 5.4 `openspec validate name-the-crm-key-after-its-agent --strict` đạt
