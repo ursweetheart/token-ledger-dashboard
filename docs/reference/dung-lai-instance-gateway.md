@@ -71,6 +71,11 @@ Bình thường ra `10 / 10`.
 > `docker logs --since "02:56:17"` **không** lọc được như mong đợi — chuỗi giờ trần bị hiểu sai và
 > trả về rỗng. Dùng `docker logs -t` rồi đọc dấu thời gian, hoặc đếm trước/sau như trên.
 
+> Sau khi gộp edge vào LB: `nginx.conf` được mount dưới dạng envsubst template.
+> `nginx -t` trong container đang chạy chỉ kiểm bản đã render, không phải template
+> vừa sửa. Restart LB để render lại; xem hướng dẫn chuyển đổi an toàn trong
+> [Gateway status README](../../tools/gateway-status/README.md#migrating-the-former-edge-into-the-lb).
+
 ## 5. Chứng minh được — vì sao bỏ được bước khởi động lại `gateway-lb`
 
 Đo ngày 17/09/2026 trên máy phát triển.

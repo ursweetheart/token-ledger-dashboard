@@ -1,7 +1,7 @@
 'use strict';
 
 function createMonitorUI(document, {timers = globalThis, now = Date.now} = {}) {
-  const ids = ['edge', 'lb', 'proxy1', 'proxy2', 'route'];
+  const ids = ['lb', 'proxy1', 'proxy2', 'route'];
   const scope = 'Liveness checks only. Provider access, credentials, database and Redis readiness are not verified.';
   const el = id => document.getElementById(id);
   let busy = false;
@@ -48,7 +48,7 @@ function createMonitorUI(document, {timers = globalThis, now = Date.now} = {}) {
       }
       const components = Object.fromEntries(data.components.map(c => [c.id, c]));
       const up = id => components[id].status === 'reachable';
-      const computed = ids.every(up) ? 'reachable' : up('edge') && up('lb') && up('route') && (up('proxy1') || up('proxy2')) ? 'degraded' : 'unavailable';
+      const computed = ids.every(up) ? 'reachable' : up('lb') && up('route') && (up('proxy1') || up('proxy2')) ? 'degraded' : 'unavailable';
       if (computed !== data.status) throw new Error('Inconsistent snapshot');
       el('overall').textContent = {reachable: 'Gateway reachable', degraded: 'Gateway degraded', unavailable: 'Gateway unavailable'}[data.status];
       el('overall').dataset.state = data.status;

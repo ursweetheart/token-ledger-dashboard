@@ -626,10 +626,14 @@ services:
     container_name: token-ledger-gateway-lb
     profiles: ["gateway"]
     restart: unless-stopped
+    environment:
+      LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
+      LLM_GATEWAY_ADMIN_CIDR: ${LLM_GATEWAY_ADMIN_CIDR:-127.0.0.1/32}
+      NGINX_ENVSUBST_FILTER: ^LLM_GATEWAY_(DOMAIN|ADMIN_CIDR)$
     volumes:
-      - ./docker/gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    expose:
-      - "4000"
+      - ./docker/gateway/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+    ports:
+      - "${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:4000/lb-health | grep -q lb-ok"]
       interval: 10s
@@ -663,30 +667,6 @@ services:
       - ./tools/gateway-status:/app:ro
     ports:
       - "127.0.0.1:8089:8089"
-
-  # Nginx handoff cho reverse proxy/TLS cua may chu. Chi port nay duoc xuat ra
-  # host, va van chi bind loopback; DNS/TLS/public exposure do lop ben ngoai quan ly.
-  gateway-edge:
-    logging: *logging
-    image: nginx:1.27-alpine
-    container_name: token-ledger-gateway-edge
-    profiles: ["gateway"]
-    restart: unless-stopped
-    environment:
-      LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
-      NGINX_ENVSUBST_FILTER: ^LLM_GATEWAY_DOMAIN$
-    volumes:
-      - ./docker/gateway/edge.conf.template:/etc/nginx/templates/default.conf.template:ro
-    ports:
-      - "${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- --header \"Host: $$LLM_GATEWAY_DOMAIN\" http://127.0.0.1:8080/edge-health | grep -q edge-ok"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-    depends_on:
-      gateway-lb:
-        condition: service_healthy
 
 # Khai ro dai mang de gan duoc IP TINH cho hai Redis.
 #

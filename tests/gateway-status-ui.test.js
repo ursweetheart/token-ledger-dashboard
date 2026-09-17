@@ -51,7 +51,7 @@ function harness(options) {
 }
 function snapshot() {
   return {status: 'reachable', checked_at: new Date().toISOString(), components:
-    ['edge', 'lb', 'proxy1', 'proxy2', 'route'].map(id => ({id, status: 'reachable', detail: 'HTTP check passed.', latency_ms: 3}))};
+    ['lb', 'proxy1', 'proxy2', 'route'].map(id => ({id, status: 'reachable', detail: 'HTTP check passed.', latency_ms: 3}))};
 }
 
 test('monitor shows measured liveness, never claims provider readiness', async () => {
@@ -68,7 +68,7 @@ test('failed monitor refresh clears previously reachable components', async () =
   await ui.refresh(async () => ({ok: true, json: async () => snapshot()}));
   await ui.refresh(async () => { throw new Error('secret diagnostic'); });
   assert.equal(nodes.get('overall').textContent, 'Status unknown');
-  assert.equal(nodes.get('edge-status').textContent, 'Unknown');
+  assert.equal(nodes.get('lb-status').textContent, 'Unknown');
   assert.doesNotMatch(nodes.get('summary').textContent, /secret diagnostic/);
 });
 
@@ -110,7 +110,7 @@ test('a 29-second snapshot expires at 30 seconds between polls', async t => {
   assert.equal(nodes.get('overall').dataset.state, 'reachable');
   t.mock.timers.tick(1);
   assert.equal(nodes.get('overall').dataset.state, 'unknown');
-  for (const id of ['edge', 'lb', 'proxy1', 'proxy2', 'route']) {
+  for (const id of ['lb', 'proxy1', 'proxy2', 'route']) {
     assert.equal(nodes.get(`${id}-status`).dataset.state, 'unknown');
   }
   assert.equal(nodes.get('checked').textContent, 'No current measurement');
@@ -146,7 +146,7 @@ for (const event of ['pageshow', 'visibilitychange']) {
     }
     (event === 'pageshow' ? window : document).dispatchEvent(new Event(event));
     assert.equal(nodes.get('overall').dataset.state, 'unknown');
-    assert.equal(nodes.get('edge-status').dataset.state, 'unknown');
+    assert.equal(nodes.get('lb-status').dataset.state, 'unknown');
     assert.equal(calls, 2);
     await new Promise(setImmediate);
     assert.equal(nodes.get('overall').dataset.state, 'reachable');

@@ -19,7 +19,6 @@ const SECURITY_HEADERS = {
 
 const SCOPE = 'Liveness checks only. Provider access, credentials, database and Redis readiness are not verified.';
 const COMPONENTS = [
-  ['edge', 'Gateway edge', 'http://token-ledger-gateway-edge:8080/edge-health'],
   ['lb', 'Load balancer', 'http://token-ledger-gateway-lb:4000/lb-health'],
   ['proxy1', 'Proxy 1', 'http://token-ledger-litellm-1:4000/health/liveliness'],
   ['proxy2', 'Proxy 2', 'http://token-ledger-litellm-2:4000/health/liveliness'],
@@ -41,7 +40,7 @@ function probe(id, name, url, timeoutMs) {
     };
     // Start before request creation: socket inactivity timeouts do not bound DNS or trickle responses.
     const timer = setTimeout(() => finish('Liveness check timed out.'), timeoutMs);
-    request = transport.get(url, { agent: false, headers: id === 'edge' ? { Host: process.env.LLM_GATEWAY_DOMAIN || 'apigateway.rangdong.com.vn' } : {} }, res => {
+    request = transport.get(url, { agent: false, headers: id === 'lb' ? { Host: process.env.LLM_GATEWAY_DOMAIN || 'apigateway.rangdong.com.vn' } : {} }, res => {
       res.on('error', () => finish('Connection failed.'));
       res.on('aborted', () => finish('Connection failed.'));
       if (res.statusCode !== 200) {
@@ -61,7 +60,7 @@ function probe(id, name, url, timeoutMs) {
       res.on('end', () => {
         const body = Buffer.concat(chunks).toString('utf8');
         let valid = false;
-        if (id === 'edge' || id === 'lb') valid = body === `${id}-ok` || body === `${id}-ok\n`;
+        if (id === 'lb') valid = body === `${id}-ok` || body === `${id}-ok\n`;
         else {
           // Pinned LiteLLM 4373a32: FastAPI serializes a JSON string, not an object.
           try { valid = JSON.parse(body) === "I'm alive!"; } catch { /* invalid body */ }
@@ -90,7 +89,7 @@ function createMonitor({ targets = {}, timeoutMs = 2500, cacheMs = 1000 } = {}) 
         .then(components => {
           const up = Object.fromEntries(components.map(c => [c.id, c.status === 'reachable']));
           const status = components.every(c => c.status === 'reachable') ? 'reachable'
-            : up.edge && up.lb && up.route && (up.proxy1 || up.proxy2) ? 'degraded' : 'unavailable';
+            : up.lb && up.route && (up.proxy1 || up.proxy2) ? 'degraded' : 'unavailable';
           cached = { status, checked_at: new Date().toISOString(), scope: SCOPE, components };
           expires = performance.now() + cacheMs;
           return cached;

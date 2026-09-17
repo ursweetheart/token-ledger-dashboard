@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { createMonitor } = require('../tools/gateway-status/server');
 
-const ids = ['edge', 'lb', 'proxy1', 'proxy2', 'route'];
-const bodies = { edge: 'edge-ok\n', lb: 'lb-ok\n', proxy1: JSON.stringify("I'm alive!"), proxy2: JSON.stringify("I'm alive!"), route: JSON.stringify("I'm alive!") };
+const ids = ['lb', 'proxy1', 'proxy2', 'route'];
+const bodies = { lb: 'lb-ok\n', proxy1: JSON.stringify("I'm alive!"), proxy2: JSON.stringify("I'm alive!"), route: JSON.stringify("I'm alive!") };
 async function listen(t, server) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
@@ -24,7 +24,7 @@ async function fixture(t, overrides = {}, options = {}) {
 }
 async function status(url) { return (await fetch(`${url}/api/status`)).json(); }
 test('rejects invalid health bodies, redirects, oversized bodies without leaking content', async t => {
-  for (const [id, body] of [['edge', 'edge-ok SECRET'], ['lb', 'lb-ok extra'], ['proxy1', 'I\'m alive!'], ['proxy2', '{"status":"ok","key":"SECRET"}'], ['route', 'null']]) {
+  for (const [id, body] of [['lb', 'lb-ok extra'], ['proxy1', 'I\'m alive!'], ['proxy2', '{"status":"ok","key":"SECRET"}'], ['route', 'null']]) {
     const { url } = await fixture(t, { [id]: (_req, res) => res.end(body) });
     const component = (await status(url)).components.find(c => c.id === id);
     assert.equal(component.status, 'unreachable');
@@ -36,9 +36,9 @@ test('rejects invalid health bodies, redirects, oversized bodies without leaking
     proxy2: (_req, res) => res.end('x'.repeat(4097)),
   });
   const result = await status(url);
-  assert.equal(result.components[2].detail, 'HTTP 302 returned.');
-  assert.equal(result.components[3].detail, 'Liveness response too large.');
-  assert.equal(hits.length, 5);
+  assert.equal(result.components[1].detail, 'HTTP 302 returned.');
+  assert.equal(result.components[2].detail, 'Liveness response too large.');
+  assert.equal(hits.length, 4);
 });
 
 test('bounds total time including a response that keeps sending bytes', async t => {
@@ -54,7 +54,7 @@ test('bounds total time including a response that keeps sending bytes', async t 
   const response = await fetch(`${url}/api/status`, { signal: AbortSignal.timeout(1500) });
   const result = await response.json();
   assert.ok(performance.now() - start < 1000);
-  for (const c of result.components.slice(2, 4)) {
+  for (const c of result.components.slice(1, 3)) {
     assert.equal(c.status, 'unreachable');
     assert.equal(c.detail, 'Liveness check timed out.');
   }
@@ -65,7 +65,7 @@ test('DNS and connection refusal are controlled English without URL or error lea
   const closedUrl = await listen(t, closed);
   await new Promise(resolve => closed.close(resolve));
   const { url } = await fixture(t, {}, { targets: {
-    edge: 'http://secret-credential.invalid/SECRET', lb: closedUrl,
+    lb: 'http://secret-credential.invalid/SECRET',
     proxy1: closedUrl, proxy2: closedUrl, route: closedUrl,
   } });
   const result = await status(url);
@@ -75,15 +75,15 @@ test('DNS and connection refusal are controlled English without URL or error lea
 });
 
 test('concurrent callers share one collection and cache expires', async t => {
-  const { url, hits } = await fixture(t, { edge: (_req, res) => setTimeout(() => res.end(bodies.edge), 30) }, { cacheMs: 80 });
+  const { url, hits } = await fixture(t, { lb: (_req, res) => setTimeout(() => res.end(bodies.lb), 30) }, { cacheMs: 80 });
   const batch = await Promise.all(Array.from({ length: 12 }, () => status(url)));
-  assert.equal(hits.length, 5);
+  assert.equal(hits.length, 4);
   for (const result of batch) assert.deepEqual(result, batch[0]);
   assert.deepEqual(await status(url), batch[0]);
-  assert.equal(hits.length, 5);
+  assert.equal(hits.length, 4);
   await new Promise(resolve => setTimeout(resolve, 100));
   await status(url);
-  assert.equal(hits.length, 10);
+  assert.equal(hits.length, 8);
 });
 
 function request(url, pathname, options = {}) {
@@ -150,7 +150,7 @@ test('rejects browser DNS-rebinding Host values before probing', async t => {
 
 test('internal collector failure returns a generic 503 and retries next time', async t => {
   const targets = {};
-  Object.defineProperty(targets, 'edge', { get() { throw new Error('SECRET internal path'); } });
+  Object.defineProperty(targets, 'lb', { get() { throw new Error('SECRET internal path'); } });
   const url = await listen(t, createMonitor({ targets }));
   const response = await fetch(`${url}/api/status`, { signal: AbortSignal.timeout(500) });
   assert.equal(response.status, 503);
@@ -167,7 +167,7 @@ test('default probes use actual Docker container names, not optional network ali
   const seen = [];
   const originalGet = http.get;
   const upstream = await listen(t, http.createServer((req, res) => {
-    res.end(req.url === '/edge-health' ? bodies.edge : req.url === '/lb-health' ? bodies.lb : bodies.proxy1);
+    res.end(req.url === '/lb-health' ? bodies.lb : bodies.proxy1);
   }));
   t.mock.method(http, 'get', (url, options, callback) => {
     seen.push(String(url));
@@ -176,7 +176,6 @@ test('default probes use actual Docker container names, not optional network ali
   const url = await listen(t, createMonitor());
   assert.equal((await status(url)).status, 'reachable');
   assert.deepEqual(seen, [
-    'http://token-ledger-gateway-edge:8080/edge-health',
     'http://token-ledger-gateway-lb:4000/lb-health',
     'http://token-ledger-litellm-1:4000/health/liveliness',
     'http://token-ledger-litellm-2:4000/health/liveliness',
@@ -225,8 +224,8 @@ test('broken responses fail safely and the exact 4096-byte limit succeeds', asyn
   });
   const result = await status(url);
   assert.equal(result.status, 'degraded');
-  assert.equal(result.components[2].detail, 'Connection failed.');
-  assert.equal(result.components[3].status, 'reachable');
+  assert.equal(result.components[1].detail, 'Connection failed.');
+  assert.equal(result.components[2].status, 'reachable');
 });
 
 const httpError = (_req, res) => { res.writeHead(503); res.end('SECRET credential'); };
@@ -236,7 +235,6 @@ test('one failed proxy degrades but failed load balancer or both proxies makes u
     [{ proxy1: httpError }, 'degraded'],
     [{ proxy2: httpError }, 'degraded'],
     [{ lb: httpError }, 'unavailable'],
-    [{ edge: httpError }, 'unavailable'],
     [{ route: httpError }, 'unavailable'],
     [{ proxy1: httpError, proxy2: httpError }, 'unavailable'],
   ]) {
@@ -251,7 +249,7 @@ test('one failed proxy degrades but failed load balancer or both proxies makes u
   }
 });
 
-test('all five real HTTP liveness checks produce the public contract', async t => {
+test('all four real HTTP liveness checks produce the public contract', async t => {
   const { url, hits } = await fixture(t);
   const result = await status(url);
   assert.equal(result.status, 'reachable');
@@ -264,6 +262,6 @@ test('all five real HTTP liveness checks produce the public contract', async t =
     assert.equal(typeof c.name, 'string');
     assert.ok(Number.isFinite(c.latency_ms) && c.latency_ms >= 0);
   }
-  assert.equal(hits.length, 5);
-  assert.equal(hits.find(h => h.id === 'edge').headers.host, process.env.LLM_GATEWAY_DOMAIN || 'apigateway.rangdong.com.vn');
+  assert.equal(hits.length, 4);
+  assert.equal(hits.find(h => h.id === 'lb').headers.host, process.env.LLM_GATEWAY_DOMAIN || 'apigateway.rangdong.com.vn');
 });

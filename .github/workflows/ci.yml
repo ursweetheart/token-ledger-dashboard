@@ -85,11 +85,7 @@ jobs:
           fi
           echo "Gateway image comes from the registry: $MAIN"
 
-      # Hai tệp nginx trong docker/gateway/ cùng làm một việc. `edge.conf.template`
-      # hỏi lại DNS theo chu kỳ; `nginx.conf` thì không, cho tới 17/09/2026. Chỗ
-      # viết thiếu hỏng IM LẶNG: instance nào đổi IP là biến mất khỏi vòng chia
-      # tải, mà container vẫn `healthy` và /lb-health vẫn trả `lb-ok`.
-      #
+      # Dynamic Docker DNS keeps recreated instances in the LB rotation.
       # Đo được 17/09/2026, ép IP đổi một bậc khi chưa có `resolve`:
       #     litellm-1    0 / 20 lượt      <- biến mất hẳn
       #     litellm-2   20 / 20 lượt
@@ -135,7 +131,7 @@ jobs:
           done
           if [ "$STATUS" -ne 0 ]; then
             echo "::error::An upstream pointing by name needs: a resolver directive in the file, a zone in the block, and resolve on each server line."
-            echo "::error::Copy the pattern from docker/gateway/edge.conf.template. Without it, an instance that changes IP silently drops out of rotation."
+            echo "::error::Copy the pattern from docker/gateway/nginx.conf. Without it, an instance that changes IP silently drops out of rotation."
             exit 1
           fi
           echo "Every upstream pointing by name re-resolves."
@@ -197,7 +193,7 @@ jobs:
     env:
       # Mốc đo 16/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
       # con số đổi trong lịch sử git chính là chỗ nhìn thấy việc đó.
-      EXPECTED_JS: "80"
+      EXPECTED_JS: "81"
     steps:
       - uses: actions/checkout@v4
 
