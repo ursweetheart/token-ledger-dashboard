@@ -239,7 +239,7 @@ jobs:
       # 9 gộp độ trễ, 4 nạp nhà cung cấp).
       # Mốc đo 15/09/2026: 37 → 58, thêm 21 phép kiểm của tools/check_english_names.py
       # (change name-the-code-in-english). Lần đẩy e3a214b đỏ vì quên sửa số này.
-      EXPECTED_PY: "58"
+      EXPECTED_PY: "71"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

@@ -668,6 +668,81 @@ services:
     ports:
       - "127.0.0.1:8089:8089"
 
+  # Canh Gateway theo nhip roi GUI THU khi trang thai doi.
+  #
+  # `gateway-status` o tren DO nhung khong bao: no la mot trang web, phai co nguoi
+  # mo ra xem. Khong ai mo luc 2 gio sang. Dich vu nay bien trang do thanh thu.
+  #
+  # KHONG CO `ports`, KHONG CO CA `expose` -- va do la dong quan trong nhat o day.
+  # Moi dich vu khac trong file nay deu MO CUA: web 8080, gateway-lb 8088,
+  # gateway-status 8089, api 8000, postgres 5432. Cai nay chi GO CUA nguoi khac,
+  # khong ai goi vao no. Be mat tan cong no them vao: khong co.
+  #
+  # Vi no nam TRONG mang, no goi thang `gateway-status:8089` va `gateway-lb:4000`
+  # bang ten, KHONG qua nginx -- nen khong phai noi `LLM_GATEWAY_ADMIN_CIDR`, khong
+  # phai doi bind cua dich vu nao. Do 17/09: chi can dat `Host: localhost`, thieu
+  # header do thi server.js tra 403.
+  #
+  # CO Y KHONG DAT `healthcheck`, cung ly do `ledger-refresh` khong dat: "tien trinh
+  # con song" la phep do sai. Phep do dung la THU NHIP TIM moi ngay -- vang thu do
+  # la tin hieu cho canh da chet.
+  gateway-watch:
+    logging: *logging
+    # Dung lai HET image cua `tools`. Khong Dockerfile moi, khong goi phu thuoc moi:
+    # script chi dung `urllib` va `smtplib` cua thu vien chuan.
+    build:
+      context: .
+      dockerfile: docker/tools.Dockerfile
+    image: token-ledger-tools:local
+    container_name: token-ledger-gateway-watch
+    profiles: ["gateway"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: ["python3", "scripts/watch_gateway.py",
+              "--every", "${WATCH_EVERY_SECONDS:-60}"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # BAT BUOC. Thieu no thi mot dong log tieng Viet lam script chet giua chung.
+      PYTHONIOENCODING: utf-8
+      WATCH_NAME: ${WATCH_NAME:-trong}
+      # MOI DICH DOC TU BIEN, khong ghim trong ma -- xem design.md D11. Cung mot tep
+      # `.py` chay duoc ca o day lan tren mot may khac; hai noi khac nhau o TAP DICH,
+      # khong khac o hanh vi.
+      #
+      # Mac dinh CO Y khong chua dich qua ten mien public. Do 17/09:
+      # `apigateway.rangdong.com.vn` tra `Non-existent domain`, nen bat no len o day
+      # la tu tao mot dich DO MOI PHUT trong khi he thong hoan toan khoe.
+      WATCH_HTTP: ${WATCH_HTTP:-lb=http://gateway-lb:4000/health/readiness}
+      # 200 chua chac la dung: `/health/readiness` co the tra 200 ma `db` khong noi
+      # duoc. Chuoi nay bat buoc than tra loi phai co `connected`.
+      WATCH_EXPECT: ${WATCH_EXPECT:-lb=connected}
+      WATCH_STATUS_URL: ${WATCH_STATUS_URL:-http://gateway-status:8089/api/status}
+      WATCH_STATE_FILE: /var/watch/state.json
+      WATCH_TIMEOUT_SECONDS: ${WATCH_TIMEOUT_SECONDS:-25}
+      WATCH_FAILS_BEFORE: ${WATCH_FAILS_BEFORE:-2}
+      WATCH_HEARTBEAT_HOUR: ${WATCH_HEARTBEAT_HOUR:-8}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-1}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TO: ${SMTP_TO:-}
+    volumes:
+      # DUY NHAT mot cho ghi duoc. `read_only: true` khoa phan con lai cua he thong
+      # tep. Trang thai PHAI song sot qua mot lan dung lai container: giu trong bo
+      # nho thi moi lan `restart` la them mot thu cho cung mot su co.
+      - watchstate:/var/watch
+    # Image `tools` chay bang root theo thiet ke cua no (xem docker/tools.Dockerfile).
+    # ponytail: giu root, vi doi UID thi volume `watchstate` do root tao ra se khong
+    # ghi duoc. Da bu bang read_only + cap_drop ALL + no-new-privileges + khong cong
+    # nao. Muon chat hon thi phai `chown` volume luc khoi tao -- lam khi co yeu cau that.
+    tmpfs:
+      - /tmp
+
 # Khai ro dai mang de gan duoc IP TINH cho hai Redis.
 #
 # VI SAO CAN: Sentinel giam sat master bang dia chi. Neu dia chi la TEN service,
@@ -697,3 +772,6 @@ volumes:
   sentinel1data:
   sentinel2data:
   sentinel3data:
+  # Chi giu mot tep JSON nho: trang thai hien tai, moc bat dau su co, ngay da gui
+  # nhip tim. No ton tai de mot lan `restart` khong sinh them thu cho su co dang chay.
+  watchstate:
