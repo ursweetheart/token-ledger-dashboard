@@ -97,6 +97,7 @@ Quy tắc đầy đủ, kèm bảng "thêm file mới thì để đâu":
 - [Cây thư mục](docs/reference/cay-thu-muc.md)
 - [API TLA Hợp Đồng](docs/reference/api-map-tla-hd.md)
 - [Luật cho lệnh triển khai tự động](docs/reference/luat-trien-khai-tu-dong-13-09.md) — ba thứ bị cấm, mỗi thứ một lý do đã đo
+- [Dựng lại instance Gateway](docs/reference/dung-lai-instance-gateway.md) — `restart` hay `up -d`, và cách đếm tải không tốn tiền
 
 ---
 

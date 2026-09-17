@@ -54,10 +54,15 @@ mọi việc khác, và nó không liên quan gì tới Gateway.
 nữa nên chép lại:
 
 ```
-   KEY_BENCH_CRM_TEST_GG_AIA_STU   dạng `AQ.`
+   KEY_CRM_FEEDBACK   dạng `AQ.`
         aiplatform.googleapis.com          → 200
         generativelanguage.googleapis.com  → 403
 ```
+
+> **Tên biến đổi 17/09/2026:** `KEY_BENCH_CRM_TEST_GG_AIA_STU` → `KEY_CRM_FEEDBACK`. Tên cũ nói sai
+> ba lần — khoá này không phải `BENCH`, không phải `TEST`, và `GG_AIA_STU` thì ngược hẳn: đúng hai
+> dòng đo ngay trên đã chỉ ra nó là Vertex express chứ không phải AI Studio. Tên mới lấy từ
+> `dim_agent.code`, trùng với nhãn đang dán trên tuyến. Xem change `name-the-crm-key-after-its-agent`.
 
 Nhánh gọi bằng khoá của CRM dựng `genai.Client(api_key=…)`, mặc định đi AI Studio, tức đi đúng cửa
 bị 403. **Đổ khoá này vào biến `KEY_FALLBACK` rồi dùng nhánh đó sẽ hỏng.** Đó là lý do đường dự

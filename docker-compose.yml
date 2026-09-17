@@ -115,22 +115,29 @@ x-litellm: &litellm
     LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
     LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-}
     KEY_GOOGLE_AI_STU: ${KEY_GOOGLE_AI_STU:-}
-    # Khoa cua project CRM rieng, dung o che do Vertex express. Tuyen dung no la
-    # `gemini-2.5-flash` trong docker/gateway/config.gateway.yaml.
+    # Khoa cua agent Phan Loai Du Lieu CRM (`crm-feedback`, agent 7), dung o che do
+    # Vertex express. Tuyen dung no la `gemini-2.5-flash` trong
+    # docker/gateway/config.gateway.yaml.
     #
-    # TEN BIEN DOI 10/09/2026: `KEY_BENCH_CRM_TEST` -> `KEY_BENCH_CRM_TEST_GG_AIA_STU`,
-    # theo dung ten dang co trong .env. Truoc do ba cho dung ten cu trong khi .env
-    # da doi, nen `:-` bien khoa thieu thanh chuoi rong va tuyen CRM CHET IM LANG:
-    # container len binh thuong, /health/liveliness tra 200, chi hong khi co nguoi
-    # goi that (HTTP 500 "Missing Gemini API key").
+    # DOI TEN HAI LAN, va lan dau da gay su co:
+    #   10/09/2026  `KEY_BENCH_CRM_TEST` -> `KEY_BENCH_CRM_TEST_GG_AIA_STU`
+    #   17/09/2026  `KEY_BENCH_CRM_TEST_GG_AIA_STU` -> `KEY_CRM_FEEDBACK`
     #
-    # Hau to `_GG_AIA_STU` GAY HIEU NHAM: day KHONG phai khoa AI Studio. Do bang
-    # tien to thi no la `AQ.`, tuc Vertex express -- dung loai tuyen nay can.
+    # BAI HOC TU LAN 10/09, giu nguyen o day vi no van la cach hong: hom do .env doi
+    # ten truoc con hai tep con lai giu ten cu, nen `:-` bien khoa thieu thanh CHUOI
+    # RONG thay vi mot loi. Container len binh thuong, /health/liveliness tra 200,
+    # moi phep kiem dat -- va tuyen CRM chi chet dung luc co nguoi goi that
+    # (HTTP 500 "Missing Gemini API key"). Doi ten thi phai doi DU 5 TEP trong CUNG
+    # MOT COMMIT; tu 17/09 co phep canh trong nhom `guards` cua CI chan viec nay.
     #
-    # Chu thich cu o day ghi "thieu thi entrypoint dung han". Cau do SAI luc viet:
-    # vong kiem trong docker/gateway/entrypoint.sh khong he co bien nay. Nay da
-    # them vao that, nen cau tren moi dung.
-    KEY_BENCH_CRM_TEST_GG_AIA_STU: ${KEY_BENCH_CRM_TEST_GG_AIA_STU:-}
+    # Ten moi lay tu `dim_agent.code`, la CUNG chuoi dang lam nhan tren tuyen:
+    # tags: ["crm-feedback"]. Ten cu noi sai ba lan -- khoa nay khong phai `BENCH`,
+    # khong phai `TEST`, va `GG_AIA_STU` thi nguoc han: do tien to ra `AQ.`, tuc
+    # Vertex express chu khong phai AI Studio.
+    #
+    # Thieu bien nay thi docker/gateway/entrypoint.sh dung han truoc khi LiteLLM
+    # khoi dong -- vong kiem trong tep do CO bien nay, da kiem lai 17/09.
+    KEY_CRM_FEEDBACK: ${KEY_CRM_FEEDBACK:-}
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}

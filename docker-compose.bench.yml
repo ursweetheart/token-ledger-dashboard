@@ -42,7 +42,7 @@ services:
       KEY_GOOGLE_AI_STU: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
       # Cung ly do, them 10/09/2026 khi entrypoint.sh bat dau doi ca khoa CRM.
       # Bench KHONG duoc goi ra ngoai nen gia tri o day co y sai.
-      KEY_BENCH_CRM_TEST_GG_AIA_STU: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
+      KEY_CRM_FEEDBACK: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
     # GIOI HAN BO NHO - co y, khong phai cho chat che.
     #

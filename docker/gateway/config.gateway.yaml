@@ -83,7 +83,7 @@ model_list:
   - model_name: gemini-2.5-flash
     litellm_params:
       model: gemini/gemini-2.5-flash
-      api_key: os.environ/KEY_BENCH_CRM_TEST_GG_AIA_STU
+      api_key: os.environ/KEY_CRM_FEEDBACK
 
       # TAT SUY NGHI cho tuyen CRM -- them 10/09/2026, do bang phep do chu khong
       # phai suy doan. `gemini-2.5-flash` bat suy nghi MAC DINH, va token suy nghi

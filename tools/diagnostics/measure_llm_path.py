@@ -8,7 +8,7 @@
         --model gemini-2.5-flash --calls 2 --agent crm-feedback
 
     # đường gọi thẳng nhà cung cấp, để so với đường qua Gateway
-    python tools/diagnostics/measure_llm_path.py --route direct --key-env KEY_BENCH_CRM_TEST \
+    python tools/diagnostics/measure_llm_path.py --route direct --key-env KEY_CRM_FEEDBACK \
         --model gemini-2.5-flash --calls 2 --agent crm-feedback
 
 
