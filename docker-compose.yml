@@ -641,6 +641,29 @@ services:
       litellm-2:
         condition: service_healthy
 
+  # Private status web; no backend dependency so outages remain visible.
+  gateway-status:
+    logging: *logging
+    image: node:24-alpine
+    container_name: token-ledger-gateway-status
+    profiles: ["gateway"]
+    restart: unless-stopped
+    init: true
+    user: "node"
+    working_dir: /app
+    command: ["node", "server.js"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      STATUS_BIND: "0.0.0.0"
+      STATUS_PORT: "8089"
+      LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
+    volumes:
+      - ./tools/gateway-status:/app:ro
+    ports:
+      - "127.0.0.1:8089:8089"
+
   # Nginx handoff cho reverse proxy/TLS cua may chu. Chi port nay duoc xuat ra
   # host, va van chi bind loopback; DNS/TLS/public exposure do lop ben ngoai quan ly.
   gateway-edge:

@@ -12,7 +12,18 @@ node tools/gateway-status/server.js
 
 Open **http://127.0.0.1:8089/** on the same machine. The same server serves assets and `GET /api/status`. The page refreshes every 10 seconds and has a manual refresh button. Keep all four runtime files together: `server.js`, `index.html`, `app.js`, `style.css`.
 
-No Docker or Compose configuration is included. Server deployment is managed separately by the operator. For container deployment, set `STATUS_BIND=0.0.0.0`, publish port 8089 on host loopback only, and attach the monitor to the existing Gateway network. Defaults are `STATUS_BIND=127.0.0.1`, `STATUS_PORT=8089`, and `LLM_GATEWAY_DOMAIN=apigateway.rangdong.com.vn`. Do not expose the monitor publicly: it has no login and accepts only localhost/loopback Host headers.
+The root Compose file includes service `gateway-status` in profile `gateway`, with container name `token-ledger-gateway-status` and loopback port `8089`. It starts with the Gateway profile but deliberately has no backend dependencies, so unavailable backends can still be reported. It uses the standard Node image and read-only source mount; no image build is needed.
+
+To add only the monitor to an existing stack, without restarting Dashboard or Gateway services:
+
+```powershell
+docker compose --profile gateway up -d --no-deps gateway-status
+curl.exe --fail http://127.0.0.1:8089/api/status
+```
+
+This assumes the shared Compose network is intact and matches its configuration. If Compose reports a network replacement/conflict, stop and inspect it; do not use `down`, delete the network or remove volumes to install the monitor. `--profile gateway down` also affects unprofiled Dashboard services. Do not run an older standalone monitor on the same port.
+
+Defaults for direct Node execution are `STATUS_BIND=127.0.0.1`, `STATUS_PORT=8089`, and `LLM_GATEWAY_DOMAIN=apigateway.rangdong.com.vn`; Compose sets the internal bind to `0.0.0.0` while publishing only on host loopback. Do not expose the monitor publicly: it has no login and accepts only localhost/loopback Host headers.
 
 ## What is measured
 
