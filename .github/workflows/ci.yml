@@ -193,7 +193,10 @@ jobs:
     env:
       # Mốc đo 16/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
       # con số đổi trong lịch sử git chính là chỗ nhìn thấy việc đó.
-      EXPECTED_JS: "81"
+      # Mốc đo 18/09/2026: 81 → 82, phép kiểm thêm vào từ bee2da6 (TLS trên gateway-lb).
+      # Commit ấy quên sửa số này nên `main` đỏ từ 03:49; sửa ở đây để lượt gộp xanh, và
+      # `main` hết đỏ ngay khi PR này vào.
+      EXPECTED_JS: "82"
     steps:
       - uses: actions/checkout@v4
 
