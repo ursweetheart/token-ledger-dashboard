@@ -177,23 +177,37 @@ báo động giả, và thư báo động giả làm người nhận tắt thôn
 
 ### Requirement: Chỗ canh gác phải tự chứng minh nó còn sống
 
-Hệ thống SHALL gửi một thư nhịp tim theo chu kỳ cố định, kể cả khi không có sự cố nào.
+Hệ thống SHALL có thư nhịp tim gửi theo chu kỳ cố định kể cả khi không có sự cố, và người vận hành
+SHALL tắt hay bật được nó bằng cấu hình, không phải bằng sửa mã.
 
 Lý do: sau khi việc báo động rời khỏi agent, chỗ canh gác là **nguồn báo động duy nhất**. Nó hỏng
 theo kiểu im lặng, mà im lặng lại trùng khít với tín hiệu "mọi thứ bình thường". Không có nhịp tim
 thì không phân biệt được hai thứ đó.
 
-#### Scenario: Không có sự cố nào trong ngày
+Vì sao tắt được chứ không bắt buộc bật: người nhận chuông là người chịu chi phí của nó. Một thư mỗi
+ngày mà ngày nào cũng giống nhau thì bị đọc lướt rồi bị lọc, và một bộ lọc như vậy nuốt luôn thư sự
+cố. Đổi lại là mất lớp phủ "chỗ canh chết lặng lẽ" — cái giá ấy SHALL nằm trong tài liệu vận hành,
+không để người nhận tự phát hiện.
+
+#### Scenario: Không có sự cố nào trong ngày, nhịp tim đang bật
 
 - **WHEN** một chu kỳ nhịp tim trôi qua mà không có sự cố
 - **THEN** hệ thống SHALL vẫn gửi một thư
 - **AND** thư SHALL nêu số nhịp đã dò và số nhịp hỏng trong chu kỳ ấy
 
-#### Scenario: Chỗ canh gác chết
+#### Scenario: Chỗ canh gác chết trong lúc nhịp tim đang bật
 
 - **WHEN** tiến trình dò dừng hẳn
 - **THEN** việc **vắng** thư nhịp tim SHALL được tài liệu vận hành coi là một tín hiệu
 - **AND** MUST NOT để người nhận tự suy ra
+
+#### Scenario: Người vận hành tắt nhịp tim
+
+- **WHEN** cấu hình khai tắt nhịp tim
+- **THEN** hệ thống SHALL không gửi thư nhịp tim nào
+- **AND** SHALL vẫn gửi đủ thư mỗi lần trạng thái đổi
+- **AND** tài liệu vận hành SHALL ghi rằng lúc này "không có thư" không còn phân biệt được
+  "không có sự cố" với "chuông đã chết"
 
 ### Requirement: Thư báo phải nêu khoảng thời gian đủ để tra lại log của agent
 

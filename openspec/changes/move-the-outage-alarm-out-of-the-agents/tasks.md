@@ -497,7 +497,7 @@ SMTP thật nên **mọi thư đều gửi đi thật**.
 | 5.6 `stop gateway-status`, Gateway khoẻ | "không đọc được trạng thái" | **ĐẠT**, `WARN - Khong doc duoc trang thai (Gateway van tra loi)` |
 | 5.7 `stop gateway-lb` | một thư, khác 5.2 | **ĐẠT** — thư gửi; thân thư không chụp được (xem ghi chú) |
 | 5.8 lớp ngoài hỏng, lớp trong khoẻ | thư nói đúng lớp | **ĐẠT** — xem thân thư dưới |
-| 5.9 sự cố ngắn hơn một nhịp | không thư nào | **KHÔNG ĐẠT — lỗi phép thử** |
+| 5.9 sự cố ngắn hơn một nhịp | không thư nào | **ĐẠT 18/09** bằng `pause`/`unpause` (17/09: lỗi phép thử) |
 | 5.10 nhịp tim | một thư | **ĐẠT** bằng đường khác (xem dưới) |
 
 **Thân thư bài 5.8** — đọc là biết hỏng ở lớp nào, không phải đoán:
@@ -523,6 +523,31 @@ Hệ quả cho D9: cửa sổ mù **không đo được bằng `docker stop`/`st
 khởi động lại đã lớn hơn một nhịp. Con số ở D9 vẫn là **suy luận từ luật debounce** (2 nhịp liên
 tiếp × nhịp dò), **không phải phép đo**. Phải ghi đúng như vậy, đừng nâng nó lên thành ĐẠT.
 
+**ĐO XONG NGÀY 18/09/2026 — bằng `docker pause` / `docker unpause`.** `pause` đóng băng tiến trình
+**tức thì cả hai chiều**, nên hẹn được giờ sự cố; đó đúng là thứ `stop`/`start` không làm được.
+
+```
+  su co 26 giay,  lot han giua hai nhip  -> 0 nhip hong, KHONG thu   08:56:57 - 08:57:23
+  su co 121 giay, trum dung mot nhip     -> 1 nhip hong, KHONG thu   08:59:57 - 09:01:58
+  tep trang thai sau ca hai bai: state=reachable, bad_ticks=1, khong dong "State changed"
+```
+
+Bài 121 giây mới là bài đáng tiền: Gateway **thật sự** không phục vụ được suốt hai phút mà chuông
+vẫn im — đúng như luật hai nhịp đã hứa, không phải lỗi.
+
+**Phép đo sửa lại chính con số của D9.** Nhịp `09:00:54` mất **28 giây** mới kết luận hỏng, nên
+trong lúc hỏng hai nhịp cách nhau `28 + 60 = 88` giây. Trần im lặng là `60 + 88 ≈ 148` giây, thư đầu
+tiên tới sau `2 × 88 ≈ 176` giây — chứ không phải 85/170. Đã sửa trong `design.md` D9 và mục 5.2 của
+`docs/reference/canh-gateway-va-gui-thu-17-09.md`.
+
+**Trần trên, không phải trần duy nhất:** số này ứng với kiểu hỏng **treo** (`pause` dựng lại đúng
+kiểu ấy, và 17/09 cũng thấy vậy khi mọi thứ chết thật). Cổng bị từ chối ngay thì phép dò hỏng tức
+thì và trần rút về `60 + 60 = 120` giây.
+
+**Quan sát kèm, không phải bài thi:** lúc bật cụm lên lúc `08:53:50`, nhịp đầu rơi vào đúng lúc
+`gateway-lb` còn đang khởi động → một nhịp `unavailable`, nhịp sau xanh lại, **không thư**. Luật hai
+nhịp chặn luôn cả báo động giả lúc khởi động.
+
 **Bài 5.10 — đạt bằng đường khác.** Không đổi đồng hồ container. Thư nhịp tim đã gửi **thật** ba
 lần trong quá trình làm: `23:09:03` qua SMTP từ máy host, và hai lần nữa khi chỗ canh khởi động với
 tệp trạng thái mới. Nội dung đúng khuôn, có số nhịp đã dò và số nhịp hỏng.
@@ -536,7 +561,8 @@ thái" **sau** khi trạng thái đã đổi, nên nó đợi một lần đổi
 chấp thời điểm. Cách đúng: chụp mốc **trước** khi phá.
 
 **Hệ quả đo được của bản sửa hạn 25 giây:** khi mọi thứ chết thật, mỗi nhịp mất ~25 giây thay vì
-tức thì. Ở nhịp production 60 giây, thời gian tới thư đầu tiên là `2 × (25 + 60) ≈ 170 giây`, chứ
+tức thì. Ở nhịp production 60 giây, thời gian tới thư đầu tiên là `2 × (25 + 60) ≈ 170 giây` (đo
+18/09 cho số sát hơn: nhịp hỏng mất 28 giây, tức `≈ 176 giây`), chứ
 không phải ~120 giây như D9 ước lượng ban đầu. Phải sửa con số trong D9 theo phép đo này.
 
 
@@ -556,8 +582,12 @@ Lát mỏng sạch **không** có nghĩa là xong.
 - [x] 5.7 `docker stop gateway-lb` → **kỳ vọng: một thư, nội dung khác bài 5.2**, và (A) cũng đỏ
 - [x] 5.8 Chặn riêng (A) trong khi (B)(C) vẫn xanh → **kỳ vọng: thư nói lớp ngoài hỏng**, theo đúng
       bảng chẩn đoán D3
-- [ ] 5.9 **Đo cửa sổ mù của D9.** Tắt rồi bật trong khoảng ngắn hơn một nhịp → **kỳ vọng: không thư
+- [x] 5.9 **Đo cửa sổ mù của D9.** Tắt rồi bật trong khoảng ngắn hơn một nhịp → **kỳ vọng: không thư
       nào.** Ghi con số thật vào tài liệu vận hành
+
+      **Đạt 18/09/2026** bằng `docker pause`/`unpause`: sự cố 26 giây (lọt giữa hai nhịp) và sự cố
+      121 giây (trùm một nhịp) đều **không sinh thư nào**. Trần im lặng đo được: **~148 giây**. Số
+      đã ghi vào `docs/reference/canh-gateway-va-gui-thu-17-09.md` mục 5.2 — xem ghi chú ở trên
 - [x] 5.10 Chỉnh đồng hồ tới sát giờ nhịp tim → **kỳ vọng: một thư nhịp tim**, số nhịp khớp log
 
 ## 6. Điều kiện dừng — thư phải TỚI NƠI
@@ -584,10 +614,21 @@ tức ai đó ghi `false` sẽ **bật** TLS chứ không tắt, im lặng làm 
 `0/false/no/off/rỗng`. Không tự lộ ra nếu chỉ thử bằng giá trị `1`.
 
 
-- [ ] 6.1 **Người nhận xác nhận đã thấy thư sự cố** trong hộp thư. Kiểm cả thư rác. Lệnh gửi không
+- [x] 6.1 **Người nhận xác nhận đã thấy thư sự cố** trong hộp thư. Kiểm cả thư rác. Lệnh gửi không
       báo lỗi MUST NOT được coi là đã báo
-- [ ] 6.2 **Người nhận xác nhận đã thấy thư nhịp tim.** Hai loại thư, hai lần xác nhận — nhịp tim
+
+      **Xác nhận 18/09/2026.** Người nhận mở Gmail, thấy trong **Inbox** cặp thư của sự cố tối
+      17/09: `[trong] WARN - Gateway mat mot phan nang luc, VAN dang phuc vu` (`23:34:21`) rồi
+      `[trong] OK - Gateway da tro lai binh thuong` (`23:34:35`). Không rơi vào thư rác.
+
+      **Sửa một con số ghi thiếu:** mục 6 trên kia chép ba thư lúc `23:09`. Hộp thư cho thấy còn
+      cặp `23:34` nữa, tức **ít nhất 6 thư** đã gửi thật, không phải 3
+- [x] 6.2 **Người nhận xác nhận đã thấy thư nhịp tim.** Hai loại thư, hai lần xác nhận — nhịp tim
       rất dễ bị bộ lọc coi là thư rác vì nó lặp lại và giống nhau
+
+      **Xác nhận 18/09/2026:** người nhận mở Gmail, thấy `[trong] nhip tim - 2026-09-18` **trong
+      Inbox**, không phải thư rác. Mốc trong thư `15:53:39 (gio VN)` khớp log container
+      `08:53:39` UTC — đúng 7 tiếng, tức phần đổi múi giờ chạy đúng
 - [ ] 6.3 Người nhận đọc thư mà **không cần hỏi lại** đang xảy ra chuyện gì và phải làm gì. Không
       đạt thì sửa mẫu thư, không phải giải thích miệng
 
@@ -628,9 +669,15 @@ không biết được (D8). Tài liệu ở task 8.1 phải nói rõ điều n�
 - [x] 8.3 Ghi cách tra số lượt đi đường thẳng từ log agent theo khoảng thời gian trong thư (D8)
 - [x] 8.4 Ghi bảng ba tình huống của D11 — nhận thư từ bản nào nghĩa là gì — kể cả khi bản ngoài
       chưa dựng. Dựng sau thì đọc là hiểu ngay
-- [ ] 8.5 `openspec validate move-the-outage-alarm-out-of-the-agents --strict` đạt
+- [x] 8.5 `openspec validate move-the-outage-alarm-out-of-the-agents --strict` đạt — chạy 18/09/2026
+      (openspec 1.3.1): `Change 'move-the-outage-alarm-out-of-the-agents' is valid`
 
 ## Ghi chú vận hành
+
+**Nhịp tim TẮT từ 18/09/2026, theo yêu cầu của người nhận chuông:** chỉ gửi thư khi trạng thái đổi.
+Bật/tắt bằng `WATCH_HEARTBEAT_HOUR` (`off` để tắt, một con số giờ để bật). Spec đã sửa cho khớp:
+nhịp tim phải **có** và phải **tắt được bằng cấu hình**, chứ không bắt buộc bật. Cái giá — chỗ canh
+chết lặng lẽ thì không còn tín hiệu nào — ghi ở mục 3 tài liệu vận hành.
 
 Gateway trên **máy phát triển** bật tắt tự do. Mọi bài phá ở mục 5 chạy ở đó, không chạy trên máy
 chủ thật.
