@@ -1,148 +1,71 @@
 # Gateway status web app
 
-Private English-language monitor. Plain HTML/CSS/JavaScript plus a small Node.js HTTP collector using built-ins only. Independent from Dashboard; no npm install, API keys, Docker socket, raw container logs or paid model requests.
+Private English-language monitor using existing HTML/CSS/JavaScript and a built-in Node HTTP collector. No npm install, API keys, Docker socket, raw logs or paid model calls.
 
-## Run
+## Single-container Gateway
 
-Requires Node.js 22 or later. From the repository root:
+`token-ledger-gateway-lb` now contains **Nginx + Node**, not a separate status service. The only published Gateway port is `${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000`. Node listens only on container loopback `127.0.0.1:8089`; there is **no host 8089 fallback**.
 
-```powershell
-node tools/gateway-status/server.js
+- `/`, `/app.js`, `/style.css`, `/api/status`: existing collector/frontend through Nginx, admin TCP-peer ACL, only `Host: localhost` forwarded, no client credentials or body.
+- `/gateway/v1/chat/completions`: strips `/gateway`, preserves query/body/auth/identity; OpenAI base URL `/gateway/v1`.
+- `/v1/chat/completions`: legacy compatibility.
+- `/lb-health`, `/edge-health`: Nginx liveness only. Container health additionally checks that Node serves HTTP, without requiring any backend to be healthy.
+- Internal LB hostnames retain `/health/liveliness` and `/health/readiness`. Other paths return 404; unknown hosts are rejected.
+
+The image builds from `docker/gateway/Dockerfile` using the existing Nginx base and Alpine Node (22+), Bash, Tini and su-exec. Tini reaps adopted children; Bash forwards shutdown to service process groups, gracefully drains Nginx, stops Node, and exits nonzero when either service exits unexpectedly. A 25-second bound fits Compose's 30-second stop grace. Node runs as the unprivileged `nginx` user. No backend `depends_on` gate prevents the web starting when LiteLLM is absent.
+
+**Shared failure domain:** losing either process stops the entire container. Web and inference are both unavailable until restart; an already-open page expires its previous result to unknown. This is not an independent uptime monitor. Dashboard remains separate and untouched.
+
+## Infrastructure handoff (operator configuration, not deployed here)
+
+```text
+Public FQDN: apigateway.rangdong.com.vn
+Public TLS: infrastructure reverse proxy :443
+Application upstream: http://<verified-VM-IP>:8088
+Web: /
+OpenAI base URL: https://apigateway.rangdong.com.vn/gateway/v1
+Chat endpoint: /gateway/v1/chat/completions
 ```
 
-Open **http://127.0.0.1:8089/** on the same machine. The same server serves assets and `GET /api/status`. The page refreshes every 10 seconds and has a manual refresh button. Keep all four runtime files together: `server.js`, `index.html`, `app.js`, `style.css`.
+Keep `Host`, `Authorization`, trusted `X-User`, `X-Forwarded-For` and incoming `X-Forwarded-Proto`; allow 25 MB request bodies and 600-second inference timeouts, disable response buffering/cache for SSE, and never retry an already-sent inference POST.
 
-The root Compose file includes service `gateway-status` in profile `gateway`, with container name `token-ledger-gateway-status` and loopback port `8089`. It starts with the Gateway profile but deliberately has no backend dependencies, so unavailable backends can still be reported. It uses the standard Node image and read-only source mount; no image build is needed.
+Binding and `LLM_GATEWAY_ADMIN_CIDR` default to loopback, deliberately. No admin subnet or proxy address is assumed. For a separate TLS-proxy machine, the operator must verify the VM address and actual TCP peer, bind 8088 to the VM LAN IP, firewall-allow only the infrastructure proxy, and set an approved admin source `/32` or CIDR. Docker NAT can make local host requests appear from a bridge peer: web 403 is expected until that peer is verified. Do not broaden to the whole Docker subnet or `0.0.0.0/0` to bypass this check.
 
-To add only the monitor to an existing stack, without restarting Dashboard or Gateway services:
+The UI has no login. If all users share an allowed TLS-proxy/NAT peer, that proxy **must enforce admin access** for all four web routes before forwarding. Client XFF does not grant web access. Inference retains its existing auth policy, not the web ACL. Domain/CIDR are trusted operator configuration and must be a valid hostname and single address/CIDR. Envsubst is restricted to those two variables; Nginx runtime variables and dynamic Docker DNS (`resolver`, `zone`, `resolve`) are preserved.
 
-```powershell
-docker compose --profile gateway up -d --no-deps gateway-status
-curl.exe --fail http://127.0.0.1:8089/api/status
-```
+## Minimal migration — Gateway LB only
 
-This assumes the shared Compose network is intact and matches its configuration. If Compose reports a network replacement/conflict, stop and inspect it; do not use `down`, delete the network or remove volumes to install the monitor. `--profile gateway down` also affects unprofiled Dashboard services. Do not run an older standalone monitor on the same port.
+These are operator instructions, not an automatic deployment. Inspect the existing LB/status container Compose labels, project, network and port ownership first. Stop on any ownership/network replacement mismatch. Preserve the previous LB image and config for rollback.
 
-Defaults for direct Node execution are `STATUS_BIND=127.0.0.1`, `STATUS_PORT=8089`, and `LLM_GATEWAY_DOMAIN=apigateway.rangdong.com.vn`; Compose sets the internal bind to `0.0.0.0` while publishing only on host loopback. Do not expose the monitor publicly: it has no login and accepts only localhost/loopback Host headers.
+1. Validate `docker compose --profile gateway config --quiet` and build only `docker compose build gateway-lb`.
+2. In a maintenance window run `docker compose --profile gateway up -d --no-deps gateway-lb`. This recreates only LB; do not use `compose down`, `--remove-orphans`, network/volume removal, or restart Dashboard, PostgreSQL, pgAdmin, Redis or LiteLLM.
+3. Verify `docker compose exec -T gateway-lb nginx -t`, container health, `/lb-health`, root/assets/status from an allowed admin peer and 403 from a denied peer. An internal diagnostic without publishing Node is `docker compose exec -T gateway-lb wget -q -O- http://127.0.0.1:4000/api/status`. Verify current component observations separately from actual inference readiness.
+4. **Only after the new LB is verified**, remove the verified obsolete collector: `docker stop token-ledger-gateway-status` then `docker rm token-ledger-gateway-status`. Leaving it temporarily during verification does not make it part of the new topology. If an even older edge still owns 8088, resolve that exact container's ownership in the maintenance window; do not broadly remove orphans.
+
+Rollback before removing the old collector: restore the saved prior LB configuration/image and recreate only LB with `--no-deps`. After removal, rollback also requires restoring the previous Compose status service and explicitly starting only it. Expect a brief LB/web outage during recreation. Source is copied into the image, so collector/frontend/entrypoint edits require rebuilding LB; Nginx template bind-mount edits require restart to rerender. Testing an old running config does not validate an edited template.
 
 ## What is measured
 
 | Component | Internal target |
 | --- | --- |
-| Load balancer | `http://token-ledger-gateway-lb:4000/lb-health` with the configured domain Host; expects `lb-ok` |
-| LiteLLM 1 | `http://token-ledger-litellm-1:4000/health/liveliness` |
-| LiteLLM 2 | `http://token-ledger-litellm-2:4000/health/liveliness` |
-| LB to proxy route | `http://token-ledger-gateway-lb:4000/health/liveliness` |
+| Load balancer | `http://token-ledger-gateway-lb:4000/lb-health` with configured domain Host; expects `lb-ok` |
+| Proxy 1 | `http://token-ledger-litellm-1:4000/health/liveliness` |
+| Proxy 2 | `http://token-ledger-litellm-2:4000/health/liveliness` |
+| Load-balanced route | `http://token-ledger-gateway-lb:4000/health/liveliness` |
 
-The monitor must resolve/reach these names. Running Node directly on a Windows host usually cannot resolve Docker container names; the page still works but reports unreachable checks, not a successful Gateway connection. Adapt server-side targets when deploying a different topology, never accept target URLs from browser requests.
+Reachable means all four liveness checks passed, not provider/auth/database/Redis readiness or successful inference. Degraded means LB, route and one proxy respond. Unavailable means required checks failed; unknown means no valid current monitor snapshot. Probes have total deadlines/size limits and sanitized observations; they never infer a missing startup key from a failed connection. Stale browser results expire and page restoration invalidates them.
 
-- **Gateway reachable**: all four liveness checks passed. Not proof of provider, authentication, database or Redis readiness, nor successful inference.
-- **Gateway degraded**: LB, LB-to-proxy route and at least one proxy responded; the other proxy failed.
-- **Gateway unavailable**: one or more required checks failed.
-- **Status unknown**: no valid current measurement from the monitor. Stale results expire; a restored page invalidates its result before refreshing.
+## Local development and tests
 
-Each probe has a total deadline and size limit. DNS failures, refused connections, timeouts, invalid responses and HTTP errors produce controlled English observations. Raw response bodies and secrets never reach the browser.
-
-A connection failure alone cannot distinguish a stopped container from a missing startup key. Exact startup causes require operator inspection of the affected service logs; the UI does not invent that cause. An already-open page detects loss of the monitor, but a fresh navigation cannot load if its own server is down. This is not an external uptime service.
-
-## Tests
-
-```powershell
-node --test tests/gateway-status-ui.test.js tests/gateway-status-server.test.js
-```
-
-Tests use isolated HTTP fixtures, not real providers. Browser clock-based freshness checks assume reasonably synchronized browser/server clocks.
-
-For isolated Nginx routing, auth/header forwarding, SSE and failure/recovery checks:
+Standalone development remains `node tools/gateway-status/server.js` (Node 22+), serving `http://127.0.0.1:8089/` by default. This is not the deployed container topology; host Node usually cannot resolve Docker container names. Keep all four runtime files together. Do not expose this unauthenticated development server publicly.
 
 ```sh
+node --test tests/*.test.js
+python -m unittest discover -s tests -p 'test_*.py'
 python tools/gateway-smoke/harnesses/lb_handoff_test.py /path/to/nginx
+python tools/gateway-smoke/harnesses/lb_bundle_test.py
 ```
 
-Requires Nginx >=1.27.3 and Node. Uses temporary config, the real Node status
-server and loopback mock inference backends only. Checks web assets/status,
-TCP-peer ACL with spoofed XFF, header stripping, prefix/query/body forwarding,
-legacy API, SSE, no replay, upstream faults, LB-down status fallback and startup
-with missing status DNS. The fallback uses an ephemeral port, not host 8089.
-The harness replaces Docker upstream names with loopback addresses and shortens
-passive recovery to one second; it does **not** verify Docker DNS rotation,
-Compose image startup, public TLS/DNS, provider auth or real inference. On Windows
-it uses a 64-byte server-name hash bucket (the native build defaults to 32).
+Native harness requires Nginx >=1.27.3 and Node; it uses ephemeral loopback backends and the real collector, testing ACL/header stripping, routing/auth/query/body, SSE, no replay, upstream faults and recovery. It does not test container supervision or Docker DNS.
 
-
-## Migrating the former edge into the LB
-
-The only inference hop in this stack is now `gateway-lb:4000`. Host port `8088`
-uses the existing `LLM_GATEWAY_EDGE_BIND` / `LLM_GATEWAY_EDGE_PORT` variables for
-compatibility (loopback by default). TLS/DNS remain outside this stack, with
-`Host: apigateway.rangdong.com.vn` and the incoming `X-Forwarded-Proto` preserved.
-`/gateway/v1/chat/completions` strips `/gateway` before forwarding; legacy
-`/v1/chat/completions` remains unchanged. `/edge-health` remains a
-compatibility alias reporting **Nginx liveness only**, alongside `/lb-health`.
-Internal LB Host names also allow `/health/liveliness` and `/health/readiness`.
-The root `/`, `/app.js`, `/style.css`, and `/api/status` proxy to the existing
-status server with only `Host: localhost`, no client headers or body. Other paths
-return 404; unknown hosts are rejected. LiteLLM ports stay unpublished.
-
-### Same-port web and API
-
-- Web: `http://127.0.0.1:8088/` (admin ACL applies).
-- OpenAI `base_url`: `http://127.0.0.1:8088/gateway/v1`.
-- LAN hostname alias: `192.168.20.111`; binding remains loopback by default.
-- Independent fallback: `http://127.0.0.1:8089/`, including when Nginx is down.
-
-The UI has **no login**. Nginx allows loopback TCP peers plus
-`LLM_GATEWAY_ADMIN_CIDR` (default `127.0.0.1/32`), then denies all other peers
-for all four web routes. It never trusts client `X-Forwarded-For` for this ACL.
-For direct LAN use, an operator must set `LLM_GATEWAY_EDGE_BIND=192.168.20.111`,
-choose a verified admin source IP `/32` or approved CIDR for
-`LLM_GATEWAY_ADMIN_CIDR`, and firewall 8088 to intended callers. No subnet is
-assumed; do not set `0.0.0.0/0`. The CIDR is trusted operator configuration, not
-request input; keep it a single valid address/CIDR.
-
-Docker NAT may present a host/bridge address instead of loopback. Until its TCP
-peer is verified and explicitly allowed, 8088 web access can fail closed with
-403; use private 8089 meanwhile. Do not allow the entire Docker subnet as a
-shortcut. If multiple clients share a NAT peer, enforce admin restrictions
-before NAT. When infrastructure TLS proxies share one allowed peer, **that
-proxy must enforce the admin ACL on `/`, `/app.js`, `/style.css`, `/api/status`**;
-otherwise every external user behind it would inherit web access. API callers
-retain their existing authentication/identity policy, not the web ACL.
-
-Status DNS is dynamic and status is not an LB startup dependency. Its absence
-can fail web requests without stopping inference. Recreate only LB when changing
-environment values; no live bind, firewall or deployment changes are made here.
-
-Operator procedure only; these commands are not an automatic deployment:
-
-1. Validate `docker compose --profile gateway config --quiet`. Inspect the existing
-   `token-ledger-gateway-edge` container's Compose labels and port ownership, and
-   confirm the shared network is intact. Stop on any ownership/network mismatch.
-2. In a maintenance window, remove **only** the verified old edge container to free
-   8088, then recreate **only** the LB (not its dependencies):
-
-   ```sh
-   docker stop token-ledger-gateway-edge
-   docker rm token-ledger-gateway-edge
-   docker compose --profile gateway up -d --no-deps gateway-lb
-   docker compose --profile gateway exec -T gateway-lb nginx -t
-   curl --fail -H 'Host: apigateway.rangdong.com.vn' http://127.0.0.1:8088/lb-health
-   docker compose --profile gateway up -d --no-deps gateway-status
-   docker compose --profile gateway restart gateway-status
-   curl --fail http://127.0.0.1:8089/api/status
-   ```
-
-   The monitor restart loads its changed collector; it stays independent of LB
-   outages. `up --no-deps` leaves Dashboard, PostgreSQL, Redis and LiteLLM untouched.
-   Do not run `compose down`, `--remove-orphans`, volume or network removal.
-   Expect a brief handoff outage between removing the old edge and LB readiness.
-3. Verify four current monitor components and the internal liveness route; a green
-   LB alone does not prove inference. Verify root/assets/status on 8088 from an
-   allowed admin peer and 403 from a denied peer; keep private 8089 as fallback.
-   `/status/` is not a route. Preserve the prior revision/config for rollback: stop/remove only the
-   new LB to release 8088, restore the previous gateway files, then recreate only
-   the previous LB and edge with `up -d --no-deps gateway-lb gateway-edge`.
-
-`nginx.conf` is now mounted as an envsubst template. After editing it, `restart gateway-lb` regenerates the rendered config; testing the old running config before
-that restart does not validate the edited template. Keep Docker DNS `resolver`,
-upstream `zone` and `resolve`; do not enable `non_idempotent` retries.
+Docker harness builds the actual image, creates a unique mock-only network and loopback ephemeral publication, then removes only its own resources. It tests image/envsubst/health, missing backends at startup and subsequent discovery, web/assets/status, transport/fault behavior, Node hang detection, process death supervision and graceful stop. No production services, paid inference, public TLS/DNS or cloud provider readiness are tested.

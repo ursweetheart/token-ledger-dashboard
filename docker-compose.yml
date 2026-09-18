@@ -15,10 +15,10 @@
 #
 #     docker compose --profile gateway up -d
 #     docker compose --profile gateway logs -f litellm-1
-#     docker compose --profile gateway down       # chi ha Gateway
+#     Khong dung profile down cho Gateway-only: no anh huong Dashboard.
 #
-#     Gateway edge      http://127.0.0.1:8088 (Host: apigateway.rangdong.com.vn)
-#     Gateway LB        chi trong mang Docker, khong publish host
+#     Gateway LB + web http://127.0.0.1:8088 (Host: apigateway.rangdong.com.vn)
+#     Node collector   chi loopback ben trong cung container, khong publish 8089
 #     Redis             127.0.0.1:6379
 #
 # `docker compose up -d` KHONG keo Gateway len: dich vu co profile chi chay khi
@@ -622,11 +622,16 @@ services:
   # dong (xem chu thich trong docker/gateway/nginx.conf).
   gateway-lb:
     logging: *logging
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: docker/gateway/Dockerfile
     container_name: token-ledger-gateway-lb
     profiles: ["gateway"]
     restart: unless-stopped
+    stop_grace_period: 30s
     environment:
+      STATUS_BIND: "127.0.0.1"
+      STATUS_PORT: "8089"
       LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
       LLM_GATEWAY_ADMIN_CIDR: ${LLM_GATEWAY_ADMIN_CIDR:-127.0.0.1/32}
       NGINX_ENVSUBST_FILTER: ^LLM_GATEWAY_(DOMAIN|ADMIN_CIDR)$
@@ -635,38 +640,10 @@ services:
     ports:
       - "${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:4000/lb-health | grep -q lb-ok"]
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:4000/lb-health | grep -q lb-ok && wget -q -O /dev/null http://127.0.0.1:8089/"]
       interval: 10s
       timeout: 5s
       retries: 6
-    depends_on:
-      litellm-1:
-        condition: service_healthy
-      litellm-2:
-        condition: service_healthy
-
-  # Private status web; no backend dependency so outages remain visible.
-  gateway-status:
-    logging: *logging
-    image: node:24-alpine
-    container_name: token-ledger-gateway-status
-    profiles: ["gateway"]
-    restart: unless-stopped
-    init: true
-    user: "node"
-    working_dir: /app
-    command: ["node", "server.js"]
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    environment:
-      STATUS_BIND: "0.0.0.0"
-      STATUS_PORT: "8089"
-      LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
-    volumes:
-      - ./tools/gateway-status:/app:ro
-    ports:
-      - "127.0.0.1:8089:8089"
 
 # Khai ro dai mang de gan duoc IP TINH cho hai Redis.
 #

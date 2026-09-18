@@ -37,5 +37,6 @@ node_modules/
 docs/
 planning/
 openspec/
-tools/
+tools/*
+!tools/gateway-status/
 tests/

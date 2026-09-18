@@ -59,8 +59,8 @@ test("Same-port status is private and inference prefix is exact", () => {
   const nginx = read(configPath);
   const compose = read(composePath);
   assert.match(nginx, /location = \/gateway\/v1\/chat\/completions\s*\{\s*proxy_pass http:\/\/litellm_pool\/v1\/chat\/completions;/);
-  assert.match(nginx, /server gateway-status:8089 resolve;/);
-  assert.match(nginx, /zone gateway_status 64k;/);
+  assert.match(nginx, /proxy_pass http:\/\/127\.0\.0\.1:8089;/);
+  assert.doesNotMatch(nginx, /gateway-status:8089/);
   assert.match(nginx, /allow \$\{LLM_GATEWAY_ADMIN_CIDR\};\s*deny all;/);
   assert.match(nginx, /proxy_pass_request_headers off;/);
   assert.match(nginx, /proxy_pass_request_body off;/);
@@ -68,5 +68,9 @@ test("Same-port status is private and inference prefix is exact", () => {
   assert.doesNotMatch(nginx, /real_ip_header|set_real_ip_from/);
   assert.match(compose, /LLM_GATEWAY_ADMIN_CIDR: \$\{LLM_GATEWAY_ADMIN_CIDR:-127\.0\.0\.1\/32\}/);
   assert.match(compose, /NGINX_ENVSUBST_FILTER: \^LLM_GATEWAY_\(DOMAIN\|ADMIN_CIDR\)\$/);
-  assert.match(compose, /"127\.0\.0\.1:8089:8089"/);
+  assert.doesNotMatch(compose, /gateway-status:|8089:8089/);
+  const lb = compose.split('  gateway-lb:')[1].split('\n# Khai ro')[0];
+  assert.match(lb, /dockerfile: docker\/gateway\/Dockerfile/);
+  assert.doesNotMatch(lb, /depends_on:/);
+  assert.match(lb, /STATUS_BIND: "127\.0\.0\.1"/);
 });
