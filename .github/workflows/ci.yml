@@ -193,7 +193,10 @@ jobs:
     env:
       # Mốc đo 16/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
       # con số đổi trong lịch sử git chính là chỗ nhìn thấy việc đó.
-      EXPECTED_JS: "81"
+      # Mốc đo 18/09/2026: 81 → 82, phép kiểm thêm vào từ bee2da6 (TLS trên gateway-lb).
+      # Commit ấy quên sửa số này nên `main` đỏ từ 03:49; sửa ở đây để lượt gộp xanh, và
+      # `main` hết đỏ ngay khi PR này vào.
+      EXPECTED_JS: "82"
     steps:
       - uses: actions/checkout@v4
 
@@ -239,7 +242,10 @@ jobs:
       # 9 gộp độ trễ, 4 nạp nhà cung cấp).
       # Mốc đo 15/09/2026: 37 → 58, thêm 21 phép kiểm của tools/check_english_names.py
       # (change name-the-code-in-english). Lần đẩy e3a214b đỏ vì quên sửa số này.
-      EXPECTED_PY: "71"
+      # Mốc đo 18/09/2026: 71 → 85, thêm 14 phép kiểm của gateway-watch (mốc bắt đầu sự cố,
+      # nội dung thư DOWN, chẩn đoán một dòng, công tắc nhịp tim). Lần đẩy 021856f đỏ vì
+      # quên sửa số này — lần thứ hai cùng một lý do.
+      EXPECTED_PY: "85"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

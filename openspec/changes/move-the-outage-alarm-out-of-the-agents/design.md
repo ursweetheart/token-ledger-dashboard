@@ -288,20 +288,32 @@ phép dò** — đây là phần bản đầu bỏ sót, và nó không nhỏ:
   -> thoi gian toi thu dau tien = 2 x (25 + 60) ~ 170 giay
 ```
 
-- sự cố **dưới ~85 giây**: agent có fallback đã đổi đường rồi quay về, **không có thư**
-- sự cố **85–170 giây**: có thể có thư, có thể không, tuỳ rơi vào đâu trong nhịp
-- sự cố **trên ~170 giây**: báo đủ, độ dài chính xác tới ±1 nhịp
+- sự cố **dưới ~148 giây**: có thể **không có thư nào**
+- sự cố **148–176 giây**: có thể có thư, có thể không, tuỳ rơi vào đâu trong nhịp
+- sự cố **trên ~176 giây**: báo đủ, độ dài chính xác tới ±1 nhịp
 
-**Đây là SUY LUẬN từ luật debounce, không phải phép đo.** Đo 17/09 đã thử và **không dựng lại được**
-một sự cố ngắn hơn một nhịp: `docker stop` rồi `start` cách nhau 4 giây vẫn tạo ra sự cố thật dài
-~30 giây, vì `docker start` chỉ khởi động container còn LiteLLM cần thêm thời gian mới `healthy`.
-Muốn đo thật thì phải làm hỏng theo cách khác — chưa làm.
+**ĐÃ ĐO 18/09/2026 — không còn là suy luận.** Cách làm hỏng mới: `docker pause` / `docker unpause`,
+đóng băng tức thì cả hai chiều, nên hẹn được giờ sự cố. Đó là thứ lần đo 17/09 thiếu: `docker stop`
+rồi `start` cách nhau 4 giây vẫn tạo sự cố thật dài ~30 giây, vì LiteLLM cần thêm thời gian mới
+`healthy`.
+
+```
+  su co 26 giay,  lot han giua hai nhip   -> 0 nhip hong,  KHONG thu   (08:56:57 - 08:57:23)
+  su co 121 giay, trum dung mot nhip      -> 1 nhip hong,  KHONG thu   (08:59:57 - 09:01:58)
+```
+
+Phép đo cũng sửa lại số cũ: nhịp hỏng **đắt hơn** nhịp thường. Nhịp `09:00:54` mất **28 giây** mới
+kết luận, nên trong lúc hỏng hai nhịp cách nhau `28 + 60 = 88` giây. Trần im lặng vì thế là
+`60 + 88 ≈ 148` giây, và thư đầu tiên tới sau `2 × 88 ≈ 176` giây — không phải 85/170 như bản trước
+ước lượng.
+
+Hai số này là **trần trên**, ứng với kiểu hỏng **treo** (tiến trình còn đó mà không trả lời) — đúng
+kiểu quan sát được khi mọi thứ chết thật. Cổng bị từ chối ngay thì phép dò hỏng tức thì, trần rút về
+`60 + 60 = 120` giây.
 
 Vì sao vẫn cần "hai nhịp liên tiếp": một lần trượt mạng lẻ không phải sự cố, và thư báo nhầm làm
-người nhận tắt thông báo — tức phép báo động tự huỷ chính nó.
-
-Vì sao vẫn cần "hai nhịp liên tiếp": một lần trượt mạng lẻ không phải sự cố, và thư báo nhầm làm
-người nhận tắt thông báo — tức phép báo động tự huỷ chính nó.
+người nhận tắt thông báo — tức phép báo động tự huỷ chính nó. Bài 121 giây ở trên là cái giá phải
+trả cho luật ấy, và nó được trả có chủ ý.
 
 ### D10 — Máy chủ chết: không còn là trần cứng, mà là việc chưa làm
 
