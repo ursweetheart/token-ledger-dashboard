@@ -13,7 +13,8 @@ test('status web starts with gateway profile independently of unhealthy backends
   assert.ok(block, 'gateway-status service must exist');
   assert.match(block, /profiles: \["gateway"\]/);
   assert.match(block, /container_name: token-ledger-gateway-status/);
-  assert.match(block, /127\.0\.0\.1:8089:8089/);
+  assert.doesNotMatch(block, /ports:/);
+  assert.doesNotMatch(block, /127\.0\.0\.1:8089:8089/);
   assert.match(block, /STATUS_BIND: "0\.0\.0\.0"/);
   assert.match(block, /\.\/tools\/gateway-status:\/app:ro/);
   assert.match(block, /command: \["node", "server\.js"\]/);
