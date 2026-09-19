@@ -19,6 +19,10 @@ RUN apt-get update \
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 
+# alembic.ini phai nam canh db/: script_location la %(here)s/db/migrations, tuc
+# tinh tu CHINH file nay. Thieu no thi connect.rebuild() chet o buoc dau tien
+# cua rebuild_db.py voi "No 'script_location' key found in configuration."
+COPY alembic.ini ./
 COPY scripts/  ./scripts/
 COPY db/       ./db/
 COPY backend/  ./backend/
