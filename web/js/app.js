@@ -336,15 +336,14 @@ function buildAccountCatalogueFromDb(){
     // ánh thực tế của database. Điều kiện giới hạn user dropdown chỉ đặt ở UI
     // hiển thị, không cắt mất nguồn dữ liệu cho cây phòng ban.
     if(kind !== "real") return null;
-    // Ưu tiên MÃ đơn vị (api.js đã quy về bản chuẩn); tên chỉ là đường lui.
-    var unit=unitById(a.unit_id)||unitOf(a.unit_name)||null;
+    // ID nguồn là danh tính; không ghép tên sang cây của agent khác.
     var displayUser = String(a.full_name || a.username || a.agent || "").trim();
     return {
       id:a.account_id || displayUser || a.username || a.agent,
       user:a.username || displayUser,
       login:a.username || displayUser,
       n:a.full_name || displayUser || a.username || a.agent || "",
-      unitId:unit?unit.id:"", d:a.unit_name||"—",
+      unitId:a.unit_id||"", d:a.unit_name||"—",
       a:a.agent||"", m:"", ug:displayUser || a.username || a.agent || "",
       weight:0,
       role:a.role||"", accountType:a.is_shared?"service":"person",
@@ -408,9 +407,14 @@ function applyRealAccountUsage(rows){
     if(u.id!=null) byId[u.id]=u;
     if(u.login) byKey[String(u.login).trim().toLowerCase()]=u;
   });
-  var r=state&&state.range, bo=0, boLuot=0;
+  var r=state&&state.range, bo=0, boLuot=0, ids=selectedOrganizationIds(), f=state.filters;
   REAL_BY_ACCOUNT.forEach(function(x){
     if(r&&(x.day<r.start||x.day>r.end)) return;
+    if(f.agent && x.agent!==f.agent) return;
+    if(ids && !ids[x.unit_id]) return;
+    var model=(state.modelNameById||{})[x.model_id];
+    if(f.model && model!==f.model) return;
+    if(f.provider && modelProvider(model)!==f.provider) return;
     /* GHÉP BẰNG `account_id` TRƯỚC. Nó là khoá số, cùng khoá mà database dùng -
        không phụ thuộc hoa/thường, khoảng trắng, hay việc app ghi tên kiểu nào.
        Đúng nguyên tắc db/migrations/sql/001_baseline.sql:161:
@@ -419,9 +423,10 @@ function applyRealAccountUsage(rows){
        Nhánh ghép theo tên giữ lại làm đường lui và có biến đếm, để nó không âm
        thầm gánh việc nếu một ngày `account_id` vắng mặt. */
     var u=byId[x.account_id];
-    if(!u){
+    if(!u && x.account_id==null){
       u=byKey[String(x.username||"").trim().toLowerCase()]
         ||byKey[String(x.full_name||"").trim().toLowerCase()];
+      if(u && u.a!==x.agent) u=null;
       if(u) accountFallbackByName++;
     }
     if(!u){ bo++; boLuot+=x.calls||0; return; }
@@ -784,7 +789,8 @@ function adoptOrgUnits(units){
   if(!units || !units.length) return false;
   ORG_UNITS = units.map(function(u){
     return {id:u.id, name:u.name, parent:u.parent, level:u.level,
-            agentId:u.agentId, reportAggregate:!!u.reportAggregate};
+            agentId:u.agentId, agent:u.agent, technical:!!u.technical,
+            reportAggregate:!!u.reportAggregate};
   });
   buildUnitIndex();
   rebuildProvisionedFromDirectory();
@@ -953,7 +959,7 @@ var PREF_KEYS = ["range", "filters", "activeDay",
 function defaultState(){
   return { days:{}, dayOrder:[], activeDay:null,
     range:null,
-    filters:{dept:"",user:"",provider:"",model:"",agent:""},
+    filters:{dept:"",unit:"",team:"",user:"",provider:"",model:"",agent:""},
     deptExpanded:defaultDeptExpanded(), deptExpandedInit:1, deptSearch:"",
     matrixExpanded:{}, matrixSearch:"", pmCollapsed:{}, pricing:{}, pricingById:{} };
 }
@@ -1026,21 +1032,36 @@ function scopeBase(){
   });
   return out;
 }
+function selectedOrganizationIds(){
+  var f=state.filters, id=f.team||f.unit||f.dept;
+  if(!f.agent || !id) return null;
+  var ids={}, node=unitById(id);
+  if(node && node.agent===f.agent){
+    [node].concat(unitDescendants(id)).forEach(function(u){
+      if(u.agent===f.agent) ids[u.id]=true;
+    });
+  }
+  return ids;
+}
+/* /api/usage chỉ có tổng ngày × agent × model, không có đơn vị.
+   Khi drilldown dùng đúng dòng đo /usage-by-account; không chia tổng hay tiền
+   hoá đơn xuống cây. Các chỉ số hiệu năng không đo ở độ mịn này để trống. */
+function accountUsageRow(x){
+  return {day:x.day, a:x.agent, unitId:x.unit_id, d:unitName(x.unit_id),
+    accountId:x.account_id, ug:x.full_name||x.username||"",
+    m:(state.modelNameById||{})[x.model_id]||"", r:num(x.calls),
+    ti:num(x.input_tokens), to:num(x.output_tokens),
+    cached:x.token_source==="billing"?num(x.cached_tokens):0, u:0,c:0};
+}
 function applyFilters(rows){
-  var f = state.filters;
-  // Lọc phòng ban theo đơn vị chuẩn hoá, không so chuỗi thô: nếu so chuỗi thì chọn
-  // "Phòng Bán hàng 1" sẽ bỏ mất các dòng ghi "PBH1" dù bảng đã gộp chúng làm một.
-  var wantIds=null;
-  if(f.dept){
-    var want=unitOf(f.dept);
-    if(want){
-      wantIds={};
-      [want].concat(unitDescendants(want.id)).forEach(function(u){ wantIds[u.id]=true; });
-    }
+  var f = state.filters, wantIds=selectedOrganizationIds();
+  if(wantIds || f.user){
+    var days={}; rows.forEach(function(r){if(r.day) days[r.day]=true;});
+    rows=REAL_BY_ACCOUNT.filter(function(x){return days[x.day];}).map(accountUsageRow);
   }
   return rows.filter(function(r){
     if(wantIds){ var u=unitOfRow(r); if(!u||!wantIds[u.id]) return false; }
-    if(f.user && r.ug !== f.user) return false;
+    if(f.user && String(r.accountId) !== f.user) return false;
     if(f.provider && modelProvider(r.m) !== f.provider) return false;
     if(f.model && r.m !== f.model) return false;
     if(f.agent && r.a !== f.agent) return false;
@@ -1447,6 +1468,7 @@ function bindAgentCostAlerts(){
     var tr = ev.target && ev.target.closest ? ev.target.closest("tr[data-alert-agent]") : null;
     if(!tr) return;
     state.filters.agent = tr.getAttribute("data-alert-agent");
+    ["dept","unit","team","user"].forEach(function(k){state.filters[k]="";});
     renderAll();
   });
 }
@@ -3601,18 +3623,11 @@ function renderUsers(rows){
 /* ─── Bảng chi tiết từng tài khoản (track theo username) — theo bộ lọc phòng/nhóm/agent/model ─── */
 function filterAccounts(){
   var f=state.filters;
-  // Bộ lọc phòng ban so theo unitId để tài khoản của đơn vị con cũng khớp phòng ban cha.
-  var wantUnit=f.dept?unitOf(f.dept):null;
-  var wantIds=null;
-  if(wantUnit){
-    wantIds={};
-    [wantUnit].concat(unitDescendants(wantUnit.id)).forEach(function(u){ wantIds[u.id]=true; });
-  }
+  var wantIds=selectedOrganizationIds();
   return USER_ACCOUNTS.filter(function(u){
     if(isExcludedDepartment(u.d)) return false;
     if(wantIds && !wantIds[u.unitId]) return false;
-    var userKey = u.ug || u.user || u.login || u.n || u.a || "";
-    if(f.user && userKey!==f.user) return false;
+    if(f.user && String(u.id)!==f.user) return false;
     if(f.agent && u.a!==f.agent) return false;
     /* HỎI SỔ ĐO THEO MODEL, KHÔNG HỎI `u.m`.
 
@@ -4244,12 +4259,26 @@ function buildDepartmentFilterOptions(rows){
    chữ làm giá trị, mà phần chữ bị cắt và gộp khoảng trắng — tên đơn vị có hai
    dấu cách liền nhau sẽ không bao giờ khớp lại được với `state.filters`. */
 function escAttr(s){ return esc(s).replace(/"/g,"&quot;"); }
+/* Đi theo cạnh cây nguồn, chỉ xuyên qua cấp gom đã được catalog đánh dấu.
+   Không suy đoán cấp từ tên, Excel hay level giữa hai agent khác nhau. */
+function organizationOptions(parent){
+  if(!state.filters.agent) return [];
+  var out=[];
+  function visit(nodes){
+    nodes.forEach(function(u){
+      if(u.agent!==state.filters.agent || u.technical || isExcludedUnit(u)) return;
+      if(u.reportAggregate) visit(unitChildren(u.id)); else out.push(u);
+    });
+  }
+  visit(parent ? unitChildren(parent) : unitRoots());
+  return out.sort(function(a,b){return a.name.localeCompare(b.name)||String(a.id).localeCompare(String(b.id));});
+}
 function fillSelect(id, opts, val, allLabel){
   var el=document.getElementById(id); if(!el) return;
   var sig=JSON.stringify([allLabel].concat(opts));
   if(el.getAttribute("data-opt-sig")!==sig){
     el.innerHTML = "<option value=\"\">"+esc(allLabel)+"</option>" +
-      opts.map(function(o){ return "<option value=\""+escAttr(o)+"\">"+esc(o)+"</option>"; }).join("");
+      opts.map(function(o){ return "<option value=\""+escAttr(typeof o==="object"?o.value:o)+"\">"+esc(typeof o==="object"?o.label:o)+"</option>"; }).join("");
     el.setAttribute("data-opt-sig", sig);
   }
   var muon = val==null ? "" : String(val);
@@ -4259,6 +4288,8 @@ function fillSelect(id, opts, val, allLabel){
     el.onchange = function(){
       var key=id.split("-")[1];
       state.filters[key] = this.value;
+      var chain=["agent","dept","unit","team","user"], pos=chain.indexOf(key);
+      if(pos>=0) chain.slice(pos+1).forEach(function(k){state.filters[k]="";});
       // Đổi phòng ban ⇒ đường đi drilldown của ma trận không còn hợp lệ, đưa về cấp gốc.
       // Đổi phòng ban lọc thì cây ma trận đang bung không còn nghĩa gì, thu về gốc.
       if(key==="dept") state.matrixExpanded={};
@@ -4315,16 +4346,6 @@ function renderUserScopeNote(){
   var chon = state.filters.user;
   var notes = [];
 
-  if(chon){
-    var soTk = userLabelAccountCount(chon);
-    if(soTk > 1){
-      notes.push("Nhãn <b>" + esc(chon) + "</b> ứng với <b>" + soTk
-        + " tài khoản khác nhau</b> — số đang xem là của cả " + soTk
-        + " người gộp lại, không phải một người. Nguồn không ghi định danh người dùng"
-        + " trên từng dòng nên không tách ra được.");
-    }
-  }
-
   var g = userScopeGap();
   if(g){
     /* Nói bằng con số, không nói chung chung. "Một số dòng bị bỏ" thì người đọc
@@ -4344,35 +4365,45 @@ function renderUserScopeNote(){
 
   if(!notes.length){ box.hidden = true; txt.innerHTML = ""; return; }
   box.hidden = false;
-  txt.innerHTML = (chon ? "Đang lọc theo user <b>" + esc(chon) + "</b>. " : "")
+  var selectedUser=USER_ACCOUNTS.filter(function(u){return String(u.id)===chon;})[0];
+  txt.innerHTML = (chon ? "Đang lọc theo user <b>" + esc(selectedUser?userFilterLabel(selectedUser):chon) + "</b>. " : "")
     + notes.join(" ");
 }
 
 function renderFilters(){
   var rows=allDayRows();
-  var deptNames = buildDepartmentFilterOptions(rows);
-  if(state.filters.dept && deptNames.indexOf(state.filters.dept)<0){ state.filters.dept=""; }
-  fillSelect("f-dept", deptNames, state.filters.dept, "Tất cả phòng ban");
+  fillSelect("f-agent", distinct(ORG_UNITS.map(function(u){return u.agent;}).concat(rows.map(function(r){return r.a;}))), state.filters.agent, "Tất cả agent");
+  ["dept", "unit", "team"].forEach(function(key, i){
+    var parent=i ? state.filters[i===1 ? "dept" : "unit"] : "";
+    var opts=(!i || parent) ? organizationOptions(parent) : [];
+    if(!opts.some(function(u){return u.id===state.filters[key];})) state.filters[key]="";
+    fillSelect("f-"+key, opts.map(function(u){return {value:u.id,label:u.name};}), state.filters[key],
+      state.filters.agent ? ["Tất cả phòng ban","Tất cả đơn vị","Tất cả đội"][i] : "Chọn Agent trước");
+    var el=document.getElementById("f-"+key);
+    if(el) el.disabled=!state.filters.agent || !opts.length;
+  });
+  var modelOpts = Object.keys(state.pricing);
+  if(state.filters.provider){ modelOpts = modelOpts.filter(function(m){ return modelProvider(m)===state.filters.provider; }); }
+  if(state.filters.model && modelOpts.indexOf(state.filters.model)<0){ state.filters.model=""; }
   /* Ô lọc User CẮT THEO PHÒNG BAN ĐANG CHỌN. Chọn một phòng ban rồi mở ô User
      mà vẫn thấy cả 937 người là bắt người dùng tự lọc bằng mắt. filterAccounts()
      đã áp đúng luật phòng ban (so theo unitId nên đơn vị con cũng khớp phòng ban
      cha), nên dùng lại nó — nhưng KHÔNG áp chính bộ lọc User, nếu không danh sách
      tự thu về đúng một tên và không đổi sang ai được nữa. */
+  // Sổ model phải theo kỳ/bộ lọc MỚI trước khi dựng danh sách user.
+  if(state.range) applyAccountAllocation(scopedRows());
   var userPool=(function(){
     var giu=state.filters.user;
     state.filters.user="";
     try{ return filterAccounts(); } finally { state.filters.user=giu; }
   })();
-  var userList = distinct(userPool.map(userFilterLabel).filter(Boolean));
-  if(state.filters.user && userList.indexOf(state.filters.user)<0){ state.filters.user=""; }
+  var userList = userPool.filter(function(u){return userFilterLabel(u) && u.role!=="AI Agent";})
+    .map(function(u){return {value:String(u.id),label:userFilterLabel(u)+" · "+(u.login||u.id)};});
+  if(state.filters.user && !userList.some(function(u){return u.value===state.filters.user;})){ state.filters.user=""; }
   fillSelect("f-user", userList, state.filters.user, "Tất cả user");
   fillSelect("f-provider", distinct(rows.map(function(r){return modelProvider(r.m);})), state.filters.provider, "Tất cả provider");
   // Model phụ thuộc Provider đang chọn: chọn provider ⇒ chỉ hiện model của provider đó.
-  var modelOpts = Object.keys(state.pricing);
-  if(state.filters.provider){ modelOpts = modelOpts.filter(function(m){ return modelProvider(m)===state.filters.provider; }); }
-  if(state.filters.model && modelOpts.indexOf(state.filters.model)<0){ state.filters.model=""; }
   fillSelect("f-model", modelOpts, state.filters.model, "Tất cả model");
-  fillSelect("f-agent", distinct(rows.map(function(r){return r.a;})), state.filters.agent, "Tất cả agent");
 }
 
 /* ═══════════════ BẢNG GIÁ (sửa rồi bấm 💾 Lưu bảng giá) ═══════════════ */
@@ -4506,7 +4537,7 @@ function init(){
   var themeBtn=document.getElementById("btn-theme");
   if(themeBtn) themeBtn.onclick=function(){ applyTheme(currentTheme()==="light"?"dark":"light"); renderAll(); };
 
-  document.getElementById("f-reset").onclick=function(){ state.filters={dept:"",user:"",provider:"",model:"",agent:""}; renderAll(); };
+  document.getElementById("f-reset").onclick=function(){ state.filters=defaultState().filters; renderAll(); };
 
   // global time range — mỗi mốc có 1 ô gõ tay (dd/mm/yyyy) + 1 ô lịch, luôn đồng bộ.
   bindRangeField("start"); bindRangeField("end");
