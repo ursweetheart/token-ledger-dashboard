@@ -202,7 +202,8 @@ Tám đầu việc, trong repo này. Sáu việc đầu là sửa file, hai vi�
   - Không đặt hạn mức → agent đó **không bị chặn bao giờ**. Không lỗi nào báo ra; nó đơn giản là
     nằm ngoài cơ chế giữ tiền.
 
-> Chi tiết ở [`quota-han-muc.md`](quota-han-muc.md). Lưu ý một điều khi sửa khoá bằng tay:
+> Chi tiết ở [`quota-han-muc.md`](quota-han-muc.md); bản đồ mã nguồn ở
+> [`quota-internals.md`](quota-internals.md). Lưu ý một điều khi sửa khoá bằng tay:
 > `/key/update` **thay thế** cả cục `metadata`, nên gửi thiếu là **xoá mất `tags`** của khoá — và
 > mất tag thì tiền ghi sai project mà request vẫn trả 200. Luôn đọc metadata hiện có rồi gửi lại
 > đầy đủ.
