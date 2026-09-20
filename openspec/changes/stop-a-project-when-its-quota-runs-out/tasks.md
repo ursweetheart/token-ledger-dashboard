@@ -102,15 +102,23 @@
       luận từ việc container lên `healthy` — khai sai tên callback không làm LiteLLM dừng
 - [x] 6.10 Viết phép kiểm cho các nhánh hỏng của hook, không chỉ nhánh chạy đúng — một lỗi trong
       hook là lỗi của toàn bộ Gateway
-- [ ] 6.10b Nhập hạn mức cho các khoá agent THẬT ở tab Setting. Chưa có bước này thì 6.11
+- [x] 6.10b Nhập hạn mức cho các khoá agent THẬT ở tab Setting. Chưa có bước này thì 6.11
       không đo được gì: không khoá nào có hạn mức thì không khoá nào vượt, và log sẽ trống
       đúng như khi hook không chạy — hai tình huống khác hẳn nhau mà trông y hệt
-- [ ] 6.11 Đo thực tế: chế độ chỉ ghi nhận chạy đủ lâu, đối chiếu số dòng "lẽ ra đã chặn" với số
-      hiển thị trên tab Setting
+- [x] 6.11 Đo thực tế — **LÀM KHÁC VỚI MÔ TẢ, ghi ra ở đây thay vì đánh dấu rồi im.**
+      Mô tả gốc là chạy chế độ chỉ-ghi-nhận đủ lâu rồi đối chiếu. Thực tế không có lượt nào để
+      đối chiếu: hai khoá thật đặt hạn mức 2.00 mà mới tiêu 0.02, nên dry-run chạy bao lâu cũng
+      không sinh một dòng `quota_block_would_have` nào.
+      Thay vào đó đo trực tiếp ngày 20/09 bằng một khoá thử hết hạn mức: bị chặn → HTTP 429,
+      `model: None`, `token: None` (chưa gọi Google), sổ ghi `failure` 0 token 0 tiền, và log có
+      dòng `quota_block` đủ bảy trường. Nạp thêm → lượt kế tiếp đi thật, 17 token, không khởi
+      động lại gì.
+      **Còn nợ:** chưa đo được khoản trôi khi agent tiêu DẦN tới ngưỡng — cái đó phụ thuộc bộ
+      nhớ đệm khoá 300 giây và chỉ thấy được khi có lưu lượng thật chạm hạn mức.
 
 ## 7. Bật chặn thật và nghiệm thu
 
-- [ ] 7.1 Tắt chế độ chỉ ghi nhận, dựng lại hai instance LiteLLM.
+- [x] 7.1 Tắt chế độ chỉ ghi nhận, dựng lại hai instance LiteLLM.
       **9.6 ĐÃ XONG** (image `b7657e95b1…` đã phát hành và đã kéo về máy này). Mã nguồn hook đã dùng `RejectedRequestError`, nhưng image
       đang chạy vẫn là bản chưa vá — bật chặn thật lúc này thì agent chat dùng chế độ luồng
       nhận HTTP 500 thay vì câu thông báo.
