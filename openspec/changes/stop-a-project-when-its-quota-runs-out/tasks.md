@@ -102,6 +102,9 @@
       luận từ việc container lên `healthy` — khai sai tên callback không làm LiteLLM dừng
 - [x] 6.10 Viết phép kiểm cho các nhánh hỏng của hook, không chỉ nhánh chạy đúng — một lỗi trong
       hook là lỗi của toàn bộ Gateway
+- [ ] 6.10b Nhập hạn mức cho các khoá agent THẬT ở tab Setting. Chưa có bước này thì 6.11
+      không đo được gì: không khoá nào có hạn mức thì không khoá nào vượt, và log sẽ trống
+      đúng như khi hook không chạy — hai tình huống khác hẳn nhau mà trông y hệt
 - [ ] 6.11 Đo thực tế: chế độ chỉ ghi nhận chạy đủ lâu, đối chiếu số dòng "lẽ ra đã chặn" với số
       hiển thị trên tab Setting
 

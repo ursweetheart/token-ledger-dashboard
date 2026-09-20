@@ -198,7 +198,9 @@ jobs:
       # `main` hết đỏ ngay khi PR này vào.
       # Moc do 20/09/2026: 82 -> 96, them 14 phep kiem cua han muc (cong khoa phu
       # toan man hinh, va lop goi API han muc - duong GHI dau tien cua frontend).
-      EXPECTED_JS: "96"
+      # Moc do 20/09/2026 (lan 2): 96 -> 98, khoa lai hanh vi ba nut cua tab
+      # Setting sau khi bo phuong an mot nut doi nghia theo trang thai.
+      EXPECTED_JS: "98"
     steps:
       - uses: actions/checkout@v4
 

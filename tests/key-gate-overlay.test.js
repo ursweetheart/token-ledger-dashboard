@@ -68,6 +68,27 @@ function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
+/* TAB SETTING: ba nut, moi nut MOT nghia co dinh.
+ *
+ * Da can nhac gop thanh mot nut doi nghia theo trang thai va BO: ranh gioi giua
+ * hai nghia la luc `da tieu` cham `han muc`, ma con so do cham toi 5 phut, nen
+ * cung mot thao tac se cho hai ket qua khac nhau ma khong loi nao bao ra.
+ *
+ * Hai dieu duoi day la thu de troi nhat khi co nguoi don giao dien sau nay. */
+test("nut Chan luon dat 0, khong doc o nhap", () => {
+  const block = appJs.slice(appJs.indexOf("blockBtn.onclick"));
+  const body = block.slice(0, block.indexOf("};") + 2);
+  assert.match(body, /quotaSet,\s*0/,
+    "nut Chan phai luon gui 0");
+  assert.doesNotMatch(body, /input\.value/,
+    "nut Chan doc o nhap -> mot con so con sot trong o se doi nghia cua nut");
+});
+
+test("ba nut deu goi dung lop API cua no", () => {
+  assert.match(appJs, /setBtn\.onclick[\s\S]{0,120}quotaSet/, "Dat thanh -> quotaSet");
+  assert.match(appJs, /addBtn\.onclick[\s\S]{0,120}quotaTopUp/, "Cong them -> quotaTopUp");
+});
+
 test("khoa khong bao gio doc tu dia chi URL", () => {
   /* Giữ nguyên cam kết đã ghi trong api.js: khoá nằm trong URL là khoá đi vào
      lịch sử trình duyệt và nhật ký máy chủ, những nơi không xoá lại được. */

@@ -124,6 +124,42 @@ class ReadingTests(unittest.TestCase):
         self.assertEqual(gateway.log_of({"metadata": {gateway.LOG_FIELD: "hong"}}), [])
 
 
+class TagTests(unittest.TestCase):
+    """Tag định danh, KHÔNG PHẢI tên khoá, mới nói một khoá thuộc agent nào.
+
+    Bản đầu gom khoá theo tiền tố tên và sai cả hai chiều trên dữ liệu thật của
+    Gateway ngày 20/09: gom `dms-feedback` với `dms-feedback-tagged` dù khoá
+    trước không mang tag nào, và bỏ sót ba khoá cùng tag `crm-feedback` mang ba
+    cái tên khác nhau — tức đúng nhóm mà cảnh báo đó sinh ra để chỉ.
+    """
+
+    def test_a_key_with_a_tag_reports_it(self):
+        self.assertEqual(gateway.tag_of({"metadata": {"tags": ["crm-feedback"]}}),
+                         "crm-feedback")
+
+    def test_a_key_with_no_tag_reports_none(self):
+        self.assertIsNone(gateway.tag_of({"metadata": {}}))
+        self.assertIsNone(gateway.tag_of({"metadata": {"tags": []}}))
+        self.assertIsNone(gateway.tag_of({"metadata": {"tags": "hong"}}))
+
+    def test_litellm_own_tags_are_skipped(self):
+        # LiteLLM tự thêm `User-Agent: ...`. Lấy "tag đầu tiên" là sai — cùng
+        # luật với hook chặn, để hai nơi không hiểu khác nhau về cùng một request.
+        self.assertEqual(
+            gateway.tag_of({"metadata": {"tags": ["User-Agent: curl/8.0", "ralli"]}}),
+            "ralli")
+
+    def test_names_that_look_alike_are_not_the_same_agent(self):
+        a = gateway.tag_of({"metadata": {"tags": ["dms-feedback"]}})
+        b = gateway.tag_of({"metadata": {}})          # khoá `dms-feedback` thật
+        self.assertNotEqual(a, b)
+
+    def test_names_that_look_different_can_be_the_same_agent(self):
+        a = gateway.tag_of({"metadata": {"tags": ["crm-feedback"]}})
+        b = gateway.tag_of({"metadata": {"tags": ["crm-feedback"]}})
+        self.assertEqual(a, b)
+
+
 class SanitizeTests(unittest.TestCase):
     def test_only_the_quota_field_survives(self):
         cleaned = gateway.sanitize_incoming(

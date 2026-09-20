@@ -4497,15 +4497,24 @@ function drawQuotaRows(tbody, rows){
 
     var tdName = document.createElement("td");
     tdName.textContent = row.key_alias;
-    /* Một project có nhiều khoá thì hạn mức không còn nghĩa "cả project". Nói ra
-       chứ không cộng gộp một con số trông như đang được thi hành. */
-    if(row.sibling_keys > 1){
-      var flag = document.createElement("span");
-      flag.className = "quota-flag";
-      flag.textContent = "⚠ project này có " + row.sibling_keys
+    /* Tên khoá chỉ là nhãn người đặt; TAG mới là thứ quyết định request đi vào
+       tuyến nào và tiền tính cho agent nào. Hiện tag ra để người đọc thấy ngay
+       hai khoá tên khác nhau vẫn có thể cùng một agent. */
+    var sub = document.createElement("span");
+    sub.className = "quota-flag";
+    if(row.untagged){
+      sub.textContent = "⚠ khoá không mang tag định danh — chặn được, nhưng lưu "
+        + "lượng của nó không quy về agent nào trên dashboard";
+    }else if(row.sibling_keys > 1){
+      /* Một agent có nhiều khoá thì hạn mức không còn nghĩa "cả agent". Nói ra
+         chứ không cộng gộp một con số trông như đang được thi hành. */
+      sub.textContent = "⚠ agent " + row.agent + " có " + row.sibling_keys
         + " khoá — hạn mức áp riêng từng khoá, không cộng gộp";
-      tdName.appendChild(flag);
+    }else{
+      sub.className = "quota-flag quota-agent";
+      sub.textContent = "agent: " + row.agent;
     }
+    tdName.appendChild(sub);
     tr.appendChild(tdName);
 
     var tdSpent = document.createElement("td");
@@ -4544,27 +4553,45 @@ function drawQuotaRows(tbody, rows){
   });
 }
 
+/* BA NÚT, MỖI NÚT MỘT NGHĨA CỐ ĐỊNH.
+   Đã cân nhắc gộp thành một nút đổi nghĩa theo trạng thái (còn hạn mức thì cộng
+   thêm, hết rồi thì đặt lại) và BỎ, vì hai lý do đo được:
+
+   - Ranh giới giữa hai nghĩa là lúc `đã tiêu` chạm `hạn mức`, mà con số đó chậm
+     tới 5 phút (khoá được nhớ đệm 300 giây). Người dùng nhìn thấy "còn hạn mức",
+     bấm để cộng thêm, nhưng nó vừa hết và thành đặt lại. Cùng một thao tác, hai
+     kết quả, không lỗi nào báo ra.
+   - Ở nhánh "cộng thêm", gõ 0 nghĩa là `hiện tại + 0` = không làm gì, tức MẤT
+     luôn cách chặn.
+
+   Ba nút nghe nhiều hơn một, nhưng mỗi nút luôn cho một kết quả biết trước. */
 function quotaEditor(row){
   var td = document.createElement("td"),
       input = document.createElement("input"),
-      save = document.createElement("button"),
-      add = document.createElement("button"),
+      setBtn = document.createElement("button"),
+      addBtn = document.createElement("button"),
+      blockBtn = document.createElement("button"),
       msg = document.createElement("span");
   input.type = "text";
   input.value = row.quota_usd === null ? "" : String(row.quota_usd);
   input.placeholder = "USD";
-  save.textContent = "Lưu";
-  add.textContent = "Nạp thêm";
+  setBtn.textContent = "Đặt thành";
+  setBtn.title = "Hạn mức = đúng số vừa gõ. Muốn giảm thì gõ số nhỏ hơn.";
+  addBtn.textContent = "Cộng thêm";
+  addBtn.title = "Hạn mức = hạn mức hiện tại + số vừa gõ.";
+  blockBtn.textContent = "Chặn";
+  blockBtn.className = "quota-danger";
+  blockBtn.title = "Đặt hạn mức về 0. Mở lại bằng cách gõ số rồi bấm Đặt thành.";
   msg.className = "quota-msg";
 
-  function run(call){
-    var raw = (input.value || "").trim();
-    if(!raw){ msg.className = "quota-msg bad"; msg.textContent = "Chưa nhập số."; return; }
-    save.disabled = add.disabled = true;
+  var buttons = [setBtn, addBtn, blockBtn];
+
+  function run(call, value, doneText){
+    buttons.forEach(function(b){ b.disabled = true; });
     msg.className = "quota-msg";
     msg.textContent = "Đang lưu…";
-    call(row.key_alias, raw).then(function(res){
-      save.disabled = add.disabled = false;
+    call(row.key_alias, value).then(function(res){
+      buttons.forEach(function(b){ b.disabled = false; });
       if(!res.ok){
         /* Lưu hỏng thì NÓI RÕ và giữ nguyên số cũ trên màn hình. */
         msg.className = "quota-msg bad";
@@ -4572,15 +4599,28 @@ function quotaEditor(row){
         return;
       }
       msg.className = "quota-msg good";
-      msg.textContent = "Đã lưu.";
+      msg.textContent = doneText;
       renderQuota();   // đọc lại từ Gateway, không tự đoán số mới
     });
   }
 
-  save.onclick = function(){ run(window.TokenLedgerAPI.quotaSet); };
-  add.onclick = function(){ run(window.TokenLedgerAPI.quotaTopUp); };
+  function withInput(call, doneText){
+    var raw = (input.value || "").trim();
+    if(!raw){ msg.className = "quota-msg bad"; msg.textContent = "Chưa nhập số."; return; }
+    run(call, raw, doneText);
+  }
 
-  td.appendChild(input); td.appendChild(save); td.appendChild(add);
+  setBtn.onclick = function(){ withInput(window.TokenLedgerAPI.quotaSet, "Đã đặt."); };
+  addBtn.onclick = function(){ withInput(window.TokenLedgerAPI.quotaTopUp, "Đã cộng thêm."); };
+  /* Chặn KHÔNG đọc ô nhập: nó luôn là 0. Đọc ô nhập ở đây thì một con số còn sót
+     trong ô sẽ đổi nghĩa của nút, đúng cái bẫy mà ba nút này tránh. */
+  blockBtn.onclick = function(){
+    run(window.TokenLedgerAPI.quotaSet, 0,
+        "Đã chặn. Gõ số rồi bấm Đặt thành để mở lại.");
+  };
+
+  td.appendChild(input);
+  buttons.forEach(function(b){ td.appendChild(b); });
   td.appendChild(msg);
   return td;
 }

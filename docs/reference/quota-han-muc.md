@@ -18,9 +18,23 @@ Mở dashboard → tab **⚙ Setting**. Mỗi khoá agent một dòng.
 | Tỷ lệ | đã tiêu / hạn mức |
 | Trạng thái | `còn hạn mức` · `sắp hết` (≥90%) · `ĐANG CHẶN` |
 
-**Lưu** đặt hạn mức thành đúng số vừa gõ. **Nạp thêm** cộng số vừa gõ vào hạn
-mức hiện có. Cả hai đều đợi Gateway trả lời rồi mới đổi số trên màn hình — bấm
-xong mà báo đỏ thì tức là **chưa lưu được**, số cũ vẫn nguyên.
+Ba nút, mỗi nút **một nghĩa cố định** — kết quả luôn biết trước:
+
+| Nút | Làm gì |
+|---|---|
+| **Đặt thành** | hạn mức = đúng số vừa gõ. Muốn **giảm** thì gõ số nhỏ hơn |
+| **Cộng thêm** | hạn mức = hạn mức hiện tại + số vừa gõ |
+| **Chặn** | hạn mức = 0. Nút này **không đọc ô nhập** |
+
+Cả ba đều đợi Gateway trả lời rồi mới đổi số trên màn hình — bấm xong mà báo đỏ
+thì tức là **chưa lưu được**, số cũ vẫn nguyên.
+
+> **Vì sao không gộp thành một nút** (đã cân nhắc và bỏ, 20/09/2026): ý tưởng là
+> "còn hạn mức thì cộng thêm, hết rồi thì đặt lại". Nhưng ranh giới giữa hai
+> nghĩa là lúc *đã tiêu* chạm *hạn mức*, mà con số đó chậm tới 5 phút — người
+> dùng nhìn thấy "còn hạn mức", bấm để cộng thêm, và nó vừa hết nên thành đặt
+> lại. Cùng một thao tác, hai kết quả, không lỗi nào báo ra. Thêm nữa, ở nhánh
+> "cộng thêm" thì gõ `0` nghĩa là `hiện tại + 0`, tức **mất luôn cách chặn**.
 
 Mọi lần đặt và nạp đều để lại một dòng trong bảng **Lịch sử nạp** phía dưới.
 

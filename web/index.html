@@ -107,7 +107,17 @@
     border-radius:6px; cursor:pointer; margin-left:6px;
   }
   .quota-table button:disabled{ opacity:.5; cursor:default; }
+  /* Nút Chặn dừng lưu lượng của một agent thật, nên nó KHÔNG được trông giống
+     hai nút kia. Đảo ngược thì dễ — gõ số rồi Đặt thành — nhưng bấm nhầm vẫn
+     làm agent im vài phút trước khi có người để ý. */
+  .quota-table button.quota-danger{
+    background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.45); color:#fca5a5;
+  }
+  .quota-table button.quota-danger:hover{ background:rgba(239,68,68,.24); }
   .quota-flag{ font-size:11.5px; color:#fbbf24; display:block; margin-top:3px; }
+  /* Dòng "agent: ..." chỉ là thông tin, không phải cảnh báo — màu khác hẳn để
+     mắt không đọc nhầm nó thành một điều đáng lo. */
+  .quota-flag.quota-agent{ color:#94a3b8; }
   .quota-blocked{ color:#fca5a5; font-weight:600; }
   .quota-warn{ color:#fbbf24; }
   .quota-fine{ color:#86efac; }

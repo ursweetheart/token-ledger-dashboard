@@ -176,6 +176,27 @@ def log_of(key: dict[str, Any]) -> list[dict[str, Any]]:
     return [x for x in raw if isinstance(x, dict)] if isinstance(raw, list) else []
 
 
+def tag_of(key: dict[str, Any]) -> str | None:
+    """Tag định danh của khoá, hoặc None nếu khoá không mang tag nào.
+
+    Đây mới là thứ quyết định project, KHÔNG PHẢI TÊN KHOÁ. Tên khoá chỉ là nhãn
+    người đặt: `dms-feedback` và `dms-feedback-tagged` trông như cùng một project
+    nhưng cái trước không mang tag nào, còn `crm-feedback-12-09` trông như một
+    project riêng mà thật ra cùng tag với `crm-feedback-tagged`.
+
+    Bỏ qua tag do LiteLLM tự thêm (`User-Agent: ...`) - cùng luật với hook chặn
+    trong docker/gateway/quota_hook.py, để hai nơi không bao giờ hiểu khác nhau
+    về việc một request thuộc agent nào.
+    """
+    tags = (key.get("metadata") or {}).get("tags")
+    if not isinstance(tags, list):
+        return None
+    for tag in tags:
+        if isinstance(tag, str) and tag and not tag.startswith("User-Agent:"):
+            return tag
+    return None
+
+
 def spend_of(key: dict[str, Any]) -> float:
     raw = key.get("spend")
     return float(raw) if isinstance(raw, (int, float)) and not isinstance(raw, bool) else 0.0
