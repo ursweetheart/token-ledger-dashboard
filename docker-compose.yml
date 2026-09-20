@@ -77,11 +77,18 @@ x-litellm: &litellm
   # openspec/changes/package-the-gateway-image-in-ci/. May nao chi co repo nay,
   # khong co fork ben canh, van `pull` va `up` duoc.
   #
-  # PHAI LA COMMIT CO BAN VA SENTINEL. Thieu ban va thi LiteLLM CHET ngay luc
-  # khoi dong voi
-  #     TypeError: Redis.__init__() got multiple values for argument 'host'
-  # CI grep _SENTINEL_IGNORED_CONNECTION_ARGS trong litellm/_redis.py TRUOC khi
-  # build, nen khong nhan nao tren kho thieu ban va.
+  # PHAI LA COMMIT CO DU HAI BAN VA. CI grep ca hai trong fork TRUOC khi build
+  # (bien `FORK_PATCHES` trong .github/workflows/ci.yml), nen khong nhan nao tren
+  # kho thieu ban va. Hai ban va hong theo hai kieu khac han:
+  #
+  #   _SENTINEL_IGNORED_CONNECTION_ARGS  (litellm/_redis.py)
+  #       Thieu -> LiteLLM CHET ngay luc khoi dong voi
+  #       TypeError: Redis.__init__() got multiple values for argument 'host'
+  #
+  #   _REJECTED_STREAM_LOGGING_FALLBACK  (litellm/proxy/proxy_server.py)
+  #       Thieu -> KHONG co loi nao luc khoi dong, container van `healthy`, nhung
+  #       moi request `stream=True` bi han muc chan se tra HTTP 500 thay vi cau
+  #       thong bao. Chi lo ra khi co nguoi dung that gap luc het han muc.
   #
   #     repo   git@github.com:ursweetheart/litellm_rang_dong.git
   #     nhanh  Tuan-develop               <- CO ban va, CI build tu nhanh nay
@@ -94,7 +101,7 @@ x-litellm: &litellm
   # Thu mot ban fork dang sua tren may, KHONG sua tep nay:
   #     docker build -t litellm-local ../litellm_tuan_test
   #     roi dat LITELLM_IMAGE=litellm-local trong .env
-  image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:4373a32c2a2608cdbd732ba47ba057615e5e2846}
+  image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:b7657e95b1650f75551404f62e134ae54dfc5740}
   profiles: ["gateway"]
   restart: unless-stopped
   # entrypoint rieng: chan khoi dong khi thieu khoa, roi moi giao lai cho

@@ -108,7 +108,7 @@
 ## 7. Bật chặn thật và nghiệm thu
 
 - [ ] 7.1 Tắt chế độ chỉ ghi nhận, dựng lại hai instance LiteLLM.
-      **PHẢI XONG 9.6 TRƯỚC.** Mã nguồn hook đã dùng `RejectedRequestError`, nhưng image
+      **9.6 ĐÃ XONG** (image `b7657e95b1…` đã phát hành và đã kéo về máy này). Mã nguồn hook đã dùng `RejectedRequestError`, nhưng image
       đang chạy vẫn là bản chưa vá — bật chặn thật lúc này thì agent chat dùng chế độ luồng
       nhận HTTP 500 thay vì câu thông báo.
 - [x] 7.2 Đo một agent loại chat: hạ hạn mức xuống dưới số đã tiêu, gọi thật → nhận HTTP 200, thân
@@ -132,10 +132,10 @@
 - [x] 9.3 Đo bản vá bằng cách gắn file đã vá vào container đang chạy: cả hai chế độ trả 200 đúng
       câu, sổ ghi `failure` spend 0 token 0
 - [x] 9.4 Commit bản vá trên nhánh `Tuan-develop` của fork (`b7657e95b1`), chưa đẩy
-- [ ] 9.5 Đẩy lên fork
-- [ ] 9.6 Đợi CI dựng image, rồi đổi nhãn `image:` trong `docker-compose.yml` **và**
+- [x] 9.5 Đẩy lên fork
+- [x] 9.6 Đợi CI dựng image, rồi đổi nhãn `image:` trong `docker-compose.yml` **và**
       `docker-compose.bench.yml` — CI đỏ nếu hai chỗ lệch nhau
-- [ ] 9.7 Dựng lại `litellm-1`, `litellm-2` bằng nhãn mới rồi đo lại chế độ luồng một lượt
+- [x] 9.7 Dựng lại `litellm-1`, `litellm-2` bằng nhãn mới rồi đo lại chế độ luồng một lượt
 
 ## 8. Tài liệu
 
