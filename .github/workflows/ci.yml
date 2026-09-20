@@ -198,7 +198,9 @@ jobs:
       # `main` hết đỏ ngay khi PR này vào.
       # Moc do 20/09/2026: 82 -> 96, them 14 phep kiem cua han muc (cong khoa phu
       # toan man hinh, va lop goi API han muc - duong GHI dau tien cua frontend).
-      EXPECTED_JS: "96"
+      # Moc do 20/09/2026 (lan 2): 96 -> 98, khoa lai hanh vi ba nut cua tab
+      # Setting sau khi bo phuong an mot nut doi nghia theo trang thai.
+      EXPECTED_JS: "98"
     steps:
       - uses: actions/checkout@v4
 
@@ -250,7 +252,12 @@ jobs:
       # Moc do 20/09/2026: 85 -> 154, them 69 phep kiem cua han muc (lop goi Gateway,
       # hook chan, bo canh bac canh bao). Ca ba tep deu chay duoc tren may sach:
       # phan logic da duoc tach khoi FastAPI va khoi litellm co y vi ly do nay.
-      EXPECTED_PY: "154"
+      # Moc do 20/09/2026 (lan 2): 154 -> 159, them 5 phep kiem cua `tag_of` khi
+      # sua cach gom khoa: gom theo TAG chu khong theo ten khoa.
+      #
+      # Lan nay quen sua so o day va CI do -- lan thu ba cung mot ly do trong lich
+      # su repo nay. Them phep kiem thi phai sua dong nay TRONG CUNG commit.
+      EXPECTED_PY: "159"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

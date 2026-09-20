@@ -2,6 +2,9 @@
 
 Viết 20/09/2026, cùng change `stop-a-project-when-its-quota-runs-out`.
 
+Tài liệu này nói **cách dùng**. Cần bản đồ mã nguồn, các quyết định đã chốt và
+những chỗ đã sập một lần thì đọc [`quota-internals.md`](quota-internals.md).
+
 Mỗi khoá agent có một hạn mức tiền do người nhập. Tiêu hết thì Gateway ngừng
 chuyển request đi, cho tới khi có người nạp thêm. **Không tự đặt lại theo tháng.**
 
@@ -18,9 +21,23 @@ Mở dashboard → tab **⚙ Setting**. Mỗi khoá agent một dòng.
 | Tỷ lệ | đã tiêu / hạn mức |
 | Trạng thái | `còn hạn mức` · `sắp hết` (≥90%) · `ĐANG CHẶN` |
 
-**Lưu** đặt hạn mức thành đúng số vừa gõ. **Nạp thêm** cộng số vừa gõ vào hạn
-mức hiện có. Cả hai đều đợi Gateway trả lời rồi mới đổi số trên màn hình — bấm
-xong mà báo đỏ thì tức là **chưa lưu được**, số cũ vẫn nguyên.
+Ba nút, mỗi nút **một nghĩa cố định** — kết quả luôn biết trước:
+
+| Nút | Làm gì |
+|---|---|
+| **Đặt thành** | hạn mức = đúng số vừa gõ. Muốn **giảm** thì gõ số nhỏ hơn |
+| **Cộng thêm** | hạn mức = hạn mức hiện tại + số vừa gõ |
+| **Chặn** | hạn mức = 0. Nút này **không đọc ô nhập** |
+
+Cả ba đều đợi Gateway trả lời rồi mới đổi số trên màn hình — bấm xong mà báo đỏ
+thì tức là **chưa lưu được**, số cũ vẫn nguyên.
+
+> **Vì sao không gộp thành một nút** (đã cân nhắc và bỏ, 20/09/2026): ý tưởng là
+> "còn hạn mức thì cộng thêm, hết rồi thì đặt lại". Nhưng ranh giới giữa hai
+> nghĩa là lúc *đã tiêu* chạm *hạn mức*, mà con số đó chậm tới 5 phút — người
+> dùng nhìn thấy "còn hạn mức", bấm để cộng thêm, và nó vừa hết nên thành đặt
+> lại. Cùng một thao tác, hai kết quả, không lỗi nào báo ra. Thêm nữa, ở nhánh
+> "cộng thêm" thì gõ `0` nghĩa là `hiện tại + 0`, tức **mất luôn cách chặn**.
 
 Mọi lần đặt và nạp đều để lại một dòng trong bảng **Lịch sử nạp** phía dưới.
 
@@ -97,22 +114,99 @@ vòng qua hạn mức.
 
 ---
 
-## 5. Triển khai lần đầu
+## 5. Triển khai lên server
 
-1. Điền `LITELLM_MASTER_KEY` trong `.env` (backend cần nó để sửa hạn mức). Thiếu
-   thì backend **không khởi động** — hoặc đặt `QUOTA_DISABLED=1` trên máy không
-   có Gateway.
-2. Giữ `QUOTA_DRY_RUN=1`. Dựng lại `litellm-1` và `litellm-2`.
-3. **Xác nhận hook thật sự được nạp**: gọi một lượt thật rồi tìm dòng
-   `quota_block_would_have` trong `docker compose logs litellm-1`.
-   **Không kết luận từ việc container lên `healthy`** — khai sai tên callback
-   không làm LiteLLM dừng, mọi đèn vẫn xanh và hạn mức lặng lẽ không chặn gì.
-4. Nhập hạn mức ở tab Setting, đối chiếu số với các tab khác.
-5. Đặt `QUOTA_DRY_RUN=0`, dựng lại hai instance. Từ đây chặn thật.
+Thứ tự này chọn để **không bước nào chặn ai trước khi bạn kịp nhìn số**.
 
-Lùi lại: gỡ dòng `callbacks` trong `docker/gateway/config.gateway.yaml` rồi dựng
-lại hai instance. Hạn mức còn nằm trong metadata của khoá cũng không gây hại —
-không ai đọc thì không ai bị chặn.
+### Bước 1 — kéo mã và dựng lại ba image
+
+```bash
+git pull
+docker compose build api web
+docker compose --profile refresh build ledger-refresh   # image `tools`
+```
+
+Ba image này chép mã **lúc build**. Không dựng lại thì server chạy bản cũ: tab
+Setting trả 404, và dịch vụ canh hạn mức không tìm thấy `scripts/watch_quota.py`.
+
+### Bước 2 — thêm hai dòng vào `.env`
+
+```
+LITELLM_MASTER_KEY=<chinh gia tri Gateway dang dung>
+QUOTA_DRY_RUN=1
+```
+
+`LITELLM_MASTER_KEY` server đã có sẵn cho Gateway — backend dùng **cùng giá trị
+đó** để sửa hạn mức. Thiếu nó thì backend **không khởi động**; máy nào không
+muốn bật hạn mức thì đặt `QUOTA_DISABLED=1`.
+
+### Bước 3 — dựng lại, giữ nguyên chế độ chỉ-ghi-nhận
+
+```bash
+docker compose --profile gateway up -d
+```
+
+`QUOTA_DRY_RUN=1` nghĩa là hook tính đủ, ghi log, nhưng **cho mọi request đi
+qua**. Chưa ai bị chặn.
+
+### Bước 4 — xác nhận hook thật sự được nạp
+
+```bash
+docker compose logs litellm-1 | grep quota_
+```
+
+**Đây là bước không được bỏ.** Khai sai tên callback không làm LiteLLM dừng:
+container vẫn `healthy`, `/health/liveliness` vẫn 200, và hạn mức lặng lẽ không
+chặn gì. Không kết luận từ trạng thái container — phải thấy dòng log thật.
+
+### Bước 5 — xem server đang có bao nhiêu khoá
+
+```bash
+curl -s -H "Authorization: Bearer $LITELLM_MASTER_KEY"   "http://litellm-1:4000/key/list?page=1&size=100&return_full_object=true"   | python3 -c "import json,sys;[print(k.get('key_alias'), (k.get('metadata') or {}).get('tags')) for k in json.load(sys.stdin)['keys']]"
+```
+
+Nhìn hai thứ: khoá nào **thiếu tag**, và khoá nào **trùng tag** với nhau. Nhiều
+khoá cùng tag nghĩa là cùng một agent — đặt hạn mức cho một khoá **không** chặn
+những khoá kia.
+
+### Bước 6 — nhập hạn mức ở tab Setting
+
+Đặt cho mọi khoá đang dùng. Khoá cũ không ai dùng thì bấm **Chặn**.
+
+### Bước 7 — chạy vài hôm rồi mới bật thật
+
+```bash
+docker compose logs litellm-1 | grep quota_block_would_have
+```
+
+Mỗi dòng là một lượt **lẽ ra đã bị chặn**. Đọc xem có lượt nào bất ngờ không.
+Ổn rồi thì đặt `QUOTA_DRY_RUN=0` và dựng lại `litellm-1`, `litellm-2`.
+
+### Lùi lại
+
+Gỡ dòng `callbacks` trong `docker/gateway/config.gateway.yaml` rồi dựng lại hai
+instance. Hạn mức còn trong metadata cũng không sao — không ai đọc thì không ai
+bị chặn.
+
+---
+
+## 5b. Bảy điều phải biết khi dùng
+
+1. **Hạn mức gắn với KHOÁ, không gắn với agent.** Một agent có ba khoá thì phải
+   đặt cả ba. Tab Setting sẽ hiện dòng vàng khi gặp trường hợp này.
+2. **Số "đã tiêu" chậm tới 5 phút.** Vừa gọi xong mà số chưa nhúc nhích là bình
+   thường.
+3. **Luôn vượt một khoản nhỏ.** Giá của một request chỉ biết sau khi gọi xong,
+   nên luật là *đã tiêu ≥ hạn mức thì chặn lượt KẾ TIẾP*.
+4. **Tiền là số ước tính** của LiteLLM, không phải hoá đơn Google. Model chưa có
+   trong bảng giá thì chi phí ghi 0 và **không bao giờ làm hết hạn mức**.
+5. **Chặn ≠ xoá.** Bấm Chặn là đặt hạn mức 0; khoá vẫn tồn tại, mở lại bằng cách
+   gõ số rồi bấm *Đặt thành*.
+6. **Lưu hỏng thì báo đỏ và giữ nguyên số cũ.** Không bao giờ có chuyện số mới
+   hiện lên rồi tải lại trang là mất.
+7. **Khoá diễn tập xong thì xoá.** Số liệu của phép đo nằm trong
+   `LiteLLM_SpendLogs`, xoá khoá không mất sổ. Không dọn thì vài tháng sau một
+   agent có năm khoá và không ai nhớ khoá nào đang dùng.
 
 ---
 

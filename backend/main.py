@@ -443,8 +443,15 @@ def _agent_view(key: dict) -> dict:
     """Một dòng cho tab Setting: hạn mức, đã tiêu, tỉ lệ, và các cờ cảnh báo."""
     quota = gateway.quota_of(key)
     spent = gateway.spend_of(key)
+    tag = gateway.tag_of(key)
     return {
         "key_alias": key.get("key_alias"),
+        "agent": tag,
+        # Khoá không mang tag định danh thì lưu lượng của nó KHÔNG quy được về
+        # agent nào - bộ nạp sẽ bỏ dòng đó với lý do "không có tag định danh".
+        # Đặt hạn mức cho một khoá như thế vẫn chặn được nó, nhưng con số sẽ không
+        # bao giờ xuất hiện ở chiều agent trên dashboard.
+        "untagged": tag is None,
         "quota_usd": quota,
         "spent_usd": spent,
         "ratio": (spent / quota) if quota else None,
@@ -468,16 +475,23 @@ def quota_list(who: Principal = Depends(caller)):
     except gateway.GatewayError as exc:
         raise HTTPException(502, str(exc))
     rows = [_agent_view(k) for k in keys if k.get("key_alias")]
-    # Một project có nhiều khoá thì hạn mức không còn nghĩa "cả project" - nói ra
-    # chứ không cộng gộp một con số trông như đang được thi hành.
+    # Một agent có nhiều khoá thì hạn mức không còn nghĩa "cả agent" - nói ra chứ
+    # không cộng gộp một con số trông như đang được thi hành.
+    #
+    # ĐẾM THEO TAG, KHÔNG THEO TÊN KHOÁ. Bản đầu gom theo tiền tố tên
+    # (`alias.split("-tagged")[0]`) và sai cả hai chiều trên dữ liệu thật:
+    #   - gom `dms-feedback` với `dms-feedback-tagged`, dù khoá trước KHÔNG mang
+    #     tag nào nên không thuộc agent nào cả;
+    #   - bỏ sót `crm-feedback-12-09` và `crm-feedback-drill-10-09`, hai khoá
+    #     CÙNG tag `crm-feedback` với `crm-feedback-tagged` - tức đúng nhóm mà
+    #     cảnh báo này sinh ra để chỉ.
+    # Tên khoá chỉ là nhãn người đặt; tag mới là thứ định tuyến và tính tiền.
     seen: dict[str, int] = {}
     for r in rows:
-        alias = str(r["key_alias"])
-        base = alias.split("-tagged")[0]
-        seen[base] = seen.get(base, 0) + 1
+        if r["agent"]:
+            seen[r["agent"]] = seen.get(r["agent"], 0) + 1
     for r in rows:
-        base = str(r["key_alias"]).split("-tagged")[0]
-        r["sibling_keys"] = seen.get(base, 1)
+        r["sibling_keys"] = seen.get(r["agent"], 1) if r["agent"] else 1
     return {"count": len(rows), "rows": rows}
 
 
