@@ -4437,6 +4437,178 @@ function renderChartsFor(tab, rows){
     case "providers": chartsProviders(rows); chartsModels(rows); break;
     case "cost": chartsCost(rows); break;
     case "performance": chartsPerformance(rows); break;
+    /* Setting không có biểu đồ nào; nó gọi thẳng Gateway qua backend, không đọc
+       `rows`. Đặt ở đây để nó được vẽ đúng lúc người dùng mở tab, và chỉ lúc đó
+       - không ai phải chờ một lượt gọi mạng mình không mở tới. */
+    case "setting": renderQuota(); break;
+  }
+}
+
+/* ─── TAB SETTING: HẠN MỨC ──────────────────────────────────────────────────
+   SỐ Ở ĐÂY LÀ SỐ GATEWAY THẤY. Xem ghi chú ở khối markup trong index.html.
+
+   Bấm Lưu thì PHẢI đợi kết quả rồi mới đổi số trên màn hình. Không được hiện
+   số mới ngay cho "mượt": panel nhập tay bị xoá 17/08/2026 chính vì làm thế -
+   số hiện lên, cộng vào tổng, rồi tải lại trang là mất sạch. */
+function quotaFmt(x, digits){
+  return (x === null || x === undefined || isNaN(x))
+    ? "—" : Number(x).toFixed(digits === undefined ? 2 : digits);
+}
+
+function renderQuota(){
+  var tbody = document.getElementById("quota-tbody"),
+      logBody = document.getElementById("quota-log-tbody"),
+      note = document.getElementById("quota-note");
+  if(!tbody || !window.TokenLedgerAPI) return;
+
+  tbody.innerHTML = '<tr><td colspan="6">Đang đọc hạn mức từ Gateway…</td></tr>';
+  window.TokenLedgerAPI.quotaList().then(function(res){
+    if(!res.ok){
+      tbody.innerHTML = "";
+      var tr = document.createElement("tr"), td = document.createElement("td");
+      td.colSpan = 6; td.className = "quota-blocked";
+      td.textContent = "Không đọc được hạn mức: " + res.message;
+      tr.appendChild(td); tbody.appendChild(tr);
+      if(logBody) logBody.innerHTML = "";
+      return;
+    }
+    var rows = (res.data && res.data.rows) || [];
+    if(note){
+      note.innerHTML = "Số <b>đã tiêu</b> ở đây là phần <b>Gateway nhìn thấy</b>, "
+        + "không phải tổng chi phí ở các tab khác — Gateway chỉ thấy lưu lượng đi "
+        + "qua nó. Đây cũng chính là số quyết định chặn hay không. "
+        + "Số có thể chậm tới <b>5 phút</b> so với thực tế.";
+    }
+    drawQuotaRows(tbody, rows);
+    drawQuotaLog(logBody, rows);
+  });
+}
+
+function drawQuotaRows(tbody, rows){
+  tbody.innerHTML = "";
+  if(!rows.length){
+    var tr0 = document.createElement("tr"), td0 = document.createElement("td");
+    td0.colSpan = 6;
+    td0.textContent = "Gateway chưa có khoá agent nào.";
+    tr0.appendChild(td0); tbody.appendChild(tr0); return;
+  }
+  rows.forEach(function(row){
+    var tr = document.createElement("tr");
+
+    var tdName = document.createElement("td");
+    tdName.textContent = row.key_alias;
+    /* Một project có nhiều khoá thì hạn mức không còn nghĩa "cả project". Nói ra
+       chứ không cộng gộp một con số trông như đang được thi hành. */
+    if(row.sibling_keys > 1){
+      var flag = document.createElement("span");
+      flag.className = "quota-flag";
+      flag.textContent = "⚠ project này có " + row.sibling_keys
+        + " khoá — hạn mức áp riêng từng khoá, không cộng gộp";
+      tdName.appendChild(flag);
+    }
+    tr.appendChild(tdName);
+
+    var tdSpent = document.createElement("td");
+    tdSpent.className = "num";
+    tdSpent.textContent = quotaFmt(row.spent_usd, 4);
+    tr.appendChild(tdSpent);
+
+    var tdQuota = document.createElement("td");
+    tdQuota.className = "num";
+    tdQuota.textContent = row.quota_usd === null ? "chưa đặt" : quotaFmt(row.quota_usd);
+    tr.appendChild(tdQuota);
+
+    var tdRatio = document.createElement("td");
+    tdRatio.className = "num";
+    tdRatio.textContent = row.ratio === null || row.ratio === undefined
+      ? "—" : (row.ratio * 100).toFixed(1) + "%";
+    tr.appendChild(tdRatio);
+
+    var tdState = document.createElement("td");
+    if(row.quota_usd === null){
+      tdState.textContent = "không chặn (chưa đặt hạn mức)";
+    }else if(row.blocked){
+      tdState.className = "quota-blocked";
+      tdState.textContent = "ĐANG CHẶN";
+    }else if(row.ratio >= 0.9){
+      tdState.className = "quota-warn";
+      tdState.textContent = "sắp hết";
+    }else{
+      tdState.className = "quota-fine";
+      tdState.textContent = "còn hạn mức";
+    }
+    tr.appendChild(tdState);
+
+    tr.appendChild(quotaEditor(row));
+    tbody.appendChild(tr);
+  });
+}
+
+function quotaEditor(row){
+  var td = document.createElement("td"),
+      input = document.createElement("input"),
+      save = document.createElement("button"),
+      add = document.createElement("button"),
+      msg = document.createElement("span");
+  input.type = "text";
+  input.value = row.quota_usd === null ? "" : String(row.quota_usd);
+  input.placeholder = "USD";
+  save.textContent = "Lưu";
+  add.textContent = "Nạp thêm";
+  msg.className = "quota-msg";
+
+  function run(call){
+    var raw = (input.value || "").trim();
+    if(!raw){ msg.className = "quota-msg bad"; msg.textContent = "Chưa nhập số."; return; }
+    save.disabled = add.disabled = true;
+    msg.className = "quota-msg";
+    msg.textContent = "Đang lưu…";
+    call(row.key_alias, raw).then(function(res){
+      save.disabled = add.disabled = false;
+      if(!res.ok){
+        /* Lưu hỏng thì NÓI RÕ và giữ nguyên số cũ trên màn hình. */
+        msg.className = "quota-msg bad";
+        msg.textContent = "Không lưu được: " + res.message;
+        return;
+      }
+      msg.className = "quota-msg good";
+      msg.textContent = "Đã lưu.";
+      renderQuota();   // đọc lại từ Gateway, không tự đoán số mới
+    });
+  }
+
+  save.onclick = function(){ run(window.TokenLedgerAPI.quotaSet); };
+  add.onclick = function(){ run(window.TokenLedgerAPI.quotaTopUp); };
+
+  td.appendChild(input); td.appendChild(save); td.appendChild(add);
+  td.appendChild(msg);
+  return td;
+}
+
+function drawQuotaLog(tbody, rows){
+  if(!tbody) return;
+  tbody.innerHTML = "";
+  var any = false;
+  rows.forEach(function(row){
+    (row.topups || []).forEach(function(entry){
+      any = true;
+      var tr = document.createElement("tr");
+      [row.key_alias, entry.at,
+       entry.from === null || entry.from === undefined ? "—" : quotaFmt(entry.from),
+       quotaFmt(entry.to), entry.by || "—"].forEach(function(text, i){
+        var td = document.createElement("td");
+        if(i === 2 || i === 3) td.className = "num";
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  });
+  if(!any){
+    var tr = document.createElement("tr"), td = document.createElement("td");
+    td.colSpan = 5;
+    td.textContent = "Chưa có lần nạp nào.";
+    tr.appendChild(td); tbody.appendChild(tr);
   }
 }
 function renderAll(){
@@ -4606,6 +4778,9 @@ function showKeyGate(sai){
   }
   box.className = "key-gate" + (sai ? " wrong" : "");
   box.hidden = false;
+  /* Ẩn hẳn phần còn lại của trang, không chỉ phủ lên trên. Xem ghi chú CSS
+     `body.locked` trong index.html. */
+  document.body.classList.add("locked");
   msg.innerHTML = sai
     ? "<b>Khoá không đúng.</b> Máy chủ trả <b>HTTP 401</b>. "
       + "Khoá có thể đã bị đổi — hỏi lại người dựng dashboard rồi nhập lại."
@@ -4622,6 +4797,7 @@ function showKeyGate(sai){
 function hideKeyGate(){
   var box=document.getElementById("key-gate");
   if(box) box.hidden = true;
+  document.body.classList.remove("locked");
 }
 
 /* Gắn sự kiện ĐÚNG MỘT LẦN. Markup nằm tĩnh trong index.html chứ không bơm
