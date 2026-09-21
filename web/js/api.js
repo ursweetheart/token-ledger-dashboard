@@ -193,45 +193,25 @@
     return out;
   }
 
-  /* Cây đơn vị cho app.js: MỘT cây, đã gộp sẵn, đã bỏ dòng kỹ thuật.
-
-     dim_unit chứa HAI cây tổ chức - Trợ lý ảo Ralli 102 đơn vị một gốc, Trợ Lý
-     Ảo Hợp Đồng 20 đơn vị bốn gốc - vì hai app mô hình hoá cùng một công ty theo
-     hai kiểu. Cột `canonical_unit_id` (database, 20/08/2026) nói dòng nào là bản
-     trùng của dòng nào. Gộp Ở ĐÂY, trong lớp dịch, để app.js chỉ thấy một cây.
-
-     Con của bản trùng được NỐI LẠI vào bản chuẩn - 13 đơn vị có cha là một bản
-     trùng, bỏ bước này thì chúng mất cha và rơi ra khỏi cây. */
+  /* Bộ lọc agent dùng cây NGUỒN: không gộp canonical liên agent, không đổi cha.
+     Giữ cả nút kỹ thuật để usage còn tra được ID; chúng không là lựa chọn tổ chức. */
   function orgTree(catalog) {
     var all = catalog.units || [];
-    var byId = {};
-    all.forEach(function (u) { byId[u.unit_id] = u; });
-
-    function canonical(id) {
-      var seen = {};
-      while (id && byId[id] && byId[id].canonical_unit_id) {
-        if (seen[id]) return id;         // vòng lặp: dừng, đừng treo trình duyệt
-        seen[id] = 1;
-        id = byId[id].canonical_unit_id;
-      }
-      return id;
-    }
-    /* Bảng tra CÔNG KHAI: mã đơn vị gốc -> mã bản chuẩn. Tài khoản và dòng usage
-       mang mã gốc, mà cây đã bỏ bản trùng, nên không có bảng này thì chúng trỏ
-       vào một đơn vị không còn tồn tại - và trỏ hụt thì lặng lẽ mất số. */
+    var agents = {};
+    (catalog.agents || []).forEach(function(a){ agents[a.agent_id] = tenAgent(a.name); });
     var canonicalOf = {};
-    all.forEach(function (u) { canonicalOf[u.unit_id] = canonical(u.unit_id); });
+    all.forEach(function (u) { canonicalOf[u.unit_id] = u.unit_id; });
 
     var out = [];
     all.forEach(function (u) {
-      if (u.is_technical) return;                       // dòng kỹ thuật đi đường riêng
-      if (canonical(u.unit_id) !== u.unit_id) return;   // bản trùng: đã gộp
       out.push({
         id: u.unit_id,
         name: u.name,
-        parent: u.parent_id ? canonical(u.parent_id) : null,
+        parent: u.parent_id || null,
         level: u.level,
         agentId: u.agent_id,
+        agent: agents[u.agent_id] || "",
+        technical: !!u.is_technical,
         /* Cấp gom thuần tuý - báo cáo bắt đầu BÊN DƯỚI nó. Trước 20/08/2026
            app.js ghim cứng hai mã `company` và `rd-corp` cho việc này. */
         reportAggregate: !!u.is_report_aggregate
@@ -341,6 +321,7 @@
       var cachedOutsideInput = x.token_source === "billing" ? (x.cached_tokens || 0) : 0;
 
       days[x.day].push({
+        day: x.day,
         a: tenAgent(x.agent) || agentName[x.agent_id] || ("agent " + x.agent_id),
         d: u ? u.name : "—",
         /* Mã đơn vị, đã quy về bản chuẩn. app.js ghép usage vào đơn vị bằng mã
@@ -529,16 +510,10 @@
           state.adoption = ((r.adoption && r.adoption.rows) || []).map(function (x) {
             return x && x.agent ? Object.assign({}, x, { agent: tenAgent(x.agent) }) : x;
           });
-          /* Tài khoản mang `unit_id` GỐC, mà cây đã bỏ các bản trùng. Quy về bản
-             chuẩn ngay tại đây - để app.js tự nhớ thì sớm muộn một chỗ quên, và
-             tài khoản trỏ vào đơn vị không còn tồn tại sẽ lặng lẽ rơi khỏi bảng. */
+          /* Giữ unit_id nguồn: cây của mỗi agent được hiển thị độc lập. */
           state.accounts = ((r.accounts && r.accounts.rows) || []).map(function (a) {
-            var cid = state.canonicalUnitOf[a.unit_id];
-            var b = cid && cid !== a.unit_id
-              ? Object.assign({}, a, { unit_id: cid, unit_id_raw: a.unit_id })
-              : a;
-            return b.agent === tenAgent(b.agent) ? b
-                 : Object.assign({}, b, { agent: tenAgent(b.agent) });
+            return a.agent === tenAgent(a.agent) ? a
+                 : Object.assign({}, a, { agent: tenAgent(a.agent) });
           });
           state.byAccount = ((r.byAccount && r.byAccount.rows) || []).map(function (x) {
             return x && x.agent ? Object.assign({}, x, { agent: tenAgent(x.agent) }) : x;
