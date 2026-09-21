@@ -22,6 +22,7 @@ RUN pip3 install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 COPY scripts/  ./scripts/
 COPY db/       ./db/
 COPY backend/  ./backend/
+COPY alembic.ini ./alembic.ini
 
 # Runs as root: loaders write to /app/data and gcloud writes to its config dir,
 # both mounted volumes. A different UID hits permission errors.

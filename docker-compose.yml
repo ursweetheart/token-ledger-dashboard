@@ -650,12 +650,15 @@ services:
       # docker/gateway/tls/README.md. File .crt/.key KHONG len git.
       - ./docker/gateway/tls:/etc/nginx/tls:ro
     ports:
+      # The router forwards public :50888 to host :8088. Keep that host port on
+      # TLS so apigateway.rangdong.com.vn:50888 is not downgraded to HTTP.
       - "${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000"
       # HTTPS them 18/09/2026, song song voi HTTP o tren, khong thay the. Mac
       # dinh CO Y giu loopback (an toan-truoc) -- phai tu dat
       # LLM_GATEWAY_TLS_BIND trong .env moi thuc su mo ra ngoai (giong quy uoc
       # cua LLM_GATEWAY_EDGE_BIND).
       - "${LLM_GATEWAY_TLS_BIND:-127.0.0.1}:${LLM_GATEWAY_TLS_PORT:-443}:4443"
+      - "${LLM_GATEWAY_TLS_ALT_BIND:-0.0.0.0}:${LLM_GATEWAY_TLS_ALT_PORT:-8443}:4443"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:4000/lb-health | grep -q lb-ok"]
       interval: 10s

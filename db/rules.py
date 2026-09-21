@@ -26,6 +26,7 @@ MODELS = [
     (11, "gemini-3.6-flash", "gemini-3"),
     # Them 31/08/2026: tuyen `gemini-flash-lite` cua Gateway dinh tuyen toi day.
     (12, "gemini-3.5-flash-lite", "gemini-3"),
+    (13, "gemini-3.8-flash", "gemini-3"),
 ]
 MODEL_ID = {name: i for i, name, _ in MODELS}
 
@@ -79,6 +80,7 @@ MODEL_PATTERNS = [
     # tra ve "gemini-3.5-flash" -- khop nham sang model khac gia, IM LANG.
     ("3.5 flash lite", "gemini-3.5-flash-lite"),
     ("3.5 flash", "gemini-3.5-flash"),
+    ("3.8 flash", "gemini-3.8-flash"),
     ("3.6 flash", "gemini-3.6-flash"),
     ("3 pro", "gemini-3-pro"),
     ("3 flash", "gemini-3-flash"),
