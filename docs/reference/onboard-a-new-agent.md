@@ -1,12 +1,16 @@
 # Nối một agent mới vào Gateway — bảng việc phải làm
 
-Viết 19/09/2026. Đây là **bảng đầu việc** để dùng khi làm, không phải tài liệu giải thích.
-Muốn biết *vì sao* mỗi việc tồn tại, đọc
+Viết 19/09/2026, soát lại 21/09/2026. Đây là **bảng đầu việc** để dùng khi làm, không phải
+tài liệu giải thích. Muốn biết *vì sao* mỗi việc tồn tại, đọc
 [`gateway-architecture-and-agent-integration.md`](gateway-architecture-and-agent-integration.md).
 
 Mỗi đầu việc có ba dòng: **Làm gì** · **Xong khi** · **Bỏ qua thì**. Dòng thứ ba quan trọng
 nhất: gần như mọi việc trong bảng này, thiếu nó thì hệ thống **vẫn chạy, vẫn trả 200**, chỉ
 có số liệu là sai.
+
+> **PHẠM VI — đọc trước khi bắt đầu.** Bảng này chỉ đủ cho agent **một-người-dùng**. Agent
+> nhiều người dùng cần thêm một khâu nạp danh bạ mà hôm nay **chưa có đường sẵn** — xem
+> mục 8. Đừng chạy theo bảng này rồi mới phát hiện ra điều đó ở việc C3.
 
 ---
 
@@ -103,7 +107,7 @@ Bảy đầu việc. Làm trong repo của agent, không đụng gì tới repo 
 
 ## 2. Việc ở phía GATEWAY
 
-Tám đầu việc, trong repo này. Sáu việc đầu là sửa file, hai việc cuối là thao tác.
+Chín đầu việc, trong repo này. B2→B6 là sửa file; B1, B7, B8 là thao tác; B9 là cả hai.
 
 ### B1 — Xin khoá Google cho project của agent
 
@@ -193,14 +197,29 @@ Tám đầu việc, trong repo này. Sáu việc đầu là sửa file, hai vi�
 
 ### B9 — Khai loại agent và đặt hạn mức
 
-- **Làm gì:** thêm mã agent vào `QUOTA_CHAT_TAGS` **nếu** đây là agent có người ngồi đọc câu trả
-  lời. Rồi mở tab **⚙ Setting** trên dashboard và đặt hạn mức cho khoá vừa cấp.
+- **Làm gì:** khai mã agent vào `QUOTA_CHAT_TAGS` **nếu** đây là agent có người ngồi đọc câu
+  trả lời. Rồi mở tab **⚙ Setting** trên dashboard và đặt hạn mức cho khoá vừa cấp.
+
+  **KHÔNG PHẢI "thêm vào", mà là "viết lại cả dòng".** Soát 21/09: `.env` hôm nay **không có
+  dòng `QUOTA_CHAT_TAGS` nào** — nó đang ăn giá trị mặc định, và giá trị đó nằm ở **hai chỗ**:
+
+  | Chỗ | Giá trị |
+  |---|---|
+  | `docker-compose.yml`, khối `x-litellm` | `${QUOTA_CHAT_TAGS:-contact-center,sale-agent,tla-hd,ralli}` |
+  | `docker/gateway/quota_hook.py`, `_DEFAULT_CHAT_TAGS` | `contact-center,sale-agent,tla-hd,ralli` |
+
+  Viết một dòng `QUOTA_CHAT_TAGS=` vào `.env` là **đè cả hai**. Nên phải **kê lại đủ bốn mã cũ
+  rồi mới thêm mã mới**. Kê thiếu một mã thì agent đó lặng lẽ rơi khỏi nhóm chat.
 - **Xong khi:** tab Setting hiện khoá mới với một con số hạn mức, không phải `chưa đặt`.
 - **Bỏ qua thì:**
   - Không khai loại → agent bị coi là **chạy theo lô** và khi hết hạn mức sẽ nhận **429** thay vì
     một câu thông báo. Với agent có người dùng thì đó là một lỗi kỹ thuật hiện lên màn hình.
   - Không đặt hạn mức → agent đó **không bị chặn bao giờ**. Không lỗi nào báo ra; nó đơn giản là
     nằm ngoài cơ chế giữ tiền.
+
+> **Đây không còn là chuyện diễn tập.** `.env` hôm nay đặt `QUOTA_DRY_RUN=0`, tức **chặn thật**.
+> Bản đầu của trang này viết khi hệ thống còn ở chế độ chỉ-ghi-nhận, nên hai hậu quả trên đọc
+> như cảnh báo xa. Nay chúng xảy ra ngay ở lượt gọi vượt hạn mức đầu tiên.
 
 > Chi tiết ở [`quota-han-muc.md`](quota-han-muc.md); bản đồ mã nguồn ở
 > [`quota-internals.md`](quota-internals.md). Lưu ý một điều khi sửa khoá bằng tay:
@@ -212,16 +231,43 @@ Tám đầu việc, trong repo này. Sáu việc đầu là sửa file, hai vi�
 
 ## 3. Việc ở phía DASHBOARD
 
-Ba đầu việc. Thiếu thì lưu lượng vẫn chạy, chỉ là dashboard không thấy.
+**Bốn** đầu việc. Thiếu thì lưu lượng vẫn chạy, chỉ là dashboard không thấy.
 
 ### C1 — Thêm agent vào danh mục
 
 - **Làm gì:** thêm một dòng vào bảng `AGENTS` trong `db/gen_catalog.py` (id, code, tên hiển
-  thị, project GCP, có cây tổ chức, ngày tạo project, đang chạy, có nguồn Google), rồi chạy
-  lại script để sinh phần nạp `dim_agent`.
+  thị, project GCP, có cây tổ chức, ngày tạo project, đang chạy, có nguồn Google). Nếu agent
+  có hạn mức USD thì thêm một dòng vào `BUDGET_USD` **ngay dưới đó** — dict này khoá bằng
+  **tên hiển thị**, không phải mã agent. Rồi chạy `python db/gen_catalog.py` để sinh lại
+  `db/02_catalog.sql`.
 - **Xong khi:** `SELECT code FROM dim_agent` có mã agent mới.
 - **Bỏ qua thì:** bộ nạp tìm tag định danh bằng cách so với `dim_agent.code`. Không có dòng
   nào khớp thì **mọi dòng của agent đó bị bỏ**, đếm vào "không có tag định danh".
+- **Bỏ qua `BUDGET_USD` thì:** agent không có hạn mức USD, và **không cách nào phân biệt với
+  cố ý**. Tools Quizzer và Ralli hôm nay cũng vắng mặt trong dict đó, và đó là có chủ đích.
+
+> **"Chạy lại script" KHÔNG đưa được dòng mới vào database.** Đây là chỗ trang này nói nhẹ hơn
+> thực tế, sửa 21/09. `db/02_catalog.sql` chỉ vào database qua **đúng một cửa**:
+>
+> ```
+> gen_catalog.py ──▶ db/02_catalog.sql
+>                          │
+>                          ▼
+>                connect.rebuild()          db/connect.py:252
+>                          ├── alembic upgrade
+>                          ├── TRUNCATE MỌI bảng dữ liệu     ◀── đây
+>                          └── nạp lại 02_catalog.sql
+>                          │
+>                          ▼
+>                scripts/rebuild_db.py — 11 bước, nạp lại tất cả từ data/
+> ```
+>
+> Và dịch vụ `ledger-refresh` **không** đi qua cửa đó: `scripts/refresh_gateway.py` chỉ chạy
+> 3 bước (nạp sổ Gateway + 2 bảng dẫn xuất) và không bao giờ nạp lại danh mục.
+>
+> Nghĩa là thêm một agent = **dựng lại cả database**, không phải chạy một script. Việc này có
+> chỗ hỏng riêng của nó (quyền đọc của vai `api_readonly`) — bước 11 của `rebuild_db.py` là
+> một **phép kiểm** sinh ra đúng để bắt chuyện đó. Đừng bỏ qua nó.
 
 ### C2 — Khai model vào `db/rules.py`
 
@@ -235,13 +281,54 @@ Ba đầu việc. Thiếu thì lưu lượng vẫn chạy, chỉ là dashboard k
   Thiếu mẫu dài thì model bị gán nhầm sang model khác — khác đơn giá, và **vẫn báo là tìm
   thấy**.
 
-### C3 — Kiểm tài khoản dịch vụ
+### C3 — Khai loại người dùng trong `db/load_org.py`
+
+**Việc này thiếu hẳn trong bản 19/09.** Thêm 21/09 sau khi soát lại mã nguồn.
+
+- **Làm gì:** mở `db/load_org.py` và thêm `agent_id` mới vào **đúng một** trong hai danh sách
+  gõ tay ở đầu tệp:
+
+  ```python
+  db/load_org.py:84    RALLI, TLA_CONTRACT = 8, 5
+  db/load_org.py:85    SINGLE_USER_AGENTS = (1, 2, 3, 4, 6, 7)      # quyết định A1
+  ```
+
+  Agent một-người-dùng → thêm vào `SINGLE_USER_AGENTS`. Agent nhiều người dùng → xem mục 8
+  trước, vì thêm vào tuple ở dòng 84 **chưa đủ**.
+- **Xong khi:** `SELECT username FROM account WHERE kind = 'service_account'` có đúng một dòng
+  `svc.<code>` của agent mới.
+- **Bỏ qua thì:** **bước 2 của `rebuild_db.py` chết**, với `KeyError` ở `load_org.py:615`.
+
+  Đường đi của lỗi, soát tĩnh 21/09:
+
+  ```
+  load_org.py:301   agent_name  ← SELECT agent_id, name FROM dim_agent   (CÓ agent mới)
+  load_org.py:311   __technical_{aid}__      chỉ cho aid trong SINGLE_USER_AGENTS
+  load_org.py:315   __unattributed_{aid}__   chỉ cho aid trong (TLA_CONTRACT, RALLI)
+          ↓
+  load_org.py:564   technical_unit = {1,2,3,4,6,7, 5,8}        ← KHÔNG có agent mới
+          ↓
+  load_org.py:568   for aid in sorted(agent_name):             ← CÓ agent mới
+  load_org.py:615   technical_unit[aid]      →  KeyError  →  BƯỚC 2 DỪNG
+  ```
+
+  Đây là một trong số **ít** việc trong trang này hỏng **to** chứ không hỏng im lặng. Vẫn phải
+  làm trước, vì nó chặn ngang lượt dựng lại database ở việc C1.
+
+- **Một danh sách, ba chỗ đọc.** `SINGLE_USER_AGENTS` được dùng ở dòng 311, 404 và 587. Chỉ
+  sửa **một** chỗ khai ở dòng 85; ba chỗ kia tự theo. Chính tệp này, ở dòng 304, đã ghi:
+  *"gõ tay thì ngày thêm agent thứ 9 sẽ quên một chỗ"* — và dòng 85 ngay trên nó là một chỗ
+  gõ tay.
+
+### C4 — Kiểm tài khoản dịch vụ
 
 - **Làm gì:** với agent một-người-dùng, kiểm `svc.<code>` có ra một dòng trong bảng tài khoản
   sau lượt nạp đầu tiên.
 - **Xong khi:** thấy đúng một dòng `kind = 'service_account'`.
-- **Bỏ qua thì:** `X-User` gửi một chuỗi không khớp quy ước sẽ tạo ra tài khoản lạ, và chiều
-  người dùng lệch.
+- **Bỏ qua thì:** `X-User` gửi một chuỗi không khớp quy ước thì `load_gateway.py:378` **từ
+  chối** định danh đó, cộng vào bộ đếm `identity_unresolvable`, và dồn lưu lượng về tài khoản
+  neo mức agent. Tổng token vẫn đúng; chỉ riêng chiều người dùng lệch — đúng kiểu hỏng đã làm
+  độ phủ báo 12,4% trong khi lỗ hổng thật là 1,2%.
 
 > Không phải chạy lệnh nạp bằng tay: dịch vụ `ledger-refresh` tự nạp theo chu kỳ. Nhưng nó
 > chạy bộ nạp với đầu ra bị nuốt khi thành công — nên dòng `model not declared` **sẽ không ai
@@ -290,12 +377,34 @@ Ba đầu việc. Thiếu thì lưu lượng vẫn chạy, chỉ là dashboard k
 | Repo này | `docker-compose.bench.yml` | B5 |
 | Repo này | `docker/gateway/config.gateway.yaml` | B6 |
 | Repo này | `db/gen_catalog.py` (bảng `AGENTS`) | C1 |
+| Repo này | `db/gen_catalog.py` (dict `BUDGET_USD`) | C1 |
 | Repo này | `db/rules.py` (`GATEWAY_MODELS`, `MODEL_PATTERNS`) | C2 |
+| Repo này | `db/load_org.py` (`SINGLE_USER_AGENTS`, dòng 85) | C3 |
 | Repo này | `.env` (`QUOTA_CHAT_TAGS`) | B9 |
 | Không phải file | `/key/generate` | B8 |
 | Không phải file | tab ⚙ Setting trên dashboard | B9 |
+| Không phải file | chạy `scripts/rebuild_db.py` một lượt | C1 |
 
-Mười ba chỗ cho một agent mới. Chín chỗ trong số đó, thiếu là **hỏng im lặng**.
+**Mười sáu chỗ** cho một agent mới một-người-dùng.
+
+Bỏ sót **phần lớn** những chỗ này thì hệ thống vẫn chạy, vẫn trả 200, chỉ số liệu là sai. Dễ
+nhớ hơn nếu học theo chiều ngược lại — đây là **toàn bộ** các chỗ bỏ sót sẽ báo lỗi to, đọc
+ra từ chính dòng "Bỏ qua thì" của từng việc:
+
+| Việc | Triệu chứng khi bỏ sót |
+|---|---|
+| A3 — danh sách cấu hình hợp lệ | app của agent không khởi động |
+| B5 — `docker-compose.bench.yml` | bench không lên được |
+| B8 — `/key/generate` | không có khoá thì không gọi được |
+| C3 — `SINGLE_USER_AGENTS` | `KeyError`, bước 2 của `rebuild_db.py` dừng |
+
+**Mọi chỗ còn lại đều hỏng im lặng.** Nếu đang làm mà thấy một lỗi báo ra, nhiều khả năng nó
+là một trong bốn dòng trên; không thấy lỗi nào **không** có nghĩa là đã làm đủ.
+
+> Bản 19/09 đếm mười ba. Ba chỗ thêm vào ngày 21/09 — `BUDGET_USD`, `load_org.py` và lượt
+> dựng lại database — đều tìm ra bằng cách đọc mã nguồn, không phải bằng cách nối thử một
+> agent. Nên **con số này vẫn có thể còn thiếu.** Lần nối agent thứ 9 thật, hãy ghi lại mọi
+> chỗ phải chạm và sửa bảng này.
 
 ---
 
@@ -329,3 +438,69 @@ Ba điều phải xử lý trước khi bật:
    tuyến và khoá được chọn gần như ngẫu nhiên.
 
 Việc 1 và 3 phải làm dù có bật hay không. Việc 2 là đánh đổi phải chốt trước.
+
+---
+
+## 8. Agent NHIỀU NGƯỜI DÙNG — hôm nay chưa có đường sẵn
+
+**Soát 21/09/2026.** Cả bảng việc ở trên ngầm giả định agent mới là loại một-người-dùng. Với
+agent nhiều người dùng, việc C3 không có đáp án, và lý do nằm sâu hơn một dòng cấu hình.
+
+### Người dùng thật đến từ đâu
+
+Không có danh bạ chung của công ty. Bảng `account` chỉ có hai nguồn, và cả hai là **bản xuất
+của chính ứng dụng đó**:
+
+```
+data/raw_web/ralli/users-list.json        ──▶  người của Trợ lý ảo Ralli   (agent 8)
+data/raw_web/tla-hd/units-members.json    ──▶  người của TLA Hợp Đồng      (agent 5)
+        + token-usage-filter-options.json      (vá người không thuộc đơn vị nào)
+```
+
+Một agent nhiều người dùng **mới** không có bản xuất nào như vậy. Người của nó chỉ xuất hiện
+qua header `X-User` lúc gọi — mà `load_gateway.py` thì **tra** bảng `account`, nó không tạo
+dòng mới. Nên phải **viết thêm một khâu nạp danh bạ** trong `db/load_org.py`, có nguồn dữ
+liệu riêng. Đó là code thật, không phải một dòng cấu hình.
+
+### Bẫy thứ hai, nặng hơn: một người chỉ thuộc về MỘT agent
+
+Đây là chỗ đáng đọc kỹ, vì nó chưa bao giờ bị thử.
+
+`load_org.py:505` gom tài khoản theo **tên đăng nhập**, gộp chung mọi agent — một người là
+một dòng, dù họ dùng mấy app. Rồi `unit_priority` (dòng 492) chọn **một** agent chủ cho dòng
+đó, và tiêu chí thứ ba là **`agent_id` nhỏ nhất**.
+
+Trong khi đó `load_gateway.py:378` chỉ nhận định danh khi tài khoản thuộc **chính agent đang
+gửi request**:
+
+```
+       account.unit_agent_id      request mang tag của       kết quả
+       ─────────────────────      ────────────────────       ───────
+  svc.dms-feedback →  agent 6         agent 6                NHẬN
+  admin            →  agent 5         agent 6                TỪ CHỐI
+  pbh1_ntlong      →  agent 5         agent 5                NHẬN
+  pbh1_ntlong      →  agent 5         agent 9   ◀── mới      TỪ CHỐI
+```
+
+Dòng cuối là vấn đề. Một người đã có mặt ở TLA Hợp Đồng (agent 5) mà cũng dùng agent 9 thì
+`unit_agent_id` của họ là **5**, vì 5 < 9. Mọi lượt gọi của họ qua agent 9 bị từ chối định
+danh, cộng vào `identity_unresolvable`, và dồn về tài khoản neo.
+
+Hỏng **im lặng**: tổng token đúng, tổng tiền đúng, HTTP 200 hết. Chỉ chiều người dùng của
+agent 9 là rỗng.
+
+Hôm nay chuyện này chưa xảy ra, vì hai agent nhiều người dùng duy nhất (5 và 8) **chưa cái
+nào đi qua Gateway**. Quy tắc `found[1] == agent_id` được viết để phục vụ đúng trường hợp
+này, và nó chưa từng gặp trường hợp này.
+
+### Phải chốt gì trước khi nối agent nhiều người dùng đầu tiên
+
+1. **Nguồn danh bạ** — lấy người của agent mới từ đâu, ai kéo, kéo bao lâu một lần.
+2. **Một người ở nhiều agent** — giữ nguyên "một dòng một người" rồi sửa phép tra định danh
+   thành *"tài khoản này có mặt ở agent đó không"*, hay tách dòng theo từng agent. Hai hướng
+   này khác nhau ở chiều phòng ban và ở chỉ tiêu tỷ lệ áp dụng, không chỉ ở một câu `WHERE`.
+3. **Phép kiểm âm** — `identity_unresolvable` phải bằng 0 sau lượt nạp đầu. Con số này đang
+   được đếm sẵn; đừng nghiệm thu bằng tổng token, vì tổng token vẫn đúng khi chuyện này hỏng.
+
+Chưa chốt xong ba điều trên thì **chưa nối được** agent nhiều người dùng, dù phía Gateway
+(mục 2) có làm đủ cả chín việc.
