@@ -48,6 +48,12 @@ build/
 !.env.example
 *.log
 
+# Chung chi TLS cua gateway-lb (them 18/09/2026). Private key KHONG duoc len git
+# du la self-signed. Xem docker/gateway/tls/README.md de biet cach tu tao lai.
+docker/gateway/tls/*.key
+docker/gateway/tls/*.crt
+docker/gateway/tls/*.pem
+
 # CSDL SQLite (qua lon cho GitHub, gui rieng)
 *.sqlite
 *.sqlite3

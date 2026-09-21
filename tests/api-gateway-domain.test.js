@@ -35,7 +35,21 @@ test("LB enforces the domain inference allowlist and retains dynamic upstream fa
   assert.match(nginx, /zone\s+litellm_pool\s+64k;/);
   assert.match(nginx, /listen\s+4000\s+default_server;/);
   assert.match(nginx, /return 444;/);
-  assert.doesNotMatch(nginx, /ssl_certificate|listen\s+443/);
+});
+
+test("gateway-lb also terminates HTTPS on 4443, alongside plain HTTP on 4000", () => {
+  const nginx = read(configPath);
+  const compose = read(composePath);
+
+  assert.match(nginx, /listen 4000;\s*\n\s*listen 4443 ssl;/);
+  assert.match(nginx, /ssl_certificate\s+\/etc\/nginx\/tls\/apigateway\.crt;/);
+  assert.match(nginx, /ssl_certificate_key\s+\/etc\/nginx\/tls\/apigateway\.key;/);
+  assert.match(nginx, /ssl_protocols\s+TLSv1\.2 TLSv1\.3;/);
+  // Plain HTTP stays -- HTTPS is additive, not a replacement.
+  assert.match(nginx, /listen\s+4000;/);
+
+  assert.match(compose, /\.\/docker\/gateway\/tls:\/etc\/nginx\/tls:ro/);
+  assert.match(compose, /\$\{LLM_GATEWAY_TLS_BIND:-127\.0\.0\.1\}:\$\{LLM_GATEWAY_TLS_PORT:-443\}:4443/);
 });
 
 test("Compose publishes the compatible loopback handoff on LB only", () => {
@@ -48,6 +62,7 @@ test("Compose publishes the compatible loopback handoff on LB only", () => {
   assert.match(compose, /\$\{LLM_GATEWAY_EDGE_BIND:-127\.0\.0\.1\}:\$\{LLM_GATEWAY_EDGE_PORT:-8088\}:4000/);
   assert.match(compose, /LLM_GATEWAY_DOMAIN:\s+\$\{LLM_GATEWAY_DOMAIN:-apigateway\.rangdong\.com\.vn\}/);
   assert.doesNotMatch(compose, /\$\{GATEWAY_PORT:-4000\}:4000/);
+  assert.doesNotMatch(compose, /"127\.0\.0\.1:8089:8089"/);
   assert.doesNotMatch(compose, /\$\{LITELLM_[12]_PORT:-400[12]\}:4000/);
   assert.match(example, /LLM_GATEWAY_DOMAIN=apigateway\.rangdong\.com\.vn/);
   assert.match(example, /LLM_GATEWAY_EDGE_BIND=127\.0\.0\.1/);
@@ -61,14 +76,15 @@ test("Same-port status is private and inference prefix is exact", () => {
   assert.match(nginx, /location = \/gateway\/v1\/chat\/completions\s*\{\s*proxy_pass http:\/\/litellm_pool\/v1\/chat\/completions;/);
   assert.match(nginx, /proxy_pass http:\/\/127\.0\.0\.1:8089;/);
   assert.doesNotMatch(nginx, /gateway-status:8089/);
-  assert.match(nginx, /allow \$\{LLM_GATEWAY_ADMIN_CIDR\};\s*deny all;/);
+  assert.match(nginx, /allow \$\{LLM_GATEWAY_ADMIN_CIDR\};\s*allow \$\{LLM_GATEWAY_LAN_CIDR\};\s*deny all;/);
   assert.match(nginx, /proxy_pass_request_headers off;/);
   assert.match(nginx, /proxy_pass_request_body off;/);
   assert.match(nginx, /proxy_set_header Host localhost;/);
   assert.doesNotMatch(nginx, /real_ip_header|set_real_ip_from/);
   assert.match(compose, /LLM_GATEWAY_ADMIN_CIDR: \$\{LLM_GATEWAY_ADMIN_CIDR:-127\.0\.0\.1\/32\}/);
-  assert.match(compose, /NGINX_ENVSUBST_FILTER: \^LLM_GATEWAY_\(DOMAIN\|ADMIN_CIDR\)\$/);
-  assert.doesNotMatch(compose, /gateway-status:|8089:8089/);
+  assert.match(compose, /LLM_GATEWAY_LAN_CIDR: \$\{LLM_GATEWAY_LAN_CIDR:-127\.0\.0\.1\/32\}/);
+  assert.match(compose, /NGINX_ENVSUBST_FILTER: \^LLM_GATEWAY_\(DOMAIN\|ADMIN_CIDR\|LAN_CIDR\)\$/);
+  assert.doesNotMatch(compose, /^  gateway-status:|8089:8089/m);
   const lb = compose.split('  gateway-lb:')[1].split('\n# Khai ro')[0];
   assert.match(lb, /dockerfile: docker\/gateway\/Dockerfile/);
   assert.doesNotMatch(lb, /depends_on:/);

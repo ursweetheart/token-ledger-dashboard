@@ -64,6 +64,9 @@ def main():
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        tls_port = sock.getsockname()[1]
 
     def request(path='/gateway/v1/chat/completions?trace=a%2Fb', host='apigateway.rangdong.com.vn', auth=True, stream=False, source='127.0.0.1'):
         conn = http.client.HTTPConnection('127.0.0.1', port, timeout=25, source_address=(source, 0))
@@ -98,8 +101,23 @@ def main():
             (temp / 'temp').mkdir()
             config = (root / 'docker/gateway/nginx.conf').read_text(encoding='utf-8').replace('${LLM_GATEWAY_DOMAIN}', 'apigateway.rangdong.com.vn')
             config = config.replace('${LLM_GATEWAY_ADMIN_CIDR}', '127.0.0.1/32')
+            # Distinct from the admin CIDR above and from every source IP this harness
+            # uses (127.0.0.1, 127.0.0.2), so the spoofed-XFF/admin-ACL check below is
+            # unaffected by this second allowlist existing.
+            config = config.replace('${LLM_GATEWAY_LAN_CIDR}', '203.0.113.0/24')
             config = config.replace('127.0.0.1:8089', f'127.0.0.1:{status_port}')
             config = config.replace('listen 4000', f'listen 127.0.0.1:{port}')
+            # gateway-lb also terminates HTTPS on 4443 (see docker/gateway/tls); nginx
+            # refuses to start without a loadable cert, so hand it a throwaway one.
+            # This harness never exercises HTTPS itself, only that HTTP still works
+            # with the extra listener present.
+            subprocess.run(['openssl', 'req', '-x509', '-nodes', '-newkey', 'rsa:2048',
+                             '-keyout', str(temp / 'tls.key'), '-out', str(temp / 'tls.crt'),
+                             '-days', '1', '-subj', '/CN=apigateway.rangdong.com.vn'],
+                            check=True, capture_output=True)
+            config = config.replace('/etc/nginx/tls/apigateway.crt', str(temp / 'tls.crt'))
+            config = config.replace('/etc/nginx/tls/apigateway.key', str(temp / 'tls.key'))
+            config = config.replace('listen 4443 ssl;', f'listen 127.0.0.1:{tls_port} ssl;')
             for i, upstream in enumerate(ports, 1):
                 config = config.replace(f'litellm-{i}:4000 resolve', f'127.0.0.1:{upstream}')
             # Shorten passive recovery only; preserve the production retry policy.

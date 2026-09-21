@@ -4,7 +4,7 @@ Private English-language monitor using existing HTML/CSS/JavaScript and a built-
 
 ## Single-container Gateway
 
-`token-ledger-gateway-lb` now contains **Nginx + Node**, not a separate status service. The only published Gateway port is `${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000`. Node listens only on container loopback `127.0.0.1:8089`; there is **no host 8089 fallback**.
+`token-ledger-gateway-lb` now contains **Nginx + Node**, not a separate status service. Published Gateway ports are HTTP `${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000` and additive HTTPS `${LLM_GATEWAY_TLS_BIND:-127.0.0.1}:${LLM_GATEWAY_TLS_PORT:-443}:4443` (certificates: `docker/gateway/tls/README.md`). Node listens only on container loopback `127.0.0.1:8089`; there is **no host 8089 fallback**.
 
 - `/`, `/app.js`, `/style.css`, `/api/status`: existing collector/frontend through Nginx, admin TCP-peer ACL, only `Host: localhost` forwarded, no client credentials or body.
 - `/gateway/v1/chat/completions`: strips `/gateway`, preserves query/body/auth/identity; OpenAI base URL `/gateway/v1`.
@@ -14,13 +14,13 @@ Private English-language monitor using existing HTML/CSS/JavaScript and a built-
 
 The image builds from `docker/gateway/Dockerfile` using the existing Nginx base and Alpine Node (22+), Bash, Tini and su-exec. Tini reaps adopted children; Bash forwards shutdown to service process groups, gracefully drains Nginx, stops Node, and exits nonzero when either service exits unexpectedly. A 25-second bound fits Compose's 30-second stop grace. Node runs as the unprivileged `nginx` user. No backend `depends_on` gate prevents the web starting when LiteLLM is absent.
 
-**Shared failure domain:** losing either process stops the entire container. Web and inference are both unavailable until restart; an already-open page expires its previous result to unknown. This is not an independent uptime monitor. Dashboard remains separate and untouched.
+**Shared failure domain:** losing either process stops the entire container. Web and inference are both unavailable until restart; an already-open page expires its previous result to unknown. This is not an independent uptime monitor. Dashboard remains separate and also gains its own TLS listener.
 
 ## Infrastructure handoff (operator configuration, not deployed here)
 
 ```text
 Public FQDN: apigateway.rangdong.com.vn
-Public TLS: infrastructure reverse proxy :443
+Public TLS: gateway-lb :4443 (host :443 by default), or an approved infrastructure reverse proxy
 Application upstream: http://<verified-VM-IP>:8088
 Web: /
 OpenAI base URL: https://apigateway.rangdong.com.vn/gateway/v1
@@ -31,7 +31,9 @@ Keep `Host`, `Authorization`, trusted `X-User`, `X-Forwarded-For` and incoming `
 
 Binding and `LLM_GATEWAY_ADMIN_CIDR` default to loopback, deliberately. No admin subnet or proxy address is assumed. For a separate TLS-proxy machine, the operator must verify the VM address and actual TCP peer, bind 8088 to the VM LAN IP, firewall-allow only the infrastructure proxy, and set an approved admin source `/32` or CIDR. Docker NAT can make local host requests appear from a bridge peer: web 403 is expected until that peer is verified. Do not broaden to the whole Docker subnet or `0.0.0.0/0` to bypass this check.
 
-The UI has no login. If all users share an allowed TLS-proxy/NAT peer, that proxy **must enforce admin access** for all four web routes before forwarding. Client XFF does not grant web access. Inference retains its existing auth policy, not the web ACL. Domain/CIDR are trusted operator configuration and must be a valid hostname and single address/CIDR. Envsubst is restricted to those two variables; Nginx runtime variables and dynamic Docker DNS (`resolver`, `zone`, `resolve`) are preserved.
+`LLM_GATEWAY_LAN_CIDR` separately allows approved LAN peers (default `127.0.0.1/32`). Keep both CIDRs narrow; neither trusts client X-Forwarded-For.
+
+The UI has no login. If all users share an allowed TLS-proxy/NAT peer, that proxy **must enforce admin access** for all four web routes before forwarding. Client XFF does not grant web access. Inference retains its existing auth policy, not the web ACL. Domain/CIDR are trusted operator configuration and must be a valid hostname and single address/CIDR. Envsubst is restricted to DOMAIN, ADMIN_CIDR and LAN_CIDR; Nginx runtime variables and dynamic Docker DNS (`resolver`, `zone`, `resolve`) are preserved.
 
 ## Minimal migration — Gateway LB only
 

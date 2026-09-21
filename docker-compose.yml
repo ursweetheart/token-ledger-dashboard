@@ -327,6 +327,17 @@ services:
       # Muon mo cho ca mang thi dat WEB_BIND=0.0.0.0 -- nhung tra loi cau nay
       # truoc: ai cham toi duoc may nay.
       - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
+      # HTTPS them 18/09/2026, song song voi HTTP o tren, khong thay the. Dung
+      # CHUNG bien WEB_BIND (cung mot may, cung quy uoc loopback-truoc). Cong
+      # host mac dinh 8443, KHONG phai 443 -- gateway-lb da chiem 0.0.0.0:443
+      # (LLM_GATEWAY_TLS_PORT), dat WEB_TLS_PORT=443 se EADDRINUSE khi
+      # WEB_BIND=0.0.0.0. Container ben trong van nghe 443 binh thuong, chi
+      # cong publish ra host la khac.
+      - "${WEB_BIND:-127.0.0.1}:${WEB_TLS_PORT:-8443}:443"
+    volumes:
+      # Chung chi TLS wildcard *.rangdong.com.vn, dung chung voi gateway-lb.
+      # Xem docker/gateway/tls/README.md. File .crt/.key KHONG len git.
+      - ./docker/gateway/tls:/etc/nginx/tls:ro
     depends_on:
       - api
 
@@ -634,11 +645,22 @@ services:
       STATUS_PORT: "8089"
       LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
       LLM_GATEWAY_ADMIN_CIDR: ${LLM_GATEWAY_ADMIN_CIDR:-127.0.0.1/32}
-      NGINX_ENVSUBST_FILTER: ^LLM_GATEWAY_(DOMAIN|ADMIN_CIDR)$
+      # Dai LAN duoc phep xem web/status. Mac dinh loopback (vo hai, trung voi
+      # allow 127.0.0.1 co san) -- phai dat ro trong .env moi thuc su mo cho LAN.
+      LLM_GATEWAY_LAN_CIDR: ${LLM_GATEWAY_LAN_CIDR:-127.0.0.1/32}
+      NGINX_ENVSUBST_FILTER: ^LLM_GATEWAY_(DOMAIN|ADMIN_CIDR|LAN_CIDR)$
     volumes:
       - ./docker/gateway/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      # Chung chi TLS wildcard *.rangdong.com.vn that (Sectigo), xem
+      # docker/gateway/tls/README.md. File .crt/.key KHONG len git.
+      - ./docker/gateway/tls:/etc/nginx/tls:ro
     ports:
       - "${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000"
+      # HTTPS them 18/09/2026, song song voi HTTP o tren, khong thay the. Mac
+      # dinh CO Y giu loopback (an toan-truoc) -- phai tu dat
+      # LLM_GATEWAY_TLS_BIND trong .env moi thuc su mo ra ngoai (giong quy uoc
+      # cua LLM_GATEWAY_EDGE_BIND).
+      - "${LLM_GATEWAY_TLS_BIND:-127.0.0.1}:${LLM_GATEWAY_TLS_PORT:-443}:4443"
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:4000/lb-health | grep -q lb-ok && wget -q -O /dev/null http://127.0.0.1:8089/"]
       interval: 10s
