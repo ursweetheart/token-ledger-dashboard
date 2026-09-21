@@ -257,7 +257,12 @@ jobs:
       #
       # Lan nay quen sua so o day va CI do -- lan thu ba cung mot ly do trong lich
       # su repo nay. Them phep kiem thi phai sua dong nay TRONG CUNG commit.
-      EXPECTED_PY: "159"
+      # Moc do 21/09/2026: 159 -> 170, them 11 phep kiem cua phep tra khoa doi
+      # (agent, ten dang nhap) -> tai khoan. Dem bang CUNG lenh ma buoc duoi chay:
+      # `python -m unittest discover -s tests -p "test_*.py"` in ra "Ran 170 tests".
+      # KHONG dem bang pytest: no bao "170 passed, 21 subtests passed", va subtest
+      # khong vao con so "Ran" -- hai cach dem cho hai so khac nhau.
+      EXPECTED_PY: "170"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8
