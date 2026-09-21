@@ -65,16 +65,65 @@
      Cùng cái bẫy `hidden` như .load-note ở trên: một class có display:flex sẽ
      THẮNG display:none mức user-agent. Khối này là display:flex nên PHẢI có
      dòng [hidden] riêng, nếu không nó hiện ra rỗng ở mọi trang. */
+  /* CỔNG KHOÁ — LỚP PHỦ TOÀN MÀN HÌNH (đổi 20/09/2026)
+     Trước đó đây là một khối rộng 640px nằm trong luồng trang: dashboard vẫn ở
+     đó phía dưới, chỉ là rỗng.
+
+     Lớp phủ này KHÔNG phải để che mắt. Backend vốn không trả một con số nào khi
+     chưa có khoá, nên dữ liệu chưa từng về tới trình duyệt — lớp phủ chỉ làm cho
+     điều đó TRÔNG đúng như nó vốn là. Trang nào tải hết rồi phủ một lớp lên trên
+     thì mở công cụ nhà phát triển là thấy; ở đây thì không có gì để thấy. */
   .key-gate[hidden]{ display:none; }
   .key-gate{
-    display:flex; flex-direction:column; gap:10px;
-    background:rgba(56,189,248,.06); border:1px solid rgba(56,189,248,.30);
-    color:#bae6fd; font-size:13px; padding:14px 16px; border-radius:8px;
-    margin-bottom:16px; line-height:1.55; max-width:640px;
+    position:fixed; inset:0; z-index:9000;
+    display:flex; flex-direction:column; gap:12px;
+    align-items:center; justify-content:center;
+    /* Nền ĐẶC, không trong suốt: trong suốt là để lộ bố cục phía sau, và người
+       xem sẽ tưởng dashboard đã tải xong rồi bị che. */
+    background:#0b1220;
+    color:#bae6fd; font-size:14px; padding:24px; line-height:1.6;
+    text-align:center;
   }
-  .key-gate.wrong{
-    background:rgba(239,68,68,.10); border-color:rgba(239,68,68,.40); color:#fca5a5;
+  .key-gate > *{ width:100%; max-width:440px; }
+  .key-gate.wrong{ color:#fca5a5; }
+  .key-gate.wrong input{ border-color:rgba(239,68,68,.55); }
+  .key-gate-lock{ font-size:34px; line-height:1; }
+  /* Chưa có khoá thì phần còn lại của trang không được dựng ra. Chỉ phủ lên trên
+     là chưa đủ: một bảng rỗng nằm dưới vẫn đọc được bằng công cụ nhà phát triển,
+     và người xem cuộn trúng sẽ tưởng dashboard hỏng chứ không phải chưa đăng nhập. */
+  body.locked > *:not(.key-gate){ display:none !important; }
+
+  /* Tab Setting */
+  .quota-note{ font-size:12.5px; color:#94a3b8; margin:0 0 12px; line-height:1.6; }
+  .quota-note b{ color:#e2e8f0; }
+  .quota-table input{
+    width:110px; background:rgba(15,23,42,.75); border:1px solid rgba(148,163,184,.35);
+    color:#e2e8f0; font-family:'JetBrains Mono',monospace; font-size:12.5px;
+    padding:5px 8px; border-radius:6px; text-align:right;
   }
+  .quota-table button{
+    background:rgba(56,189,248,.16); border:1px solid rgba(56,189,248,.45);
+    color:#e0f2fe; font-size:12px; font-weight:600; padding:5px 12px;
+    border-radius:6px; cursor:pointer; margin-left:6px;
+  }
+  .quota-table button:disabled{ opacity:.5; cursor:default; }
+  /* Nút Chặn dừng lưu lượng của một agent thật, nên nó KHÔNG được trông giống
+     hai nút kia. Đảo ngược thì dễ — gõ số rồi Đặt thành — nhưng bấm nhầm vẫn
+     làm agent im vài phút trước khi có người để ý. */
+  .quota-table button.quota-danger{
+    background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.45); color:#fca5a5;
+  }
+  .quota-table button.quota-danger:hover{ background:rgba(239,68,68,.24); }
+  .quota-flag{ font-size:11.5px; color:#fbbf24; display:block; margin-top:3px; }
+  /* Dòng "agent: ..." chỉ là thông tin, không phải cảnh báo — màu khác hẳn để
+     mắt không đọc nhầm nó thành một điều đáng lo. */
+  .quota-flag.quota-agent{ color:#94a3b8; }
+  .quota-blocked{ color:#fca5a5; font-weight:600; }
+  .quota-warn{ color:#fbbf24; }
+  .quota-fine{ color:#86efac; }
+  .quota-msg{ font-size:11.5px; display:block; margin-top:3px; }
+  .quota-msg.bad{ color:#fca5a5; }
+  .quota-msg.good{ color:#86efac; }
   .key-gate-row{ display:flex; gap:8px; flex-wrap:wrap; }
   .key-gate input{
     flex:1 1 260px; min-width:0;
@@ -348,6 +397,7 @@
 
      KHOÁ KHÔNG ĐI QUA URL - app.js gửi nó trong header. Xem js/api.js. -->
 <div class="key-gate" id="key-gate" hidden>
+  <div class="key-gate-lock" aria-hidden="true">🔒</div>
   <div id="key-gate-msg"></div>
   <div class="key-gate-row">
     <input id="key-input" type="password" autocomplete="off" spellcheck="false"
@@ -515,6 +565,7 @@
   <button class="tab" data-tab="providers">🏭 Provider &amp; Model</button>
   <button class="tab" data-tab="cost">💸 Chi phí</button>
   <button class="tab" data-tab="performance">⚡ Hiệu năng</button>
+  <button class="tab" data-tab="setting">⚙ Setting</button>
 </div>
 
 <div class="delta-legend">Cách đọc so sánh: <b>▲/▼ % KT</b> = tăng/giảm so với <b>kỳ trước</b>, <b>▲/▼ % CK</b> = so với <b>cùng kỳ năm trước</b>. Di chuột vào dòng để xem kỳ gốc và giá trị kỳ gốc → giá trị hiện tại.</div>
@@ -1267,6 +1318,48 @@
         <th class="num">Tỷ lệ thành công</th><th class="num">Tỷ lệ lỗi</th>
       </tr></thead>
       <tbody id="pf-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB: SETTING (hạn mức) ═══════════════
+     Bảng này KHÔNG dựng bằng markup tĩnh: danh sách khoá đến từ Gateway, và
+     viết cứng một danh sách project ở đây thì thêm agent mới là phải sửa HTML.
+
+     SỐ HIỆN Ở ĐÂY LÀ SỐ GATEWAY THẤY, không phải tổng chi phí trên các tab kia.
+     Hai con số đó khác nhau vì Gateway chỉ thấy lưu lượng đi qua nó — và đây là
+     số quyết định chặn hay không, nên phải hiện đúng nó. Hiện số kia thì người
+     nhập sẽ thấy "38/50" trong khi agent đã bị chặn, và không cách nào giải
+     thích được. -->
+<div class="tab-content" id="setting">
+  <div class="insight-banner">
+    <span class="insight-text"><b>Hạn mức chi tiêu</b> theo từng khoá agent.
+      Hết là hết — không tự đặt lại theo tháng, phải nạp thêm.</span>
+  </div>
+
+  <div class="quota-note" id="quota-note"></div>
+
+  <div class="table-container">
+    <table class="quota-table">
+      <thead><tr>
+        <th>Khoá agent</th>
+        <th class="num">Đã tiêu (USD)</th>
+        <th class="num">Hạn mức (USD)</th>
+        <th class="num">Tỷ lệ</th>
+        <th>Trạng thái</th>
+        <th>Đặt hạn mức</th>
+      </tr></thead>
+      <tbody id="quota-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="overview-flow-head"><h3><span class="flow-step">2</span>Lịch sử nạp</h3></div>
+  <div class="table-container">
+    <table class="quota-log-table">
+      <thead><tr>
+        <th>Khoá agent</th><th>Lúc</th><th class="num">Từ</th><th class="num">Thành</th><th>Người đặt</th>
+      </tr></thead>
+      <tbody id="quota-log-tbody"></tbody>
     </table>
   </div>
 </div>

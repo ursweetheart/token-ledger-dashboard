@@ -21,7 +21,7 @@ services:
   litellm-bench:
     # PHAI giong het dong `image:` cua x-litellm trong docker-compose.yml (CI kiem):
     # do tai tren mot image khac image dang chay thi so do khong noi len dieu gi.
-    image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:4373a32c2a2608cdbd732ba47ba057615e5e2846}
+    image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:b7657e95b1650f75551404f62e134ae54dfc5740}
     container_name: token-ledger-litellm-bench
     profiles: ["bench"]
     restart: "no"

@@ -85,7 +85,7 @@ test("Same-port status is private and inference prefix is exact", () => {
   assert.match(compose, /LLM_GATEWAY_LAN_CIDR: \$\{LLM_GATEWAY_LAN_CIDR:-127\.0\.0\.1\/32\}/);
   assert.match(compose, /NGINX_ENVSUBST_FILTER: \^LLM_GATEWAY_\(DOMAIN\|ADMIN_CIDR\|LAN_CIDR\)\$/);
   assert.doesNotMatch(compose, /^  gateway-status:|8089:8089/m);
-  const lb = compose.split('  gateway-lb:')[1].split('\n# Khai ro')[0];
+  const lb = compose.split('  gateway-lb:')[1].split(/\n  [a-z][a-z0-9-]*:|\n# Khai ro/)[0];
   assert.match(lb, /dockerfile: docker\/gateway\/Dockerfile/);
   assert.doesNotMatch(lb, /depends_on:/);
   assert.match(lb, /STATUS_BIND: "127\.0\.0\.1"/);

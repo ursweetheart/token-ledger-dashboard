@@ -197,6 +197,20 @@ general_settings:
     password: os.environ/REDIS_PASSWORD
 
 litellm_settings:
+  # [HAN MUC] Hook chan khi mot project da tieu het han muc ghi trong `metadata`
+  # cua chinh virtual key. File nam o docker/gateway/quota_hook.py va di vao
+  # container bang `volumes` (xem khoi `x-litellm` trong docker-compose.yml);
+  # image tu GHCR khong chua ma cua repo nay.
+  #
+  # BAT DAU O CHE DO CHI GHI NHAN: `QUOTA_DRY_RUN=1` trong .env. No tinh du va
+  # ghi dong `quota_block_would_have`, nhung cho MOI request di qua. Chi bo co do
+  # sau khi da doi chieu so.
+  #
+  # KHAI SAI TEN O DAY KHONG LAM LITELLM DUNG. Container van len, healthcheck van
+  # xanh, va han muc lang le khong chan gi. Kiem bang mot luot goi THAT roi tim
+  # dong `quota_block` trong log - khong ket luan tu trang thai container.
+  callbacks: ["quota_hook.proxy_handler_instance"]
+
   drop_params: true
 
   # [BAT 3/3] Doi trong bat buoc cua khoa 2. Xoa noi dung prompt/response truoc

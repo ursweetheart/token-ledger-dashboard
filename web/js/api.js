@@ -417,6 +417,41 @@
              budgets: budgets, fxRate: catalog.fx_rate || null };
   }
 
+  /* Gọi một endpoint hạn mức. LUÔN resolve, không bao giờ reject.
+
+     Thông báo lỗi lấy nguyên văn `detail` của FastAPI khi có, vì nó là thứ nói
+     được VÌ SAO bị từ chối ("must not be negative", "no key named ..."). Một câu
+     "lưu không được" chung chung thì người dùng không sửa được gì. */
+  function quotaCall(path, method, payload) {
+    var k = khoa(), headers = {}, goi;
+    if (k) headers["Authorization"] = "Bearer " + k;
+    if (payload) headers["Content-Type"] = "application/json";
+    try {
+      goi = fetch(base() + path, {
+        method: method, cache: "no-store", headers: headers,
+        body: payload ? JSON.stringify(payload) : undefined
+      });
+    } catch (e) {
+      /* `fetch` ném NGAY thay vì trả Promise hỏng - hiếm, nhưng xảy ra khi môi
+         trường không có `fetch`, hoặc một tiện ích mở rộng chặn lời gọi. Không
+         bắt ở đây thì lỗi lọt ra ngoài và app.js treo ở chữ "Đang lưu…" mãi mãi:
+         `.then` của nó không bao giờ chạy, kể cả nhánh thất bại. */
+      return Promise.resolve({ ok: false, message: "khong goi duoc: " + (e && e.message) });
+    }
+    return goi.then(function (r) {
+      return r.json().then(function (j) { return { r: r, j: j }; },
+                           function () { return { r: r, j: null }; });
+    }).then(function (x) {
+      if (x.r.ok) return { ok: true, data: x.j };
+      var d = x.j && x.j.detail;
+      return { ok: false,
+               message: (typeof d === "string" ? d : JSON.stringify(d || {}))
+                        || ("HTTP " + x.r.status) };
+    }, function () {
+      return { ok: false, message: "khong toi duoc " + base() + path };
+    });
+  }
+
   global.TokenLedgerAPI = {
     base: base,
 
@@ -424,6 +459,26 @@
        `load()`. File này vẫn KHÔNG vẽ gì - đó là hợp đồng ghi ở đầu file. */
     khoa: khoa,
     datKhoa: datKhoa,
+
+    /* ─── HẠN MỨC ────────────────────────────────────────────────────────
+       Ba hàm này là ĐƯỜNG GHI DUY NHẤT của cả frontend. Mọi thứ khác trong
+       file này chỉ đọc.
+
+       Chúng trả về `{ok:true, data}` hoặc `{ok:false, message}` - KHÔNG ném.
+       Cùng hợp đồng với `load()` ở dưới, và cùng một lý do: phía gọi phải
+       phân biệt được "lưu xong" với "lưu hỏng" để không hiện số mới như thể
+       đã lưu. Đó đúng là cái bẫy của panel nhập tay bị xoá 17/08/2026. */
+    quotaList: function () { return quotaCall("/api/quota", "GET"); },
+
+    quotaSet: function (keyAlias, usd) {
+      return quotaCall("/api/quota?key_alias=" + encodeURIComponent(keyAlias),
+                       "POST", { quota_usd: usd });
+    },
+
+    quotaTopUp: function (keyAlias, usd) {
+      return quotaCall("/api/quota/top-up?key_alias=" + encodeURIComponent(keyAlias),
+                       "POST", { quota_usd: usd });
+    },
 
     /* Trả về Promise, LUÔN resolve - không bao giờ reject.
        Hình dạng kết quả:
