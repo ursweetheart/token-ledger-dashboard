@@ -307,6 +307,37 @@ def human_duration(seconds: float) -> str:
     return f"{seconds // 3600} gio {seconds % 3600 // 60} phut"     # vi-ok: email text
 
 
+def parse_since(since: str) -> datetime | None:
+    """Đọc mốc bắt đầu từ tệp trạng thái. Hỏng thì trả `None` — thư vẫn phải gửi được."""
+    try:
+        return datetime.fromisoformat(since) if since else None
+    except ValueError:
+        LOG.warning("State file has an unreadable start time %r", since)
+        return None
+
+
+def diagnose(components: list[dict]) -> str:
+    """Một dòng kết luận từ bảng thành phần của `gateway-status`.
+
+    D3: chênh lệch giữa các lớp CHÍNH LÀ chẩn đoán. Bảng ở cuối thư có đủ dữ kiện, nhưng đọc được
+    nó thì phải biết `proxy1` là gì; người bị gọi dậy lúc nửa đêm không nợ ai kiến thức đó.
+    """
+    state_of = {str(c.get("id")): str(c.get("status"))
+                for c in components if isinstance(c, dict)}
+    if not state_of:
+        return ""
+    dead = [name for name in ("proxy1", "proxy2")
+            if state_of.get(name, "reachable") != "reachable"]
+    if state_of.get("lb", "reachable") != "reachable":
+        # nginx im thì mọi thứ sau nó đều đỏ theo, không suy ra được gì thêm.
+        return "nginx (gateway-lb) khong tra loi -- hong o lop ngoai cung."   # vi-ok: email text
+    if len(dead) == 2:
+        return "nginx con song, nhung CA HAI instance LiteLLM deu chet."      # vi-ok: email text
+    if dead:
+        return f"nginx con song, instance {dead[0]} chet."                    # vi-ok: email text
+    return "Cac thanh phan deu bao song -- hong o duong di toi chung."        # vi-ok: email text
+
+
 def build_body(watch_name: str, new: str, old: str, now: datetime,
                since: str, http: dict[str, str], status: str,
                components: list[dict], status_error: str, every: int) -> str:
@@ -316,21 +347,40 @@ def build_body(watch_name: str, new: str, old: str, now: datetime,
         f"Thoi diem:  {stamp(now)}",                                # vi-ok: email text
         "",
     ]
-    if new == OK and since:
-        try:
-            started = datetime.fromisoformat(since)
-            lines += [
-                f"Su co bat dau: {stamp(started)}",                 # vi-ok: email text
-                f"Su co ket thuc: {stamp(now)}",                    # vi-ok: email text
-                f"Keo dai: {human_duration((now - started).total_seconds())} "
-                f"(chinh xac toi mot nhip do, tuc +/- {every} giay)",  # vi-ok: email text
-                "",
-                "So luot agent da di THANG toi nha cung cap trong khoang nay khong nam o day.",  # vi-ok: email text
-                "Tra trong log cua agent, tim theo dau [FALLBACK].",  # vi-ok: email text
-                "",
-            ]
-        except ValueError:
-            LOG.warning("State file has an unreadable start time %r", since)
+    started = parse_since(since)
+    if new == DOWN:
+        lines += [
+            "Gateway KHONG phuc vu duoc: moi luot goi di qua Gateway deu dang hong.",  # vi-ok: email text
+            "Agent nao co duong du phong thi van chay (goi thang nha cung cap); agent khong co thi dung.",  # vi-ok: email text
+        ]
+        # Chẩn đoán một dòng. Bảng thành phần ở dưới có đủ dữ kiện, nhưng người nhận lúc nửa đêm
+        # không phải người biết `proxy1` là gì — bắt họ tự suy ra là bắt họ hỏi lại.
+        hint = diagnose(components)
+        if hint:
+            lines.append(hint)
+        if started:
+            lines.append(f"Hong tu khoang: {stamp(started)} "                 # vi-ok: email text
+                         f"(lan do TOT cuoi cung; su co bat dau sau moc nay)")  # vi-ok: email text
+        lines += [
+            "",
+            "Kiem nhanh:",                                              # vi-ok: email text
+            "  docker compose --profile gateway ps",
+            "  docker compose --profile gateway logs --tail 50 gateway-lb",
+            "",
+        ]
+    if new == OK and started:
+        lines += [
+            f"Su co bat dau: {stamp(started)}",                     # vi-ok: email text
+            f"Su co ket thuc: {stamp(now)}",                        # vi-ok: email text
+            f"Keo dai: {human_duration((now - started).total_seconds())}",  # vi-ok: email text
+            f"Moc bat dau la lan do TOT cuoi cung, nen su co that bat dau SAU moc nay, "
+            f"trong vong mot nhip ({every} giay). Khoang nay rong hon that mot chut - "
+            f"co y, de tra log agent khong bo sot.",                # vi-ok: email text
+            "",
+            "So luot agent da di THANG toi nha cung cap trong khoang nay khong nam o day.",  # vi-ok: email text
+            "Tra trong log cua agent, tim theo dau [FALLBACK].",     # vi-ok: email text
+            "",
+        ]
     if new == BLIND:
         lines += [
             "KHONG doc duoc trang thai tu gateway-status.",          # vi-ok: email text
@@ -384,6 +434,9 @@ def tick(cfg: dict, state: dict, args) -> dict:
     state["ticks"] = state.get("ticks", 0) + 1
     if observed != OK:
         state["bad_ticks"] = state.get("bad_ticks", 0) + 1
+    else:
+        # Mốc "tốt cuối cùng". Thư sự cố lấy mốc này làm lúc bắt đầu — xem `commit()`.
+        state["last_ok"] = now.isoformat()
 
     if observed == current:
         state["pending"], state["pending_count"] = "", 0
@@ -406,12 +459,26 @@ def tick(cfg: dict, state: dict, args) -> dict:
 def commit(cfg: dict, state: dict, new: str, now: datetime, http: dict[str, str],
            status: str, components: list[dict], status_error: str, args) -> None:
     old = state.get("state", OK)
-    body = build_body(cfg["name"], new, old, now, state.get("since", ""),
+    # `since` trống nghĩa là sự cố VỪA bắt đầu — lúc ấy mốc nằm ở `last_ok`. Thiếu dòng này thì thư
+    # `DOWN` không nói được hỏng từ bao giờ, mà thư `OK` thì mãi sau mới tới.
+    body = build_body(cfg["name"], new, old, now,
+                      state.get("since") or state.get("last_ok", ""),
                       http, status, components, status_error, cfg["every"])
     send_mail(f"[{cfg['name']}] {SEVERITY.get(new, '?')} - "
               f"{SUBJECT.get(new, new)}", body, args.dry_run)
     state["state"] = new
-    state["since"] = "" if new == OK else now.isoformat()
+    if new == OK:
+        state["since"] = ""
+    elif old == OK:
+        # Mốc bắt đầu là lần dò TỐT cuối cùng, KHÔNG phải nhịp dò làm đủ hai lần hỏng. Lấy nhịp
+        # ấy thì khoảng thời gian trong thư hụt mất cả quãng chờ — đo 18/09/2026: sự cố thật
+        # 3 phút 31 giây, thư ghi 1 phút 31 giây, mốc bắt đầu muộn 144 giây. Và đúng quãng hụt ấy
+        # là lúc agent
+        # đi đường thẳng nhiều nhất, tức thứ người ta cần tra nhất (D8) lại rơi ngoài khoảng.
+        # Thà rộng hơn thật một nhịp còn hơn hẹp hơn: khoảng rộng chỉ tốn công đọc, khoảng hẹp
+        # thì mất số liệu.
+        state["since"] = state.get("last_ok") or now.isoformat()
+    # Đi xuống sâu hơn (degraded -> unavailable) thì GIỮ mốc cũ: vẫn là một sự cố, không phải hai.
     state["pending"], state["pending_count"] = "", 0
     LOG.warning("State changed: %s -> %s", old, new)
 
@@ -456,7 +523,11 @@ def build_config(args) -> dict:
         # `degraded` — sai mức độ, và sinh hai thư cho một sự cố.
         "timeout": float(env("WATCH_TIMEOUT_SECONDS", "25")),
         "fails_before": max(1, int(env("WATCH_FAILS_BEFORE", "2"))),
-        "heartbeat_hour": int(env("WATCH_HEARTBEAT_HOUR", "8")),
+        # `off` tắt hẳn thư nhịp tim. 99 vì `local.hour` không bao giờ tới đó, nên phép so
+        # trong `heartbeat()` luôn trả về sớm — tắt mà không thêm một nhánh `if` nào.
+        # Tắt là MẤT lớp phủ "chỗ canh chết lặng lẽ": xem D7, và mục 3 tài liệu vận hành.
+        "heartbeat_hour": 99 if env("WATCH_HEARTBEAT_HOUR", "8").lower() in (
+            "off", "no", "false") else int(env("WATCH_HEARTBEAT_HOUR", "8")),
         "targets": targets,
         "expect": parse_pairs(env("WATCH_EXPECT")),
         "status_url": env("WATCH_STATUS_URL"),

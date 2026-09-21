@@ -193,7 +193,15 @@ jobs:
     env:
       # Mốc đo 16/09/2026. Thêm hoặc bớt phép kiểm có chủ ý thì sửa số này —
       # con số đổi trong lịch sử git chính là chỗ nhìn thấy việc đó.
-      EXPECTED_JS: "84"
+      # Mốc đo 18/09/2026: 81 → 82, phép kiểm thêm vào từ bee2da6 (TLS trên gateway-lb).
+      # Commit ấy quên sửa số này nên `main` đỏ từ 03:49; sửa ở đây để lượt gộp xanh, và
+      # `main` hết đỏ ngay khi PR này vào.
+      # Moc do 20/09/2026: 82 -> 96, them 14 phep kiem cua han muc (cong khoa phu
+      # toan man hinh, va lop goi API han muc - duong GHI dau tien cua frontend).
+      # Moc do 20/09/2026 (lan 2): 96 -> 98, khoa lai hanh vi ba nut cua tab
+      # Setting sau khi bo phuong an mot nut doi nghia theo trang thai.
+      # The branch adds three agent-scope checks on top of main's 98.
+      EXPECTED_JS: "101"
     steps:
       - uses: actions/checkout@v4
 
@@ -239,7 +247,18 @@ jobs:
       # 9 gộp độ trễ, 4 nạp nhà cung cấp).
       # Mốc đo 15/09/2026: 37 → 58, thêm 21 phép kiểm của tools/check_english_names.py
       # (change name-the-code-in-english). Lần đẩy e3a214b đỏ vì quên sửa số này.
-      EXPECTED_PY: "71"
+      # Mốc đo 18/09/2026: 71 → 85, thêm 14 phép kiểm của gateway-watch (mốc bắt đầu sự cố,
+      # nội dung thư DOWN, chẩn đoán một dòng, công tắc nhịp tim). Lần đẩy 021856f đỏ vì
+      # quên sửa số này — lần thứ hai cùng một lý do.
+      # Moc do 20/09/2026: 85 -> 154, them 69 phep kiem cua han muc (lop goi Gateway,
+      # hook chan, bo canh bac canh bao). Ca ba tep deu chay duoc tren may sach:
+      # phan logic da duoc tach khoi FastAPI va khoi litellm co y vi ly do nay.
+      # Moc do 20/09/2026 (lan 2): 154 -> 159, them 5 phep kiem cua `tag_of` khi
+      # sua cach gom khoa: gom theo TAG chu khong theo ten khoa.
+      #
+      # Lan nay quen sua so o day va CI do -- lan thu ba cung mot ly do trong lich
+      # su repo nay. Them phep kiem thi phai sua dong nay TRONG CUNG commit.
+      EXPECTED_PY: "159"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8
@@ -290,8 +309,12 @@ jobs:
       FORK_URL: https://github.com/ursweetheart/litellm_rang_dong
       FORK_BRANCH: Tuan-develop
       IMAGE_REPO: ghcr.io/ursweetheart/litellm_rang_dong
-      PATCH_FILE: litellm/_redis.py
-      PATCH_SYMBOL: _SENTINEL_IGNORED_CONNECTION_ARGS
+      # MOI BAN VA TRONG FORK PHAI CO MOT DONG O DAY, dang `<tep>:<ky hieu>`.
+      # Thieu mot ban va thi khong co loi cu phap nao -- chi la mot tinh nang bien
+      # mat lang le sau mot lan merge upstream. Do la ly do buoc canh nay ton tai.
+      FORK_PATCHES: |
+        litellm/_redis.py:_SENTINEL_IGNORED_CONNECTION_ARGS
+        litellm/proxy/proxy_server.py:_REJECTED_STREAM_LOGGING_FALLBACK
     steps:
       - uses: actions/checkout@v4
 
@@ -304,18 +327,31 @@ jobs:
           echo "FORK_COMMIT=$FORK_COMMIT" >> "$GITHUB_ENV"
           echo "Fork $FORK_BRANCH is at $FORK_COMMIT."
 
-      # D3: thiếu bản vá thì LiteLLM chết lúc khởi động. Canh TRƯỚC khi build, để
+      # D3: thiếu bản vá thì hỏng, mỗi bản một kiểu. Canh TRƯỚC khi build, để
       # không có image hỏng nào lên kho. Đo 14/09/2026: nhánh
-      # litellm_internal_staging của fork không có bản vá.
-      - name: Require the Sentinel patch
+      # litellm_internal_staging của fork không có bản vá Sentinel.
+      #
+      #   _SENTINEL_IGNORED_CONNECTION_ARGS  thiếu -> LiteLLM CHẾT lúc khởi động
+      #       TypeError: Redis.__init__() got multiple values for argument 'host'
+      #
+      #   _REJECTED_STREAM_LOGGING_FALLBACK  thiếu -> KHÔNG có lỗi nào lúc khởi
+      #       động, nhưng mọi request `stream=True` bị hạn mức chặn sẽ trả HTTP
+      #       500 thay vì câu thông báo. Đo 20/09/2026. Kiểu hỏng thứ hai nguy
+      #       hơn: nó chỉ lộ ra khi có người dùng thật gặp lúc hết hạn mức.
+      - name: Require the fork patches
         run: |
-          if ! grep -q "$PATCH_SYMBOL" "fork/$PATCH_FILE" 2>/dev/null; then
-            echo "::error::Sentinel patch missing: $PATCH_SYMBOL not found in $PATCH_FILE."
-            echo "::error::Fork $FORK_URL, branch $FORK_BRANCH, commit $FORK_COMMIT."
-            echo "::error::Without it LiteLLM exits at startup with: Redis.__init__() got multiple values for argument 'host'."
-            exit 1
-          fi
-          echo "Sentinel patch present in $PATCH_FILE."
+          # `<<<` chứ KHÔNG phải `echo ... | while`: đường ống đẩy vòng lặp vào
+          # một subshell, và `exit 1` ở trong đó thoát subshell chứ không chắc
+          # làm đỏ bước này. Một phép canh không đỏ được khi hỏng thì vô dụng.
+          while IFS=: read -r file symbol; do
+            [ -n "$file" ] || continue
+            if ! grep -q "$symbol" "fork/$file" 2>/dev/null; then
+              echo "::error::Fork patch missing: $symbol not found in $file."
+              echo "::error::Fork $FORK_URL, branch $FORK_BRANCH, commit $FORK_COMMIT."
+              exit 1
+            fi
+            echo "Patch present: $symbol in $file."
+          done <<< "$FORK_PATCHES"
 
       - name: Log in to GHCR
         env:

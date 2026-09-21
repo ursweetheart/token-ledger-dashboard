@@ -77,11 +77,18 @@ x-litellm: &litellm
   # openspec/changes/package-the-gateway-image-in-ci/. May nao chi co repo nay,
   # khong co fork ben canh, van `pull` va `up` duoc.
   #
-  # PHAI LA COMMIT CO BAN VA SENTINEL. Thieu ban va thi LiteLLM CHET ngay luc
-  # khoi dong voi
-  #     TypeError: Redis.__init__() got multiple values for argument 'host'
-  # CI grep _SENTINEL_IGNORED_CONNECTION_ARGS trong litellm/_redis.py TRUOC khi
-  # build, nen khong nhan nao tren kho thieu ban va.
+  # PHAI LA COMMIT CO DU HAI BAN VA. CI grep ca hai trong fork TRUOC khi build
+  # (bien `FORK_PATCHES` trong .github/workflows/ci.yml), nen khong nhan nao tren
+  # kho thieu ban va. Hai ban va hong theo hai kieu khac han:
+  #
+  #   _SENTINEL_IGNORED_CONNECTION_ARGS  (litellm/_redis.py)
+  #       Thieu -> LiteLLM CHET ngay luc khoi dong voi
+  #       TypeError: Redis.__init__() got multiple values for argument 'host'
+  #
+  #   _REJECTED_STREAM_LOGGING_FALLBACK  (litellm/proxy/proxy_server.py)
+  #       Thieu -> KHONG co loi nao luc khoi dong, container van `healthy`, nhung
+  #       moi request `stream=True` bi han muc chan se tra HTTP 500 thay vi cau
+  #       thong bao. Chi lo ra khi co nguoi dung that gap luc het han muc.
   #
   #     repo   git@github.com:ursweetheart/litellm_rang_dong.git
   #     nhanh  Tuan-develop               <- CO ban va, CI build tu nhanh nay
@@ -94,7 +101,7 @@ x-litellm: &litellm
   # Thu mot ban fork dang sua tren may, KHONG sua tep nay:
   #     docker build -t litellm-local ../litellm_tuan_test
   #     roi dat LITELLM_IMAGE=litellm-local trong .env
-  image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:4373a32c2a2608cdbd732ba47ba057615e5e2846}
+  image: ${LITELLM_IMAGE:-ghcr.io/ursweetheart/litellm_rang_dong:b7657e95b1650f75551404f62e134ae54dfc5740}
   profiles: ["gateway"]
   restart: unless-stopped
   # entrypoint rieng: chan khoi dong khi thieu khoa, roi moi giao lai cho
@@ -104,6 +111,15 @@ x-litellm: &litellm
   volumes:
     - ./docker/gateway/config.gateway.yaml:/app/config.yaml:ro
     - ./docker/gateway/entrypoint.sh:/gateway-entrypoint.sh:ro
+    # Hook chặn hạn mức. Image lấy từ GHCR không chứa mã của repo này, nên file
+    # đi vào container bằng đúng đường mà cấu hình và entrypoint đang đi. Đặt ở
+    # `/app` vì đó là thư mục làm việc của LiteLLM - `litellm_settings.callbacks`
+    # phân giải tên module theo đường dẫn nạp của tiến trình.
+    #
+    # KHAI SAI TÊN CALLBACK KHÔNG LÀM LITELLM DỪNG: container vẫn `healthy` và
+    # hạn mức lặng lẽ không chặn gì. Sau khi triển khai phải gọi THẬT một lượt
+    # rồi xem log có dòng `quota_block` không.
+    - ./docker/gateway/quota_hook.py:/app/quota_hook.py:ro
   environment:
     # Database RIENG tren chinh may postgres o duoi. token_ledger phai co DUNG 0
     # bang LiteLLM_* - do la mot phep kiem nghiem thu, khong phai so thich.
@@ -138,6 +154,19 @@ x-litellm: &litellm
     # Thieu bien nay thi docker/gateway/entrypoint.sh dung han truoc khi LiteLLM
     # khoi dong -- vong kiem trong tep do CO bien nay, da kiem lai 17/09.
     KEY_CRM_FEEDBACK: ${KEY_CRM_FEEDBACK:-}
+    # --- HOOK CHAN HAN MUC ---------------------------------------------------
+    # Ba bien nay CO gia tri mac dinh trong chinh quota_hook.py, nen thieu chung
+    # khong lam Gateway chet - co y: mot hook chan tien ma lam Gateway khong len
+    # duoc la doi mot van de nho lay mot van de to.
+    #
+    # QUOTA_DRY_RUN=1: tinh du, ghi dong "le ra da chan", nhung CHO MOI request
+    # di qua. Day la che do phai chay truoc khi bat chan that.
+    QUOTA_DRY_RUN: ${QUOTA_DRY_RUN:-1}
+    # Tag cua agent CO NGUOI CHAT. Tag khong nam trong day duoc coi la agent chay
+    # theo lo va nhan 429 - mac dinh an toan, vi van xuoi di vao mot duong phan
+    # tich JSON thi sinh ra du lieu rac ma khong loi nao bao ra.
+    QUOTA_CHAT_TAGS: ${QUOTA_CHAT_TAGS:-contact-center,sale-agent,tla-hd,ralli}
+    QUOTA_BLOCK_MESSAGE: ${QUOTA_BLOCK_MESSAGE:-}
     REDIS_HOST: redis
     REDIS_PORT: "6379"
     REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
@@ -290,6 +319,19 @@ services:
       # on a machine without .env. backend/main.py:129 refuses to start instead,
       # with a message that says what to do.
       DASHBOARD_KEY: ${DASHBOARD_KEY:-}
+      # --- HAN MUC ---------------------------------------------------------
+      # Hai endpoint han muc goi THANG vao litellm-1, KHONG qua gateway-lb:
+      # nginx o edge chi mo /v1/chat/completions va /health/*, moi duong khac tra
+      # 404 -- ke ca /key/list va /key/update. Do bang mot luot goi that 20/09.
+      #
+      # Dia chi nay chi phan giai duoc BEN TRONG mang Docker. Chay uvicorn tren
+      # host thi khong toi duoc litellm (no khong publish cong nao), luc do dat
+      # QUOTA_DISABLED=1.
+      GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-http://litellm-1:4000}
+      # Can master key de sua `metadata` cua virtual key. Thieu no thi backend
+      # TU CHOI KHOI DONG, tru khi QUOTA_DISABLED=1.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      QUOTA_DISABLED: ${QUOTA_DISABLED:-}
     ports:
       # Side door, keeps the old habit working: opening web/index.html over
       # file:// still loads. The main door is nginx on 8080.
@@ -771,6 +813,54 @@ services:
     # nao. Muon chat hon thi phai `chown` volume luc khoi tao -- lam khi co yeu cau that.
     tmpfs:
       - /tmp
+
+  # Canh HAN MUC. Tach khoi `gateway-watch` o tren vi hai viec khac han: cai kia
+  # hoi "Gateway con song khong", cai nay hoi "project nao sap het tien".
+  #
+  # Dung chung image `tools`, chung khuon gui thu, chung kieu file trang thai --
+  # scripts/watch_quota.py import thang tu scripts/watch_gateway.py.
+  quota-watch:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: docker/tools.Dockerfile
+    image: token-ledger-tools:local
+    container_name: token-ledger-quota-watch
+    profiles: ["gateway"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: ["python3", "scripts/watch_quota.py",
+              "--every", "${QUOTA_WATCH_EVERY_SECONDS:-300}",
+              "--state", "/var/watch/quota.json"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # BAT BUOC. Thieu no thi mot dong log tieng Viet lam script chet giua chung.
+      PYTHONIOENCODING: utf-8
+      # Doc han muc va so da tieu tu chinh khoa ao, qua API quan ly cua Gateway.
+      GATEWAY_BASE_URL: ${QUOTA_GATEWAY_URL:-http://litellm-1:4000}
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-1}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TO: ${SMTP_TO:-}
+    volumes:
+      # Dung chung volume voi `gateway-watch`, khac TEN TEP. Hai tien trinh, hai
+      # file trang thai, khong dam len nhau.
+      - watchstate:/var/watch
+    tmpfs:
+      - /tmp
+    depends_on:
+      # Doi litellm, KHONG doi gateway-lb: bo canh nay doc /key/list, ma nginx o
+      # gateway-lb chan moi duong /key/*. Buoc no doi mot dich vu no khong dung
+      # toi la tu rang buoc minh vao mot thu co the hong vi ly do khac han.
+      litellm-1:
+        condition: service_started
 
 # Khai ro dai mang de gan duoc IP TINH cho hai Redis.
 #

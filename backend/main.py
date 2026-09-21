@@ -44,18 +44,29 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from . import store
+from . import gateway, store
 
 # ═══════════════════════════════════════════════════════════════════════════
 # XÁC THỰC
 #
 # Một khoá dùng chung, gửi trong `Authorization: Bearer <khoá>`.
 #
-# VÌ SAO KHÔNG PHẢI JWT THEO NGƯỜI (quyết định 21/08/2026)
-# --------------------------------------------------------
-# 8/8 endpoint là GET, 0 hành động đặc quyền, và `account` không có cột mật
-# khẩu - không có kho người dùng nào để đăng nhập vào. Không có gì để phân biệt
-# thì phân vai bây giờ là viết code không dùng tới.
+# VÌ SAO KHÔNG PHẢI JWT THEO NGƯỜI (quyết định 21/08/2026, SỬA LẠI 20/09/2026)
+# -----------------------------------------------------------------------------
+# Bản trước lập luận: "8/8 endpoint là GET, 0 hành động đặc quyền, và `account`
+# không có cột mật khẩu - không có gì để phân biệt thì phân vai bây giờ là viết
+# code không dùng tới."
+#
+# TIỀN ĐỀ ĐÓ ĐÃ HẾT ĐÚNG. Từ change `stop-a-project-when-its-quota-runs-out` có
+# hai endpoint GHI (`POST /api/quota`, `POST /api/quota/top-up`) - hành động đặc
+# quyền đầu tiên của API này. Quyết định vẫn là MỘT KHOÁ DÙNG CHUNG cho cả xem
+# lẫn sửa hạn mức, và hệ quả phải nói thẳng: **ai xem được dashboard thì cũng
+# sửa được hạn mức của mọi project.** Đó là lựa chọn đã chốt, không phải chỗ bị
+# bỏ quên.
+#
+# Backend còn giữ master key của Gateway để sửa hạn mức. Phạm vi của nó bị khoá
+# trong `backend/gateway.py`: đường dẫn viết cứng, hai khoá metadata, và không
+# endpoint nào chuyển tiếp lệnh tuỳ ý sang Gateway.
 #
 # Nói thẳng phần này KHÔNG cho: không biết AI đã xem gì, không thu hồi được
 # quyền của MỘT người, không phân biệt Admin/User. Nó chỉ làm đúng một việc -
@@ -119,6 +130,19 @@ def _read_env(name: str) -> str:
 DASHBOARD_KEY = _read_env("DASHBOARD_KEY")
 DASHBOARD_OPEN = _read_env("DASHBOARD_OPEN") == "1"
 
+# Master key của Gateway, dùng để sửa hạn mức. Cùng kỷ luật với DASHBOARD_KEY:
+# thiếu thì máy chủ KHÔNG khởi động. Chế độ hỏng phải là "không chạy", không được
+# là "chạy nhưng bấm Lưu mới biết là hỏng".
+#
+# `QUOTA_DISABLED=1` là đường thoát tường minh cho máy chưa dựng Gateway: hai
+# endpoint hạn mức trả 503, phần còn lại của dashboard chạy như cũ.
+GATEWAY_MASTER_KEY = _read_env("LITELLM_MASTER_KEY")
+# THANG vao litellm, KHONG qua gateway-lb: nginx o edge chi mo
+# /v1/chat/completions va /health/*, moi duong khac tra 404 - ke ca /key/list
+# va /key/update. Do bang mot luot goi that ngay 20/09/2026.
+GATEWAY_BASE_URL = _read_env("GATEWAY_BASE_URL") or "http://litellm-1:4000"
+QUOTA_DISABLED = _read_env("QUOTA_DISABLED") == "1"
+
 # Thiếu cấu hình thì KHÔNG khởi động. `raise SystemExit` ở mức module nên uvicorn
 # vấp ngay lúc nạp `backend.main:app` - đối tượng `app` chưa kịp tồn tại, không
 # cổng nào được mở.
@@ -141,6 +165,18 @@ if not DASHBOARD_KEY and not DASHBOARD_OPEN:
         "         export DASHBOARD_KEY=<key>   (bash)\n\n"
         "  ONLY in DEVELOPMENT, and only if running unauthenticated is acceptable:\n"
         "    DASHBOARD_OPEN=1\n")
+
+if not GATEWAY_MASTER_KEY and not QUOTA_DISABLED:
+    raise SystemExit(
+        "\nMISSING ENVIRONMENT VARIABLE: LITELLM_MASTER_KEY\n"
+        "  The server refuses to start. No port is opened.\n\n"
+        "  The quota endpoints edit the budget stored on each virtual key, so\n"
+        "  this server needs the Gateway master key. It is the same value the\n"
+        "  Gateway itself uses - copy it from the .env line LITELLM_MASTER_KEY.\n\n"
+        "  On a machine with no Gateway, turn the quota endpoints off instead:\n"
+        "    QUOTA_DISABLED=1\n")
+
+gateway.configure(GATEWAY_BASE_URL, GATEWAY_MASTER_KEY)
 
 if DASHBOARD_OPEN:
     # In ra stderr MỖI LẦN khởi động. Chế độ mở phải luôn nhìn thấy được - một
@@ -225,8 +261,11 @@ DEFAULT_ORIGINS = "null,http://127.0.0.1:8080,http://localhost:8080"
 ALLOWED_ORIGINS = [o.strip() for o in
                    os.environ.get("DASHBOARD_ORIGINS", DEFAULT_ORIGINS).split(",")
                    if o.strip()]
+# `POST` thêm vào 20/09/2026 cùng hai endpoint hạn mức. Thiếu nó thì trình duyệt
+# chặn ngay ở bước preflight và lỗi hiện ra là "CORS", không phải "401" - mất một
+# buổi để tìm ra chỗ đúng.
 app.add_middleware(
-    CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET"],
+    CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -371,6 +410,123 @@ def performance(start: str | None = None, end: str | None = None,
     with store.open_db() as (cn, ph):
         result = store.performance(cn, ph, start, end)
     return {"start": start, "end": end, **result}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HẠN MỨC - HAI ENDPOINT GHI DUY NHẤT CỦA API NÀY
+#
+# Chúng KHÔNG ghi database. Chúng gọi sang Gateway để sửa `metadata` của virtual
+# key. Kỷ luật chỉ-đọc của PostgreSQL giữ nguyên: không vai mới, không GRANT mới.
+# Phạm vi những gì sửa được nằm trong `backend/gateway.py`, không nằm ở đây.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _quota_ready() -> None:
+    """503 khi máy này cố ý chạy không có Gateway. Đây không phải lỗi."""
+    if QUOTA_DISABLED or not gateway.configured():
+        raise HTTPException(503, "Quota endpoints are off (QUOTA_DISABLED=1)")
+
+
+def _quota_amount(body: dict | None) -> float:
+    """Lấy số tiền từ thân yêu cầu, hoặc 400 kèm lý do đọc được.
+
+    Phép kiểm giá trị nằm ở `gateway.parse_amount`, không nằm ở đây: bộ kiểm của
+    dự án phải chạy được trên máy sạch, mà file này kéo theo FastAPI. Chỗ này chỉ
+    đổi `ValueError` thành mã HTTP.
+    """
+    try:
+        return gateway.parse_amount((body or {}).get(gateway.QUOTA_FIELD))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
+def _agent_view(key: dict) -> dict:
+    """Một dòng cho tab Setting: hạn mức, đã tiêu, tỉ lệ, và các cờ cảnh báo."""
+    quota = gateway.quota_of(key)
+    spent = gateway.spend_of(key)
+    tag = gateway.tag_of(key)
+    return {
+        "key_alias": key.get("key_alias"),
+        "agent": tag,
+        # Khoá không mang tag định danh thì lưu lượng của nó KHÔNG quy được về
+        # agent nào - bộ nạp sẽ bỏ dòng đó với lý do "không có tag định danh".
+        # Đặt hạn mức cho một khoá như thế vẫn chặn được nó, nhưng con số sẽ không
+        # bao giờ xuất hiện ở chiều agent trên dashboard.
+        "untagged": tag is None,
+        "quota_usd": quota,
+        "spent_usd": spent,
+        "ratio": (spent / quota) if quota else None,
+        "blocked": bool(quota is not None and spent >= quota),
+        "enforceable": True,
+        "topups": gateway.log_of(key),
+    }
+
+
+@app.get("/api/quota", summary="Budget and spend per virtual key, as the Gateway sees them")
+def quota_list(who: Principal = Depends(caller)):
+    """Số ở đây là SỐ GATEWAY THẤY, không phải tổng chi phí trên dashboard.
+
+    Hai con số đó khác nhau: Gateway chỉ thấy lưu lượng đi qua nó. Tab Setting
+    phải hiện đúng số này, vì đây là số quyết định chặn hay không - hiện số kia
+    thì người nhập sẽ thấy "38/50" trong khi agent đã bị chặn.
+    """
+    _quota_ready()
+    try:
+        keys = gateway.list_keys()
+    except gateway.GatewayError as exc:
+        raise HTTPException(502, str(exc))
+    rows = [_agent_view(k) for k in keys if k.get("key_alias")]
+    # Một agent có nhiều khoá thì hạn mức không còn nghĩa "cả agent" - nói ra chứ
+    # không cộng gộp một con số trông như đang được thi hành.
+    #
+    # ĐẾM THEO TAG, KHÔNG THEO TÊN KHOÁ. Bản đầu gom theo tiền tố tên
+    # (`alias.split("-tagged")[0]`) và sai cả hai chiều trên dữ liệu thật:
+    #   - gom `dms-feedback` với `dms-feedback-tagged`, dù khoá trước KHÔNG mang
+    #     tag nào nên không thuộc agent nào cả;
+    #   - bỏ sót `crm-feedback-12-09` và `crm-feedback-drill-10-09`, hai khoá
+    #     CÙNG tag `crm-feedback` với `crm-feedback-tagged` - tức đúng nhóm mà
+    #     cảnh báo này sinh ra để chỉ.
+    # Tên khoá chỉ là nhãn người đặt; tag mới là thứ định tuyến và tính tiền.
+    seen: dict[str, int] = {}
+    for r in rows:
+        if r["agent"]:
+            seen[r["agent"]] = seen.get(r["agent"], 0) + 1
+    for r in rows:
+        r["sibling_keys"] = seen.get(r["agent"], 1) if r["agent"] else 1
+    return {"count": len(rows), "rows": rows}
+
+
+@app.post("/api/quota", summary="Set the budget of one virtual key")
+def quota_set(key_alias: str = Query(..., min_length=1), body: dict | None = None,
+              who: Principal = Depends(caller)):
+    _quota_ready()
+    amount = _quota_amount(gateway.sanitize_incoming(body))
+    try:
+        metadata = gateway.set_quota(key_alias, amount, who.name)
+    except gateway.GatewayError as exc:
+        raise HTTPException(502, str(exc))
+    return {"key_alias": key_alias, "quota_usd": metadata.get(gateway.QUOTA_FIELD),
+            "topups": metadata.get(gateway.LOG_FIELD, [])}
+
+
+@app.post("/api/quota/top-up", summary="Add to the budget of one virtual key")
+def quota_top_up(key_alias: str = Query(..., min_length=1), body: dict | None = None,
+                 who: Principal = Depends(caller)):
+    """Nạp thêm: cộng vào hạn mức hiện có, không thay bằng con số mới.
+
+    Khác `POST /api/quota` đúng ở điểm đó. Chưa có hạn mức thì coi như đang ở 0.
+    """
+    _quota_ready()
+    added = _quota_amount(gateway.sanitize_incoming(body))
+    try:
+        key = gateway.find_key(key_alias)
+        if key is None:
+            raise HTTPException(404, f"No key named {key_alias!r} at the Gateway")
+        metadata = gateway.set_quota(key_alias, (gateway.quota_of(key) or 0.0) + added,
+                                     who.name)
+    except gateway.GatewayError as exc:
+        raise HTTPException(502, str(exc))
+    return {"key_alias": key_alias, "quota_usd": metadata.get(gateway.QUOTA_FIELD),
+            "topups": metadata.get(gateway.LOG_FIELD, [])}
 
 
 # `/api/thinking` GỠ 12/09/2026. Token suy luận và token ra là MỘT biến: hoá đơn

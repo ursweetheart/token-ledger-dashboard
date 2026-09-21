@@ -335,6 +335,7 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         "identity_unresolvable": 0,
         "cached_null": 0,
         "cost_null": 0,
+        "cost_zero_with_tokens": 0,
         "master_key_calls": 0,
         "cache_hits": 0,
         "alias_model_names": 0,
@@ -457,6 +458,15 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
             stats["cached_null"] += 1
         if cost_usd is None:
             stats["cost_null"] += 1
+        # CHI PHI BANG 0 TREN MOT LUOT CO TOKEN = model khong co trong bang gia
+        # noi bo cua LiteLLM. Dem rieng, khong gop vao `cost_null`: mot dong
+        # thieu gia trong khi van tieu token la mot LOI DI VONG QUA HAN MUC -
+        # han muc tinh bang tien, nen model gia 0 khong bao gio lam het han muc.
+        #
+        # Con so nay se tang ngay khi co ai mo tuyen `*` cho agent tu chon model
+        # ma chua chot don gia. Do la luc phai biet, chu khong phai luc doc hoa don.
+        elif cost_usd == 0 and (total_tokens or 0) > 0 and outcome == "success":
+            stats["cost_zero_with_tokens"] += 1
         if outcome == "failure":
             stats["failed_loaded"] += 1
         elif outcome != "success":
@@ -654,6 +664,13 @@ def main() -> int:
              stats["end_user_empty"], stats["identity_unresolvable"])
     log.info("  cached_tokens NULL %d | cost_usd NULL %d | duration_ms NULL %d",
              stats["cached_null"], stats["cost_null"], stats["duration_null"])
+    if stats["cost_zero_with_tokens"]:
+        # WARNING chu khong phai INFO: day la lo hong cua co che han muc, khong
+        # phai mot con so thong ke. Han muc tinh bang tien, nen nhung luot nay
+        # tieu token ma khong bao gio lam het han muc.
+        log.warning("  %d successful rows spent tokens but cost 0 - those models"
+                    " are missing from LiteLLM's price table, and they slip past"
+                    " the quota", stats["cost_zero_with_tokens"])
     log.info("  via MASTER KEY %d/%d | cache hits %d | alias model names %d"
              " | unit unknown %d",
              stats["master_key_calls"], len(rows), stats["cache_hits"],
