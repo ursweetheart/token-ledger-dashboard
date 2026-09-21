@@ -200,7 +200,8 @@ jobs:
       # toan man hinh, va lop goi API han muc - duong GHI dau tien cua frontend).
       # Moc do 20/09/2026 (lan 2): 96 -> 98, khoa lai hanh vi ba nut cua tab
       # Setting sau khi bo phuong an mot nut doi nghia theo trang thai.
-      EXPECTED_JS: "98"
+      # The branch adds three agent-scope checks on top of main's 98.
+      EXPECTED_JS: "101"
     steps:
       - uses: actions/checkout@v4
 

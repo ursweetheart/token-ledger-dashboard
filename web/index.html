@@ -517,11 +517,23 @@
 <!-- ═══════════════ FILTER BAR ═══════════════ -->
 <div class="filter-bar">
   <div class="filter-field">
-    <label>Phòng ban</label>
+    <label for="f-agent">Agent</label>
+    <select class="filter-select" id="f-agent"></select>
+  </div>
+  <div class="filter-field">
+    <label for="f-dept">Phòng ban</label>
     <select class="filter-select" id="f-dept"></select>
   </div>
   <div class="filter-field">
-    <label>User</label>
+    <label for="f-unit">Đơn vị</label>
+    <select class="filter-select" id="f-unit"></select>
+  </div>
+  <div class="filter-field">
+    <label for="f-team">Đội</label>
+    <select class="filter-select" id="f-team"></select>
+  </div>
+  <div class="filter-field">
+    <label for="f-user">User</label>
     <select class="filter-select" id="f-user"></select>
   </div>
   <div class="filter-field">
@@ -532,10 +544,7 @@
     <label>Model</label>
     <select class="filter-select" id="f-model"></select>
   </div>
-  <div class="filter-field">
-    <label>Agent</label>
-    <select class="filter-select" id="f-agent"></select>
-  </div>
+
   <div class="filter-field" style="justify-content:flex-end">
     <button class="btn btn-secondary" id="f-reset">↺ Xoá lọc</button>
   </div>

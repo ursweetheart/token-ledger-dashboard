@@ -255,6 +255,69 @@ def resolve_agent(tags, agent_by_code):
     return None, "several identity tags"
 
 
+def auto_register_models(cn, ledger, models, dry_run=False):
+    """Tự khai model Gateway chưa biết, thay vì chỉ đếm rồi bỏ NULL.
+
+    VÌ SAO (19/09/2026): mỗi khi agent đổi/thêm nhà cung cấp (vd Google AI
+    Studio -> Anthropic qua tuyến `anthropic/*`), tên model upstream mới xuất
+    hiện bất kỳ lúc nào và không ai kịp khai tay trong `rules.GATEWAY_MODELS`
+    trước khi nó gọi thật. Trước bản vá này, dòng đó vẫn vào `fact_call`
+    (đúng thiết kế, không mất dữ liệu) nhưng NẰM NGOÀI moi rollup theo model
+    (`fact_usage_daily` lọc `model_id IS NOT NULL`) cho tới khi có người vá tay.
+
+    `cost_usd` KHÔNG phụ thuộc bước này: cột đó lấy thẳng từ
+    metadata->cost_breakdown của chính LiteLLM (xem BASE_SQL), nên tiền vẫn
+    đúng dù model chưa từng được khai. Bước này chỉ mở khoá GOM NHÓM theo
+    model.
+
+    KHÁC `rules.GATEWAY_MODELS`: bảng đó là danh sách REVIEW ĐƯỢC, do người
+    viết tay và đi qua `gen_catalog.py`. Model tự đăng ký ở đây không đi qua
+    review - `family`/`provider` chỉ là suy đoán từ tiền tố nhà cung cấp
+    (`anthropic/claude-...` -> provider `anthropic`), có thể thô. Đây là đánh
+    đổi có ý: ưu tiên KHÔNG BỎ SÓT báo cáo hơn là tên gọn đẹp. Muốn tên chuẩn
+    hơn thì vẫn sửa `rules.py` rồi chạy `gen_catalog.py` như cũ - lần chạy sau
+    `dim_model_alias` đã có sẵn sẽ không bị ghi đè (xem INSERT ... DO NOTHING
+    dưới đây).
+    """
+    known_raw = {model for (source, model) in models if source == SOURCE}
+    unseen = sorted({r[2] for r in ledger
+                      if r[2] and r[2] not in known_raw and r[10] == "success"})
+    if not unseen:
+        return models
+    if dry_run:
+        for raw in unseen:
+            log.info("  --dry-run: would auto-register gateway model %r", raw)
+        return models
+
+    cur = cn.cursor()
+    for raw in unseen:
+        provider, sep, rest = raw.partition("/")
+        name = rest if sep else raw
+        provider_label = provider if sep else "unknown"
+
+        cur.execute("SELECT model_id FROM dim_model WHERE name = %s", (name,))
+        row = cur.fetchone()
+        if row is None:
+            cur.execute(
+                "INSERT INTO dim_model (model_id, name, family, provider)"
+                " SELECT COALESCE(MAX(model_id), 0) + 1, %s, %s, %s FROM dim_model"
+                " ON CONFLICT (name) DO NOTHING",
+                (name, provider_label, provider_label))
+            cur.execute("SELECT model_id FROM dim_model WHERE name = %s", (name,))
+            row = cur.fetchone()
+        model_id = row[0]
+
+        cur.execute(
+            "INSERT INTO dim_model_alias (source, raw_name, model_id)"
+            " VALUES (%s, %s, %s) ON CONFLICT (source, raw_name) DO NOTHING",
+            (SOURCE, raw, model_id))
+        models[(SOURCE, raw)] = model_id
+        log.info("  auto-registered gateway model: raw=%r -> model_id=%d"
+                 " (name=%r, provider=%r)", raw, model_id, name, provider_label)
+    cn.commit()
+    return models
+
+
 def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
     """Ánh xạ dòng sổ -> dòng `fact_call`, kèm bộ đếm mọi thứ bị bỏ hoặc hụt."""
     rows = []
@@ -518,6 +581,7 @@ def main() -> int:
 
     agent_by_code = connect.agent_code_lookup(cn)
     models = connect.model_lookup(cn)
+    models = auto_register_models(cn, ledger, models, dry_run=args.dry_run)
     accounts = connect.account_lookup(cn)
     anchors = connect.anchor_account_lookup(cn)
     units = connect.account_unit_lookup(cn)
