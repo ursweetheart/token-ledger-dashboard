@@ -441,6 +441,89 @@ def account_lookup(cn) -> dict[str, int]:
     return {u: (a, g) for u, a, g in cur.fetchall()}
 
 
+def directory_account_lookup(cn) -> dict[tuple[int, str], int]:
+    """(agent_id, username) -> account_id. Khoá ĐÔI, không phải khoá đơn.
+
+    VÌ SAO KHÔNG DÙNG `account_lookup()` Ở TRÊN
+    --------------------------------------------
+    Hàm kia khoá bằng `username` một mình, nên nó chỉ trả về được MỘT agent cho
+    mỗi người - `account.unit_agent_id`, tức agent thắng phép chọn ở
+    `load_org.py:492`. Bên gọi vì thế phải đem cột đó đi SO SÁNH với agent gửi
+    request, và phép so ấy trượt với người dùng nhiều agent.
+
+    Đo 21/09/2026 trên đợt kéo 20/09: 5 người có mặt trong danh bạ của CẢ Ralli
+    (892 tên) lẫn TLA Hợp Đồng (44 tên) - `longnt`, `pbh3_tthien`,
+    `quy.tv@rangdong.com.vn`, `tg.namnh`, `tt3.binhtv`. Con số 5 khớp chú thích
+    đã có ở `db/migrations/sql/001_baseline.sql:239`.
+
+    Hỏng kiểu gì: token đủ, tiền đủ, HTTP 200, dòng vẫn vào sổ - chỉ chiều người
+    dùng là mất. Mọi phép nghiệm thu bằng TỔNG đều ĐẠT.
+
+    HAI SỔ ĐĂNG KÝ, KHÔNG PHẢI MỘT
+    -------------------------------
+    Hai bảng đặt hai cái tên khác nhau cho cùng một tài khoản dịch vụ:
+
+        load_org.py:405   dim_user:  (agent 6, "__technical_6__") -> account 949
+        load_org.py:609   account:   949, "svc.dms-feedback"
+
+    Gateway gửi `X-User: svc.dms-feedback`. Tra riêng `dim_user` thì ra RỖNG, và
+    cả 6 agent một-người-dùng rơi khỏi chiều người dùng. Nên phải hợp hai nguồn:
+
+        dim_user  NOT is_technical              khoá (agent_id, username)
+        account   kind = 'service_account'      khoá (unit_agent_id, username)
+
+    `whole_agent` và `unattributed` CỐ Ý không lấy: chúng là đích RƠI VỀ khi tra
+    không ra (xem `anchor_account_lookup`). Gộp chúng vào là biến đường rơi thành
+    đường nhận, và bộ đếm `identity_unresolvable` sẽ im lặng về 0 vì không còn gì
+    trượt được nữa.
+
+    DỪNG KHI DỮ LIỆU HỎNG, KHÔNG IM LẶNG CHỌN MỘT
+    ----------------------------------------------
+    `dim_user` khoá chính là `(agent_id, user_id)`, KHÔNG phải `(agent_id,
+    username)` - nên một `username` có thể ra nhiều dòng trong cùng một agent.
+    Có thật: `001_baseline.sql:239` ghi "13 dòng do Ralli ghi hai dạng khoá".
+
+    Cả 13 dòng đó trỏ về cùng một `account_id`, nên gộp trùng là đúng. Nhưng đó
+    là một tính chất KHÔNG ai cưỡng chế bằng ràng buộc, nên không được dựa vào nó
+    trong im lặng: nếu một khoá cho ra hai `account_id` khác nhau thì dữ liệu đã
+    hỏng, và hàm này dừng hẳn thay vì chọn bừa một cái.
+
+    `username` chuẩn hoá bằng LOWER(TRIM()) ở cả hai nguồn, khớp `load_org.norm()`.
+    """
+    seen: dict[tuple[int, str], int] = {}
+    conflicts: list[str] = []
+
+    def add(agent_id, username, account_id, source: str) -> None:
+        if account_id is None:
+            return
+        key = (int(agent_id), username)
+        cu = seen.get(key)
+        if cu is not None and cu != int(account_id):
+            conflicts.append(f"  {key} -> account {cu} và {account_id} ({source})")
+        else:
+            seen[key] = int(account_id)
+
+    cur = cn.cursor()
+    # Nguồn 1: danh bạ người thật, đã tách sẵn theo agent.
+    cur.execute("SELECT agent_id, LOWER(TRIM(username)), account_id"
+                " FROM dim_user WHERE NOT is_technical")
+    for a, u, acc in cur.fetchall():
+        add(a, u, acc, "dim_user")
+
+    # Nguồn 2: tài khoản dịch vụ - tên `svc.<code>` CHỈ tồn tại ở bảng này.
+    cur.execute("SELECT unit_agent_id, LOWER(TRIM(username)), account_id"
+                " FROM account WHERE kind = 'service_account'")
+    for a, u, acc in cur.fetchall():
+        add(a, u, acc, "account/service")
+
+    if conflicts:
+        raise SystemExit(
+            "directory_account_lookup: một cặp (agent, tên đăng nhập) trỏ về hai"
+            " tài khoản khác nhau. Dữ liệu danh bạ hỏng, không đoán bừa:\n"
+            + "\n".join(sorted(conflicts)))
+    return seen
+
+
 def account_unit_lookup(cn) -> dict[int, str]:
     """account_id -> unit_id.
 
