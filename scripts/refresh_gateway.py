@@ -48,6 +48,7 @@ moi duong Gateway tren database dang co (~0,8 giay). Hai viec khac nhau.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -214,7 +215,8 @@ def run_once(dsn: str, quiet: bool, interval: int = 0) -> int:
         # xem nhat khi co su co.
         r = subprocess.run([PY, str(ROOT / path), *extra],
                            capture_output=quiet, text=True,
-                           encoding="utf-8", errors="replace")
+                           encoding="utf-8", errors="replace",
+                           timeout=int(os.environ.get('GATEWAY_REFRESH_STEP_TIMEOUT', '120')))
         if r.returncode != 0:
             print(f"FAILED at step '{label}' ({path}), exit code {r.returncode}."
                   f" Stopping - no rollup on incomplete data.")
@@ -239,6 +241,33 @@ def run_once(dsn: str, quiet: bool, interval: int = 0) -> int:
     return 0
 
 
+def pricing_tick():
+    # Explicit credential opt-in; no new writes using the ingestion credential.
+    dsn = os.environ.get('PRICING_WRITE_DSN')
+    if not dsn:
+        return
+    from datetime import datetime, timezone
+    from sync_model_catalog import run_if_due
+    cn, _ = connect.open_db(dsn)
+    try:
+        run_if_due(cn, datetime.now(timezone.utc))
+    finally:
+        cn.close()
+
+
+def run_cycle(dsn, quiet, interval):
+    try:
+        pricing_tick()
+    except Exception as exc:
+        print(f'  Pricing heartbeat failed: {type(exc).__name__}')
+    try:
+        return run_once(dsn, quiet, interval)
+    except subprocess.TimeoutExpired:
+        # subprocess.run kills and waits for the child before raising.
+        print('  Ingest timed out; no subsequent rollup, retry next cycle')
+        return 1
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
@@ -249,14 +278,14 @@ def main() -> int:
     args = p.parse_args()
 
     if not args.every:
-        return run_once(args.db, args.quiet, 0)
+        return run_cycle(args.db, args.quiet, 0)
 
     print(f"Looping every {args.every}s. Ctrl-C to stop.")
     while True:
         # Bat CA loi cua count_gateway_rows(): database co the dang khoi dong lai,
         # va mot vong lap chet vi mot luot hong la mat luon co che tu dong.
         try:
-            code = run_once(args.db, True, args.every)
+            code = run_cycle(args.db, True, args.every)
         except Exception as exc:
             print(f"  ERROR: {type(exc).__name__}: "
                   f"{str(exc).strip().splitlines()[0]}")

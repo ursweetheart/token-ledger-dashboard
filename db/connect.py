@@ -232,7 +232,9 @@ def apply_migrations(dsn: str) -> None:
 
     ACTIVE_DSN = dsn
     try:
-        command.upgrade(Config(str(ROOT / "alembic.ini")), "head")
+        config = Config(str(ROOT / "alembic.ini"))
+        config.attributes['explicit_dsn'] = dsn
+        command.upgrade(config, "head")
     finally:
         ACTIVE_DSN = None
 
@@ -246,7 +248,8 @@ def apply_migrations(dsn: str) -> None:
 # Không bảng nào ở đây có khoá ngoại trỏ sang bảng khác, nên TRUNCATE ... CASCADE các bảng
 # còn lại không lan tới chúng. tests/test_connect_migrations.py quét mọi migration và ĐỎ nếu
 # có migration ghi dòng vào một bảng chưa có tên ở đây.
-KEEP_ON_REBUILD = ("alembic_version", "ref_source")
+KEEP_ON_REBUILD = ("alembic_version", "ref_source", "ref_model_catalog",
+                   "ref_model_price_version", "ref_price_sync_state")
 
 
 def rebuild(dsn: str):
@@ -289,7 +292,11 @@ def rebuild(dsn: str):
     cn, placeholder = open_db(dsn)
     with cn.cursor() as cur:
         cur.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename")
-        tables = [name for (name,) in cur.fetchall() if name not in KEEP_ON_REBUILD]
+        names = [name for (name,) in cur.fetchall()]
+        if 'ref_model_catalog' in names:
+            cn.close()
+            raise RuntimeError('Refusing rebuild: dim_model CASCADE would erase pricing history. Use incremental ingestion.')
+        tables = [name for name in names if name not in KEEP_ON_REBUILD]
         # TRUNCATE với danh sách rỗng là lỗi cú pháp của PostgreSQL.
         if tables:
             quoted = ", ".join('"' + name.replace('"', '""') + '"' for name in tables)

@@ -243,8 +243,11 @@ app = FastAPI(
     title="Token Ledger API",
     version="1.0",
     description="Reads cost / token / performance data of the AI agents."
-                " Read-only, never writes.",
+                " Usage is read-only; pricing writes are separately gated.",
 )
+
+from .pricing import build_router
+app.include_router(build_router(caller))
 
 # Dashboard mở bằng file:// (origin 'null') hoặc từ một cổng khác.
 #
@@ -265,7 +268,7 @@ ALLOWED_ORIGINS = [o.strip() for o in
 # chặn ngay ở bước preflight và lỗi hiện ra là "CORS", không phải "401" - mất một
 # buổi để tìm ra chỗ đúng.
 app.add_middleware(
-    CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET", "POST"],
+    CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=["GET", "POST", "PUT"],
     allow_headers=["*"],
 )
 

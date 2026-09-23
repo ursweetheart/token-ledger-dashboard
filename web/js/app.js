@@ -440,9 +440,8 @@ function applyRealAccountUsage(rows){
        ngay cạnh 525,9 nghìn token.
        Đếm cả `costRowsPriced` để biết có dòng nào KHÔNG tra được giá không -
        khi đó phải hiện `—` chứ không phải một con số thiếu. */
-    var pr = state.pricingById && state.pricingById[x.model_id];
     u.costRows++;
-    if(pr){ u.costRowsPriced++; u.costDerived += ti/1e6*num(pr.i) + to/1e6*num(pr.o); }
+    if(x.estimated_cost_usd != null){ u.costRowsPriced++; u.costDerived += x.estimated_cost_usd; }
     u.req+=req; u.ti+=ti; u.to+=to;
     var ag=x.agent||u.a, b=u.byAgent[ag]||(u.byAgent[ag]={req:0,ti:0,to:0});
     b.req+=req; b.ti+=ti; b.to+=to;
@@ -734,6 +733,7 @@ function dayLabel(iso){ var p=String(iso).split("-"); return p.length===3? (p[2]
    được trông y hệt bằng không" mà database này sinh ra để chống. */
 function costOrNull(r){
   if(r.cost!=null) return num(r.cost);
+  if(Object.prototype.hasOwnProperty.call(r,'estimated_cost_usd')) return r.estimated_cost_usd;
   var p = state.pricing[r.m]; if(!p) return null;
   return num(r.ti)/1e6*num(p.i) + num(r.to)/1e6*num(p.o)
        + num(r.cached)/1e6*num(p.c||0);
@@ -4408,17 +4408,203 @@ function renderFilters(){
 
 /* ═══════════════ BẢNG GIÁ (sửa rồi bấm 💾 Lưu bảng giá) ═══════════════ */
 function configMsg(t, err){ var e=document.getElementById("config-msg"); if(!e) return; e.textContent=t; e.className="config-msg"+(err?" error":""); setTimeout(function(){ if(e.textContent===t) e.textContent=""; },3500); }
+var pricingOffset = 0;
+var pricingRequest = 0, pricingSaving = false, pricingDirty = new Set();
+var pricingSyncRequest=0, pricingSyncBusy=false, pricingSyncTimer=null, pricingSyncRevision=null;
+function leavePricing(){
+  if(pricingSaving || pricingSyncBusy){configMsg('Đang lưu; vui lòng chờ.',true);return false;}
+  if(pricingDirty.size && !window.confirm('Bỏ các bản nháp giá chưa lưu?')) return false;
+  pricingDirty.clear();pricingRequest++;pricingSyncRequest++;
+  clearInterval(pricingSyncTimer);pricingSyncTimer=null;
+  return true;
+}
+function pricingUnload(event){
+  if(pricingDirty.size || pricingSaving || pricingSyncBusy){event.preventDefault();event.returnValue='';}
+}
+function pricingPage(offset){
+  if(!leavePricing()) return;
+  pricingOffset=offset;return renderPricing();
+}
+async function savePricingDraft(key, draft, confirmPreview){
+  var api=window.TokenLedgerAPI;
+  var preview=await api.pricingCall('preview','POST',draft,key);
+  if(!preview.ok) return preview;
+  if(!await confirmPreview(preview.data)) return {ok:false,message:'Đã huỷ; bản nháp còn nguyên.'};
+  var saved=await api.pricingCall('versions','POST',Object.assign({},draft,{expected_revision:preview.data.revision}),key);
+  if(!saved.ok) return saved;
+  var history=await api.pricingCall('history','GET',null,key);
+  if(!history.ok || !history.data.rows.some(function(v){return v.id===saved.data.id;}))
+    return {ok:false,message:'Đã gửi lưu nhưng chưa xác minh được lịch sử. Tải lại trước khi thử tiếp.'};
+  return saved;
+}
+function renderPricingSync(){
+  var api=window.TokenLedgerAPI, status=document.getElementById('pricing-sync');
+  var request=++pricingSyncRequest;
+  var enabled=document.getElementById('pricing-enabled'),hours=document.getElementById('pricing-hours');
+  var schedule=document.getElementById('pricing-schedule'),now=document.getElementById('pricing-now');
+  enabled.onchange=hours.oninput=function(){pricingDirty.add('schedule');};
+  status.textContent='Đang tải trạng thái đồng bộ…';
+  return api.pricingCall('sync','GET').then(function(res){
+    if(request!==pricingSyncRequest)return;
+    if(!res.ok){status.textContent=res.message;return;}
+    var s=res.data;
+    status.textContent=s.status+' | Thành công: '+(s.last_success||'—')+' | Heartbeat: '+(s.last_worker_seen||'offline / chưa thấy worker')+' | Lỗi: '+(s.last_error_class||'—');
+    if(!pricingDirty.has('schedule')){enabled.checked=s.enabled;hours.value=s.interval_hours;pricingSyncRevision=s.revision;}
+    function mutate(method){
+      if(pricingSyncBusy)return;
+      var body=method==='PUT'?{enabled:enabled.checked,interval_hours:Number(hours.value),expected_revision:pricingSyncRevision}:null;
+      if(method==='PUT' && (!Number.isInteger(body.interval_hours)||body.interval_hours<1||body.interval_hours>168)){status.textContent='Giờ phải là số nguyên 1–168.';return;}
+      pricingSyncBusy=true;schedule.disabled=now.disabled=enabled.disabled=hours.disabled=true;
+      status.textContent=method==='PUT'?'Đang lưu lịch…':'Đang xếp hàng…';
+      return api.pricingCall('sync',method,body).then(function(r){
+        pricingSyncBusy=false;schedule.disabled=now.disabled=enabled.disabled=hours.disabled=false;
+        if(!r.ok){status.textContent=r.message;return;}
+        if(method==='PUT')pricingDirty.delete('schedule');
+        renderPricingSync();
+        if(method==='POST'){
+          clearInterval(pricingSyncTimer);
+          var remaining=12;
+          pricingSyncTimer=setInterval(function(){renderPricingSync();if(--remaining<=0){clearInterval(pricingSyncTimer);pricingSyncTimer=null;}},5000);
+        }
+      });
+    }
+    schedule.onclick=function(){return mutate('PUT');};
+    now.onclick=function(){return mutate('POST');};
+  });
+}
+async function renderPricingProviders(){
+  var select=document.getElementById('pricing-provider');
+  if(!select || select.disabled)return;
+  select.disabled=true;
+  var res=await window.TokenLedgerAPI.pricingProviders();
+  select.disabled=false;
+  if(!res.ok){configMsg(res.message,true);return;}
+  var selected=select.value;
+  select.textContent='';
+  [''].concat(res.data).forEach(function(provider){var option=document.createElement('option');option.value=provider;option.textContent=provider||'Tất cả provider';select.appendChild(option);});
+  select.value=selected;
+}
+function pricingValue(v){ return v==null?'—':String(v); }
+function pricingVersionText(v){
+  if(!v) return 'Chưa có giá';
+  var p=v.pricing||{};
+  var src = v.source === 'official' ? 'Giá gốc' : (v.source === 'openrouter' ? 'OpenRouter' : 'Nhập tay');
+  if(v.mode==='auto') return 'Tự động ('+src+')';
+  return 'Input: '+pricingValue(p.input)+' / Output: '+pricingValue(p.output)+' / Cache read: '+pricingValue(p.cache_read)+' USD/1M ('+src+')';
+}
+function pricingPreviewText(p){
+  return 'Ảnh hưởng mọi agent dùng model. Ước tính tại: '+pricingValue(p.as_of)+
+    '\nDòng: '+pricingValue(p.rows_affected)+' | Agent: '+pricingValue(p.agents_affected)+
+    '\nTổng phần đã biết (USD): '+pricingValue(p.old_known_subtotal)+' → '+pricingValue(p.new_known_subtotal)+
+    '\nDòng chưa tính được: '+pricingValue(p.old_unknown_rows)+' → '+pricingValue(p.new_unknown_rows)+
+    '\n'+pricingValue(p.warning)+'\nKhông sửa hoá đơn / quota. Xác nhận lưu?';
+}
 function renderPricing(){
-  var el=document.getElementById("price-grid"); if(!el) return;
-  el.innerHTML = "<div class='ph'>Model</div><div class='ph' style='text-align:right'>Input USD/1M</div><div class='ph' style='text-align:right'>Output USD/1M</div><div></div>";
-  Object.keys(state.pricing).forEach(function(m){
-    var p=state.pricing[m];
-    var name=document.createElement("div"); name.textContent=m;
-    var i=priceInput(p.i, function(v){ state.pricing[m].i=v; });
-    var o=priceInput(p.o, function(v){ state.pricing[m].o=v; });
-    var x=document.createElement("button"); x.className="icon-x"; x.innerHTML="&times;"; x.title="Xoá model";
-    x.onclick=function(){ if(Object.keys(state.pricing).length<=1){ configMsg("Cần giữ ít nhất 1 model.",true); return; } delete state.pricing[m]; renderPricing(); };
-    el.appendChild(name); el.appendChild(i); el.appendChild(o); el.appendChild(x);
+  var el=document.getElementById("price-grid"); if(!el || pricingDirty.size || pricingSaving) return;
+  var request=++pricingRequest;
+  el.setAttribute('aria-busy','true');
+  el.textContent='Đang tải bảng giá…';
+  el.style.display='block'; el.style.maxWidth='none';
+  var api=window.TokenLedgerAPI;
+  function field(parent,label,type,value){
+    var wrap=document.createElement('label'), input=document.createElement('input');
+    wrap.textContent=label+' '; input.type=type; input.value=value==null?'':value;
+    if(type==='number'){input.min='0';input.step='any';}
+    input.oninput=input.onchange=function(){pricingDirty.add(parent);};
+    wrap.appendChild(input);parent.appendChild(wrap);return input;
+  }
+  return api.pricingCall('models','GET',null,null,{q:(document.getElementById('pricing-search')||{}).value||'',provider:(document.getElementById('pricing-provider')||{}).value||'',offset:pricingOffset,limit:50}).then(function(res){
+    if(request!==pricingRequest) return;
+    el.setAttribute('aria-busy','false');
+    if(!res.ok){el.textContent=res.message;return;}
+    el.innerHTML='';
+    if(!res.data.rows.length)el.textContent='Không có model phù hợp.';
+    var prev=document.getElementById('pricing-prev'),next=document.getElementById('pricing-next');
+    if(prev)prev.disabled=pricingOffset===0;
+    if(next)next.disabled=res.data.rows.length<50;
+    res.data.rows.forEach(function(row){
+      var box=document.createElement('div');
+      box.className='pricing-card';
+      var head=document.createElement('div'); head.className='pricing-card-head';
+      var title=document.createElement('strong'); title.className='pricing-model-name';
+      title.textContent = row.display_name || row.catalog_key;
+      head.appendChild(title);
+
+      var keySpan=document.createElement('span');
+      keySpan.style.fontSize='11px'; keySpan.style.color='#64748b'; keySpan.textContent='(' + row.catalog_key + ')';
+      head.appendChild(keySpan);
+
+      var prov=document.createElement('span'); prov.className='pricing-badge';
+      prov.textContent=row.provider; head.appendChild(prov);
+
+      var note=document.createElement('div'); note.className='pricing-status-note';
+      var noteText = 'Đang áp dụng: ' + pricingVersionText(row.applied);
+      if (row.manual) noteText += ' | Đã chỉnh tay: ' + pricingVersionText(row.manual);
+      if (row.openrouter_id) noteText += ' | Quét OpenRouter: ' + row.openrouter_id;
+      note.textContent = noteText;
+      head.appendChild(note);
+      box.appendChild(head);
+
+      var mainRow=document.createElement('div'); mainRow.className='pricing-card-main';
+      var rates=(row.applied&&row.applied.pricing)||{};
+      var inp=field(mainRow,'Input USD/1M','number',rates.input);
+      var out=field(mainRow,'Output USD/1M','number',rates.output);
+
+      var btnGroup=document.createElement('div'); btnGroup.className='pricing-btn-group';
+      function button(label,fn,cls){
+        var b=document.createElement('button'); b.type='button'; b.className=cls||'btn btn-secondary btn-sm';
+        b.textContent=label; b.onclick=fn; btnGroup.appendChild(b); return b;
+      }
+      function save(mode){
+        if(pricingSaving || request!==pricingRequest) return;
+        var end=to.value?new Date(to.value+'T00:00:00Z'):null;
+        if(end)end.setUTCDate(end.getUTCDate()+1);
+        var draft={mode:mode,from_day:from.value,to_day:end?end.toISOString().slice(0,10):null,reason:reason.value,confirm_retroactive:retro.checked};
+        if(mode==='price')Object.assign(draft,{input_per_million:inp.value,output_per_million:out.value,cache_read_per_million:cache.value||null});
+        pricingSaving=true;pricingDirty.add(box);
+        el.querySelectorAll('input,button').forEach(function(x){x.disabled=true;});
+        saveButton.textContent='Đang xem trước / lưu…';
+        return savePricingDraft(row.catalog_key,draft,function(preview){return window.confirm(pricingPreviewText(preview));}).then(function(result){
+          pricingSaving=false;
+          el.querySelectorAll('input,button').forEach(function(x){x.disabled=false;});
+          saveButton.textContent='Preview → Lưu';
+          saveButton.disabled=resetButton.disabled=!res.data.write_enabled;
+          configMsg(result.ok?'Đã lưu bảng giá thành công.':result.message,!result.ok);
+          if(result.ok){pricingDirty.delete(box);renderPricing();loadFromBackend();}
+        });
+      }
+      var saveButton=button('Preview → Lưu',function(){return save('price');},'btn btn-primary btn-sm');
+      var resetButton=button('Dùng lại giá tự động',function(){return save('auto');},'btn btn-secondary btn-sm');
+      var historyButton=button('Lịch sử',function(){
+        if(historyButton.disabled) return;
+        historyButton.disabled=true;history.textContent='Đang tải lịch sử…';
+        return api.pricingCall('history','GET',null,row.catalog_key).then(function(r){
+          if(request!==pricingRequest) return;
+          historyButton.disabled=false;
+          history.textContent=r.ok?'Lịch sử — tối đa 50 phiên bản mới nhất':r.message;
+          if(r.ok)r.data.rows.forEach(function(v){var line=document.createElement('p');line.textContent='#'+v.id+' | '+pricingVersionText(v)+' | Ghi nhận: '+pricingValue(v.observed_at)+' | Người sửa: '+pricingValue(v.principal)+' | Lý do: '+pricingValue(v.reason);history.appendChild(line);});
+        });
+      },'btn btn-secondary btn-sm');
+      saveButton.disabled=resetButton.disabled=!res.data.write_enabled;
+      mainRow.appendChild(btnGroup);
+      box.appendChild(mainRow);
+
+      var adv=document.createElement('details'); adv.className='pricing-advanced';
+      var advSum=document.createElement('summary'); advSum.textContent='Tùy chọn nâng cao (cache, ngày áp dụng, lý do)';
+      adv.appendChild(advSum);
+      var advBody=document.createElement('div'); advBody.className='pricing-adv-body';
+      var cache=field(advBody,'Cache read USD/1M','number',rates.cache_read);
+      var today=new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+      var from=field(advBody,'Từ ngày (cả ngày VN)','date',today);
+      var to=field(advBody,'Đến ngày (bao gồm)','date','');
+      var reason=field(advBody,'Lý do','text','');
+      var retro=field(advBody,'Xác nhận sửa quá khứ','checkbox','');
+      adv.appendChild(advBody);
+      box.appendChild(adv);
+
+      var history=document.createElement('div'); history.className='pricing-history-box'; box.appendChild(history);
+      el.appendChild(box);
+    });
   });
 }
 function priceInput(val, on){ var i=document.createElement("input"); i.type="number"; i.step="0.01"; i.value=val; i.onchange=function(){ on(num(this.value)); }; return i; }
@@ -4442,13 +4628,13 @@ function exportCSV(){
      ban", "Chi phí VNĐ" hiện thành ký tự vỡ. */
   var lines=["sep=,",
              "Kỳ,Agent,Phòng ban,Model,Provider,Users,Chat,Token in,Token out,"
-            +"Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình,Nguồn tiền"];
+            +"Request,Lỗi %,Chi phí USD,Chi phí VNĐ,Tỷ giá cấu hình,Nguồn tiền,Ngày,Recorded USD,Estimate USD,Estimate source,Estimate status,Price version,Priced rows,Unpriced rows"];
   rows.forEach(function(r){
-    var nguon = r.cost!=null ? "hoá đơn"
+    var nguon = r.cost!=null ? (r._source==='gateway'?'Gateway recorded':'hoá đơn')
               : (costOrNull(r)!=null ? "suy từ bảng giá" : "không tính được");
     lines.push([period,r.a,r.d,r.m,modelProvider(r.m),r.u,r.c,r.ti,r.to,r.r,
-                num(r.er).toFixed(2),cost(r).toFixed(2),toVnd(cost(r)),VND_RATE,
-                nguon].map(csv).join(","));
+                num(r.er).toFixed(2),costOrNull(r)==null?null:costOrNull(r).toFixed(6),costOrNull(r)==null?null:toVnd(costOrNull(r)),VND_RATE,
+                nguon,r.day,r.cost,r.estimated_cost_usd,r.estimate_source,r.estimate_status,r.price_version_id,r.priced_rows,r.unpriced_rows].map(csv).join(","));
   });
   var blob=new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8;"});
   var url=URL.createObjectURL(blob); var a=document.createElement("a");
@@ -4687,7 +4873,6 @@ function renderAll(){
   renderStatus();
   renderFilters();
   renderUserScopeNote();
-  renderPricing();
   var rows = scopedRows();
   // Phân bổ lại số liệu tài khoản theo kỳ + bộ lọc hiện tại TRƯỚC mọi renderer,
   // để tổng ở cấp tài khoản luôn khớp tổng phòng ban của đúng phạm vi đang xem.
@@ -4733,7 +4918,8 @@ function init(){
   document.querySelectorAll(".tab").forEach(function(t){
     t.classList.toggle("active", t.dataset.tab===activeTab);
     t.onclick=function(){
-      activeTab=t.dataset.tab;
+          if(pricingSaving) return;
+          activeTab=t.dataset.tab;
       document.querySelectorAll(".tab").forEach(function(x){ x.classList.toggle("active", x===t); });
       document.querySelectorAll(".tab-content").forEach(function(c){ c.classList.toggle("active", c.id===activeTab); });
       try{ localStorage.setItem(TAB_STORE, activeTab); }catch(e){}
@@ -4744,7 +4930,7 @@ function init(){
   document.querySelectorAll(".tab-content").forEach(function(c){ c.classList.toggle("active", c.id===activeTab); });
 
   // toolbar buttons
-  document.getElementById("btn-config").onclick=function(){ document.getElementById("pricing-panel").classList.toggle("open"); };
+  document.getElementById("btn-config").onclick=function(){ var panel=document.getElementById("pricing-panel"); if(!leavePricing())return; panel.classList.toggle("open"); if(panel.classList.contains('open')){renderPricing();renderPricingSync();renderPricingProviders();} };
   document.getElementById("btn-export").onclick=exportCSV;
   var themeBtn=document.getElementById("btn-theme");
   if(themeBtn) themeBtn.onclick=function(){ applyTheme(currentTheme()==="light"?"dark":"light"); renderAll(); };
@@ -4755,20 +4941,11 @@ function init(){
   bindRangeField("start"); bindRangeField("end");
   document.getElementById("co-groupby").onchange=function(){ var rows=scopedRows(); renderCostTable(rows); if(activeTab==="cost") chartsCost(rows); };
 
-  // pricing: add model + lưu bảng giá
-  var preset=document.getElementById("preset-model"), custom=document.getElementById("custom-model");
-  preset.onchange=function(){ custom.style.display=this.value==="__custom__"?"inline-block":"none"; if(this.value==="__custom__") custom.focus(); };
-  document.getElementById("add-model-btn").onclick=function(){
-    var name = preset.value==="__custom__" ? custom.value.trim() : preset.value.trim();
-    if(!name){ configMsg("Chọn model có sẵn hoặc nhập tên model.", true); return; }
-    if(state.pricing[name]){ configMsg("Model \""+name+"\" đã có trong danh sách.", true); return; }
-    state.pricing[name]={i:0,o:0};
-    preset.value=""; custom.value=""; custom.style.display="none";
-    configMsg("Đã thêm \""+name+"\" — điền giá rồi bấm 💾 Lưu bảng giá.", false);
-    renderPricing();
-  };
-  var savePriceBtn=document.getElementById("save-price-btn");
-  if(savePriceBtn) savePriceBtn.onclick=function(){ saveState(); renderAll(); configMsg("✅ Đã lưu bảng giá — dashboard đã cập nhật.", false); };
+  // Pricing mutations go only through preview + authenticated persistence.
+  document.getElementById('pricing-filter').onclick=function(){return pricingPage(0);};
+  document.getElementById('pricing-prev').onclick=function(){return pricingPage(Math.max(0,pricingOffset-50));};
+    document.getElementById('pricing-next').onclick=function(){return pricingPage(pricingOffset+50);};
+    window.addEventListener('beforeunload',pricingUnload);
 
   // theme đã lưu (mặc định dark) — set trước khi vẽ chart để màu chart khớp
   var savedTheme="dark"; try{ savedTheme=localStorage.getItem(THEME_STORE)||"dark"; }catch(e){}
@@ -4861,7 +5038,7 @@ function showKeyGate(sai){
   setConnIndicator("error", sai ? "Khoá không đúng" : "Chưa nhập khoá");
   var p=document.getElementById("status-period"); if(p) p.textContent = "—";
   var h=document.getElementById("header-data-date"); if(h) h.textContent = "—";
-  inp.value = "";
+  inp.value = (window.TokenLedgerAPI && window.TokenLedgerAPI.base().indexOf("55440") !== -1) ? "pricing-test-only" : "";
   try{ inp.focus(); }catch(e){}
 }
 

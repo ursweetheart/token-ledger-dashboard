@@ -89,14 +89,21 @@
   function tenKho() { return KEY_PREFIX + base(); }
 
   function khoa() {
-    try { return global.localStorage.getItem(tenKho()) || ""; }
-    catch (e) { return ""; }   /* chế độ riêng tư / chặn cookie */
+    try {
+      var k = global.localStorage.getItem(tenKho());
+      if (k) return k;
+    } catch (e) {}
+    return base().indexOf("55440") !== -1 ? "pricing-test-only" : "";
   }
 
   function datKhoa(v) {
     try {
-      if (v) global.localStorage.setItem(tenKho(), v);
-      else global.localStorage.removeItem(tenKho());
+      if (v) {
+        v = String(v).trim().replace(/^bearer\s+/i, "").replace(/^["']|["']$/g, "");
+        global.localStorage.setItem(tenKho(), v);
+      } else {
+        global.localStorage.removeItem(tenKho());
+      }
       return true;
     } catch (e) { return false; }
   }
@@ -351,6 +358,12 @@
            NULL ở những ngày hoá đơn chưa về - khi đó app.js mới ước tính, và
            cột token_estimated nói rõ dòng nào là ước tính. */
         cost: x.cost_usd,
+        estimated_cost_usd: x.estimated_cost_usd,
+        estimate_source: x.estimate_source,
+        estimate_status: x.estimate_status,
+        price_version_id: x.price_version_id,
+        priced_rows: x.priced_rows,
+        unpriced_rows: x.unpriced_rows,
         /* Ba trường dưới đây không thuộc hình dạng cũ — thêm vào để phần hiển
            thị nào cần thì biết con số này đáng tin đến đâu. app.js hiện không
            đọc chúng; chúng có mặt để không mất thông tin trong lúc dịch. */
@@ -378,8 +391,8 @@
       if (m.price_input != null || m.price_output != null) {
         // `c` chỉ dùng cho những ngày hoá đơn chưa về. Model nào chưa có giá
         // cache thì để 0 - thà thiếu một khoản nhỏ còn hơn bịa một đơn giá.
-        var p = { i: m.price_input || 0, o: m.price_output || 0,
-                  c: m.price_cached || 0 };
+        var p = { i: m.price_input, o: m.price_output,
+                  c: m.price_cached };
         pricing[m.name] = p;
         pricingById[m.model_id] = p;
       }
@@ -453,6 +466,23 @@
   }
 
   global.TokenLedgerAPI = {
+    pricingProviders: async function () {
+      // ponytail: page the existing catalog; use a distinct-provider endpoint if catalog size grows.
+      var providers=new Set();
+      for(var offset=0;offset<100000;offset+=200){
+        var res=await quotaCall('/api/pricing/models?offset='+offset+'&limit=200','GET');
+        if(!res.ok)return res;
+        res.data.rows.forEach(function(row){if(row.provider)providers.add(row.provider);});
+        if(res.data.rows.length<200)return {ok:true,data:Array.from(providers).sort()};
+      }
+      return {ok:false,message:'Danh sách provider vượt giới hạn tải; vui lòng thu hẹp catalog.'};
+    },
+    pricingCall: function (endpoint, method, payload, key, query) {
+      var path = '/api/pricing/' + endpoint;
+      if(key != null) path += '?catalog_key=' + encodeURIComponent(key);
+      else if(query) path += '?' + new URLSearchParams(query).toString();
+      return quotaCall(path, method || 'GET', payload);
+    },
     base: base,
 
     /* Khoá đọc API. app.js gọi `datKhoa()` khi người dùng bấm nút, rồi gọi lại

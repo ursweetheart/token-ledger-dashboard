@@ -286,6 +286,31 @@
   .icon-x{ background:none; border:none; color:#64748b; cursor:pointer; font-size:14px; padding:2px 6px; }
   .icon-x:hover{ color:#f87171; }
 
+  /* ─── Cấu hình giá tinh gọn ─── */
+  .pricing-header-row{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+  .pricing-sync-bar{ display:flex; align-items:center; gap:8px; font-size:12px; color:#94a3b8; }
+  .pricing-sync-bar input[type=number]{ width:45px; background:#0a0f1e; border:1px solid #334155; border-radius:4px; padding:2px 4px; color:#e2e8f0; text-align:center; }
+  .pricing-filter-row{ display:flex; align-items:center; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .pricing-card{ background:#1e293b; border:1px solid #334155; border-radius:8px; padding:12px 14px; margin-bottom:10px; display:flex; flex-direction:column; gap:8px; }
+  .pricing-card-head{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .pricing-model-name{ font-size:14px; font-weight:600; color:#f8fafc; font-family:'JetBrains Mono',monospace; }
+  .pricing-badge{ font-size:11px; padding:2px 6px; border-radius:4px; background:#334155; color:#cbd5e1; text-transform:uppercase; font-weight:600; }
+  .pricing-status-note{ font-size:11.5px; color:#94a3b8; width:100%; margin-top:2px; }
+  .pricing-card-main{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:4px; }
+  .pricing-card-main label{ display:flex; align-items:center; gap:6px; font-size:12px; color:#cbd5e1; font-weight:500; }
+  .pricing-card-main input[type=number]{ width:110px; background:#0a0f1e; border:1px solid #475569; border-radius:5px; padding:4px 8px; color:#f8fafc; text-align:right; font-family:'JetBrains Mono',monospace; font-size:13px; }
+  .pricing-btn-group{ display:flex; gap:6px; margin-left:auto; align-items:center; }
+  .pricing-advanced{ font-size:12px; color:#94a3b8; border-top:1px dashed #334155; padding-top:6px; margin-top:4px; }
+  .pricing-advanced summary{ cursor:pointer; user-select:none; color:#94a3b8; font-size:11.5px; }
+  .pricing-advanced summary:hover{ color:#e2e8f0; }
+  .pricing-adv-body{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:8px; }
+  .pricing-adv-body label{ display:flex; align-items:center; gap:4px; font-size:11.5px; color:#cbd5e1; }
+  .pricing-adv-body input{ background:#0a0f1e; border:1px solid #334155; border-radius:4px; padding:3px 6px; color:#e2e8f0; font-size:12px; }
+  .pricing-adv-body input[type=number]{ width:90px; text-align:right; }
+  .pricing-adv-body input[type=date]{ width:125px; }
+  .pricing-history-box{ font-size:11.5px; color:#cbd5e1; background:#0a0f1e; border-radius:6px; padding:8px; margin-top:6px; display:none; max-height:160px; overflow-y:auto; }
+  .pricing-history-box:not(:empty){ display:block; }
+
   /* Dòng Tổng của bảng nhập liệu */
   #data-tbody tr.data-total-row td{ border-top:2px solid #334155; font-weight:700; color:#e2e8f0; padding-top:11px; }
   #data-tbody tr.data-total-row:hover{ background:transparent; }
@@ -469,37 +494,27 @@
 
 <!-- ═══════════════ PANEL: BẢNG GIÁ ═══════════════ -->
 <div class="config-panel" id="pricing-panel">
-  <div class="panel-title">💲 Giá theo model (USD / 1 triệu token) — không chỉ Gemini, thêm model provider khác nếu agent dùng</div>
+  <div class="pricing-header-row">
+    <div class="panel-title" style="margin-bottom:0;">Cấu hình đơn giá Model (USD / 1M token)</div>
+    <div class="pricing-sync-bar">
+      <label><input type="checkbox" id="pricing-enabled"> Tự động quét mỗi <input id="pricing-hours" type="number" min="1" max="168" value="24"> giờ</label>
+      <button class="btn btn-secondary btn-sm" id="pricing-schedule" title="Lưu lịch quét">Lưu lịch</button>
+      <button class="btn btn-secondary btn-sm" id="pricing-now" title="Gửi yêu cầu quét ngay">🔄 Quét ngay</button>
+      <span id="pricing-sync" role="status" aria-live="polite"></span>
+    </div>
+  </div>
+
+  <div class="pricing-filter-row">
+    <select id="pricing-provider" class="filter-select"><option value="">Tất cả provider</option></select>
+    <input class="text-input" id="pricing-search" type="search" placeholder="Tìm model..." style="max-width:240px;background:#0a0f1e;border:1px solid #334155;border-radius:6px;padding:6px 10px;">
+    <button class="btn btn-secondary btn-sm" id="pricing-filter">Tìm</button>
+    <div style="flex:1;"></div>
+    <button class="btn btn-secondary btn-sm" id="pricing-prev">◀ Trang trước</button>
+    <button class="btn btn-secondary btn-sm" id="pricing-next">Trang sau ▶</button>
+  </div>
+
   <div class="price-grid" id="price-grid"></div>
-  <div class="add-model-row">
-    <select id="preset-model">
-      <option value="">— Chọn model có sẵn —</option>
-      <optgroup label="OpenAI">
-        <option value="GPT-4o">GPT-4o</option><option value="GPT-4o mini">GPT-4o mini</option>
-        <option value="GPT-4.1">GPT-4.1</option><option value="o3">o3</option><option value="o4-mini">o4-mini</option>
-      </optgroup>
-      <optgroup label="Anthropic">
-        <option value="Claude Opus 4.5">Claude Opus 4.5</option><option value="Claude Sonnet 4.5">Claude Sonnet 4.5</option>
-        <option value="Claude Haiku 4.5">Claude Haiku 4.5</option>
-      </optgroup>
-      <optgroup label="Google Gemini">
-        <option value="Gemini 2.5 Pro">Gemini 2.5 Pro</option><option value="Gemini 2.5 Flash">Gemini 2.5 Flash</option>
-        <option value="Gemini 3.0 Flash">Gemini 3.0 Flash</option><option value="Gemini 3.0 Pro">Gemini 3.0 Pro</option>
-        <option value="Gemini 3.1 Flash Lite">Gemini 3.1 Flash Lite</option>
-      </optgroup>
-      <optgroup label="Khác">
-        <option value="Llama 3.3 70B">Llama 3.3 70B</option><option value="DeepSeek V3">DeepSeek V3</option>
-        <option value="__custom__">Model khác (tự nhập tên)…</option>
-      </optgroup>
-    </select>
-    <input type="text" id="custom-model" placeholder="Nhập tên model" style="display:none;">
-    <button class="btn btn-secondary" id="add-model-btn">+ Thêm vào bảng giá</button>
-  </div>
-  <div class="add-model-row" style="margin-top:14px">
-    <button class="btn btn-export" id="save-price-btn">💾 Lưu bảng giá</button>
-    <span class="subtle" style="align-self:center">Sửa giá xong bấm Lưu ⇒ toàn bộ chi phí trên dashboard tính lại.</span>
-  </div>
-  <div class="config-msg" id="config-msg"></div>
+  <div class="config-msg" id="config-msg" role="status" aria-live="polite"></div>
 </div>
 
 <!-- ═══════════════ PANEL: DỮ LIỆU NGUỒN (nhập theo NGÀY) ═══════════════ -->

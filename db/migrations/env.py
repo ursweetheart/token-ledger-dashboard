@@ -63,7 +63,7 @@ def _dsn() -> str:
     KHONG LOI NAO BAO RA cho toi luc ai do doc so lieu.
     """
     overrides = context.get_x_argument(as_dictionary=True)
-    return overrides.get("db") or connect.ACTIVE_DSN or connect.DEFAULT_DSN
+    return overrides.get("db") or config.attributes.get('explicit_dsn') or connect.ACTIVE_DSN or connect.DEFAULT_DSN
 
 
 def run_migrations_offline() -> None:

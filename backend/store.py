@@ -351,7 +351,8 @@ def usage(cn, ph, start: str, end: str) -> list[dict]:
         x["day"] = _day(x["day"])
         x["cost_usd"] = _money(x["cost_usd"])
         x["token_estimated"] = bool(x["token_estimated"])
-    return r
+    from .pricing import attach_estimates
+    return attach_estimates(cn, r, start, end)
 
 
 def usage_hourly(cn, ph, start: str, end: str) -> list[dict]:
@@ -423,7 +424,8 @@ def usage_by_account(cn, ph, start: str, end: str) -> list[dict]:
         ORDER BY v.day, v.account_id, v.agent_id, v.model_id""", (start, end))
     for x in r:
         x["day"] = _day(x["day"])
-    return r
+    from .pricing import attach_estimates
+    return attach_estimates(cn, r, start, end)
 
 
 def performance(cn, ph, start: str, end: str) -> dict:

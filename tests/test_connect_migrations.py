@@ -105,6 +105,10 @@ class RebuildTests(unittest.TestCase):
         for statement in statements:
             self.assertNotIn("DROP", statement.upper())
 
+    def test_rebuild_refuses_to_cascade_delete_pricing_history(self):
+        with self.assertRaisesRegex(RuntimeError, 'pricing history'):
+            self.run_rebuild(['dim_model','ref_model_catalog','ref_model_price_version','ref_price_sync_state'])
+
     def test_rebuild_keeps_tables_whose_rows_come_from_migrations(self):
         """Emptying alembic_version replays 001 onto existing tables; emptying ref_source loses
         the rows 001 seeded, because an existing database never re-runs 001. Measured on the
@@ -135,6 +139,13 @@ class RebuildTests(unittest.TestCase):
 
 
 class ApplyMigrationsTests(unittest.TestCase):
+    def test_explicit_dsn_is_carried_in_alembic_config_across_import_aliases(self):
+        from alembic import command
+        def upgrade(config, revision):
+            self.assertEqual(config.attributes.get('explicit_dsn'), 'postgresql://isolated')
+        with patch.object(command, 'upgrade', side_effect=upgrade):
+            connect.apply_migrations('postgresql://isolated')
+
     def test_active_dsn_is_reset_when_alembic_upgrade_fails(self):
         """Omitting the finally reset leaks a candidate DSN into later migrations."""
         alembic_module = types.ModuleType("alembic")
@@ -148,6 +159,7 @@ class ApplyMigrationsTests(unittest.TestCase):
         class Config:
             def __init__(self, path):
                 self.path = path
+                self.attributes = {}
 
         command_module.upgrade = upgrade
         config_module.Config = Config
