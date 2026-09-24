@@ -296,6 +296,13 @@ def main() -> None:
     args = p.parse_args()
 
     cn, ph = connect.open_db(args.db)
+    import gateway_registry
+    with cn.cursor() as lock_cur:
+        lock_cur.execute("SELECT pg_try_advisory_xact_lock(%s)", (gateway_registry.LOCK_ID,))
+        if not lock_cur.fetchone()[0]:
+            cn.close()
+            raise RuntimeError("Gateway apply/refresh already running; bulk reload refused")
+    gateway_registry.guard_legacy(cn)
     cur = cn.cursor()
 
     agent_name = dict(connect.query(cn, "SELECT agent_id, name FROM dim_agent"))

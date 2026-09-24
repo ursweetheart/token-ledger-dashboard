@@ -913,6 +913,18 @@
 
 <!-- ═══════════════ TAB 3 — AGENTS ═══════════════ -->
 <div class="tab-content" id="agents">
+  <section class="chart-card" id="gateway-identities-panel" aria-label="Định danh qua Gateway">
+    <h3>Định danh qua Gateway</h3>
+    <p>Usage theo định danh đã gửi request, không phải danh bạ nhân viên đã cấp quyền.
+       Bảng này áp dụng bộ lọc Agent và khoảng ngày; chưa có thông tin phòng ban.</p>
+    <p id="gateway-identities-status" role="status" aria-live="polite">Đang tải…</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Agent</th><th>Định danh</th><th>Loại</th><th>Request thành công</th><th>Token</th></tr></thead>
+      <tbody id="gateway-identities-rows"></tbody>
+    </table></div>
+    <button type="button" id="gateway-identities-prev">Trang trước</button>
+    <button type="button" id="gateway-identities-next">Trang sau</button>
+  </section>
   <div class="insight-banner">
     <span class="insight-text"><b>Agent được dùng nhiều nhất</b>, <b>agent tiêu nhiều tài nguyên nhất</b> và <b>agent đã tạo nhưng bỏ không</b>.</span>
   </div>
@@ -1385,6 +1397,7 @@
 <!-- Nạp TRƯỚC app.js. Chỉ bơm dữ liệu từ backend vào, không đụng giao diện.
      Không chạy backend thì tự rút lui, dashboard chạy như cũ. -->
 <script src="js/api.js"></script>
+<script src="js/gateway-identities.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -391,6 +391,18 @@ def adoption(who: Principal = Depends(caller)):
         return {"rows": store.adoption(cn)}
 
 
+@app.get("/api/gateway-identities", summary="Observed Gateway identities, not a staff directory")
+def gateway_identities(start: str | None = None, end: str | None = None,
+                       agent_id: int | None = Query(None, ge=1),
+                       limit: int = Query(100, ge=1, le=500),
+                       offset: int = Query(0, ge=0),
+                       who: Principal = Depends(caller)):
+    from .gateway_identities import identities
+    start, end = date_range(start, end)
+    with store.open_db() as (cn, _):
+        return {"start": start, "end": end, **identities(cn, start, end, agent_id, limit, offset)}
+
+
 @app.get("/api/usage-by-account", summary="Usage attributed to each person")
 def usage_by_account(start: str | None = None, end: str | None = None,
                      who: Principal = Depends(caller)):

@@ -116,9 +116,11 @@ from datetime import timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import connect  # noqa: E402
 import logs  # noqa: E402
+from db import gateway_registry
 
 log = logs.get_logger("load_gateway")
 
@@ -229,14 +231,16 @@ def watermark(cn):
     return row[0] if row else None
 
 
-def read_ledger(gw_cn, since):
+def read_ledger(gw_cn, since, pending_codes=()):
     """Đọc sổ Gateway. `since` là None thì đọc hết."""
     cur = gw_cn.cursor()
     if since is None:
         cur.execute(BASE_SQL + ' ORDER BY "startTime"')
     else:
-        cur.execute(BASE_SQL + ' AND "startTime" > %s ORDER BY "startTime"',
-                    (since,))
+        cur.execute(BASE_SQL + ' AND ("startTime" > %s OR EXISTS ('
+                    "SELECT 1 FROM jsonb_array_elements_text(COALESCE(request_tags,'[]'::jsonb)) t "
+                    'WHERE t = ANY(%s))) ORDER BY "startTime"',
+                    (since, list(pending_codes)))
     return cur.fetchall()
 
 
@@ -255,7 +259,7 @@ def resolve_agent(tags, agent_by_code):
     return None, "several identity tags"
 
 
-def auto_register_models(cn, ledger, models, dry_run=False):
+def auto_register_models(cn, ledger, models, dry_run=False, commit=True):
     """Tự khai model Gateway chưa biết, thay vì chỉ đếm rồi bỏ NULL.
 
     VÌ SAO (19/09/2026): mỗi khi agent đổi/thêm nhà cung cấp (vd Google AI
@@ -314,13 +318,21 @@ def auto_register_models(cn, ledger, models, dry_run=False):
         models[(SOURCE, raw)] = model_id
         log.info("  auto-registered gateway model: raw=%r -> model_id=%d"
                  " (name=%r, provider=%r)", raw, model_id, name, provider_label)
-    cn.commit()
+    if commit:
+        cn.commit()
     return models
 
 
-def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
-    """Ánh xạ dòng sổ -> dòng `fact_call`, kèm bộ đếm mọi thứ bị bỏ hoặc hụt."""
+def build_rows(ledger, agent_by_code, models, directory, anchors, units,
+               policies=None, identity_resolver=None):
+    """Ánh xạ dòng sổ -> dòng `fact_call`, kèm bộ đếm mọi thứ bị bỏ hoặc hụt.
+
+    `directory` là bảng tra KHOÁ ĐÔI `(agent_id, tên đăng nhập) -> account_id`,
+    do `connect.directory_account_lookup()` dựng. Trước 21/09/2026 tham số này
+    là `accounts`, khoá bằng tên đăng nhập một mình và trả kèm `unit_agent_id`
+    để bên gọi đem đi so sánh - xem khối chú thích ở chỗ quy tài khoản."""
     rows = []
+    policies = policies or {}
     stats = {
         "read_from_ledger": len(ledger),
         "dropped_no_tag": 0,
@@ -345,11 +357,15 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         "modality_null": 0,
         "thinking_null": 0,
         "reasoning_seen": 0,
+        "identity_invalid": 0,
+        "dropped_before_start": 0,
     }
     # Token của những dòng BỊ BỎ, tách theo lý do. Đếm số dòng thôi là chưa đủ:
     # "bỏ 6 dòng" nghe như chuyện nhỏ, "bỏ 6 dòng mang 760 token" thì không.
     dropped_tokens = {"dropped_no_tag": 0, "dropped_many_tags": 0, "dropped_cache_duplicate": 0}
     dropped_ids = {"dropped_no_tag": [], "dropped_many_tags": [], "dropped_cache_duplicate": []}
+    dropped_tokens["dropped_before_start"] = 0
+    dropped_ids["dropped_before_start"] = []
 
     def drop(key: str, dropped_id: str, tokens) -> None:
         stats[key] += 1
@@ -390,6 +406,11 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
                  else "dropped_many_tags", call_id, total_tokens)
             continue
 
+        policy = policies.get(agent_id)
+        if policy and not gateway_registry.in_scope(policy, ts_raw):
+            drop("dropped_before_start", call_id, total_tokens)
+            continue
+
         # BẪY 4: tra theo tên upstream ở cột `model`. Dòng nào chưa khai trong
         # rules.GATEWAY_MODELS sẽ ra None - nạp vào với model_id NULL và ĐẾM,
         # chứ không loại. Mất dòng thì không ai biết; NULL thì đếm được.
@@ -414,7 +435,7 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         # NULL. Neo tra theo (kind, unit_agent_id) - xem anchor_account_lookup().
         anchor = anchors.get(agent_id)
 
-        # ĐỊNH DANH PHẢI THUỘC ĐÚNG AGENT GỬI REQUEST.
+        # ĐỊNH DANH PHẢI CÓ MẶT TRONG DANH BẠ CỦA AGENT GỬI REQUEST.
         #
         # Trước 31/08 chỗ này tra thẳng `accounts.get(end_user)`, tức là tin bất
         # kỳ chuỗi nào Gateway gửi tới. Đo ra một đường hỏng có thật: bảng
@@ -424,23 +445,52 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
         # lượng đó bị trộn vào lịch sử của một người dùng TLA Hợp Đồng. Im lặng,
         # tổng vẫn khớp, không phép kiểm nào bắt được.
         #
-        # Bản vá đầu chỉ nhận định danh tra ra ĐÚNG tài khoản neo. Chặn được
-        # `admin`, nhưng SAI với agent nhiều người dùng: cả 45 người thật của TLA
-        # Hợp Đồng cũng khác neo, nên sẽ bị gộp hết vào một tài khoản.
+        # Bản vá 31/08 hỏi "tài khoản này THUỘC VỀ agent nào" rồi đem so. Nó chặn
+        # được `admin`, nhưng đặt SAI CÂU HỎI, và chỗ sai chỉ lộ ra khi đo:
         #
-        # Quy tắc đúng cho CẢ HAI loại agent: định danh hợp lệ khi tài khoản của
-        # nó thuộc chính agent đang gửi request.
+        #     `account` gộp mỗi con người thành MỘT dòng (`username` là UNIQUE),
+        #     và dòng ấy mang MỘT `unit_agent_id` - agent thắng phép chọn ở
+        #     `load_org.py:492`. Người dùng HAI agent vì thế chỉ "thuộc về" một
+        #     bên, và mọi request qua bên kia đều trượt phép so.
         #
-        #     svc.dms-feedback -> agent 6, request agent 6  ->  NHAN
-        #     admin            -> agent 5, request agent 6  ->  TU CHOI
-        #     pbh1_ntlong      -> agent 5, request agent 5  ->  NHAN
+        # Đo 21/09/2026 trên database đã dựng lại: 5 người có mặt trong danh bạ
+        # của CẢ Ralli lẫn TLA Hợp Đồng - `longnt`, `pbh3_tthien`,
+        # `quy.tv@rangdong.com.vn`, `tg.namnh`, `tt3.binhtv`. Ralli giữ 4, TLA
+        # Hợp Đồng giữ 1. Ngày agent nhiều người dùng đi qua Gateway, 4/5 người
+        # ấy mất khỏi chiều người dùng mà tổng token và tổng tiền vẫn đúng y.
         #
-        # Quy ước 20/08: 6/8 agent được coi là chỉ có MỘT người dùng, và người đó
-        # là tài khoản dịch vụ `svc.<code>` (kind='service_account'). Với chúng,
-        # neo CHÍNH LÀ đáp án đúng, không phải giải pháp tạm.
-        found = accounts.get(user_id) if user_id else None
-        if found is not None and found[1] == agent_id:
-            account_id = found[0]
+        # CÂU HỎI ĐÚNG là "định danh này CÓ MẶT trong danh bạ của agent đang gửi
+        # không" - tra thẳng bằng khoá đôi, không so gì cả:
+        #
+        #     (6, svc.dms-feedback)  -> co   ->  NHAN
+        #     (6, admin)             -> khong -> TU CHOI   <- loi 31/08 van bi chan
+        #     (5, longnt)            -> co   ->  NHAN      <- moi, truoc day truot
+        #     (8, longnt)            -> co   ->  NHAN      <- moi
+        #     (6, tuan.tran)         -> khong -> TU CHOI   <- do that: 13 luot
+        #
+        # Xem `connect.directory_account_lookup()` để biết vì sao bảng tra phải
+        # hợp hai nguồn và vì sao nó chỉ nhận dòng danh bạ.
+        #
+        # CHUẨN HOÁ HAI ĐẦU. Bảng tra khoá bằng `LOWER(TRIM())`, nên chỗ này phải
+        # chuẩn hoá y hệt. Đo 21/09: 59/935 tên đăng nhập (6,3%) có chữ hoa, và
+        # HAI trong năm người nói trên nằm trong số đó - `Longnt`, `PBH3_TTHien`.
+        # Bỏ khâu này thì sửa xong vẫn mất 2/5 người, vì một chữ hoa.
+        if policy:
+            if policy["user_mode"] == "single":
+                valid = gateway_registry.valid_identity(user_id)
+                if user_id and not valid:
+                    stats["identity_invalid"] += 1
+                found = (anchor if valid and user_id.strip().lower() == f"svc.{policy['code']}" else None)
+            elif gateway_registry.valid_identity(user_id) and outcome in ("success", "failure"):
+                found = identity_resolver(agent_id, user_id, ts_raw) if identity_resolver else None
+            else:
+                found = None
+                if user_id:
+                    stats["identity_invalid"] += 1
+        else:
+            found = directory.get((agent_id, user_id.strip().lower())) if user_id else None
+        if found is not None:
+            account_id = found
         else:
             if user_id is not None:
                 stats["identity_unresolvable"] += 1
@@ -524,7 +574,7 @@ def build_rows(ledger, agent_by_code, models, accounts, anchors, units):
     return rows, stats
 
 
-def main() -> int:
+def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN,
                    help="Dashboard connection string. Default: connect.DEFAULT_DSN")
@@ -534,22 +584,29 @@ def main() -> int:
                    help="Ignore the load watermark, read the whole ledger again")
     p.add_argument("--dry-run", action="store_true",
                    help="Print what would be loaded, write nothing")
-    args = p.parse_args()
+    args = p.parse_args(argv)
 
-    cn, ph = connect.open_db(args.db)
+    with gateway_registry.operation_lock(args.db):
+        cn, ph = connect.open_db(args.db)
+        try:
+            try:
+                gw_cn, _ = connect.open_db(args.gateway_db)
+            except Exception as exc:
+                log.error("CANNOT REACH THE GATEWAY LEDGER: %s (%s)",
+                          connect.mask_dsn(args.gateway_db), type(exc).__name__)
+                return 1
+            try:
+                gw_cn.set_session(readonly=True)
+                if args.dry_run:
+                    cn.set_session(readonly=True)
+                return load(args, cn, ph, gw_cn)
+            finally:
+                gw_cn.close()
+        finally:
+            cn.close()
 
-    # Nối sổ Gateway. Hỏng ở đây phải BÁO RÕ rồi dừng - tuyệt đối không được
-    # nuốt lỗi rồi nạp 0 dòng và báo thành công, vì "0 dòng" trông y hệt
-    # "chưa có lưu lượng".
-    try:
-        gw_cn, _ = connect.open_db(args.gateway_db)
-    except Exception as exc:
-        log.error("CANNOT REACH THE GATEWAY LEDGER: %s",
-                  connect.mask_dsn(args.gateway_db))
-        log.error("  %s: %s", type(exc).__name__,
-                  str(exc).strip().splitlines()[0])
-        log.error("  gateway down? run: docker compose --profile gateway up -d")
-        return 1
+
+def load(args, cn, ph, gw_cn):
 
     # CHOT CHAN: `total_cost` chi la gia goc cua nha cung cap KHI margin va
     # discount deu bang 0. Do 31/08: 0/34 dong khac 0 - chua ai bat. Neu mot ngay
@@ -577,17 +634,27 @@ def main() -> int:
     log.info("  watermark: %s (rewound by %s)",
              "ALL" if since is None else since, OVERLAP)
 
-    ledger = read_ledger(gw_cn, since)
+    policies = gateway_registry.read_registry(cn)
+    pending_codes = [p["code"] for p in policies.values() if p["pending"]]
+    ledger = read_ledger(gw_cn, since, pending_codes)
 
     agent_by_code = connect.agent_code_lookup(cn)
     models = connect.model_lookup(cn)
-    models = auto_register_models(cn, ledger, models, dry_run=args.dry_run)
-    accounts = connect.account_lookup(cn)
+    models = auto_register_models(cn, ledger, models, dry_run=args.dry_run, commit=False)
+    directory = connect.directory_account_lookup(cn)
     anchors = connect.anchor_account_lookup(cn)
     units = connect.account_unit_lookup(cn)
 
-    rows, stats = build_rows(ledger, agent_by_code, models, accounts, anchors,
-                             units)
+    def identity_resolver(agent_id, user_id, timestamp):
+        account_id = gateway_registry.discover(cn, agent_id, user_id, timestamp, args.dry_run)
+        if account_id is None:  # Dry-run of a new identity: preview without allocating an ID.
+            log.info("  --dry-run: would discover an identity for agent %d", agent_id)
+            return anchors[agent_id]
+        units[account_id] = f"__gateway_{agent_id}__"
+        return account_id
+
+    rows, stats = build_rows(ledger, agent_by_code, models, directory, anchors,
+                             units, policies, identity_resolver)
 
     before = connect.query_one(
         cn, f"SELECT COUNT(*) FROM fact_call WHERE source = '{SOURCE}'")[0]
@@ -640,6 +707,7 @@ def main() -> int:
     # trong đó một dòng THÀNH CÔNG 25 token" thì không ai bỏ qua được nữa.
     for key, label in (("dropped_no_tag",          "no identity tag"),
                        ("dropped_many_tags",       "several identity tags"),
+                       ("dropped_before_start",    "before reporting start date"),
                        ("dropped_cache_duplicate", "cache-hit duplicate row")):
         n = stats[key]
         if not n:
@@ -650,7 +718,7 @@ def main() -> int:
                  ", ".join(m[:28] for m in ids[:5]),
                  f" ... +{len(ids) - 5}" if len(ids) > 5 else "")
     if not any(stats[k] for k in ("dropped_no_tag", "dropped_many_tags",
-                                  "dropped_cache_duplicate")):
+                                  "dropped_cache_duplicate", "dropped_before_start")):
         log.info("  dropped: nothing - every source row in range was loaded")
     if stats["unknown_status"]:
         log.warning("  %d rows carry a status other than success/failure -"
@@ -662,6 +730,8 @@ def main() -> int:
              stats["failed_before_routing"])
     log.info("  end_user empty %d | identity unresolvable %d",
              stats["end_user_empty"], stats["identity_unresolvable"])
+    if stats["identity_invalid"]:
+        log.warning("  invalid Gateway identities: %d", stats["identity_invalid"])
     log.info("  cached_tokens NULL %d | cost_usd NULL %d | duration_ms NULL %d",
              stats["cached_null"], stats["cost_null"], stats["duration_null"])
     if stats["cost_zero_with_tokens"]:
@@ -783,6 +853,15 @@ def main() -> int:
         '             WHERE t = ANY(%s)) <> 1)',
         (CACHE_HIT_SUFFIX, CACHE_HIT_SUFFIX, CACHE_HIT_SUFFIX, list(agent_by_code)))
     skipped_rows, skipped_tokens, cache_dup_rows, cache_dup_tokens = gw_cur.fetchone()
+    # Count the date exclusions over the WHOLE source, not only this load window.
+    if policies:
+        gw_cur.execute('SELECT request_id, "startTime", request_tags, total_tokens '
+                       'FROM "LiteLLM_SpendLogs" WHERE status IS NOT NULL')
+        for call_id, ts, tags, tokens in gw_cur.fetchall():
+            aid, _ = resolve_agent(tags, agent_by_code)
+            if CACHE_HIT_SUFFIX not in call_id and aid in policies and not gateway_registry.in_scope(policies[aid], ts):
+                skipped_rows += 1
+                skipped_tokens += int(tokens or 0)
     log.info("  skipped across the ledger: %d rows, %d tokens"
              " (of which cache-hit duplicates: %d rows, %d tokens)",
              skipped_rows, skipped_tokens, cache_dup_rows, cache_dup_tokens)

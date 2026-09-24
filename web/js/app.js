@@ -2760,7 +2760,7 @@ function chartsDepartments(rows){
   // dưới biểu đồ nói rõ khoảng thời gian để không ai đọc nhầm thành số của kỳ đang xem.
   var pool=filterAccounts(), missing=[], adoption, missingNote;
   if(ADOPTION_BY_AGENT.length){
-    adoption=ADOPTION_BY_AGENT.map(function(r){
+    adoption=ADOPTION_BY_AGENT.filter(function(r){return r.denominator_known!==false;}).map(function(r){
       return {key:r.agent, active:r.active, prov:r.provisioned,
               value:Math.min(100,Math.round(r.rate_pct))};
     }).sort(function(a,b){return a.value-b.value;}).slice(0,12);
@@ -4880,6 +4880,7 @@ function renderAll(){
   renderOverview(rows); renderDepartments(rows); renderAgents(rows); renderProviders(rows);
   renderModels(rows); renderUsers(rows); renderCost(rows); renderPerformance(rows);
   renderChartsFor(activeTab, rows);
+  if(typeof window!=="undefined" && window.GatewayIdentityPanel) window.GatewayIdentityPanel.render(state.range, state.filters.agent);
   saveState();
 }
 
@@ -5112,8 +5113,13 @@ function renderError(err){
       html = "<b>Nối được backend, nhưng database chưa có dữ liệu sử dụng.</b><br>"
            + "Khác với không nối được: máy chủ trả lời bình thường, chỉ là "
            + "<code>/api/health</code> không báo khoảng ngày nào cho usage.<br>"
-           + "Nạp dữ liệu bằng <code>python scripts/rebuild_db.py</code>, "
-           + "rồi soát bằng <code>python scripts/audit_db.py</code>.";
+           + "Với agent Gateway-only, đăng ký bằng <code>scripts/apply_gateway_agents.py</code>, "
+           + "rồi chạy <code>scripts/refresh_gateway.py</code>. Không rebuild database.";
+      if(typeof window!=="undefined" && window.GatewayIdentityPanel){
+        hideKeyGate(); // Health was authenticated; empty usage is not an auth failure.
+        var today=toISO(today0());
+        window.GatewayIdentityPanel.render(state.range || {start:today,end:today}, "");
+      }
       break;
     default:
       html = "<b>Không nạp được dữ liệu.</b> <code>"+addr+"</code> — "

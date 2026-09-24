@@ -45,8 +45,9 @@ class WorkerTests(unittest.TestCase):
 
     def test_refresh_tick_survives_ingest_timeout(self):
         import subprocess
+        from contextlib import nullcontext
         from scripts import refresh_gateway as refresh
-        with patch.object(refresh,'pricing_tick') as pricing, patch.object(refresh,'count_gateway_rows',return_value=(0,0,0,0,0)), patch.object(refresh.subprocess,'run',side_effect=subprocess.TimeoutExpired('ingest',1)) as run:
+        with patch.object(refresh.gateway_registry,'operation_lock',side_effect=lambda dsn: nullcontext()), patch.object(refresh.load_gateway,'main',return_value=0), patch.object(refresh,'pricing_tick') as pricing, patch.object(refresh,'count_gateway_rows',return_value=(0,0,0,0,0)), patch.object(refresh.subprocess,'run',side_effect=subprocess.TimeoutExpired('rollup',1)) as run:
             self.assertEqual(refresh.run_cycle('unused',True,120),1)
             self.assertEqual(refresh.run_cycle('unused',True,120),1)
             self.assertEqual(pricing.call_count,2)

@@ -434,6 +434,8 @@ services:
       dockerfile: docker/tools.Dockerfile
     image: token-ledger-tools:local
     container_name: token-ledger-refresh
+    volumes:
+      - ./config:/app/config:ro
     profiles: ["refresh"]
     restart: unless-stopped
     # `sys.executable` duoc dung ben trong script de goi bon buoc, nen chi can

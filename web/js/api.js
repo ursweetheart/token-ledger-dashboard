@@ -466,6 +466,9 @@
   }
 
   global.TokenLedgerAPI = {
+    gatewayIdentities: function (query) {
+      return quotaCall('/api/gateway-identities?' + new URLSearchParams(query).toString(), 'GET');
+    },
     pricingProviders: async function () {
       // ponytail: page the existing catalog; use a distinct-provider endpoint if catalog size grows.
       var providers=new Set();

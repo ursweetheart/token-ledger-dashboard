@@ -57,8 +57,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "db"))
+sys.path.insert(0, str(ROOT))
 
 import connect  # noqa: E402
+from db import gateway_registry, load_gateway
 
 PY = sys.executable
 
@@ -148,7 +150,7 @@ def print_counters_worth_attention(step_label: str, output: str | None) -> None:
                 break
 
 
-def write_heartbeat(dsn: str, row_count: int, interval: int) -> None:
+def write_heartbeat(dsn: str, row_count: int, interval: int) -> bool:
     """Ghi dau moc "luot lam moi nay da chay xong" vao `ref_load_run`.
 
     VI SAO CAN, va vi sao khong the suy ra tu du lieu (do 09/09/2026)
@@ -166,10 +168,8 @@ def write_heartbeat(dsn: str, row_count: int, interval: int) -> None:
     CHI GOI KHI CA BON BUOC DA XONG. Ghi som mot buoc la noi doi: nhip tim se
     tuoi trong khi so dang thieu du lieu.
 
-    KHONG DUOC LAM CHET CA LUOT LAM MOI. Nhip tim la thu de CHAN DOAN; hong noi
-    nay khong duoc keo do viec nap du lieu that. Nhung cung KHONG duoc nuot lang:
-    nhip tim khong ghi duoc ma khong ai biet thi phep kiem do tre se doc mot moc
-    cu va bao dong gia.
+    Heartbeat failure leaves committed facts intact, but the cycle fails and
+    pending initial backfills remain pending until a complete successful retry.
 
     `interval` la so giay giua hai luot cua CHINH tien trinh nay (0 = chay mot lan roi
     thoat). Ghi no vao so chu khong de moi ben doc tu doan: nguong cua phep kiem
@@ -180,7 +180,7 @@ def write_heartbeat(dsn: str, row_count: int, interval: int) -> None:
         cn, _ = connect.open_db(dsn)
     except Exception as e:                        # noqa: BLE001
         print(f"  WARNING: could not open a connection to write the heartbeat: {type(e).__name__}")
-        return
+        return False
     try:
         with cn.cursor() as cur:
             # `now() AT TIME ZONE 'Asia/Ho_Chi_Minh'` -- dong ho cua DATABASE, gio
@@ -200,20 +200,34 @@ def write_heartbeat(dsn: str, row_count: int, interval: int) -> None:
                        every_seconds   = EXCLUDED.every_seconds""",
                         (row_count, interval or None))
         cn.commit()
+        return True
     except Exception as e:                        # noqa: BLE001
         print(f"  WARNING: could not write the heartbeat: {type(e).__name__}: {e}")
+        return False
     finally:
         cn.close()
 
 
 def run_once(dsn: str, quiet: bool, interval: int = 0) -> int:
+    with gateway_registry.operation_lock(dsn):
+        return _run_once_locked(dsn, quiet, interval)
+
+
+def _run_once_locked(dsn: str, quiet: bool, interval: int = 0) -> int:
     before = count_gateway_rows(dsn)
     for label, path, extra in STEPS:
+        if path == "db/load_gateway.py":
+            # Same-process lock ownership; no bypass flag or inherited secret.
+            code = load_gateway.main(["--db", dsn])
+            if code:
+                print(f"FAILED at step '{label}', exit code {code}")
+                return code
+            continue
         # encoding PHAI dat tuong minh: mac dinh cua subprocess la codepage cua
         # console (cp1252 tren may nay), ma cac buoc co the in tieng Viet. Thieu no
         # thi luong doc nem UnicodeDecodeError - va mat dung doan chan doan can
         # xem nhat khi co su co.
-        r = subprocess.run([PY, str(ROOT / path), *extra],
+        r = subprocess.run([PY, str(ROOT / path), "--db", dsn, *extra],
                            capture_output=quiet, text=True,
                            encoding="utf-8", errors="replace",
                            timeout=int(os.environ.get('GATEWAY_REFRESH_STEP_TIMEOUT', '120')))
@@ -231,7 +245,16 @@ def run_once(dsn: str, quiet: bool, interval: int = 0) -> int:
         if quiet:
             print_counters_worth_attention(label, r.stdout)
     after = count_gateway_rows(dsn)
-    write_heartbeat(dsn, after[0], interval)
+    if not write_heartbeat(dsn, after[0], interval):
+        return 1
+    cn, _ = connect.open_db(dsn)
+    try:
+        if gateway_registry.available(cn):
+            with cn.cursor() as cur:
+                cur.execute("UPDATE gateway_agent_registry SET pending_backfill=false WHERE pending_backfill")
+            cn.commit()
+    finally:
+        cn.close()
 
     print(f"  fact_call gateway  {before[0]:>6} -> {after[0]:<6} (+{after[0] - before[0]})"
           f"  | token {before[1]:,} -> {after[1]:,}")

@@ -28,6 +28,11 @@ class FakeCursor:
     def fetchall(self):
         return [(name,) for name in self.tables]
 
+    def fetchone(self):
+        # Legacy test database has no registry yet. Integration tests exercise
+        # the populated-registry refusal against real PostgreSQL.
+        return (None,)
+
 
 class FakeConnection:
     def __init__(self, name, events, tables=()):
@@ -87,10 +92,11 @@ class RebuildTests(unittest.TestCase):
         events, connection, (result_connection, result_placeholder) = self.run_rebuild(
             ["alembic_version", "dim_agent", "fact_call", "ref_source"])
 
-        self.assertEqual(events[:2], ["migrate:postgresql://candidate", "open"])
-        self.assertTrue(events[2].startswith("sql:SELECT") and "pg_tables" in events[2], events[2])
+        self.assertEqual(events[:3], ["open", "sql:SELECT to_regclass('public.gateway_agent_registry')", "close:main"])
+        self.assertEqual(events[3:5], ["migrate:postgresql://candidate", "open"])
+        self.assertTrue(events[5].startswith("sql:SELECT") and "pg_tables" in events[5], events[5])
         self.assertEqual(
-            events[3:],
+            events[6:],
             ['sql:TRUNCATE TABLE "dim_agent", "fact_call" RESTART IDENTITY CASCADE',
              "seed:02_catalog.sql", "commit:main"],
         )

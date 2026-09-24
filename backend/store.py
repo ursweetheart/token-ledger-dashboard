@@ -308,9 +308,19 @@ def adoption(cn) -> list[dict]:
         FROM dim_agent g
         ORDER BY g.name, g.agent_id""")
 
+    from .gateway_identities import registered
+    policies = {}
+    if registered(cn):
+        policies = {x["agent_id"]: x["user_mode"] for x in _rows(
+            cn, "SELECT agent_id,user_mode FROM gateway_agent_registry")}
     for x in r:
         x["from_day"] = _day(x["from_day"]) if x["from_day"] else None
         x["to_day"] = _day(x["to_day"]) if x["to_day"] else None
+        if policies.get(x["agent_id"]) == "multiple":
+            x.update(kind="gateway_observed", provisioned=None, active=None,
+                     rate_pct=None, denominator_known=False, identity_source="gateway")
+            x.pop("any_usage")
+            continue
         if x["provisioned"]:
             # Agent cấp cho người. Mẫu số là danh bạ.
             x["kind"] = "people"

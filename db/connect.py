@@ -284,7 +284,16 @@ def rebuild(dsn: str):
     catalog = DB_DIR / "02_catalog.sql"
     if not catalog.exists():
         raise SystemExit("db/02_catalog.sql does not exist yet. Run: python db/gen_catalog.py")
-
+    # Check BEFORE migration: upgrading a populated registry is not a safe preflight.
+    try:
+        from . import gateway_registry
+    except ImportError:
+        import gateway_registry
+    check_cn, _ = open_db(dsn)
+    try:
+        gateway_registry.guard_legacy(check_cn)
+    finally:
+        check_cn.close()
     # Migration CHẠY TRƯỚC khi mở kết nối của hàm này: Alembic mở kết nối riêng,
     # và bảng nó vừa tạo phải nhìn thấy được khi đọc pg_tables ngay dưới đây.
     apply_migrations(dsn)
@@ -466,6 +475,11 @@ def directory_account_lookup(cn) -> dict[tuple[int, str], int]:
     Hỏng kiểu gì: token đủ, tiền đủ, HTTP 200, dòng vẫn vào sổ - chỉ chiều người
     dùng là mất. Mọi phép nghiệm thu bằng TỔNG đều ĐẠT.
 
+    CHỈ NHẬN DÒNG DANH BẠ
+    ----------------------
+    `dim_user` còn chứa dòng từ nhật ký. Chúng KHÔNG tính là "có mặt" - xem khối
+    chú thích ở câu truy vấn thứ nhất bên dưới.
+
     HAI SỔ ĐĂNG KÝ, KHÔNG PHẢI MỘT
     -------------------------------
     Hai bảng đặt hai cái tên khác nhau cho cùng một tài khoản dịch vụ:
@@ -511,9 +525,32 @@ def directory_account_lookup(cn) -> dict[tuple[int, str], int]:
             seen[key] = int(account_id)
 
     cur = cn.cursor()
-    # Nguồn 1: danh bạ người thật, đã tách sẵn theo agent.
+    # Nguồn 1: DANH BẠ người thật, đã tách sẵn theo agent.
+    #
+    # `found_in = 'directory'` là một QUYẾT ĐỊNH, không phải một bộ lọc tiện tay -
+    # chốt 21/09/2026 sau khi đo. `dim_user` còn nhận dòng từ NHẬT KÝ
+    # (`found_in = 'log'`): định danh có gọi thật nhưng không có trong danh bạ.
+    # Nhận chúng thì hỏng hai chuyện:
+    #
+    #   1. Không cái nào là NGƯỜI. Toàn bộ 8 định danh chỉ-có-trong-nhật-ký -
+    #      `admin`, `guest`, `system` (Ralli); `test1`..`test4`, `nghiệp vụ bh1`
+    #      (TLA HĐ) - đều mang `is_shared = 1`, tức hệ thống ĐÃ tự xếp chúng là
+    #      "không đại diện cho một con người".
+    #
+    #   2. Mở lại đúng lỗi mà phép so cũ dựng ra để chặn. `admin` có ở TLA Hợp
+    #      Đồng qua danh bạ và ở Ralli qua nhật ký; `account` gộp thành MỘT dòng
+    #      thuộc agent 5. Nhận dòng nhật ký nghĩa là Ralli gửi `X-User: admin` sẽ
+    #      quy vào LỊCH SỬ ADMIN CỦA TLA HỢP ĐỒNG. Mỗi app có admin riêng, chúng
+    #      chỉ trùng chuỗi ký tự.
+    #
+    # Danh bạ trả lời "người này ĐƯỢC CẤP QUYỀN dùng agent này" - đúng nghĩa cần
+    # cho câu hỏi "có thuộc về đây không". Cùng bộ lọc mà `backend/store.py`
+    # (`adoption()`) đã dùng cho mẫu số.
+    #
+    # Giá phải trả: người dùng thật chưa kịp vào danh bạ sẽ bị từ chối. Hôm nay 0
+    # ca. Nếu mai có thì `adoption()` đã có chỗ báo - cột `outside_directory`.
     cur.execute("SELECT agent_id, LOWER(TRIM(username)), account_id"
-                " FROM dim_user WHERE NOT is_technical")
+                " FROM dim_user WHERE NOT is_technical AND found_in = 'directory'")
     for a, u, acc in cur.fetchall():
         add(a, u, acc, "dim_user")
 
