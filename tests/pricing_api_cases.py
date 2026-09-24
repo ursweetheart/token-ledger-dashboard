@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 os.environ.update(DASHBOARD_KEY='pricing-test-only', DASHBOARD_OPEN='0',
                   LITELLM_MASTER_KEY='unused-test', GATEWAY_BASE_URL='http://127.0.0.1:1', QUOTA_DISABLED='1')
 from backend import main
-from test_pricing_db import PersistenceTests
+from pricing_db_cases import PersistenceTests
 
 
 class PricingCorsTests(unittest.TestCase):

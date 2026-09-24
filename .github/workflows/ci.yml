@@ -269,7 +269,11 @@ jobs:
       # Moc do 21/09/2026 (lan 3): 174 -> 184, them 10 phep kiem cua khau quy dinh
       # danh trong load_gateway (nguoi dung hai agent, dinh danh la, chuan hoa
       # hoa/thuong, va tong KHONG duoc doi).
-      EXPECTED_PY: "184"
+      # Moc do 24/09/2026: 184 -> 197, them 13 phep kiem don vi cua catalog pricing
+      # (5 cua sync_model_catalog worker, 6 cua model_pricing logic, va 2 cua
+      # migration schema ref_model_price). Cac phep kiem tich hop (API, DB) doi
+      # hoi Postgres/FastAPI duoc tach khoi bo chay may sach.
+      EXPECTED_PY: "197"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

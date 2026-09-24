@@ -3,7 +3,16 @@ import os
 import json
 from contextlib import contextmanager
 from datetime import date, datetime
-from fastapi import APIRouter, Depends, HTTPException, Query
+try:
+    from fastapi import APIRouter, Depends, HTTPException, Query
+except ImportError:
+    APIRouter = Depends = Query = None
+
+    class HTTPException(Exception):  # type: ignore[no-redef]
+        def __init__(self, status_code: int, detail: str = ""):
+            super().__init__(detail)
+            self.status_code = status_code
+            self.detail = detail
 from db.model_pricing import BUSINESS_TZ, parse_rate, select_price
 from . import store
 

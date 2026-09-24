@@ -146,11 +146,32 @@ class RebuildTests(unittest.TestCase):
 
 class ApplyMigrationsTests(unittest.TestCase):
     def test_explicit_dsn_is_carried_in_alembic_config_across_import_aliases(self):
-        from alembic import command
+        alembic_module = types.ModuleType("alembic")
+        command_module = types.ModuleType("alembic.command")
+        config_module = types.ModuleType("alembic.config")
+
+        captured = {}
         def upgrade(config, revision):
-            self.assertEqual(config.attributes.get('explicit_dsn'), 'postgresql://isolated')
-        with patch.object(command, 'upgrade', side_effect=upgrade):
+            captured['explicit_dsn'] = config.attributes.get('explicit_dsn')
+
+        class Config:
+            def __init__(self, path):
+                self.path = path
+                self.attributes = {}
+
+        command_module.upgrade = upgrade
+        config_module.Config = Config
+        alembic_module.command = command_module
+        alembic_module.config = config_module
+
+        with patch.dict(sys.modules, {
+            "alembic": alembic_module,
+            "alembic.command": command_module,
+            "alembic.config": config_module,
+        }):
             connect.apply_migrations('postgresql://isolated')
+
+        self.assertEqual(captured.get('explicit_dsn'), 'postgresql://isolated')
 
     def test_active_dsn_is_reset_when_alembic_upgrade_fails(self):
         """Omitting the finally reset leaks a candidate DSN into later migrations."""
