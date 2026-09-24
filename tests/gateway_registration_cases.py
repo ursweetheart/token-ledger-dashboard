@@ -175,9 +175,10 @@ def source_fixture(dsn):
 
 def source_row(dsn, call_id, code, identity, timestamp="2026-09-02 01:00:00", status="success"):
     import json
+    tags = code if isinstance(code, list) else ([code] if code else [])
     query(dsn, '''INSERT INTO "LiteLLM_SpendLogs" VALUES
         (%s,%s,'test/model',%s,%s,10,20,30,%s,%s,120,'fixture-key','False')''',
-        (call_id, timestamp, identity, json.dumps([code]),
+        (call_id, timestamp, identity, json.dumps(tags),
          json.dumps({"cost_breakdown": {"total_cost": "0.001"},
                      "usage_object": {"completion_tokens_details": {"text_tokens": 20}}}), status))
 
@@ -361,3 +362,149 @@ def test_upgrade_preserves_legacy_and_grants(database):
         assert result.returncode != 0
         assert "Bulk reload refused" in result.stderr
         assert snapshot(dsn) == protected
+
+
+def test_adversarial_identities_and_tag_counters(database):
+    dsn = database
+    source_fixture(dsn)
+    query(dsn, """INSERT INTO dim_agent VALUES
+        (41,'legacy','Legacy',NULL,false,NULL,'2026-08-01',NULL,true,false);
+        INSERT INTO dim_unit(unit_id,agent_id,name,is_technical) VALUES ('legacy-unit',41,'Legacy',false);
+        INSERT INTO account(account_id,username,kind,unit_id,is_shared,unit_agent_id,unit_conflict)
+        VALUES (9001,'admin','real','legacy-unit',0,41,0);
+        INSERT INTO dim_model VALUES (71,'legacy-model','legacy','test');
+        INSERT INTO fact_call(call_id,agent_id,ts_raw,tz_confirmed,ts_local,user_id,account_id,
+          unit_id,model_id,prompt_tokens,completion_tokens,total_tokens,source,cost_usd,outcome)
+        VALUES ('legacy-call',41,'2026-08-02',true,'2026-08-02 07:00','admin',9001,
+          'legacy-unit',71,10,20,30,'app',0.123456,'success');""")
+    legacy_facts = query(dsn, "SELECT call_id,account_id,cost_usd FROM fact_call WHERE call_id='legacy-call'")
+
+    c1, c2 = config("agent-one"), config("agent-two")
+    c1[0]["name"] = "Agent One"
+    c2[0]["name"] = "Agent Two"
+    apply(dsn, c1 + c2)
+    a1 = query(dsn, "SELECT agent_id FROM dim_agent WHERE code='agent-one'")[0][0]
+    a2 = query(dsn, "SELECT agent_id FROM dim_agent WHERE code='agent-two'")[0][0]
+
+    source_row(dsn, "call-adv-1", "agent-one", "admin")
+    source_row(dsn, "call-adv-2", "agent-two", "admin")
+    source_row(dsn, "call-adv-3", "agent-one", "Alice")
+    source_row(dsn, "call-adv-4", "agent-one", "alice")
+    source_row(dsn, "call-adv-5", "agent-one", "Nguyễn Văn A")
+    source_row(dsn, "call-adv-6", "agent-one", "   ")
+    source_row(dsn, "call-adv-7", "agent-one", "\nEvil")
+    source_row(dsn, "call-adv-8", "agent-one", "é" * 129)
+    source_row(dsn, "call-adv-9", "agent-one", "FailureOnlyUser", status="failure")
+    source_row(dsn, "call-adv-10_cache_hit12345", "agent-one", "CacheUser")
+    source_row(dsn, "call-adv-11", ["agent-one", "agent-two"], "MultiTagUser")
+    source_row(dsn, "call-adv-12", "unknown-agent", "UnknownTagUser")
+
+    assert lg.main(["--db", dsn, "--gateway-db", dsn]) == 0
+
+    assert query(dsn, "SELECT call_id,account_id,cost_usd FROM fact_call WHERE call_id='legacy-call'") == legacy_facts
+    assert query(dsn, "SELECT username,kind FROM account WHERE account_id=9001") == [("admin", "real")]
+
+    obs_admin = query(dsn, "SELECT agent_id,account_id FROM gateway_observed_identity WHERE external_user_id='admin' ORDER BY agent_id")
+    assert len(obs_admin) == 2
+    acc_a1, acc_a2 = obs_admin[0][1], obs_admin[1][1]
+    assert acc_a1 != acc_a2
+    assert acc_a1 != 9001 and acc_a2 != 9001
+
+    obs_alice = query(dsn, "SELECT external_user_id,account_id FROM gateway_observed_identity WHERE agent_id=%s AND external_user_id IN ('Alice','alice') ORDER BY external_user_id", (a1,))
+    assert len(obs_alice) == 2
+    assert obs_alice[0][1] != obs_alice[1][1]
+
+    obs_nv = query(dsn, "SELECT external_user_id,account_id FROM gateway_observed_identity WHERE agent_id=%s AND external_user_id='Nguyễn Văn A'", (a1,))
+    assert len(obs_nv) == 1
+
+    assert not query(dsn, "SELECT 1 FROM gateway_observed_identity WHERE external_user_id IN (%s, %s, %s)", ("   ", "\nEvil", "é" * 129))
+
+    anchor_a1 = query(dsn, "SELECT account_id FROM account WHERE unit_agent_id=%s AND kind='whole_agent'", (a1,))[0][0]
+    for cid in ("call-adv-6", "call-adv-7", "call-adv-8"):
+        assigned = query(dsn, "SELECT account_id FROM fact_call WHERE call_id=%s", (cid,))
+        assert assigned == [(anchor_a1,)]
+
+    obs_fail = query(dsn, "SELECT external_user_id FROM gateway_observed_identity WHERE external_user_id='FailureOnlyUser'")
+    assert len(obs_fail) == 1
+
+    for dropped_cid in ("call-adv-10_cache_hit12345", "call-adv-11", "call-adv-12"):
+        assert not query(dsn, "SELECT 1 FROM fact_call WHERE call_id=%s", (dropped_cid,))
+
+
+def test_concurrent_discovery(database):
+    import concurrent.futures
+    import time
+    dsn = database
+    apply(dsn, config())
+    aid = query(dsn, "SELECT agent_id FROM gateway_agent_registry")[0][0]
+    identity = "racing-user"
+
+    def worker(worker_id):
+        for _ in range(30):
+            try:
+                cn, _ = connect.open_db(dsn)
+                try:
+                    with reg.operation_lock(dsn):
+                        acc_id = reg.discover(cn, aid, identity, datetime(2026, 9, 2))
+                        cn.commit()
+                        return acc_id
+                finally:
+                    cn.close()
+            except RuntimeError as e:
+                if "already running" in str(e):
+                    time.sleep(0.05)
+                    continue
+                raise
+        raise TimeoutError("worker timed out waiting for operation_lock")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        f1 = executor.submit(worker, 1)
+        f2 = executor.submit(worker, 2)
+        r1, r2 = f1.result(), f2.result()
+
+    assert r1 == r2 and isinstance(r1, int)
+    rows = query(dsn, "SELECT account_id FROM gateway_observed_identity WHERE agent_id=%s AND external_user_id=%s", (aid, identity))
+    assert len(rows) == 1
+    assert rows[0][0] == r1
+
+
+def test_api_duplicate_external_ids_and_filter_boundaries(database, monkeypatch):
+    from fastapi.testclient import TestClient
+    monkeypatch.setenv("DASHBOARD_KEY", "onboarding-fixture")
+    monkeypatch.setenv("DASHBOARD_OPEN", "0")
+    monkeypatch.setenv("QUOTA_DISABLED", "1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "unused-fixture")
+    from backend import main, store
+    monkeypatch.setattr(main, "DASHBOARD_KEY", "onboarding-fixture")
+    monkeypatch.setattr(main, "DASHBOARD_OPEN", False)
+    monkeypatch.setattr(store, "DSN", database)
+    source_fixture(database)
+    apply(database, config("agent-one") + config("agent-two"))
+    a1 = query(database, "SELECT agent_id FROM dim_agent WHERE code='agent-one'")[0][0]
+    a2 = query(database, "SELECT agent_id FROM dim_agent WHERE code='agent-two'")[0][0]
+
+    source_row(database, "call-a1-alice", "agent-one", "Alice", "2026-09-02 01:00:00")
+    source_row(database, "call-a2-alice", "agent-two", "Alice", "2026-09-02 01:00:00")
+    assert lg.main(["--db", database, "--gateway-db", database]) == 0
+
+    client = TestClient(main.app)
+    client.headers["Authorization"] = "Bearer onboarding-fixture"
+
+    res1 = client.get(f"/api/gateway-identities?agent_id={a1}&start=2026-09-01&end=2026-09-30").json()
+    assert res1["total"] == 2
+    assert {r["kind"] for r in res1["rows"]} == {"whole_agent", "gateway_observed"}
+    alice1 = [r for r in res1["rows"] if r["kind"] == "gateway_observed"][0]
+    assert alice1["agent_id"] == a1 and alice1["external_user_id"] == "Alice"
+
+    res2 = client.get(f"/api/gateway-identities?agent_id={a2}&start=2026-09-01&end=2026-09-30").json()
+    assert res2["total"] == 2
+    assert {r["kind"] for r in res2["rows"]} == {"whole_agent", "gateway_observed"}
+    alice2 = [r for r in res2["rows"] if r["kind"] == "gateway_observed"][0]
+    assert alice2["agent_id"] == a2 and alice2["external_user_id"] == "Alice"
+    assert alice1["account_id"] != alice2["account_id"]
+
+    res_all = client.get("/api/gateway-identities?start=2026-09-01&end=2026-09-30").json()
+    assert res_all["total"] == 4
+    alice_rows = [r for r in res_all["rows"] if r["external_user_id"] == "Alice"]
+    assert len(alice_rows) == 2
+    assert {r["agent_id"] for r in alice_rows} == {a1, a2}

@@ -1,8 +1,8 @@
 ## 1. Baseline và phối hợp change đang dở
 
-- [ ] 1.1 Đọc lại proposal/design/specs và `/tu-soat`; ghi baseline source revision, DB revision, row counts/IDs/tổng theo nguồn, pricing/grants trên môi trường kiểm thử; không dùng số snapshot trong design làm fixture expected cố định.
+- [x] 1.1 Đọc lại proposal/design/specs và `/tu-soat`; ghi baseline source revision, DB revision, row counts/IDs/tổng theo nguồn, pricing/grants trên môi trường kiểm thử; không dùng số snapshot trong design làm fixture expected cố định.
 - [x] 1.2 Đối chiếu working tree với `keep-a-person-visible-in-every-agent-they-use`; giữ lookup directory/service hiện có và tests chiều âm, không ghi đè thay đổi chưa commit của người dùng.
-- [ ] 1.3 Chuẩn bị PostgreSQL dashboard + Gateway fixture cách ly; có legacy single, directory multi, hai usernames trùng giữa agent, failed/cache/missing tags, logs trước global watermark. Không dùng model thật có phí.
+- [x] 1.3 Chuẩn bị PostgreSQL dashboard + Gateway fixture cách ly; có legacy single, directory multi, hai usernames trùng giữa agent, failed/cache/missing tags, logs trước global watermark. Không dùng model thật có phí.
 
 ## 2. Schema và bảo vệ dữ liệu
 
@@ -26,8 +26,8 @@
 - [x] 4.2 Implement single service identity svc.<code>, giữ raw user_id, missing/invalid/mismatch counters và fallback; không tự tạo người thật trong single mode.
 - [x] 4.3 Implement multiple discovery theo (agent_id, exact external_user_id), limit 256 UTF-8 bytes/control chars/blank, kind gateway_observed, namespace injective, unknown personal fields và first/last source timestamps.
 - [x] 4.4 Đưa discovery sau xác định agent và loại duplicate/out-of-scope logs; discovery + facts atomic; review model auto-registration commit để không phá dry-run/rollback.
-- [ ] 4.5 Test Alice/Bob, hai agent cùng admin, tên trùng legacy real, Alice khác alice, unicode/multibyte, whitespace-only, control chars, identity quá dài, failure-only, cache duplicate, unknown/multiple tags; assert account_id và counters bên cạnh token/tiền.
-- [ ] 4.6 Test concurrent discovery, repeated replay và rollback sau tạo account; không orphan, không trùng và legacy regression tests vẫn giữ cùng kết quả.
+- [x] 4.5 Test Alice/Bob, hai agent cùng admin, tên trùng legacy real, Alice khác alice, unicode/multibyte, whitespace-only, control chars, identity quá dài, failure-only, cache duplicate, unknown/multiple tags; assert account_id và counters bên cạnh token/tiền.
+- [x] 4.6 Test concurrent discovery, repeated replay và rollback sau tạo account; không orphan, không trùng và legacy regression tests vẫn giữ cùng kết quả.
 
 ## 5. Backfill và refresh
 
@@ -43,11 +43,11 @@
 - [x] 6.2 Thêm bảng Định danh qua Gateway trong phạm vi agent, đồng bộ filters với usage; hiển thị fallback, no-traffic, inactive và failure-only đúng nghĩa, không bị bộ lọc kind=real loại mất.
 - [x] 6.3 Bổ sung denominator-known/provenance cho adoption, hiển thị NULL/chưa biết với multiple Gateway-only; giữ real-person counters, /api/accounts và legacy membership không đổi.
 - [x] 6.4 Kiểm tổng token và calls identity + fallback bằng resolved totals; chi phí Gateway nếu hiển thị lấy source đúng và có nhãn ước tính, missing khác zero; không sửa source precedence.
-- [ ] 6.5 Test auth, pagination/filter boundary, unknown kind, duplicate external IDs khác agent, 10 observed không thành adoption 100%, single không thành nhân viên; chạy UI harness và kiểm trực quan với fixture khi triển khai.
+- [x] 6.5 Test auth, pagination/filter boundary, unknown kind, duplicate external IDs khác agent, 10 observed không thành adoption 100%, single không thành nhân viên; chạy UI harness và kiểm trực quan với fixture khi triển khai.
 
 ## 7. Docker và hướng dẫn vận hành
 
-- [ ] 7.1 Đóng gói CLI/module/dependency vào tools image, mount thư mục config read-only cho one-off apply; refresh không yêu cầu file hiện diện; test atomic save trên host được container đọc bản mới.
+- [x] 7.1 Đóng gói CLI/module/dependency vào tools image, mount thư mục config read-only cho one-off apply; refresh không yêu cầu file hiện diện; test atomic save trên host được container đọc bản mới.
 - [x] 7.2 Viết runbook một-file: migrate/build lần nâng cấp, sửa YAML, stop worker, dry-run, apply, one-shot refresh, kiểm exit/counters rồi up; tách rõ Gateway key/tag/X-User vẫn cấu hình phía Gateway/agent.
 - [x] 7.3 Cập nhật docs/reference/noi-agent-vao-gateway-hai-phia.md, onboard-a-new-agent.md và gateway-connection-simple-english.md để bỏ chỉ dẫn gen_catalog/load_org/rebuild cho agent Gateway-only; giữ phần legacy có nhãn.
 - [x] 7.4 Ghi quy tắc immutable fields, retained entries, active=false không thu hồi key, phạm vi retention, rollback giữ schema/data và không trộn observed với danh bạ.
@@ -56,6 +56,6 @@
 
 - [x] 8.1 Đọc lại toàn bộ diff; chạy unit tests lát mỏng, phân loại lỗi test/script và phát hiện dữ liệu thật; sửa rồi đọc lại, không nới assertion cho qua.
 - [x] 8.2 Chạy PostgreSQL integration suite đầy đủ từ migration đến YAML apply, single/two-multiple discovery, pending replay, locks, API và rollups; fixture không có Google/app exports.
-- [ ] 8.3 Chạy một vòng container end-to-end với Gateway fake-provider/fixture, xác nhận tag + X-User đi vào end_user/mapping/UI; không gửi request trả phí hoặc ghi vào sổ thật.
-- [ ] 8.4 Đối chiếu trước/sau toàn bộ legacy counts/IDs/tokens/costs, model pricing, grants và danh bạ; lưu các lệch nền có lượng hóa, không gọi dữ liệu chưa kiểm là đạt.
-- [ ] 8.5 Chạy OpenSpec strict validation và bộ kiểm CI liên quan; ghi báo cáo bằng chứng, giới hạn còn lại và lệnh vận hành đã chạy thật trước khi đánh dấu implementation hoàn tất.
+- [x] 8.3 Chạy một vòng container end-to-end với Gateway fake-provider/fixture, xác nhận tag + X-User đi vào end_user/mapping/UI; không gửi request trả phí hoặc ghi vào sổ thật.
+- [x] 8.4 Đối chiếu trước/sau toàn bộ legacy counts/IDs/tokens/costs, model pricing, grants và danh bạ; lưu các lệch nền có lượng hóa, không gọi dữ liệu chưa kiểm là đạt.
+- [x] 8.5 Chạy OpenSpec strict validation và bộ kiểm CI liên quan; ghi báo cáo bằng chứng, giới hạn còn lại và lệnh vận hành đã chạy thật trước khi đánh dấu implementation hoàn tất.

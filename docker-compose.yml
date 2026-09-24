@@ -407,6 +407,7 @@ services:
       # and losing an old pull directory is permanent.
       - ${DATA_DIR:-./data}:/app/data
       - ${GCLOUD_CONFIG:-~/.config/gcloud}:/root/.config/gcloud
+      - ./config:/app/config:ro
     depends_on:
       postgres:
         condition: service_healthy
