@@ -154,6 +154,7 @@ x-litellm: &litellm
     # Thieu bien nay thi docker/gateway/entrypoint.sh dung han truoc khi LiteLLM
     # khoi dong -- vong kiem trong tep do CO bien nay, da kiem lai 17/09.
     KEY_CRM_FEEDBACK: ${KEY_CRM_FEEDBACK:-}
+    KEY_RALLI: ${KEY_RALLI:-}
     # --- HOOK CHAN HAN MUC ---------------------------------------------------
     # Ba bien nay CO gia tri mac dinh trong chinh quota_hook.py, nen thieu chung
     # khong lam Gateway chet - co y: mot hook chan tien ma lam Gateway khong len
