@@ -159,6 +159,24 @@ jobs:
           STATUS=0
 
           # Khoá ghi thẳng vào tệp cấu hình = bí mật nằm trong git.
+          # Ralli sends bare developer-selected Gemini names, not a shared alias.
+          python - <<'PY'
+          import pathlib, re
+          config = pathlib.Path('docker/gateway/config.gateway.yaml').read_text()
+          routes = re.split(r'^  - model_name:', config, flags=re.M)[1:]
+          wildcard = [route for route in routes if route.splitlines()[0].strip() == '"*"']
+          assert len(wildcard) == 1, 'Ralli needs exactly one bare-name wildcard route'
+          route = wildcard[0].split('\ngeneral_settings:')[0]
+          assert re.search(r'^      model: "gemini/\*"$', route, re.M)
+          assert re.search(r'^      api_key: os.environ/KEY_RALLI$', route, re.M)
+          assert re.search(r'^      tags: \["ralli"\]$', route, re.M)
+          assert re.search(r'^  enable_tag_filtering: true$', config, re.M)
+          PY
+          GUARD=$(env -i PATH="$PATH" LITELLM_MASTER_KEY=sk-offline-guard-only \
+            LITELLM_SALT_KEY=fake KEY_GOOGLE_AI_STU=fake KEY_CRM_FEEDBACK=fake \
+            DATABASE_URL=fake REDIS_PASSWORD=fake sh "$ENTRY" 2>&1) && exit 1
+          printf '%s\n' "$GUARD" | grep -q 'STOP: KEY_RALLI is missing'
+
           LIT=$(grep -nE '^[[:space:]]*api_key:' "$CFG" | grep -v 'os\.environ/' || true)
           if [ -n "$LIT" ]; then
             echo "$LIT"
