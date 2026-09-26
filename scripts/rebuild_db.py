@@ -168,6 +168,13 @@ def main() -> None:
                    help=f"Start at step N (1-{len(STEPS)}). Use after a step failed and was fixed.")
     args = p.parse_args()
 
+    import gateway_registry
+    check_cn, _ = connect.open_db(args.db)
+    try:
+        gateway_registry.guard_legacy(check_cn)
+    finally:
+        check_cn.close()
+
     log.info("rebuilding database from collected data -> %s",
              connect.mask_dsn(args.db))
     if args.from_step > 1:

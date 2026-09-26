@@ -15,10 +15,10 @@
 #
 #     docker compose --profile gateway up -d
 #     docker compose --profile gateway logs -f litellm-1
-#     docker compose --profile gateway down       # chi ha Gateway
+#     Khong dung profile down cho Gateway-only: no anh huong Dashboard.
 #
-#     Gateway edge      http://127.0.0.1:8088 (Host: apigateway.rangdong.com.vn)
-#     Gateway LB        chi trong mang Docker, khong publish host
+#     Gateway LB + web http://127.0.0.1:8088 (Host: apigateway.rangdong.com.vn)
+#     Node collector   chi loopback ben trong cung container, khong publish 8089
 #     Redis             127.0.0.1:6379
 #
 # `docker compose up -d` KHONG keo Gateway len: dich vu co profile chi chay khi
@@ -408,6 +408,7 @@ services:
       # and losing an old pull directory is permanent.
       - ${DATA_DIR:-./data}:/app/data
       - ${GCLOUD_CONFIG:-~/.config/gcloud}:/root/.config/gcloud
+      - ./config:/app/config:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -435,6 +436,8 @@ services:
       dockerfile: docker/tools.Dockerfile
     image: token-ledger-tools:local
     container_name: token-ledger-refresh
+    volumes:
+      - ./config:/app/config:ro
     profiles: ["refresh"]
     restart: unless-stopped
     # `sys.executable` duoc dung ben trong script de goi bon buoc, nen chi can
@@ -676,11 +679,16 @@ services:
   # dong (xem chu thich trong docker/gateway/nginx.conf).
   gateway-lb:
     logging: *logging
-    image: nginx:1.27-alpine
+    build:
+      context: .
+      dockerfile: docker/gateway/Dockerfile
     container_name: token-ledger-gateway-lb
     profiles: ["gateway"]
     restart: unless-stopped
+    stop_grace_period: 30s
     environment:
+      STATUS_BIND: "127.0.0.1"
+      STATUS_PORT: "8089"
       LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
       LLM_GATEWAY_ADMIN_CIDR: ${LLM_GATEWAY_ADMIN_CIDR:-127.0.0.1/32}
       # Dai LAN duoc phep xem web/status. Mac dinh loopback (vo hai, trung voi
@@ -703,42 +711,10 @@ services:
       - "${LLM_GATEWAY_TLS_BIND:-127.0.0.1}:${LLM_GATEWAY_TLS_PORT:-443}:4443"
       - "${LLM_GATEWAY_TLS_ALT_BIND:-0.0.0.0}:${LLM_GATEWAY_TLS_ALT_PORT:-8443}:4443"
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:4000/lb-health | grep -q lb-ok"]
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:4000/lb-health | grep -q lb-ok && wget -q -O /dev/null http://127.0.0.1:8089/"]
       interval: 10s
       timeout: 5s
       retries: 6
-    depends_on:
-      litellm-1:
-        condition: service_healthy
-      litellm-2:
-        condition: service_healthy
-
-  # Private status web; no backend dependency so outages remain visible.
-  #
-  # KHONG publish port ra host. Duy nhat mot cua vao cong khai la gateway-lb
-  # tren 8088; gateway-lb proxy noi bo sang day qua ten service `gateway-status`
-  # (xem `upstream gateway_status` trong docker/gateway/nginx.conf). Container
-  # khac trong CUNG mang Docker van goi duoc `gateway-status:8089` binh thuong
-  # ma khong can khai `ports` hay `expose` o day.
-  gateway-status:
-    logging: *logging
-    image: node:24-alpine
-    container_name: token-ledger-gateway-status
-    profiles: ["gateway"]
-    restart: unless-stopped
-    init: true
-    user: "node"
-    working_dir: /app
-    command: ["node", "server.js"]
-    read_only: true
-    cap_drop: [ALL]
-    security_opt: [no-new-privileges:true]
-    environment:
-      STATUS_BIND: "0.0.0.0"
-      STATUS_PORT: "8089"
-      LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
-    volumes:
-      - ./tools/gateway-status:/app:ro
 
   # Canh Gateway theo nhip roi GUI THU khi trang thai doi.
   #

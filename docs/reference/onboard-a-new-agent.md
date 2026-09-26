@@ -231,6 +231,13 @@ Chín đầu việc, trong repo này. B2→B6 là sửa file; B1, B7, B8 là tha
 
 ## 3. Việc ở phía DASHBOARD
 
+> **Workflow hiện tại cho Gateway-only:** sửa `config/gateway-agents.yaml`,
+> dry-run → apply → refresh; xem đầy đủ [runbook](gateway-agent-registration.md).
+> Không tải danh bạ/web exports hay billing/monitoring files. Mode multiple
+> tạo identity riêng theo agent từ log; không gọi đó là nhân viên đã cấp quyền.
+> **C1–C4 và phần 8 dưới đây là ghi chép legacy**, không áp dụng cho agent
+> đăng ký bằng YAML. Không chạy generator/load_org/rebuild theo các ví dụ cũ.
+
 **Bốn** đầu việc. Thiếu thì lưu lượng vẫn chạy, chỉ là dashboard không thấy.
 
 ### C1 — Thêm agent vào danh mục
@@ -441,7 +448,10 @@ Việc 1 và 3 phải làm dù có bật hay không. Việc 2 là đánh đổi 
 
 ---
 
-## 8. Agent NHIỀU NGƯỜI DÙNG — hôm nay chưa có đường sẵn
+## 8. Ghi chép legacy: agent nhiều người dùng dựa trên danh bạ
+
+Với agent Gateway-only mới, dùng `user_mode: multiple` theo runbook trên;
+những yêu cầu import danh bạ dưới đây chỉ dành cho luồng legacy.
 
 **Soát 21/09/2026.** Cả bảng việc ở trên ngầm giả định agent mới là loại một-người-dùng. Với
 agent nhiều người dùng, việc C3 không có đáp án, và lý do nằm sâu hơn một dòng cấu hình.

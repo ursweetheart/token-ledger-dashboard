@@ -28,6 +28,11 @@ class FakeCursor:
     def fetchall(self):
         return [(name,) for name in self.tables]
 
+    def fetchone(self):
+        # Legacy test database has no registry yet. Integration tests exercise
+        # the populated-registry refusal against real PostgreSQL.
+        return (None,)
+
 
 class FakeConnection:
     def __init__(self, name, events, tables=()):
@@ -87,10 +92,11 @@ class RebuildTests(unittest.TestCase):
         events, connection, (result_connection, result_placeholder) = self.run_rebuild(
             ["alembic_version", "dim_agent", "fact_call", "ref_source"])
 
-        self.assertEqual(events[:2], ["migrate:postgresql://candidate", "open"])
-        self.assertTrue(events[2].startswith("sql:SELECT") and "pg_tables" in events[2], events[2])
+        self.assertEqual(events[:3], ["open", "sql:SELECT to_regclass('public.gateway_agent_registry')", "close:main"])
+        self.assertEqual(events[3:5], ["migrate:postgresql://candidate", "open"])
+        self.assertTrue(events[5].startswith("sql:SELECT") and "pg_tables" in events[5], events[5])
         self.assertEqual(
-            events[3:],
+            events[6:],
             ['sql:TRUNCATE TABLE "dim_agent", "fact_call" RESTART IDENTITY CASCADE',
              "seed:02_catalog.sql", "commit:main"],
         )
@@ -104,6 +110,10 @@ class RebuildTests(unittest.TestCase):
         self.assertTrue(statements)
         for statement in statements:
             self.assertNotIn("DROP", statement.upper())
+
+    def test_rebuild_refuses_to_cascade_delete_pricing_history(self):
+        with self.assertRaisesRegex(RuntimeError, 'pricing history'):
+            self.run_rebuild(['dim_model','ref_model_catalog','ref_model_price_version','ref_price_sync_state'])
 
     def test_rebuild_keeps_tables_whose_rows_come_from_migrations(self):
         """Emptying alembic_version replays 001 onto existing tables; emptying ref_source loses
@@ -135,6 +145,34 @@ class RebuildTests(unittest.TestCase):
 
 
 class ApplyMigrationsTests(unittest.TestCase):
+    def test_explicit_dsn_is_carried_in_alembic_config_across_import_aliases(self):
+        alembic_module = types.ModuleType("alembic")
+        command_module = types.ModuleType("alembic.command")
+        config_module = types.ModuleType("alembic.config")
+
+        captured = {}
+        def upgrade(config, revision):
+            captured['explicit_dsn'] = config.attributes.get('explicit_dsn')
+
+        class Config:
+            def __init__(self, path):
+                self.path = path
+                self.attributes = {}
+
+        command_module.upgrade = upgrade
+        config_module.Config = Config
+        alembic_module.command = command_module
+        alembic_module.config = config_module
+
+        with patch.dict(sys.modules, {
+            "alembic": alembic_module,
+            "alembic.command": command_module,
+            "alembic.config": config_module,
+        }):
+            connect.apply_migrations('postgresql://isolated')
+
+        self.assertEqual(captured.get('explicit_dsn'), 'postgresql://isolated')
+
     def test_active_dsn_is_reset_when_alembic_upgrade_fails(self):
         """Omitting the finally reset leaks a candidate DSN into later migrations."""
         alembic_module = types.ModuleType("alembic")
@@ -148,6 +186,7 @@ class ApplyMigrationsTests(unittest.TestCase):
         class Config:
             def __init__(self, path):
                 self.path = path
+                self.attributes = {}
 
         command_module.upgrade = upgrade
         config_module.Config = Config

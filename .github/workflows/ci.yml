@@ -219,7 +219,7 @@ jobs:
       # Moc do 20/09/2026 (lan 2): 96 -> 98, khoa lai hanh vi ba nut cua tab
       # Setting sau khi bo phuong an mot nut doi nghia theo trang thai.
       # The branch adds three agent-scope checks on top of main's 98.
-      EXPECTED_JS: "101"
+      EXPECTED_JS: "117"
     steps:
       - uses: actions/checkout@v4
 
@@ -281,7 +281,17 @@ jobs:
       # `python -m unittest discover -s tests -p "test_*.py"` in ra "Ran 170 tests".
       # KHONG dem bang pytest: no bao "170 passed, 21 subtests passed", va subtest
       # khong vao con so "Ran" -- hai cach dem cho hai so khac nhau.
-      EXPECTED_PY: "170"
+      # Moc do 21/09/2026 (lan 2): 170 -> 174, them 4 phep kiem cua phep tra khoa
+      # doi: hai nguon cung luc, xung dot xuyen nguon, chi nhan dong danh ba (D7),
+      # va ca `admin` hai chieu.
+      # Moc do 21/09/2026 (lan 3): 174 -> 184, them 10 phep kiem cua khau quy dinh
+      # danh trong load_gateway (nguoi dung hai agent, dinh danh la, chuan hoa
+      # hoa/thuong, va tong KHONG duoc doi).
+      # Moc do 24/09/2026: 184 -> 197, them 13 phep kiem don vi cua catalog pricing
+      # (5 cua sync_model_catalog worker, 6 cua model_pricing logic, va 2 cua
+      # migration schema ref_model_price). Cac phep kiem tich hop (API, DB) doi
+      # hoi Postgres/FastAPI duoc tach khoi bo chay may sach.
+      EXPECTED_PY: "197"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

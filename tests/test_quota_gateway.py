@@ -259,7 +259,7 @@ class RouteTests(unittest.TestCase):
     def test_cors_allows_the_post_method(self):
         # Thiếu "POST" ở đây thì trình duyệt chặn ngay bước preflight, và lỗi hiện
         # ra là "CORS" chứ không phải "401" - mất công tìm nhầm chỗ.
-        self.assertRegex(self.src, r'allow_methods=\["GET",\s*"POST"\]')
+        self.assertRegex(self.src, r'allow_methods=\["GET",\s*"POST"(?:,\s*"PUT")?\]')
 
     def test_the_quota_endpoints_go_through_the_gateway_layer(self):
         # Không được gọi thẳng `urllib` từ `main.py`: phạm vi những gì sửa được

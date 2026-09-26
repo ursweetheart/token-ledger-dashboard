@@ -29,7 +29,8 @@ INSERT INTO dim_model (model_id, name, family, provider) VALUES
   (9, 'gemini-embedding-1.0', 'embedding', 'Google'),
   (10, 'gemini-embedding-2', 'embedding', 'Google'),
   (11, 'gemini-3.6-flash', 'gemini-3', 'Google'),
-  (12, 'gemini-3.5-flash-lite', 'gemini-3', 'Google');
+  (12, 'gemini-3.5-flash-lite', 'gemini-3', 'Google'),
+  (13, 'gemini-3.8-flash', 'gemini-3', 'Google');
 
 -- 49 anh xa. Ba nguon goi ten model theo ba kieu khac nhau:
 --   billing 'gemini-embedding-001'  <->  monitoring 'gemini-embedding-1.0'

@@ -105,7 +105,7 @@ def main():
             # uses (127.0.0.1, 127.0.0.2), so the spoofed-XFF/admin-ACL check below is
             # unaffected by this second allowlist existing.
             config = config.replace('${LLM_GATEWAY_LAN_CIDR}', '203.0.113.0/24')
-            config = config.replace('gateway-status:8089 resolve', f'127.0.0.1:{status_port}')
+            config = config.replace('127.0.0.1:8089', f'127.0.0.1:{status_port}')
             config = config.replace('listen 4000', f'listen 127.0.0.1:{port}')
             # gateway-lb also terminates HTTPS on 4443 (see docker/gateway/tls); nginx
             # refuses to start without a loadable cert, so hand it a throwaway one.
@@ -189,35 +189,10 @@ def main():
                 raise AssertionError('LB still listening after quit')
             except OSError:
                 pass
-            conn = http.client.HTTPConnection('127.0.0.1', status_port, timeout=5)
-            # putrequest avoids automatic Accept-Encoding, matching the privacy assertion.
-            conn.putrequest('GET', '/api/status', skip_host=True, skip_accept_encoding=True)
-            conn.putheader('Host', 'localhost')
-            conn.endheaders()
-            response = conn.getresponse()
-            assert response.status == 200 and b'checked_at' in response.read()
-            conn.close()
+            # Native harness owns separate processes; Docker harness tests supervision.
             status_process.terminate()
             status_process.wait(timeout=5)
-            # Missing status DNS must not prevent Nginx startup or inference.
-            absent = config.replace(f'127.0.0.1:{status_port}', 'status-missing.invalid:8089 resolve')
-            (temp / 'nginx.conf').write_text('daemon off;\nworker_processes 1;\nevents {}\nhttp {\nserver_names_hash_bucket_size 64;\n' + absent + '\n}\n', encoding='utf-8')
-            process = subprocess.Popen(args)
-            deadline = time.monotonic() + 5
-            while True:
-                try:
-                    assert request('/lb-health')[0] == 200
-                    break
-                except OSError:
-                    if time.monotonic() >= deadline:
-                        raise
-                    time.sleep(0.05)
-            assert request('/')[0] == 502
-            assert request()[0] == 200
-            subprocess.run(args + ['-s', 'quit'], check=True)
-            process.wait(timeout=5)
-            process = None
-            print(json.dumps({'result': 'PASS', 'checks': ['domain/IP/routes', 'status assets/API and TCP-peer ACL with spoofed XFF', 'status strips all client headers/body', 'prefix/query/body and legacy API', 'authorization/identity/forwarded headers', 'SSE early delivery', '503 and dropped POST no replay', 'one upstream down pre-send failover', 'all upstreams down with LB liveness', 'recovery', 'LB-down direct status fallback', 'missing status DNS startup/inference'], 'docker_dns_rotation': 'NOT TESTED'}))
+            print(json.dumps({'result': 'PASS', 'checks': ['domain/IP/routes', 'status assets/API and TCP-peer ACL with spoofed XFF', 'status strips all client headers/body', 'prefix/query/body and legacy API', 'authorization/identity/forwarded headers', 'SSE early delivery', '503 and dropped POST no replay', 'one upstream down pre-send failover', 'all upstreams down with LB liveness', 'recovery', 'LB shutdown (bundle supervision covered by Docker harness)'], 'docker_dns_rotation': 'NOT TESTED'}))
     finally:
         if process is not None:
             # Stop the master and workers, including on failed assertions.

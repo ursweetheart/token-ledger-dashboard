@@ -36,6 +36,7 @@ from pathlib import Path
 
 from alembic import context
 from sqlalchemy import create_engine, pool
+from sqlalchemy.engine import make_url
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "db"))
@@ -63,7 +64,7 @@ def _dsn() -> str:
     KHONG LOI NAO BAO RA cho toi luc ai do doc so lieu.
     """
     overrides = context.get_x_argument(as_dictionary=True)
-    return overrides.get("db") or connect.ACTIVE_DSN or connect.DEFAULT_DSN
+    return overrides.get("db") or config.attributes.get('explicit_dsn') or connect.ACTIVE_DSN or connect.DEFAULT_DSN
 
 
 def run_migrations_offline() -> None:
@@ -83,10 +84,12 @@ def run_migrations_online() -> None:
     # In ra database dang bi tac dong. Da che mat khau bang connect.mask_dsn -
     # `alembic upgrade` la lenh SUA schema, nen nham database la chuyen dat gia.
     print(f"alembic -> {connect.mask_dsn(dsn)}")
-    # DSN cua du an dung nguyen lam URL SQLAlchemy vi chi con PostgreSQL, va chuoi
-    # `postgresql://...` von da la URL hop le. Truoc 24/08 o day co mot ham doi
-    # duong dan SQLite tran thanh `sqlite:///...`; no di cung nhanh SQLite.
-    engine = create_engine(dsn, poolclass=pool.NullPool)
+    # Match the psycopg2 driver installed by backend/requirements.txt rather
+    # than relying on SQLAlchemy's default PostgreSQL driver.
+    url = make_url(dsn)
+    if url.drivername == "postgresql":
+        url = url.set(drivername="postgresql+psycopg2")
+    engine = create_engine(url, poolclass=pool.NullPool)
     with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():

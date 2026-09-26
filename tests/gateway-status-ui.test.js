@@ -9,15 +9,13 @@ const read = file => readFileSync(path.join(root, file), 'utf8');
 
 test('status web starts with gateway profile independently of unhealthy backends', () => {
   const compose = read('docker-compose.yml');
-  const block = compose.match(/^  gateway-status:\r?\n(?:(?: {4}[^\n]*|\s*)\r?\n)*/m)?.[0];
-  assert.ok(block, 'gateway-status service must exist');
+  const block = compose.match(/^  gateway-lb:\r?\n(?:(?: {4}[^\n]*|\s*)\r?\n)*/m)?.[0];
+  assert.ok(block, 'combined gateway-lb service must exist');
   assert.match(block, /profiles: \["gateway"\]/);
-  assert.match(block, /container_name: token-ledger-gateway-status/);
-  assert.doesNotMatch(block, /ports:/);
-  assert.doesNotMatch(block, /127\.0\.0\.1:8089:8089/);
-  assert.match(block, /STATUS_BIND: "0\.0\.0\.0"/);
-  assert.match(block, /\.\/tools\/gateway-status:\/app:ro/);
-  assert.match(block, /command: \["node", "server\.js"\]/);
+  assert.match(block, /container_name: token-ledger-gateway-lb/);
+  assert.doesNotMatch(block, /8089:8089/);
+  assert.match(block, /STATUS_BIND: "127\.0\.0\.1"/);
+  assert.match(read("docker/gateway/Dockerfile"), /tools\/gateway-status\/server\.js/);
   assert.doesNotMatch(block, /depends_on:|docker\.sock|env_file:/);
 });
 

@@ -1,0 +1,4 @@
+# Dashboard registration only. Keys/routes remain configured in the Gateway.
+# See docs/reference/gateway-agent-registration.md for single/multiple examples.
+version: 1
+agents: []

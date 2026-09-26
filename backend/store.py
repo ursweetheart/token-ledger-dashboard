@@ -308,9 +308,19 @@ def adoption(cn) -> list[dict]:
         FROM dim_agent g
         ORDER BY g.name, g.agent_id""")
 
+    from .gateway_identities import registered
+    policies = {}
+    if registered(cn):
+        policies = {x["agent_id"]: x["user_mode"] for x in _rows(
+            cn, "SELECT agent_id,user_mode FROM gateway_agent_registry")}
     for x in r:
         x["from_day"] = _day(x["from_day"]) if x["from_day"] else None
         x["to_day"] = _day(x["to_day"]) if x["to_day"] else None
+        if policies.get(x["agent_id"]) == "multiple":
+            x.update(kind="gateway_observed", provisioned=None, active=None,
+                     rate_pct=None, denominator_known=False, identity_source="gateway")
+            x.pop("any_usage")
+            continue
         if x["provisioned"]:
             # Agent cấp cho người. Mẫu số là danh bạ.
             x["kind"] = "people"
@@ -351,7 +361,8 @@ def usage(cn, ph, start: str, end: str) -> list[dict]:
         x["day"] = _day(x["day"])
         x["cost_usd"] = _money(x["cost_usd"])
         x["token_estimated"] = bool(x["token_estimated"])
-    return r
+    from .pricing import attach_estimates
+    return attach_estimates(cn, r, start, end)
 
 
 def usage_hourly(cn, ph, start: str, end: str) -> list[dict]:
@@ -423,7 +434,8 @@ def usage_by_account(cn, ph, start: str, end: str) -> list[dict]:
         ORDER BY v.day, v.account_id, v.agent_id, v.model_id""", (start, end))
     for x in r:
         x["day"] = _day(x["day"])
-    return r
+    from .pricing import attach_estimates
+    return attach_estimates(cn, r, start, end)
 
 
 def performance(cn, ph, start: str, end: str) -> dict:

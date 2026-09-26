@@ -311,9 +311,9 @@ def main() -> None:
     log.info("  billing %d | monitoring %d | app %d | gateway %d",
              n_b, n_m, n_a, n_g)
 
-    cost = connect.query_one(cn, "SELECT SUM(cost_usd) FROM fact_usage_daily"
+    cost = connect.query_one(cn, "SELECT COALESCE(SUM(cost_usd),0) FROM fact_usage_daily"
                                  " WHERE source='billing'")[0]
-    app_tokens = connect.query_one(cn, "SELECT SUM(total_tokens) FROM fact_usage_daily"
+    app_tokens = connect.query_one(cn, "SELECT COALESCE(SUM(total_tokens),0) FROM fact_usage_daily"
                                        " WHERE source='app'")[0]
     by_source = dict(connect.query(cn, "SELECT source, COUNT(*) FROM fact_usage_daily"
                                        " GROUP BY source"))
@@ -348,11 +348,16 @@ def main() -> None:
                       f" in fact_billing_daily")
     if app_tokens != src_tokens:
         errors.append(f"app tokens {app_tokens} != {src_tokens} in fact_call")
-    # Trước 31/08/2026 chỗ này ghim cứng `!= 3`. Ghim SỐ là sai hướng: thêm nguồn
-    # thứ tư là phép kiểm báo lỗi trong khi hệ thống đang đúng. Nay nêu ĐÍCH DANH
-    # ba nguồn bắt buộc, còn `gateway` là tuỳ - sổ Gateway có thể rỗng khi chưa
-    # agent nào chạy qua, và đó không phải lỗi.
-    REQUIRED = {"billing", "monitoring", "app"}
+    # A Gateway-only installation legitimately has no billing/app exports.
+    # Require every populated upstream source, not three hardcoded sources.
+    REQUIRED = set()
+    for source, table in (("billing", "fact_billing_daily"),
+                          ("monitoring", "fact_monitoring"),
+                          ("app", "fact_app_daily")):
+        if connect.query_one(cn, f"SELECT EXISTS (SELECT 1 FROM {table})")[0]:
+            REQUIRED.add(source)
+    if connect.query_one(cn, "SELECT EXISTS (SELECT 1 FROM fact_call WHERE source='app')")[0]:
+        REQUIRED.add("app")
     missing = REQUIRED - set(by_source)
     if missing:
         errors.append(f"missing sources {sorted(missing)}")
