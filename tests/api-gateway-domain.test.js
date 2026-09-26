@@ -88,5 +88,7 @@ test("Same-port status is private and inference prefix is exact", () => {
   const lb = compose.split('  gateway-lb:')[1].split(/\n  [a-z][a-z0-9-]*:|\n# Khai ro/)[0];
   assert.match(lb, /dockerfile: docker\/gateway\/Dockerfile/);
   assert.doesNotMatch(lb, /depends_on:/);
-  assert.match(lb, /STATUS_BIND: "127\.0\.0\.1"/);
+  assert.match(lb, /STATUS_BIND: "0\.0\.0\.0"/);
+  const watch = compose.split('  gateway-watch:')[1].split('\n# Khai ro')[0];
+  assert.match(watch, /WATCH_STATUS_URL: \$\{WATCH_STATUS_URL:-http:\/\/gateway-lb:8089\/api\/status\}/);
 });

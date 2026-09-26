@@ -44,6 +44,7 @@ services:
       # Bench KHONG duoc goi ra ngoai nen gia tri o day co y sai.
       KEY_CRM_FEEDBACK: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
       KEY_RALLI: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
+      KEY_TLA_HD: "KHONG-PHAI-KHOA-THAT-bench-khong-duoc-goi-ra-ngoai"
       REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_local}
     # GIOI HAN BO NHO - co y, khong phai cho chat che.
     #

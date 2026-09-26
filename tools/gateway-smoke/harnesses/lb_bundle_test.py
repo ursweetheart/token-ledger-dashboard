@@ -93,8 +93,13 @@ def main():
         bindings = json.loads(docker('inspect', lb))[0]['NetworkSettings']['Ports']
         assert {key for key, value in bindings.items() if value} == {'4000/tcp'}, bindings
         sockets = docker('exec', lb, 'cat', '/proc/net/tcp')
-        assert '0100007F:1F99' in sockets and '00000000:1F99' not in sockets
-        checks.append('image/envsubst/nginx-t; missing both backends healthy; web/assets/status; loopback Node; denied TCP peer/XFF')
+        assert '00000000:1F99' in sockets
+        status_from_watch = docker('run', '--rm', '--network', network,
+                                   '--entrypoint', 'wget', image, '-q', '-O-',
+                                   '--header', 'Host: localhost',
+                                   'http://token-ledger-gateway-lb:8089/api/status')
+        assert json.loads(status_from_watch)['status'] == 'unavailable'
+        checks.append('image/envsubst/nginx-t; missing both backends healthy; web/assets/status; private-network collector; denied TCP peer/XFF')
 
         def start_mock(i):
             name = tag + '-mock' + str(i)

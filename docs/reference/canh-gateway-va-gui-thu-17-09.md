@@ -9,8 +9,7 @@ Tách rõ phần **chứng minh được** khỏi phần **suy luận**, theo kh
 
 ## 1. Kết quả một dòng
 
-`gateway-status` **đo** nhưng không báo — nó là một trang web, phải có người mở ra xem.
-`gateway-watch` biến trang đó thành **thư**.
+Collector trong `gateway-lb` **đo** nhưng không báo; `gateway-watch` biến kết quả đó thành **thư**.
 
 ---
 
@@ -20,7 +19,7 @@ Tách rõ phần **chứng minh được** khỏi phần **suy luận**, theo kh
 |---|---|---|
 | `DOWN - GATEWAY HONG` | Gateway không phục vụ được | xử ngay |
 | `WARN - Gateway mat mot phan nang luc, VAN dang phuc vu` | một instance chết, LB đẩy hết sang instance kia | xử trong giờ làm việc |
-| `WARN - Khong doc duoc trang thai (Gateway van tra loi)` | `gateway-status` chết, Gateway thì không | **không phải sự cố Gateway** |
+| `WARN - Khong doc duoc trang thai (Gateway van tra loi)` | collector không đọc được nhưng readiness vẫn trả lời | **chưa đủ kết luận Gateway hỏng** |
 | `OK - Gateway da tro lai binh thuong` | phục hồi | đọc độ dài sự cố |
 | ~~`nhip tim - <ngày>`~~ | ~~mỗi ngày một lần~~ | **ĐÃ TẮT 18/09/2026** — xem mục 3 |
 
@@ -93,7 +92,7 @@ Nhịp tim là cái vá cho chuyện đó.
 
 ```
  (A)  https://<ten mien>/lb-health       DNS + TLS + proxy may chu + nginx con song
- (B)  gateway-status:8089/api/status     instance nao chet, degraded hay unavailable
+ (B)  gateway-lb:8089/api/status         collector noi bo: degraded hay unavailable
  (C)  gateway-lb:4000/health/readiness   LiteLLM san sang + db: connected
 ```
 
@@ -162,7 +161,7 @@ hai trên máy khác**; cùng một tệp `.py`, chỉ đổi biến môi trư�
 ## 5b. Khi có hai bản — đọc tiêu đề là biết hỏng ở lớp nào
 
 **Hai máy KHÔNG dùng chung mạng Docker được.** Mạng của compose này là `bridge`, mà `bridge` có
-`scope=local` — nó sống trong nhân của một máy. Nên bản ngoài không gọi được `gateway-status:8089`
+`scope=local` — nó sống trong nhân của một máy. Nên bản ngoài không gọi được `gateway-lb:8089`
 hay `gateway-lb:4000`; nó chỉ gọi tên miền công khai, và bỏ trống `WATCH_STATUS_URL`.
 
 Mỗi bản mang tên riêng qua `WATCH_NAME`, và tên ấy nằm trong tiêu đề thư:
