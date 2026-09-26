@@ -4,6 +4,8 @@ Mỗi báo cáo dưới đây ghi rõ ranh giới bằng chứng. TLA-HĐ và Ra
 
 ## Cập nhật mới nhất
 
+- [Law Insight routing/fallback 25/09/2026](./LAW-ROUTING-FALLBACK-20260925.md): **49 stage fault mock PASS**, 30 Gateway responses/SpendLogs khớp; OCR hai trang/hai user, cả hai Proxy/LB down và recovery. Direct là SDK mock; không phải provider-real. [Evidence](../artifacts/current/law-fallback-dd3a479685ff.json).
+
 - [Báo cáo tổng hợp API Gateway cho 4 agent](./FOUR-AGENT-API-GATEWAY-CONSOLIDATED-TEST-REPORT.md): quy trình test, identity, routing, failover/fallback, SpendLogs/ledger/billing, bằng chứng và production gate cho TLA-HĐ, Ralli AI, DMS Feedback và CRM Classification.
 - [Báo cáo kỹ thuật chi tiết Ralli](./ralli-request-scope-verification.md): nguyên nhân và diff code cũ–mới, kiến trúc identity/request scope, ma trận test offline/mock/Google-real, ảnh hưởng nhiều agent, rủi ro và điều kiện production.
 - [Báo cáo Gateway smoke Ralli](./RALLI-TEST-REPORT.md): fallback 20/20 stage và hồi quy SpendLogs 93/93 request trên môi trường mock.
