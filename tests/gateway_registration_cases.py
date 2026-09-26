@@ -4,11 +4,13 @@ Run only against the dedicated gateway-onboarding-test-pg container. Never falls
 back to project credentials. Each integration test creates its own database.
 """
 import os
+import shutil
 import subprocess
 import sys
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from db import connect, gateway_registry as reg, load_gateway as lg
@@ -316,7 +318,7 @@ def test_api_auth_boundaries_and_unknown_denominator(database, monkeypatch):
 
 
 @pytest.mark.parametrize("database", ["012_nhip_tim_lam_moi", "013_model_catalog_pricing"], indirect=True)
-def test_upgrade_preserves_legacy_and_grants(database):
+def test_upgrade_preserves_legacy_and_grants(database, tmp_path):
     dsn = database
     query(dsn, """INSERT INTO dim_agent VALUES
         (41,'legacy','Legacy',NULL,false,NULL,'2026-08-01',NULL,true,false);
@@ -354,11 +356,30 @@ def test_upgrade_preserves_legacy_and_grants(database):
     finally:
         cn.close()
     protected = snapshot(dsn)
+    # CLI loaders resolve source files before checking the database guard.
+    # Use a disposable checkout with minimal inputs, independent of local pulls.
+    root = Path(__file__).resolve().parents[1]
+    shutil.copytree(root / "db", tmp_path / "db", ignore=shutil.ignore_patterns("__pycache__"))
+    (tmp_path / "scripts").mkdir()
+    shutil.copy2(root / "scripts" / "rebuild_db.py", tmp_path / "scripts" / "rebuild_db.py")
+    sources = {
+        "data/raw_web/ralli/2026-09-01": (
+            "units.json", "users-list.json", "db-token_usage-raw.json"),
+        "data/raw_web/tla-hd/2026-09-01": (
+            "units-tree.json", "units-members.json", "token-usage-year.json",
+            "token-usage-filter-options.json", "usage-day-user-model.json"),
+        "data/da_xu_ly/billing": ("billing_2026-09-01.csv",),
+    }
+    for folder, names in sources.items():
+        directory = tmp_path / folder
+        directory.mkdir(parents=True)
+        for name in names:
+            (directory / name).touch()
     for script in ("db/load_org.py", "scripts/rebuild_db.py", "db/load_billing.py"):
         args = [sys.executable, script, "--db", dsn]
         if script.endswith("load_billing.py"):
             args += ["--rebuild"]
-        result = subprocess.run(args, capture_output=True, text=True, timeout=15)
+        result = subprocess.run(args, cwd=tmp_path, capture_output=True, text=True, timeout=15)
         assert result.returncode != 0
         assert "Bulk reload refused" in result.stderr
         assert snapshot(dsn) == protected
