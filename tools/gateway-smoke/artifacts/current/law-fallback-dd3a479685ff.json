@@ -1,0 +1,4605 @@
+{
+  "run_id": "law-fallback-dd3a479685ff",
+  "result": "PASS",
+  "endpoint": "http://127.0.0.1:4101",
+  "scope": "analysis/chat + real two-page scanned-PDF OCR, two concurrent users; SDK/LB/two mock proxies",
+  "limitations": [
+    "Direct provider is MOCK at litellm.acompletion, not real Gemini",
+    "SMTP disabled; any SMTP constructor attempt fails the harness",
+    "Actual ledger builder only; no application DB persistence or ETL/dashboard verification",
+    "No authenticated HTTP E2E; synthetic UsageContext is injected",
+    "Direct HTTP attempts NOT measured: synthetic litellm.acompletion SDK boundary",
+    "Gateway HTTP send counted; LB receipt trace lacks body/response IDs, joined by synthetic user/status",
+    "No Marker/parser, provider-real, production traffic, or capacity coverage"
+  ],
+  "guards": {
+    "dotenv_read_denial": true,
+    "dotenv_sources_disabled": true,
+    "only_application_egress": "http://127.0.0.1:4101",
+    "direct_boundary": "MOCK",
+    "smtp_boundary": "DISABLED; attempts forbidden",
+    "blocked_egress_count": 0
+  },
+  "stages": [
+    {
+      "name": "baseline-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "gateway",
+      "fallback_enabled": false,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.8076154999998835,
+      "result": "PASS"
+    },
+    {
+      "name": "baseline-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "gateway",
+      "fallback_enabled": false,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.08595460000105959,
+      "result": "PASS"
+    },
+    {
+      "name": "baseline-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": false,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.11180349999995087,
+      "result": "PASS"
+    },
+    {
+      "name": "baseline-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": false,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.07810779999999795,
+      "result": "PASS"
+    },
+    {
+      "name": "missing-call_llm",
+      "helper": "call_llm",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "ValueError",
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {},
+      "gateway_http_attempts": 0,
+      "elapsed_seconds": 7.310000000870787e-05,
+      "result": "PASS"
+    },
+    {
+      "name": "missing-call_llm_chat",
+      "helper": "call_llm_chat",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "ValueError",
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {},
+      "gateway_http_attempts": 0,
+      "elapsed_seconds": 2.6899999284069054e-05,
+      "result": "PASS"
+    },
+    {
+      "name": "missing-ocr_pdf_with_gemini",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "ValueError",
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {},
+      "gateway_http_attempts": 0,
+      "elapsed_seconds": 0.030783899999732967,
+      "result": "PASS"
+    },
+    {
+      "name": "invalid-call_llm",
+      "helper": "call_llm",
+      "expected_route": null,
+      "fallback_enabled": true,
+      "expected_failure": true,
+      "error_type": "AuthenticationError",
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.08293179999964195,
+      "result": "PASS"
+    },
+    {
+      "name": "invalid-call_llm_chat",
+      "helper": "call_llm_chat",
+      "expected_route": null,
+      "fallback_enabled": true,
+      "expected_failure": true,
+      "error_type": "AuthenticationError",
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.035008700000616955,
+      "result": "PASS"
+    },
+    {
+      "name": "one_proxy_down-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "gateway",
+      "fallback_enabled": false,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.014024399999470916,
+      "result": "PASS"
+    },
+    {
+      "name": "one_proxy_down-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "gateway",
+      "fallback_enabled": false,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.0131698999994114,
+      "result": "PASS"
+    },
+    {
+      "name": "one_proxy_down-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": false,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.0853020000013203,
+      "result": "PASS"
+    },
+    {
+      "name": "one_proxy_down-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": false,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.063984399999754,
+      "result": "PASS"
+    },
+    {
+      "name": "both_proxies_down-disabled-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "BadGatewayError",
+      "failure_reason": "502",
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.0146491000014066,
+      "result": "PASS"
+    },
+    {
+      "name": "both_proxies_down-disabled-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "Timeout",
+      "failure_reason": "connection_timeout",
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 3.018305599998712,
+      "result": "PASS"
+    },
+    {
+      "name": "both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "BadGatewayError",
+      "failure_reason": "502",
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.062300600000526,
+      "result": "PASS"
+    },
+    {
+      "name": "both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "BadGatewayError",
+      "failure_reason": "502",
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.0920355999987805,
+      "result": "PASS"
+    },
+    {
+      "name": "both_proxies_down-enabled-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.01045460000023013,
+      "result": "PASS"
+    },
+    {
+      "name": "both_proxies_down-enabled-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.012988100001166458,
+      "result": "PASS"
+    },
+    {
+      "name": "both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2,
+        "direct_fallback": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.10286840000117081,
+      "result": "PASS"
+    },
+    {
+      "name": "both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2,
+        "direct_fallback": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 3.0467858000010892,
+      "result": "PASS"
+    },
+    {
+      "name": "proxy_recovery-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.10194750000118802,
+      "result": "PASS"
+    },
+    {
+      "name": "proxy_recovery-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.09549429999970016,
+      "result": "PASS"
+    },
+    {
+      "name": "proxy_recovery-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.10271589999865682,
+      "result": "PASS"
+    },
+    {
+      "name": "proxy_recovery-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.08474399999977322,
+      "result": "PASS"
+    },
+    {
+      "name": "lb_down-disabled-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "InternalServerError",
+      "failure_reason": "connection_error",
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.093876500000988,
+      "result": "PASS"
+    },
+    {
+      "name": "lb_down-disabled-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "InternalServerError",
+      "failure_reason": "connection_error",
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.0407233999994787,
+      "result": "PASS"
+    },
+    {
+      "name": "lb_down-disabled-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "InternalServerError",
+      "failure_reason": "connection_error",
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.122765800000707,
+      "result": "PASS"
+    },
+    {
+      "name": "lb_down-disabled-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": null,
+      "fallback_enabled": false,
+      "expected_failure": true,
+      "error_type": "InternalServerError",
+      "failure_reason": "connection_error",
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.0892640000001848,
+      "result": "PASS"
+    },
+    {
+      "name": "lb_down-enabled-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.062870899999325,
+      "result": "PASS"
+    },
+    {
+      "name": "lb_down-enabled-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.0542901000007987,
+      "result": "PASS"
+    },
+    {
+      "name": "lb_down-enabled-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2,
+        "direct_fallback": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.1628397000004043,
+      "result": "PASS"
+    },
+    {
+      "name": "lb_down-enabled-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2,
+        "direct_fallback": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.1335376999995788,
+      "result": "PASS"
+    },
+    {
+      "name": "direct_failure-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": true,
+      "error_type": "RuntimeError",
+      "failure_reason": "connection_error",
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.047546499999953,
+      "result": "PASS"
+    },
+    {
+      "name": "direct_failure-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": true,
+      "error_type": "RuntimeError",
+      "failure_reason": "connection_error",
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.0613017000014224,
+      "result": "PASS"
+    },
+    {
+      "name": "direct_failure-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": true,
+      "error_type": "RuntimeError",
+      "failure_reason": "connection_error",
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2,
+        "direct_fallback": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.132980399999724,
+      "result": "PASS"
+    },
+    {
+      "name": "direct_failure-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": true,
+      "error_type": "RuntimeError",
+      "failure_reason": "connection_error",
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2,
+        "direct_fallback": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.1023327999992034,
+      "result": "PASS"
+    },
+    {
+      "name": "recovery-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.01551110000036715,
+      "result": "PASS"
+    },
+    {
+      "name": "recovery-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.01581629999964207,
+      "result": "PASS"
+    },
+    {
+      "name": "recovery-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.1080718999983219,
+      "result": "PASS"
+    },
+    {
+      "name": "recovery-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.08590069999991101,
+      "result": "PASS"
+    },
+    {
+      "name": "second_outage-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.0490494999994553,
+      "result": "PASS"
+    },
+    {
+      "name": "second_outage-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1,
+        "direct_fallback": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 2.0607331999999587,
+      "result": "PASS"
+    },
+    {
+      "name": "second_outage-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2,
+        "direct_fallback": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.212761800001317,
+      "result": "PASS"
+    },
+    {
+      "name": "second_outage-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "direct_fallback",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2,
+        "direct_fallback": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 2.1846570999987307,
+      "result": "PASS"
+    },
+    {
+      "name": "final_recovery-call_llm-0",
+      "helper": "call_llm",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.022787699999753386,
+      "result": "PASS"
+    },
+    {
+      "name": "final_recovery-call_llm_chat-0",
+      "helper": "call_llm_chat",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 1,
+      "sdk_attempts": {
+        "gateway": 1
+      },
+      "gateway_http_attempts": 1,
+      "elapsed_seconds": 0.016765100001066457,
+      "result": "PASS"
+    },
+    {
+      "name": "final_recovery-ocr_pdf_with_gemini-0",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.13106249999873398,
+      "result": "PASS"
+    },
+    {
+      "name": "final_recovery-ocr_pdf_with_gemini-1",
+      "helper": "ocr_pdf_with_gemini",
+      "expected_route": "gateway",
+      "fallback_enabled": true,
+      "expected_failure": false,
+      "error_type": null,
+      "failure_reason": null,
+      "pages": 2,
+      "sdk_attempts": {
+        "gateway": 2
+      },
+      "gateway_http_attempts": 2,
+      "elapsed_seconds": 0.09831609999855573,
+      "result": "PASS"
+    }
+  ],
+  "attempts": [
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-baseline-call_llm-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-baseline-call_llm_chat-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.invalid-call_llm",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-invalid-call_llm",
+      "page": null,
+      "failure_reason": null,
+      "error_chain": [
+        {
+          "type": "AuthenticationError",
+          "status": 401
+        },
+        {
+          "type": "OpenAIError",
+          "status": 401
+        },
+        {
+          "type": "AuthenticationError",
+          "status": 401
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.invalid-call_llm_chat",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-invalid-call_llm_chat",
+      "page": null,
+      "failure_reason": null,
+      "error_chain": [
+        {
+          "type": "AuthenticationError",
+          "status": 401
+        },
+        {
+          "type": "OpenAIError",
+          "status": 401
+        },
+        {
+          "type": "AuthenticationError",
+          "status": 401
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm_chat-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm-0",
+      "page": null,
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm_chat-0",
+      "page": null,
+      "failure_reason": "connection_timeout",
+      "error_chain": [
+        {
+          "type": "Timeout",
+          "status": 408
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APITimeoutError",
+          "status": null
+        },
+        {
+          "type": "TimeoutException",
+          "status": null
+        },
+        {
+          "type": "TimeoutError",
+          "status": null
+        },
+        {
+          "type": "CancelledError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm-0",
+      "page": null,
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-call_llm-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm-0",
+      "page": null,
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm_chat-0",
+      "page": null,
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-call_llm_chat-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm_chat-0",
+      "page": null,
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "502",
+      "error_chain": [
+        {
+          "type": "BadGatewayError",
+          "status": 502
+        },
+        {
+          "type": "OpenAIError",
+          "status": 502
+        },
+        {
+          "type": "InternalServerError",
+          "status": 502
+        },
+        {
+          "type": "HTTPStatusError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm_chat-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm-0",
+      "page": null,
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm_chat-0",
+      "page": null,
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm-0",
+      "page": null,
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm-0",
+      "page": null,
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm_chat-0",
+      "page": null,
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm_chat-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm_chat-0",
+      "page": null,
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm-0",
+      "page": null,
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-call_llm-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm-0",
+      "page": null,
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm_chat-0",
+      "page": null,
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-call_llm_chat-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm_chat-0",
+      "page": null,
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-1",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-1",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-recovery-call_llm-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-recovery-call_llm_chat-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-call_llm-0",
+      "page": null,
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-call_llm-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-call_llm-0",
+      "page": null,
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-call_llm_chat-0",
+      "page": null,
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-call_llm_chat-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-call_llm_chat-0",
+      "page": null,
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "failure_reason": "connection_error",
+      "error_chain": [
+        {
+          "type": "InternalServerError",
+          "status": 500
+        },
+        {
+          "type": "OpenAIError",
+          "status": 500
+        },
+        {
+          "type": "APIConnectionError",
+          "status": null
+        },
+        {
+          "type": "ConnectError",
+          "status": null
+        },
+        {
+          "type": "ClientConnectorError",
+          "status": null
+        },
+        {
+          "type": "ConnectionRefusedError",
+          "status": null
+        }
+      ]
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "route": "direct_fallback",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9",
+      "boundary": "MOCK litellm.acompletion (SDK only)"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-call_llm-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-call_llm_chat-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm_chat-0",
+      "page": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-0",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-1",
+      "route": "gateway",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    }
+  ],
+  "ledger_rows": [
+    {
+      "call_id": "chatcmpl-8c7ff0f1-6a88-462e-8a56-fe7f117981a9",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "f1fe2103-b5c2-4c11-9b5e-2c46a9448bb1",
+      "user_id": "synthetic-baseline-call_llm-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-baseline-call_llm-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-baseline-call_llm-0",
+      "session_id": "law-fallback-dd3a479685ff.baseline-call_llm-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-cc8250f8-c3ec-4585-81e6-3e2d7d1be8f0",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "4d6a55fb-4ae8-480f-8583-f0e936b8c5e4",
+      "user_id": "synthetic-baseline-call_llm_chat-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-baseline-call_llm_chat-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-baseline-call_llm_chat-0",
+      "session_id": "law-fallback-dd3a479685ff.baseline-call_llm_chat-0",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-d0d1c79d-d405-44d0-8124-455a62ac7417",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "1f4bce44-166c-49c3-ad64-0cc290bdeac5",
+      "user_id": "synthetic-baseline-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-baseline-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "chatcmpl-85cdfda7-1284-46fb-9add-120a06655480",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "c801c5a3-272a-497e-af37-dbeae6c4285e",
+      "user_id": "synthetic-baseline-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-baseline-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "chatcmpl-a7381f78-63b7-424f-8dce-6702217326d0",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "371cde35-2bf5-4023-b105-c9a3e61d4510",
+      "user_id": "synthetic-baseline-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-baseline-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-dd01e6e7-44ba-49bc-bd81-465754150fa4",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "d4e64ceb-52bb-43c9-9713-343db0971416",
+      "user_id": "synthetic-baseline-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-baseline-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-e338f6be-ff08-4f18-8cfc-c5489cb29f97",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "e99464cd-6289-4317-bb0d-3c2e73b01e6e",
+      "user_id": "synthetic-one_proxy_down-call_llm-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-one_proxy_down-call_llm-0",
+      "session_id": "law-fallback-dd3a479685ff.one_proxy_down-call_llm-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-6b312990-25b2-4067-b83d-d163d1255458",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "97d8a77d-8a22-4ac8-9e8a-771084b33ff8",
+      "user_id": "synthetic-one_proxy_down-call_llm_chat-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm_chat-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-one_proxy_down-call_llm_chat-0",
+      "session_id": "law-fallback-dd3a479685ff.one_proxy_down-call_llm_chat-0",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-c70989a7-dd32-4923-88cf-76ddf49a83b8",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "33b7a3ba-46cf-4422-8a08-1ab459901582",
+      "user_id": "synthetic-one_proxy_down-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-one_proxy_down-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-d57a242d-31c0-4b14-9162-f13844347a09",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "29d31790-04a8-48de-9750-6e8295ca4ac6",
+      "user_id": "synthetic-one_proxy_down-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-one_proxy_down-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "chatcmpl-d780c5cd-25ee-468a-9889-42207f885848",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "e68f8219-bbe2-4f93-aa6c-c7131f6cf621",
+      "user_id": "synthetic-one_proxy_down-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-one_proxy_down-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-15cf4974-9720-45e5-a772-0cc790f52f0c",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "0dfa503f-13ae-4b3a-bae7-b2563d0a5ac9",
+      "user_id": "synthetic-one_proxy_down-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-one_proxy_down-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "mock-direct-ebb30e3452a3db99",
+      "route": "direct_fallback",
+      "fallback_reason": "502",
+      "operation_id": "12234fe5-ee09-443f-b157-78a1df20aff6",
+      "user_id": "synthetic-both_proxies_down-enabled-call_llm-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-both_proxies_down-enabled-call_llm-0",
+      "session_id": "law-fallback-dd3a479685ff.both_proxies_down-enabled-call_llm-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": null
+    },
+    {
+      "call_id": "mock-direct-8b3074f4478c8a85",
+      "route": "direct_fallback",
+      "fallback_reason": "502",
+      "operation_id": "cb6345c1-0c8b-4f28-983b-54152555dd61",
+      "user_id": "synthetic-both_proxies_down-enabled-call_llm_chat-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm_chat-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-both_proxies_down-enabled-call_llm_chat-0",
+      "session_id": "law-fallback-dd3a479685ff.both_proxies_down-enabled-call_llm_chat-0",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": null
+    },
+    {
+      "call_id": "mock-direct-5f866b5f2b160bf6",
+      "route": "direct_fallback",
+      "fallback_reason": "502",
+      "operation_id": "11dcbf91-df31-4107-b9da-147024228f32",
+      "user_id": "synthetic-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "mock-direct-a8926b8026b159e5",
+      "route": "direct_fallback",
+      "fallback_reason": "502",
+      "operation_id": "ce3350c5-7c9e-460f-b1b3-2107e56590a0",
+      "user_id": "synthetic-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "mock-direct-40c2c86630e45dde",
+      "route": "direct_fallback",
+      "fallback_reason": "502",
+      "operation_id": "3317e0fc-6e7d-4e7f-8994-5fb684c83b60",
+      "user_id": "synthetic-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "mock-direct-210c87092d3f8734",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_timeout",
+      "operation_id": "0c6e2625-8dd0-4862-8d69-f6906a3ca645",
+      "user_id": "synthetic-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-aecd9026-e7d3-42eb-8bf6-fa9f9cf791ab",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "824af068-e944-4efe-8831-043b646a10a6",
+      "user_id": "synthetic-proxy_recovery-call_llm-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-proxy_recovery-call_llm-0",
+      "session_id": "law-fallback-dd3a479685ff.proxy_recovery-call_llm-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-d2ef5598-60e6-4282-9c49-4e615bde07a8",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "b9936a95-c929-496f-a84e-4c11a10244a3",
+      "user_id": "synthetic-proxy_recovery-call_llm_chat-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm_chat-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-proxy_recovery-call_llm_chat-0",
+      "session_id": "law-fallback-dd3a479685ff.proxy_recovery-call_llm_chat-0",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-888a918f-e099-444d-99f6-2c61b5d3d003",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "965d5376-5c68-44e4-9dc6-10cfe8bcecfe",
+      "user_id": "synthetic-proxy_recovery-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-proxy_recovery-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-3633461f-31cf-4060-aa60-071b7bc309d2",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "695f5dd7-e324-4a46-9dce-9e5e4c943a4c",
+      "user_id": "synthetic-proxy_recovery-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-proxy_recovery-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "chatcmpl-5911a3ab-ef69-43cf-a5e4-154546ebc4b0",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "94222f4f-df77-42be-89ed-41ae41331244",
+      "user_id": "synthetic-proxy_recovery-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-proxy_recovery-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-8bfb8acb-32e5-409d-9fe1-8c1b8c95231e",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "c40dfba9-b4e8-4fc6-8f4d-d48ea12fcd05",
+      "user_id": "synthetic-proxy_recovery-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-proxy_recovery-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "mock-direct-732e88e6a15c3e47",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "957b8ea6-ce3f-432d-a94a-6206fc480305",
+      "user_id": "synthetic-lb_down-enabled-call_llm-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-lb_down-enabled-call_llm-0",
+      "session_id": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": null
+    },
+    {
+      "call_id": "mock-direct-1ef65e35dbfe896a",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "0ed892cf-05b7-4328-8970-656cace9e4ca",
+      "user_id": "synthetic-lb_down-enabled-call_llm_chat-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm_chat-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-lb_down-enabled-call_llm_chat-0",
+      "session_id": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm_chat-0",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": null
+    },
+    {
+      "call_id": "mock-direct-aca72c39b62b4af1",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "c09dfa47-6674-47c9-9ccd-6a7a3dd2ada5",
+      "user_id": "synthetic-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "mock-direct-7bdf51fbe81ae342",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "934cba6d-2b58-4562-9cb3-d0891df5e7ab",
+      "user_id": "synthetic-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "mock-direct-419f70fb36ce8d8f",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "98876c47-8e97-48c0-9a05-cde875e321c4",
+      "user_id": "synthetic-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "mock-direct-15cc5036ec520701",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "041c2113-b51f-4a4b-a57a-0020a1c745be",
+      "user_id": "synthetic-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "chatcmpl-ea15a773-afe0-49f9-8160-34776a0b0b3e",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "7ea8ed7a-e97b-42f8-9335-c775aac37b2f",
+      "user_id": "synthetic-recovery-call_llm-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-recovery-call_llm-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-recovery-call_llm-0",
+      "session_id": "law-fallback-dd3a479685ff.recovery-call_llm-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-0764adfb-3c88-45d0-8d15-312e8b83ee0f",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "2c92d974-820c-49ce-be26-dbfae195d1b7",
+      "user_id": "synthetic-recovery-call_llm_chat-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-recovery-call_llm_chat-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-recovery-call_llm_chat-0",
+      "session_id": "law-fallback-dd3a479685ff.recovery-call_llm_chat-0",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-71cb7857-4b6b-409a-b5e4-fba75a566322",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "92b21bf5-b077-4cbe-9bba-97df9a855a2e",
+      "user_id": "synthetic-recovery-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-recovery-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-b2e7ee1a-88a1-4d7c-8d6e-a715bf5ccb2e",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "b9d3f9d9-4ae4-4bca-9010-4a16cc009b78",
+      "user_id": "synthetic-recovery-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-recovery-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-f5b1ea4a-7bf9-4c6d-9499-971c73ea5084",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "26e1b7fb-0fd4-409e-9e99-7aaf8b429e2a",
+      "user_id": "synthetic-recovery-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-recovery-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "chatcmpl-549e5cf7-88ed-4893-ad8d-aabf400a303a",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "eb489f70-68f9-4535-bf4a-b01620a0828a",
+      "user_id": "synthetic-recovery-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-recovery-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "mock-direct-c0cd0ea00ca89785",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "d3590cf7-de72-43ba-9734-670e1831a581",
+      "user_id": "synthetic-second_outage-call_llm-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-second_outage-call_llm-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-second_outage-call_llm-0",
+      "session_id": "law-fallback-dd3a479685ff.second_outage-call_llm-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": null
+    },
+    {
+      "call_id": "mock-direct-90efb2490315028c",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "b88c8584-8b16-4e85-b856-e4aeed2d5021",
+      "user_id": "synthetic-second_outage-call_llm_chat-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-second_outage-call_llm_chat-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-second_outage-call_llm_chat-0",
+      "session_id": "law-fallback-dd3a479685ff.second_outage-call_llm_chat-0",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": null
+    },
+    {
+      "call_id": "mock-direct-e820e0b211df89d8",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "6b00dcfe-d75d-4452-ab8e-c3360327764b",
+      "user_id": "synthetic-second_outage-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-second_outage-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "mock-direct-317fd7017c58c6eb",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "5416a877-ece3-46db-8f58-8087e406f22d",
+      "user_id": "synthetic-second_outage-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-second_outage-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "mock-direct-356882dac804236f",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "a958077d-f20e-4b2f-9608-7b4f8fea311f",
+      "user_id": "synthetic-second_outage-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-second_outage-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "mock-direct-1afcfbc8199f016b",
+      "route": "direct_fallback",
+      "fallback_reason": "connection_error",
+      "operation_id": "e6571074-0634-4a6c-800c-c530710256dd",
+      "user_id": "synthetic-second_outage-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-second_outage-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 11,
+      "completion_tokens": 7,
+      "total_tokens": 18,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "chatcmpl-4204908b-e46b-40a1-93f8-a137f39d4bd8",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "f524aaf1-e75c-4b37-b9ba-c281b9076b75",
+      "user_id": "synthetic-final_recovery-call_llm-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-final_recovery-call_llm-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-final_recovery-call_llm-0",
+      "session_id": "law-fallback-dd3a479685ff.final_recovery-call_llm-0",
+      "function_name": "call_llm",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-0489c7d9-00bd-43dc-bf90-0d9635247313",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "8dd728c3-7840-4f1f-9204-d2c40e77b92a",
+      "user_id": "synthetic-final_recovery-call_llm_chat-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-final_recovery-call_llm_chat-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-final_recovery-call_llm_chat-0",
+      "session_id": "law-fallback-dd3a479685ff.final_recovery-call_llm_chat-0",
+      "function_name": "call_llm_chat",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": null
+    },
+    {
+      "call_id": "chatcmpl-7058db97-b999-41ff-ba97-b80fa171a80e",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "7ea9fbf5-7506-4a88-8164-650c801d72ed",
+      "user_id": "synthetic-final_recovery-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-final_recovery-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-bf7368dd-0da3-4d76-8f18-1be4c34b7de5",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "0d27876b-0ba8-42ca-a973-fff98e713fc2",
+      "user_id": "synthetic-final_recovery-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-final_recovery-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "40ac138110a9f56fd7fd701acfde1ffd076ef148290356e416683e0e20ce30a6"
+    },
+    {
+      "call_id": "chatcmpl-e400de26-2c48-49e2-a21a-4ebe1229215d",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "c02b4a59-01fe-4fe3-8ac9-4d3b1637ba4f",
+      "user_id": "synthetic-final_recovery-ocr_pdf_with_gemini-0",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-final_recovery-ocr_pdf_with_gemini-0",
+      "session_id": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-0",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    },
+    {
+      "call_id": "chatcmpl-b42df6b9-79c7-436d-8a0a-86d08a4a24d4",
+      "route": "gateway",
+      "fallback_reason": null,
+      "operation_id": "8c48817b-1305-4274-9e17-092a3976bf4b",
+      "user_id": "synthetic-final_recovery-ocr_pdf_with_gemini-1",
+      "username_snapshot": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "company_id_snapshot": "synthetic-company",
+      "unit_id_snapshot": "synthetic-unit-final_recovery-ocr_pdf_with_gemini-1",
+      "session_id": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-1",
+      "function_name": "ocr_pdf_with_gemini",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "page": "b11d82cd1a89a272a21bf4abaec0fd810484756eba731c94d6829ded649024e9"
+    }
+  ],
+  "smtp": [],
+  "faults": [
+    {
+      "stage": "one_proxy_down",
+      "container": "tla-gateway-smoke-gateway2-1",
+      "running": false
+    },
+    {
+      "stage": "both_proxies_down",
+      "container": "tla-gateway-smoke-gateway-1",
+      "running": false
+    },
+    {
+      "stage": "both_proxies_down",
+      "container": "tla-gateway-smoke-gateway-1",
+      "running": true,
+      "health": "healthy"
+    },
+    {
+      "stage": "both_proxies_down",
+      "container": "tla-gateway-smoke-gateway2-1",
+      "running": true,
+      "health": "healthy"
+    },
+    {
+      "stage": "lb_down",
+      "container": "tla-gateway-smoke-gateway-lb-1",
+      "running": false
+    },
+    {
+      "stage": "direct_failure",
+      "container": "tla-gateway-smoke-gateway-lb-1",
+      "running": true,
+      "health": "healthy"
+    },
+    {
+      "stage": "second_outage",
+      "container": "tla-gateway-smoke-gateway-lb-1",
+      "running": false
+    },
+    {
+      "stage": "second_outage",
+      "container": "tla-gateway-smoke-gateway-lb-1",
+      "running": true,
+      "health": "healthy"
+    }
+  ],
+  "initial_health": {
+    "tla-gateway-smoke-gateway-lb-1": "healthy",
+    "tla-gateway-smoke-gateway2-1": "healthy",
+    "tla-gateway-smoke-gateway-1": "healthy",
+    "tla-gateway-smoke-db-1": "healthy"
+  },
+  "credential_created_and_readback": true,
+  "gateway_http_trace": [
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-baseline-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-baseline-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-baseline-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-baseline-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.baseline-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.invalid-call_llm",
+      "user": "law-fallback-dd3a479685ff.user-invalid-call_llm",
+      "body_user": "law-fallback-dd3a479685ff.user-invalid-call_llm",
+      "model": "tla-hd-mock",
+      "status": 401
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.invalid-call_llm_chat",
+      "user": "law-fallback-dd3a479685ff.user-invalid-call_llm_chat",
+      "body_user": "law-fallback-dd3a479685ff.user-invalid-call_llm_chat",
+      "model": "tla-hd-mock",
+      "status": 401
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.one_proxy_down-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 502
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.proxy_recovery-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-recovery-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-recovery-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-recovery-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-recovery-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.recovery-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": 200
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.final_recovery-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": 200
+    }
+  ],
+  "spend_logs": [
+    {
+      "request_id": "chatcmpl-8c7ff0f1-6a88-462e-8a56-fe7f117981a9",
+      "end_user": "law-fallback-dd3a479685ff.user-baseline-call_llm-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-d0d1c79d-d405-44d0-8124-455a62ac7417",
+      "end_user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-85cdfda7-1284-46fb-9add-120a06655480",
+      "end_user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-cc8250f8-c3ec-4585-81e6-3e2d7d1be8f0",
+      "end_user": "law-fallback-dd3a479685ff.user-baseline-call_llm_chat-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-a7381f78-63b7-424f-8dce-6702217326d0",
+      "end_user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-dd01e6e7-44ba-49bc-bd81-465754150fa4",
+      "end_user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-e338f6be-ff08-4f18-8cfc-c5489cb29f97",
+      "end_user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-6b312990-25b2-4067-b83d-d163d1255458",
+      "end_user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm_chat-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-c70989a7-dd32-4923-88cf-76ddf49a83b8",
+      "end_user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-d57a242d-31c0-4b14-9162-f13844347a09",
+      "end_user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-d780c5cd-25ee-468a-9889-42207f885848",
+      "end_user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-15cf4974-9720-45e5-a772-0cc790f52f0c",
+      "end_user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-d2ef5598-60e6-4282-9c49-4e615bde07a8",
+      "end_user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm_chat-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-aecd9026-e7d3-42eb-8bf6-fa9f9cf791ab",
+      "end_user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-888a918f-e099-444d-99f6-2c61b5d3d003",
+      "end_user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-3633461f-31cf-4060-aa60-071b7bc309d2",
+      "end_user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-5911a3ab-ef69-43cf-a5e4-154546ebc4b0",
+      "end_user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-8bfb8acb-32e5-409d-9fe1-8c1b8c95231e",
+      "end_user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-ea15a773-afe0-49f9-8160-34776a0b0b3e",
+      "end_user": "law-fallback-dd3a479685ff.user-recovery-call_llm-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-71cb7857-4b6b-409a-b5e4-fba75a566322",
+      "end_user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-b2e7ee1a-88a1-4d7c-8d6e-a715bf5ccb2e",
+      "end_user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-f5b1ea4a-7bf9-4c6d-9499-971c73ea5084",
+      "end_user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-549e5cf7-88ed-4893-ad8d-aabf400a303a",
+      "end_user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-4204908b-e46b-40a1-93f8-a137f39d4bd8",
+      "end_user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-7058db97-b999-41ff-ba97-b80fa171a80e",
+      "end_user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-bf7368dd-0da3-4d76-8f18-1be4c34b7de5",
+      "end_user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-e400de26-2c48-49e2-a21a-4ebe1229215d",
+      "end_user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-b42df6b9-79c7-436d-8a0a-86d08a4a24d4",
+      "end_user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-0764adfb-3c88-45d0-8d15-312e8b83ee0f",
+      "end_user": "law-fallback-dd3a479685ff.user-recovery-call_llm_chat-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    },
+    {
+      "request_id": "chatcmpl-0489c7d9-00bd-43dc-bf90-0d9635247313",
+      "end_user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm_chat-0",
+      "prompt_tokens": 10,
+      "completion_tokens": 20,
+      "total_tokens": 30,
+      "request_tags": [
+        "tla-hd",
+        "User-Agent: AsyncOpenAI",
+        "User-Agent: AsyncOpenAI/Python 3.11.0"
+      ],
+      "model": "openai/gpt-4o-mini",
+      "status": "success"
+    }
+  ],
+  "unmatched_gateway_spend": [],
+  "lb_trace": [
+    {
+      "user": "law-fallback-dd3a479685ff.user-baseline-call_llm-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.083
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-baseline-call_llm_chat-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.078
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.012
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.015
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.016
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-baseline-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.022
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-invalid-call_llm",
+      "path": "/v1/chat/completions",
+      "status": 401,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "401",
+      "seconds": 0.049
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-invalid-call_llm_chat",
+      "path": "/v1/chat/completions",
+      "status": 401,
+      "upstream": "172.22.0.4:4000",
+      "upstream_status": "401",
+      "seconds": 0.02
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-call_llm_chat-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000, 172.22.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.008
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.013
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000, 172.22.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.017
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-one_proxy_down-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000, 172.22.0.3:4000",
+      "upstream_status": "504, 200",
+      "seconds": 2.021
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm-0",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "172.22.0.3:4000, litellm_pool",
+      "upstream_status": "504, 502",
+      "seconds": 2.003
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm_chat-0",
+      "path": "/v1/chat/completions",
+      "status": 499,
+      "upstream": "172.22.0.3:4000, 172.22.0.4:4000",
+      "upstream_status": "504, -",
+      "seconds": 3.016
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "172.22.0.4:4000, litellm_pool",
+      "upstream_status": "504, 502",
+      "seconds": 2.002
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "172.22.0.4:4000, litellm_pool",
+      "upstream_status": "504, 502",
+      "seconds": 2.001
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "172.22.0.4:4000, litellm_pool",
+      "upstream_status": "504, 502",
+      "seconds": 2.0
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 499,
+      "upstream": "172.22.0.3:4000, 172.22.0.4:4000",
+      "upstream_status": "504, -",
+      "seconds": 2.021
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm-0",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "litellm_pool",
+      "upstream_status": "502",
+      "seconds": 0.0
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-call_llm_chat-0",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "litellm_pool",
+      "upstream_status": "502",
+      "seconds": 0.0
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "litellm_pool",
+      "upstream_status": "502",
+      "seconds": 0.0
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "litellm_pool",
+      "upstream_status": "502",
+      "seconds": 0.0
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 502,
+      "upstream": "litellm_pool",
+      "upstream_status": "502",
+      "seconds": 0.0
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 499,
+      "upstream": "172.22.0.4:4000, 172.22.0.3:4000",
+      "upstream_status": "504, -",
+      "seconds": 2.972
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.092
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-call_llm_chat-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.09
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.014
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.026
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.028
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-proxy_recovery-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.033
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-recovery-call_llm-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-recovery-call_llm_chat-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.008
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.025
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.026
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-recovery-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.036
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.011
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-call_llm_chat-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.4:4000",
+      "upstream_status": "200",
+      "seconds": 0.01
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.019
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.04
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-0",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.041
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-final_recovery-ocr_pdf_with_gemini-1",
+      "path": "/v1/chat/completions",
+      "status": 200,
+      "upstream": "172.22.0.3:4000",
+      "upstream_status": "200",
+      "seconds": 0.044
+    }
+  ],
+  "ambiguous_gateway_http": [
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-disabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-disabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.lb_down-enabled-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-lb_down-enabled-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.direct_failure-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-direct_failure-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-call_llm-0",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-call_llm-0",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-call_llm-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-call_llm_chat-0",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-call_llm_chat-0",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-call_llm_chat-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-0",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-0",
+      "model": "tla-hd-mock",
+      "status": null
+    },
+    {
+      "operation": "law-fallback-dd3a479685ff.second_outage-ocr_pdf_with_gemini-1",
+      "user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "body_user": "law-fallback-dd3a479685ff.user-second_outage-ocr_pdf_with_gemini-1",
+      "model": "tla-hd-mock",
+      "status": null
+    }
+  ],
+  "lb_unreturned_requests": [
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-call_llm_chat-0",
+      "status": 499,
+      "count": 1
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-disabled-ocr_pdf_with_gemini-0",
+      "status": 499,
+      "count": 1
+    },
+    {
+      "user": "law-fallback-dd3a479685ff.user-both_proxies_down-enabled-ocr_pdf_with_gemini-1",
+      "status": 499,
+      "count": 1
+    }
+  ],
+  "upstreams": {
+    "baseline": [
+      "172.22.0.3:4000",
+      "172.22.0.4:4000"
+    ],
+    "one_proxy_down": [
+      "172.22.0.3:4000"
+    ]
+  },
+  "reconciliation": {
+    "gateway_response_ids_matched": 30,
+    "synthetic_direct_ids_absent_at_readback": 18,
+    "unmatched_failed_spend": 0,
+    "gateway_http_attempts": 68,
+    "lb_received_requests": 44,
+    "direct_http_count": "NOT MEASURED: SDK mock boundary"
+  },
+  "credential_cleanup": {
+    "delete_status": 200,
+    "readback_status": 404
+  },
+  "final_health": {
+    "tla-gateway-smoke-gateway-lb-1": "healthy",
+    "tla-gateway-smoke-gateway2-1": "healthy",
+    "tla-gateway-smoke-gateway-1": "healthy",
+    "tla-gateway-smoke-db-1": "healthy"
+  },
+  "cleanup_errors": [],
+  "totals": {
+    "stages": 49,
+    "sdk_attempts": {
+      "gateway": 68,
+      "direct_fallback": 24
+    },
+    "ledger_rows": 48,
+    "smtp_attempts": 0
+  }
+}

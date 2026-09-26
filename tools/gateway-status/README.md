@@ -4,7 +4,7 @@ Private English-language monitor using existing HTML/CSS/JavaScript and a built-
 
 ## Single-container Gateway
 
-`token-ledger-gateway-lb` now contains **Nginx + Node**, not a separate status service. Published Gateway ports are HTTP `${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000` and additive HTTPS `${LLM_GATEWAY_TLS_BIND:-127.0.0.1}:${LLM_GATEWAY_TLS_PORT:-443}:4443` (certificates: `docker/gateway/tls/README.md`). Node listens only on container loopback `127.0.0.1:8089`; there is **no host 8089 fallback**.
+`token-ledger-gateway-lb` now contains **Nginx + Node**, not a separate status service. Published Gateway ports are HTTP `${LLM_GATEWAY_EDGE_BIND:-127.0.0.1}:${LLM_GATEWAY_EDGE_PORT:-8088}:4000` and additive HTTPS `${LLM_GATEWAY_TLS_BIND:-127.0.0.1}:${LLM_GATEWAY_TLS_PORT:-443}:4443` (certificates: `docker/gateway/tls/README.md`). Node listens on container port `8089` so `gateway-watch` can read it over the private Docker network, but `8089` is **not published to the host**.
 
 - `/`, `/app.js`, `/style.css`, `/api/status`: existing collector/frontend through Nginx, admin TCP-peer ACL, only `Host: localhost` forwarded, no client credentials or body.
 - `/gateway/v1/chat/completions`: strips `/gateway`, preserves query/body/auth/identity; OpenAI base URL `/gateway/v1`.
@@ -41,8 +41,8 @@ These are operator instructions, not an automatic deployment. Inspect the existi
 
 1. Validate `docker compose --profile gateway config --quiet` and build only `docker compose build gateway-lb`.
 2. In a maintenance window run `docker compose --profile gateway up -d --no-deps gateway-lb`. This recreates only LB; do not use `compose down`, `--remove-orphans`, network/volume removal, or restart Dashboard, PostgreSQL, pgAdmin, Redis or LiteLLM.
-3. Verify `docker compose exec -T gateway-lb nginx -t`, container health, `/lb-health`, root/assets/status from an allowed admin peer and 403 from a denied peer. An internal diagnostic without publishing Node is `docker compose exec -T gateway-lb wget -q -O- http://127.0.0.1:4000/api/status`. Verify current component observations separately from actual inference readiness.
-4. **Only after the new LB is verified**, remove the verified obsolete collector: `docker stop token-ledger-gateway-status` then `docker rm token-ledger-gateway-status`. Leaving it temporarily during verification does not make it part of the new topology. If an even older edge still owns 8088, resolve that exact container's ownership in the maintenance window; do not broadly remove orphans.
+3. Verify `docker compose exec -T gateway-lb nginx -t`, container health, `/lb-health`, root/assets/status from an allowed admin peer and 403 from a denied peer. An internal diagnostic without publishing Node is `docker compose exec -T gateway-lb wget -q -O- --header 'Host: localhost' http://127.0.0.1:8089/api/status`. Verify current component observations separately from actual inference readiness.
+4. Start/recreate `gateway-watch` only after the bundled collector is healthy; it reads `http://gateway-lb:8089/api/status` inside Docker. **Only after both are verified**, remove the obsolete collector: `docker stop token-ledger-gateway-status` then `docker rm token-ledger-gateway-status`. If an even older edge still owns 8088, resolve that exact container's ownership in the maintenance window; do not broadly remove orphans.
 
 Rollback before removing the old collector: restore the saved prior LB configuration/image and recreate only LB with `--no-deps`. After removal, rollback also requires restoring the previous Compose status service and explicitly starting only it. Expect a brief LB/web outage during recreation. Source is copied into the image, so collector/frontend/entrypoint edits require rebuilding LB; Nginx template bind-mount edits require restart to rerender. Testing an old running config does not validate an edited template.
 

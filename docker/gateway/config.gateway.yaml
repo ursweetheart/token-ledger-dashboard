@@ -126,6 +126,29 @@ model_list:
       # qua va khong phan giai duoc agent nao -- dong roi vao `bo_nhieu_tag`.
       tags: ["crm-feedback"]
 
+  # CRM can select any Gemini model through its existing Vertex Express credential.
+  # The existing bare alias above remains for backward compatibility.
+  - model_name: "gemini/*"
+    litellm_params:
+      model: "gemini/*"
+      api_key: os.environ/KEY_CRM_FEEDBACK
+      api_base: https://aiplatform.googleapis.com/v1/publishers/google
+      tags: ["crm-feedback"]
+
+  # DMS can select any Gemini model through the provider-scoped wildcard.
+  - model_name: "gemini/*"
+    litellm_params:
+      model: "gemini/*"
+      api_key: os.environ/KEY_GOOGLE_AI_STU
+      tags: ["dms-feedback"]
+
+  # Law Insight can select any Gemini model through its own project credential.
+  - model_name: "gemini/*"
+    litellm_params:
+      model: "gemini/*"
+      api_key: os.environ/KEY_TLA_HD
+      tags: ["tla-hd"]
+
   # Ralli sends bare Gemini model names selected by the application.
   - model_name: "*"
     litellm_params:

@@ -155,6 +155,7 @@ x-litellm: &litellm
     # khoi dong -- vong kiem trong tep do CO bien nay, da kiem lai 17/09.
     KEY_CRM_FEEDBACK: ${KEY_CRM_FEEDBACK:-}
     KEY_RALLI: ${KEY_RALLI:-}
+    KEY_TLA_HD: ${KEY_TLA_HD:-}
     # --- HOOK CHAN HAN MUC ---------------------------------------------------
     # Ba bien nay CO gia tri mac dinh trong chinh quota_hook.py, nen thieu chung
     # khong lam Gateway chet - co y: mot hook chan tien ma lam Gateway khong len
@@ -687,7 +688,8 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     environment:
-      STATUS_BIND: "127.0.0.1"
+      # Collector nghe trong mang Docker de gateway-watch doc duoc; 8089 khong publish.
+      STATUS_BIND: "0.0.0.0"
       STATUS_PORT: "8089"
       LLM_GATEWAY_DOMAIN: ${LLM_GATEWAY_DOMAIN:-apigateway.rangdong.com.vn}
       LLM_GATEWAY_ADMIN_CIDR: ${LLM_GATEWAY_ADMIN_CIDR:-127.0.0.1/32}
@@ -718,18 +720,15 @@ services:
 
   # Canh Gateway theo nhip roi GUI THU khi trang thai doi.
   #
-  # `gateway-status` o tren DO nhung khong bao: no la mot trang web, phai co nguoi
-  # mo ra xem. Khong ai mo luc 2 gio sang. Dich vu nay bien trang do thanh thu.
+  # Collector nam trong `gateway-lb` DO nhung khong bao: gateway-watch bien ket
+  # qua do thanh thu ma khong can mot container status rieng.
   #
   # KHONG CO `ports`, KHONG CO CA `expose` -- va do la dong quan trong nhat o day.
-  # Moi dich vu khac trong file nay deu MO CUA: web 8080, gateway-lb 8088,
-  # gateway-status 8089, api 8000, postgres 5432. Cai nay chi GO CUA nguoi khac,
-  # khong ai goi vao no. Be mat tan cong no them vao: khong co.
+  # Watcher khong publish cong. Collector 8089 cung chi o trong mang Docker;
+  # cua duy nhat cho web/API Gateway tren host la 8088.
   #
-  # Vi no nam TRONG mang, no goi thang `gateway-status:8089` va `gateway-lb:4000`
-  # bang ten, KHONG qua nginx -- nen khong phai noi `LLM_GATEWAY_ADMIN_CIDR`, khong
-  # phai doi bind cua dich vu nao. Do 17/09: chi can dat `Host: localhost`, thieu
-  # header do thi server.js tra 403.
+  # Vi no nam TRONG mang, no goi collector `gateway-lb:8089` va readiness
+  # `gateway-lb:4000` bang ten. Collector van yeu cau `Host: localhost`.
   #
   # CO Y KHONG DAT `healthcheck`, cung ly do `ledger-refresh` khong dat: "tien trinh
   # con song" la phep do sai. Phep do dung la THU NHIP TIM moi ngay -- vang thu do
@@ -767,7 +766,7 @@ services:
       # 200 chua chac la dung: `/health/readiness` co the tra 200 ma `db` khong noi
       # duoc. Chuoi nay bat buoc than tra loi phai co `connected`.
       WATCH_EXPECT: ${WATCH_EXPECT:-lb=connected}
-      WATCH_STATUS_URL: ${WATCH_STATUS_URL:-http://gateway-status:8089/api/status}
+      WATCH_STATUS_URL: ${WATCH_STATUS_URL:-http://gateway-lb:8089/api/status}
       WATCH_STATE_FILE: /var/watch/state.json
       WATCH_TIMEOUT_SECONDS: ${WATCH_TIMEOUT_SECONDS:-25}
       WATCH_FAILS_BEFORE: ${WATCH_FAILS_BEFORE:-2}
