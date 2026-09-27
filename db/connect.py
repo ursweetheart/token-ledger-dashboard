@@ -249,7 +249,10 @@ def apply_migrations(dsn: str) -> None:
 # còn lại không lan tới chúng. tests/test_connect_migrations.py quét mọi migration và ĐỎ nếu
 # có migration ghi dòng vào một bảng chưa có tên ở đây.
 KEEP_ON_REBUILD = ("alembic_version", "ref_source", "ref_model_catalog",
-                   "ref_model_price_version", "ref_price_sync_state")
+                   "ref_model_price_version", "ref_price_sync_state",
+                   "gateway_connection_profile", "gateway_connection_operation",
+                   "gateway_connection_key", "gateway_connection_audit",
+                   "gateway_connection_deployment")
 
 
 def rebuild(dsn: str):

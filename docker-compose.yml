@@ -332,6 +332,12 @@ services:
       # TU CHOI KHOI DONG, tru khi QUOTA_DISABLED=1.
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
       QUOTA_DISABLED: ${QUOTA_DISABLED:-}
+      # Connection administration stays off until a separate admin DSN and worker are configured.
+      CONNECTIONS_ENABLED: ${CONNECTIONS_ENABLED:-0}
+      CONNECTION_ADMIN_KEY: ${CONNECTION_ADMIN_KEY:-}
+      CONNECTION_ADMIN_DSN: ${CONNECTION_ADMIN_DSN:-}
+      CONNECTION_WORKER_URL: ${CONNECTION_WORKER_URL:-}
+      CONNECTION_WORKER_KEY: ${CONNECTION_WORKER_KEY:-}
     ports:
       # Side door, keeps the old habit working: opening web/index.html over
       # file:// still loads. The main door is nginx on 8080.

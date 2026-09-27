@@ -1,0 +1,43 @@
+name: gateway-connections-test
+services:
+  pg:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: connection_test
+      POSTGRES_PASSWORD: isolated-test-only
+      POSTGRES_DB: connection_test
+    ports: ["127.0.0.1:55439:5432"]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U connection_test -d connection_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    networks: [isolated, ingress]
+  provider:
+    image: python:3.12-alpine
+    command: [python, /fake_provider.py]
+    volumes: ["./fake_provider.py:/fake_provider.py:ro"]
+    networks: [isolated]
+  litellm-1: &gateway
+    image: ghcr.io/ursweetheart/litellm_rang_dong:b7657e95b1650f75551404f62e134ae54dfc5740
+    command: ["--config=/app/config.yaml", "--port", "4000"]
+    environment:
+      DATABASE_URL: postgresql://connection_test:isolated-test-only@pg:5432/connection_test
+      LITELLM_MASTER_KEY: sk-isolated-connections-test-master
+      LITELLM_SALT_KEY: isolated-connections-test-salt
+      STORE_MODEL_IN_DB: "False"
+      LITELLM_LOG: WARNING
+      QUOTA_CHAT_TAGS: test-chat
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ../../docker/gateway/quota_hook.py:/app/quota_hook.py:ro
+    ports: ["127.0.0.1:4401:4000"]
+    depends_on:
+      pg: {condition: service_healthy}
+    networks: [isolated, ingress]
+  litellm-2:
+    <<: *gateway
+    ports: ["127.0.0.1:4402:4000"]
+networks:
+  isolated: {internal: true}
+  ingress: {}

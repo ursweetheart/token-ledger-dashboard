@@ -45,6 +45,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from . import gateway, store
+from .connection_api import router as connection_router
 
 # ═══════════════════════════════════════════════════════════════════════════
 # XÁC THỰC
@@ -248,6 +249,7 @@ app = FastAPI(
 
 from .pricing import build_router
 app.include_router(build_router(caller))
+app.include_router(connection_router(_read_env))
 
 # Dashboard mở bằng file:// (origin 'null') hoặc từ một cổng khác.
 #

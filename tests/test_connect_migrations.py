@@ -92,11 +92,12 @@ class RebuildTests(unittest.TestCase):
         events, connection, (result_connection, result_placeholder) = self.run_rebuild(
             ["alembic_version", "dim_agent", "fact_call", "ref_source"])
 
-        self.assertEqual(events[:3], ["open", "sql:SELECT to_regclass('public.gateway_agent_registry')", "close:main"])
-        self.assertEqual(events[3:5], ["migrate:postgresql://candidate", "open"])
-        self.assertTrue(events[5].startswith("sql:SELECT") and "pg_tables" in events[5], events[5])
+        self.assertEqual(events[:4], ["open", "sql:SELECT to_regclass('public.gateway_connection_profile')",
+                                     "sql:SELECT to_regclass('public.gateway_agent_registry')", "close:main"])
+        self.assertEqual(events[4:6], ["migrate:postgresql://candidate", "open"])
+        self.assertTrue(events[6].startswith("sql:SELECT") and "pg_tables" in events[6], events[6])
         self.assertEqual(
-            events[6:],
+            events[7:],
             ['sql:TRUNCATE TABLE "dim_agent", "fact_call" RESTART IDENTITY CASCADE',
              "seed:02_catalog.sql", "commit:main"],
         )
