@@ -1,5 +1,9 @@
 ## Why
 
+> **Topology update (18/09/2026):** the same collector now runs inside
+> `gateway-lb`. `gateway-watch` reads `http://gateway-lb:8089/api/status` on the
+> private Docker network; no separate status container or host port 8089 exists.
+
 Ngày 14/09, `agent-outage-alerting` được đặt ra với **một actor duy nhất: chính agent**. Agent đổi
 đường thì agent gửi thư. Đến 17/09, đúng **1 trong 8** agent có mã ấy —
 `CRM-Classification-Pipeline/src/llm.py:263` và `:279`. Bảy agent còn lại, Gateway chết là im lặng

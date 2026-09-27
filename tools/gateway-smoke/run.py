@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import secrets
 import subprocess
+import tempfile
 import time
 import urllib.request
 import urllib.error
@@ -13,7 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = Path(__file__).resolve().parent
 RUNTIME = ROOT / 'runtime'
 ARTIFACTS = ROOT / 'artifacts' / 'current'
-STATE = Path(os.environ['LOCALAPPDATA']) / 'Temp' / 'tla-gateway-smoke-state.json'
+STATE = (Path(os.environ['SMOKE_STATE_FILE']) if os.environ.get('SMOKE_STATE_FILE')
+         else Path(os.environ.get('TMPDIR', tempfile.gettempdir())) / 'tla-gateway-smoke-state.json')
 COMPOSE = ['docker', 'compose', '-f', str(RUNTIME / 'compose.yaml')]
 
 def state():

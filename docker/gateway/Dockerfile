@@ -3,7 +3,7 @@ RUN apk add --no-cache nodejs bash tini su-exec
 ENV LLM_GATEWAY_DOMAIN=apigateway.rangdong.com.vn \
     LLM_GATEWAY_ADMIN_CIDR=127.0.0.1/32 \
     NGINX_ENVSUBST_FILTER=^LLM_GATEWAY_(DOMAIN|ADMIN_CIDR)$ \
-    STATUS_BIND=127.0.0.1 STATUS_PORT=8089
+    STATUS_BIND=0.0.0.0 STATUS_PORT=8089
 COPY tools/gateway-status/server.js tools/gateway-status/index.html tools/gateway-status/app.js tools/gateway-status/style.css /app/
 COPY docker/gateway/nginx.conf /etc/nginx/templates/default.conf.template
 COPY docker/gateway/lb-entrypoint.sh /lb-entrypoint.sh

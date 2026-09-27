@@ -122,7 +122,7 @@ def setup():
     for name in ('DASHBOARD_KEY', 'LITELLM_MASTER_KEY', 'LITELLM_SALT_KEY', 'REDIS_PASSWORD'):
         if not env.get(name):
             generated[name] = ('sk-' if name == 'LITELLM_MASTER_KEY' else '') + secrets.token_urlsafe(32)
-    for name in ('KEY_GOOGLE_AI_STU', 'KEY_CRM_FEEDBACK'):
+    for name in ('KEY_GOOGLE_AI_STU', 'KEY_CRM_FEEDBACK', 'KEY_RALLI', 'KEY_TLA_HD'):
         if not env.get(name):
             generated[name] = getpass.getpass(name + ' (required by existing Gateway routes): ').strip()
             if not generated[name]:

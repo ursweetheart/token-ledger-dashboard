@@ -6,7 +6,7 @@ Chạy lệnh tại gốc project. UI, API, worker và script setup đều có t
 
 - Python 3.11 trở lên, có pip và venv. Linux chỉ có `python3` thì dùng `python3` thay `python`; Debian/Ubuntu thường cần gói `python3-venv`.
 - Docker Desktop đang chạy trên Windows; Docker Engine với Compose v2 trên Linux. Tài khoản chạy script phải dùng được `docker compose version` và `docker info`.
-- Điền cấu hình database hiện có trong `.env` nếu máy đã có dữ liệu. Setup có thể tạo `.env` và hỏi hai provider key bắt buộc: `KEY_GOOGLE_AI_STU`, `KEY_CRM_FEEDBACK`. Đây là yêu cầu của các route Gateway hiện có; không dùng key giả.
+- Điền cấu hình database hiện có trong `.env` nếu máy đã có dữ liệu. Setup có thể tạo `.env` và hỏi các provider key bắt buộc: `KEY_GOOGLE_AI_STU`, `KEY_CRM_FEEDBACK`, `KEY_RALLI`, `KEY_TLA_HD`. Đây là yêu cầu của các route Gateway hiện có; không dùng key giả.
 - Cần quyền pull image Gateway. Nếu registry báo unauthorized, đăng nhập registry hoặc cấu hình `LITELLM_IMAGE` trong `.env`.
 - Cổng mặc định: dashboard 8080/8443, PostgreSQL 5432, Gateway 8088/443/9443, instance 4401/4402, worker 8766. Linux dùng thêm HTTPS 8767 cho proxy worker.
 

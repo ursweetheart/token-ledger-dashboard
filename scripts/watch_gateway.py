@@ -46,11 +46,11 @@ Một sự cố dài có hàng trăm nhịp. Gửi mỗi nhịp một thư là l
 động tự huỷ chính nó. Trạng thái ghi ra tệp chứ không giữ trong bộ nhớ, vì container mang
 `restart: unless-stopped` và sẽ được dựng lại giữa sự cố.
 
-NGUỒN TÌNH TRẠNG CHẾT KHÔNG PHẢI GATEWAY CHẾT
+NGUỒN TÌNH TRẠNG KHÔNG ĐỌC ĐƯỢC CHƯA ĐỦ KẾT LUẬN GATEWAY CHẾT
 
-`gateway-status` là dịch vụ riêng, cũng `restart: unless-stopped`, nên nó sẽ có lúc dựng lại trong
-khi Gateway khoẻ. Coi việc đó là sự cố thì mỗi lần dựng lại là một thư báo động giả. Nên nó có
-trạng thái riêng, và các đích HTTP làm trọng tài.
+Collector Node nằm cùng container với Nginx nhưng là một tiến trình và cổng riêng. Nếu phép đọc
+collector hỏng mà readiness vẫn trả lời, watcher giữ trạng thái riêng thay vì báo Gateway chết;
+các đích HTTP vẫn là trọng tài.
 """
 
 from __future__ import annotations

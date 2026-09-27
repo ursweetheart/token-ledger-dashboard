@@ -14,7 +14,7 @@ test('status web starts with gateway profile independently of unhealthy backends
   assert.match(block, /profiles: \["gateway"\]/);
   assert.match(block, /container_name: token-ledger-gateway-lb/);
   assert.doesNotMatch(block, /8089:8089/);
-  assert.match(block, /STATUS_BIND: "127\.0\.0\.1"/);
+  assert.match(block, /STATUS_BIND: "0\.0\.0\.0"/);
   assert.match(read("docker/gateway/Dockerfile"), /tools\/gateway-status\/server\.js/);
   assert.doesNotMatch(block, /depends_on:|docker\.sock|env_file:/);
 });

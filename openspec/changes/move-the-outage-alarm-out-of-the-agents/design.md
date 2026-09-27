@@ -1,5 +1,10 @@
 ## Context
 
+> **Topology update (18/09/2026):** `gateway-status` is no longer a separate
+> service. Its existing Node collector runs inside `gateway-lb`; the internal
+> watcher target is `http://gateway-lb:8089/api/status`, and port 8089 is not
+> published. Historical measurements below retain the old service wording.
+
 Capability `agent-outage-alerting` ra đời ngày 14/09 từ diễn tập 10/09: Gateway mất, agent CRM thử
 ba lần trong **21–24 giây** rồi bỏ cả lô, và chỉ để lại ba dòng log giữa hàng trăm dòng khác. Lời
 giải lúc ấy đặt việc gửi thư **bên trong agent**, vì lúc ấy chỉ có một agent được sửa.

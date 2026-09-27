@@ -1,5 +1,9 @@
 ## 0. Chứng minh khoảng trống có thật, và đo hai thứ có thể lật thiết kế
 
+> **Topology update (18/09/2026):** the completed measurements below used the
+> former separate `gateway-status` service. Current runtime bundles that
+> collector into `gateway-lb` and uses `gateway-lb:8089` internally.
+
 Không dựng chuông trước rồi tin là đã có chuông.
 
 - [x] 0.1 Đếm chính xác bao nhiêu agent có mã gửi thư khi đổi đường. Tìm theo `_notify`,
