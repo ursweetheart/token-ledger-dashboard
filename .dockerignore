@@ -10,6 +10,7 @@
 .env.*
 !.env.example
 secrets/
+.local/
 
 # Data reaches the server through a mounted volume, never inside an image.
 data/

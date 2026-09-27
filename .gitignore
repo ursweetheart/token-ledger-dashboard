@@ -66,3 +66,6 @@ __pycache__/
 # Workspace cô lập do Superpowers tạo khi thực thi kế hoạch.
 .worktrees/
 .superpowers/
+
+# Local connection runtime: credentials, snapshots and Python environment.
+.local/

@@ -5,7 +5,8 @@
 # Nhóm thứ tư, `gateway-image`, đóng gói image Gateway. Nó không chạy ở pull
 # request. Xem openspec/changes/package-the-gateway-image-in-ci/.
 #
-# KHÔNG có bước cài gói ở bất kỳ nhóm nào, và đó là CÓ Ý:
+# Ba nhóm kiểm cũ giữ nguyên không cài gói. Nhóm connection-administration
+# riêng cài dependency backend để kiểm contract mới cần FastAPI/PyYAML.
 #   - repo không có package.json, pytest.ini, pyproject.toml, setup.cfg
 #   - phần JavaScript dùng bộ chạy kiểm có sẵn của Node
 #   - psycopg2 được nạp bên trong hàm (db/connect.py:196), không ở đầu tệp
@@ -24,6 +25,17 @@ on:
   workflow_dispatch:
 
 jobs:
+  connection-administration:
+    name: Connection administration contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r backend/requirements.txt pytest httpx
+      - run: python -m pytest tests/connection_config_cases.py tests/connection_auth_cases.py -q
+
   # ---------------------------------------------------------------------------
   # Canh cấu hình. Nhóm rẻ nhất, và là nhóm bắt đúng lỗi đã thật sự xảy ra:
   # ngày 12/09 địa chỉ bind của `web` bị để ở chế độ máy phát triển.
@@ -291,7 +303,7 @@ jobs:
       # (5 cua sync_model_catalog worker, 6 cua model_pricing logic, va 2 cua
       # migration schema ref_model_price). Cac phep kiem tich hop (API, DB) doi
       # hoi Postgres/FastAPI duoc tach khoi bo chay may sach.
-      EXPECTED_PY: "197"
+      EXPECTED_PY: "201"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

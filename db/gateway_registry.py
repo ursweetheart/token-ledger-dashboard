@@ -53,6 +53,13 @@ def operation_lock(dsn):
 
 
 def guard_legacy(cn):
+    with cn.cursor() as cur:
+        cur.execute("SELECT to_regclass('public.gateway_connection_profile')")
+        if cur.fetchone()[0] is not None:
+            cur.execute("SELECT EXISTS (SELECT 1 FROM gateway_connection_profile)")
+            if cur.fetchone()[0]:
+                raise RuntimeError("Bulk reload refused: Gateway connection profiles exist. "
+                                   "Use connection administration; do not rebuild or run load_org.py.")
     if available(cn):
         with cn.cursor() as cur:
             cur.execute("SELECT EXISTS (SELECT 1 FROM gateway_agent_registry)")

@@ -581,6 +581,7 @@
   <button class="tab" data-tab="cost">💸 Chi phí</button>
   <button class="tab" data-tab="performance">⚡ Hiệu năng</button>
   <button class="tab" data-tab="setting">⚙ Setting</button>
+  <button class="tab" data-tab="connections">🔗 Kết nối agent</button>
 </div>
 
 <div class="delta-legend">Cách đọc so sánh: <b>▲/▼ % KT</b> = tăng/giảm so với <b>kỳ trước</b>, <b>▲/▼ % CK</b> = so với <b>cùng kỳ năm trước</b>. Di chuột vào dòng để xem kỳ gốc và giá trị kỳ gốc → giá trị hiện tại.</div>
@@ -1358,7 +1359,82 @@
      số quyết định chặn hay không, nên phải hiện đúng nó. Hiện số kia thì người
      nhập sẽ thấy "38/50" trong khi agent đã bị chặn, và không cách nào giải
      thích được. -->
+<!-- K?t n?i agent d?ng chung c? ch? tab c?a dashboard. -->
+<div class="tab-content" id="connections">
+  <section id="gateway-connections" class="section connections-panel" aria-label="Kết nối agent">
+    <h2 class="section-title">Kết nối agent với Gateway</h2>
+    <p>Cấu hình, áp dụng và kiểm tra kết nối. Ngân sách tính riêng cho từng Virtual Key.</p>
+    <form id="connection-login" class="connection-login">
+      <label>Khoá quản trị kết nối <input class="text-input" name="credential" type="password" autocomplete="off" required></label>
+      <button class="btn btn-primary" type="submit">Mở quản trị</button>
+      <button class="btn btn-secondary" type="button" id="connection-logout">Đóng quản trị</button>
+    </form>
+    <p id="connection-message" role="status" aria-live="polite"></p>
+    <div id="connection-workspace" hidden>
+      <div class="connection-toolbar"><label>Hồ sơ <select class="filter-select" id="connection-select"><option value="">Agent mới</option></select></label>
+        <button class="btn btn-secondary" type="button" id="connection-reload">Tải lại</button></div>
+      <p id="connection-legacy"></p>
+      <form id="connection-form" class="connection-grid">
+        <fieldset><legend>1. Thông tin agent</legend>
+          <label>Mã agent <input class="text-input" name="code" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="96"></label>
+          <label>Tên hiển thị <input class="text-input" name="name" required maxlength="200"></label>
+          <label>Người dùng <select class="filter-select" name="user_mode"><option value="single">Một tài khoản dịch vụ</option><option value="multiple">Nhiều người dùng</option></select></label>
+          <label>Ngày bắt đầu báo cáo <input class="text-input" name="reporting_start_date" type="date" required></label>
+          <label><input name="active" type="checkbox" checked> Đang hoạt động (không tự thu hồi key khi bỏ chọn)</label>
+        </fieldset>
+        <fieldset><legend>2. Provider và model</legend>
+          <label>Tham chiếu Google key <input class="text-input" name="secret_ref" required placeholder="KEY_MANAGED_…"></label>
+          <label>Google API key mới <input class="text-input" id="connection-provider-key" type="password" autocomplete="off"></label>
+          <button class="btn btn-secondary" type="button" id="connection-import-secret">Lưu key và lấy tham chiếu</button>
+          <label>Model alias <input class="text-input" name="alias" required placeholder="gemini-flash-lite"></label>
+          <label>Model Google <input class="text-input" name="upstream" required placeholder="gemini/model-name"></label>
+          <div id="connection-extra-models"></div>
+          <button class="btn btn-secondary" type="button" id="connection-add-model">Thêm model</button>
+          <label>RPM <input class="text-input" name="rpm" type="number" min="1" step="1" value="15" required></label>
+          <label>TPM <input class="text-input" name="tpm" type="number" min="1" step="1" value="1000000" required></label>
+          <p>Key chung dùng chung quota Google project. Mã agent vẫn tách usage trên dashboard.</p>
+        </fieldset>
+        <fieldset><legend>3. Hạn mức Virtual Key</legend>
+          <label>Khi hết hạn mức <select class="filter-select" name="quota_response_mode"><option value="batch">Lỗi 429 cho ứng dụng tự động</option><option value="chat">Thông báo cho ứng dụng chat</option></select></label>
+          <label>Ngân sách <select class="filter-select" name="budget_mode"><option value="finite">Có hạn mức</option><option value="unlimited">Không giới hạn</option></select></label>
+          <label>Trần spend tích luỹ của key (USD) <input class="text-input" name="budget_usd" type="number" min="0" step="any" value="10"></label>
+          <p>Key thay thế có spend và hạn mức riêng. Khi hai key cùng hoạt động, có hai ngân sách độc lập.</p>
+        </fieldset>
+        <div class="connection-actions">
+          <button class="btn btn-primary" type="submit">Lưu bản nháp</button>
+          <button class="btn btn-secondary" type="button" id="connection-preview">4. Xem thay đổi</button>
+          <button class="btn btn-primary" type="button" id="connection-apply" disabled>5. Áp dụng</button>
+        </div>
+      </form>
+      <pre id="connection-preview-result" tabindex="0" aria-label="Thay đổi dự kiến"></pre>
+      <div class="connection-actions"><button class="btn btn-primary" type="button" id="connection-issue">Cấp key / key thay thế</button>
+        <label>Virtual Key <select class="filter-select" id="connection-key-select"><option value="">Chọn key managed</option></select></label>
+        <button class="btn btn-secondary" type="button" id="connection-budget">Đặt hạn mức cho key đã chọn</button>
+        <button class="btn btn-secondary" type="button" id="connection-revoke-one">Thu hồi key đã chọn</button>
+        <button class="btn btn-secondary" type="button" id="connection-revoke">Thu hồi tất cả key đã quản lý</button>
+        <button class="btn btn-secondary" type="button" id="connection-template-host">Hướng dẫn host</button>
+        <button class="btn btn-secondary" type="button" id="connection-template-docker">Hướng dẫn Docker</button></div>
+      <div id="connection-key-once" hidden><p>Copy key ngay; hệ thống không trả lại key này lần nữa.</p>
+        <input class="text-input" id="connection-issued-key" type="password" readonly aria-label="Virtual Key vừa cấp">
+        <button class="btn btn-secondary" type="button" id="connection-show-key">Hiện / ẩn key</button>
+        <button class="btn btn-secondary" type="button" id="connection-clear-key">Đã lưu key</button></div>
+      <pre id="connection-template" tabindex="0" aria-label="Hướng dẫn kết nối"></pre>
+      <div class="connection-actions"><button class="btn btn-secondary" type="button" id="connection-reconcile">Xem thay đổi ngoài UI</button>
+        <button class="btn btn-secondary" type="button" id="connection-accept-drift" disabled>Chấp nhận baseline đã xem</button>
+        <button class="btn btn-secondary" type="button" id="connection-recover">Phục hồi operation bị lỗi</button></div>
+      <form id="connection-test"><label>Virtual Key của agent cho lần test <input class="text-input" name="virtual_key" type="password" autocomplete="off" required></label>
+        <label><input name="accept_cost" type="checkbox" required> Chấp nhận request thử có thể phát sinh phí provider</label>
+        <button class="btn btn-primary" type="submit">Kiểm tra Gateway</button></form>
+      <p>Test này chạy từ worker. Để xác minh ứng dụng agent, cần request có correlation từ chính ứng dụng đã triển khai.</p>
+      <form id="connection-external-test"><label>Request ID từ ứng dụng agent đã triển khai <input class="text-input" name="request_id" maxlength="200" required></label>
+        <button class="btn btn-primary" type="submit">Đối chiếu request của agent</button></form>
+      <pre id="connection-status" tabindex="0" aria-label="Trạng thái kết nối"></pre>
+    </div>
+  </section>
+</div>
+
 <div class="tab-content" id="setting">
+
   <div class="insight-banner">
     <span class="insight-text"><b>Hạn mức chi tiêu</b> theo từng khoá agent.
       Hết là hết — không tự đặt lại theo tháng, phải nạp thêm.</span>
@@ -1398,6 +1474,7 @@
      Không chạy backend thì tự rút lui, dashboard chạy như cũ. -->
 <script src="js/api.js"></script>
 <script src="js/gateway-identities.js"></script>
+<script src="js/gateway-connections.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

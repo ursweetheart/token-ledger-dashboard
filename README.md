@@ -5,6 +5,15 @@ và hai web app nội bộ, gom vào một database rồi hiển thị qua API c
 
 ## Cách chạy
 
+Dashboard cùng chức năng kết nối agent, trên Windows hoặc Linux:
+
+```bash
+python scripts/dashboard.py setup  # chỉ lần đầu trên mỗi máy
+python scripts/dashboard.py start  # những lần sau
+```
+
+Git Bash / Linux Bash cũng dùng được `bash start-dashboard.sh`. Xem [hướng dẫn setup](docs/reference/dashboard-setup.md) về prerequisites, key, database và triển khai Linux.
+
 ```bash
 # 1. Database — PHẢI lên trước, PostgreSQL là mặc định từ 17/08/2026
 docker compose up -d
