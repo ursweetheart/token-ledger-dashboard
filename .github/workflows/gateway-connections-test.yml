@@ -1,5 +1,15 @@
 name: Gateway connection integration fixture
 on:
+  push:
+    branches: [main, Tuan-develop]
+    paths:
+      - '.github/workflows/gateway-connections-test.yml'
+      - 'backend/connection_*.py'
+      - 'db/gateway_registry.py'
+      - 'db/migrations/**'
+      - 'docker/gateway/**'
+      - 'tests/connection_*.py'
+      - 'tests/gateway-connections/**'
   workflow_dispatch:
 jobs:
   isolated-integration:
