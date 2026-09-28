@@ -65,7 +65,7 @@ def worker(store,tmp_path):
              ['http://127.0.0.1:4401','http://127.0.0.1:4402'],'sk-isolated-connections-test-master',
              'http://127.0.0.1:4401','http://gateway-lb:4000','shared-test-network')
     w.bootstrap()
-    reference=w.import_secret('dummy-google-provider-key')['secret_ref']
+    reference=w.import_secret('AQ.dummy-google-provider-key')['secret_ref']
     p=profile('test-'+uuid.uuid4().hex[:10]); p['secret_ref']=reference
     saved=store.save(p,0,'admin')
     return w,saved
@@ -250,6 +250,28 @@ def test_interrupted_verification_is_not_billed_again(worker):
     assert w.store.operation(str(op['id']))['status']=='inconclusive'
 
 
+def test_ledger_refresh_waits_for_gateway_log(worker):
+    # Refreshing before LiteLLM flushes SpendLogs loads nothing and used to end inconclusive.
+    w,p=worker
+    with w.store.transaction() as cur:
+        cur.execute('UPDATE gateway_connection_profile SET applied=draft,applied_revision=revision WHERE code=%s',(p['code'],))
+    op=w.store.enqueue(p['code'],'verify',1,uuid.uuid4().hex,'admin',{})
+    w.store.stage(str(op['id']),'pending','evidence',{'gateway':'pending','reporting':'pending','call_id':'c',
+        'started_at':'2026-01-01T00:00:00+00:00','deadline':time.time()+60,'expected_profile':p['draft']})
+    logged=[False]
+    def evidence(profile,call_id,result):
+        return {**result,'request_id':'r','reason':'Gateway log found'} if logged[0] else dict(result)
+    with patch.object(w,'evidence',side_effect=evidence), patch('backend.connection_worker.subprocess.run') as run:
+        w.drain()
+        run.assert_not_called()
+        logged[0]=True
+        w.drain()
+        run.assert_called_once()
+        w.drain()
+        run.assert_called_once()
+    assert w.store.operation(str(op['id']))['result']['refresh_attempted'] is True
+
+
 def test_draft_profiles_block_legacy_rebuild(worker):
     w,p=worker
     from db import gateway_registry
@@ -290,6 +312,7 @@ def test_live_verified_usage_after_refresh(worker,code,alias,mode):
         assert command.returncode==0,command.stdout.decode(errors='replace')[-1500:]
         confirmed=w.evidence(p,result['call_id'],result)
         assert confirmed['gateway']=='verified' and confirmed['reporting']=='verified',confirmed
+        assert 'waiting' not in confirmed['reason'] and 'awaits' not in confirmed['reason'],confirmed['reason']
         assert confirmed['external_agent']=='awaiting-agent-request'
         external=w.store.enqueue(p['code'],'verify',1,uuid.uuid4().hex,'admin',{'external_request_id':confirmed['request_id']})
         with patch.object(w.gateways[0],'call') as call:

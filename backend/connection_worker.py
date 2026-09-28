@@ -189,7 +189,7 @@ class Worker:
         return values
 
     def import_secret(self, value):
-        if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_-]{8,4096}',value):
+        if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9._-]{8,4096}',value):
             raise ValueError('Invalid provider secret')
         with self.lock():
             baseline = self.baseline()
@@ -711,7 +711,9 @@ class Worker:
         expected_cost = Decimal(str(cost))
         if row[2]!=p['code'] or row[0]!=tokens or row[1] is None or row[1]!=expected_cost:
             return {**result,'gateway':'failed','reporting':'mismatch','reason':'Ledger evidence mismatch'}
+        # Overwrite the pending reason carried in from earlier polls.
         return {**result,'gateway':'verified','reporting':'verified','request_id':request_id,
+                'reason':'Gateway log and ledger usage match',
                 'verified_at':datetime.now(timezone.utc).isoformat()}
 
     def template(self, code, context):
@@ -785,15 +787,17 @@ class Worker:
         if verification:
             result = verification['result']
             p = result['expected_profile']
-            if not result.get('refresh_attempted'):
+            refreshed = self.evidence(p,result['call_id'],result)
+            # LiteLLM flushes SpendLogs seconds after the response; refreshing before the
+            # log exists loads nothing. Refresh once, only after the log is visible.
+            if refreshed.get('request_id') and refreshed.get('reporting')=='pending' and not result.get('refresh_attempted'):
                 try:
                     subprocess.run([sys.executable,'scripts/refresh_gateway.py','--db',self.ledger_dsn],
                         cwd=self.root,capture_output=True,timeout=45,
                         env={**os.environ,'TOKEN_LEDGER_DSN':self.ledger_dsn,'GATEWAY_DSN':self.gateway_dsn})
                 except (OSError,subprocess.TimeoutExpired):
                     pass  # Evidence remains pending; never claim refresh succeeded.
-                result['refresh_attempted']=True
-            refreshed = self.evidence(p,result['call_id'],result)
+                refreshed = self.evidence(p,result['call_id'],{**result,'refresh_attempted':True})
             if refreshed['gateway']=='pending' and time.time()>=result['deadline']:
                 refreshed['gateway']='inconclusive'
             self.store.stage(str(verification['id']),refreshed['gateway'],'evidence',refreshed)
