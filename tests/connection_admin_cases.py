@@ -253,9 +253,11 @@ def test_interrupted_verification_is_not_billed_again(worker):
 def test_ledger_refresh_waits_for_gateway_log(worker):
     # Refreshing before LiteLLM flushes SpendLogs loads nothing and used to end inconclusive.
     w,p=worker
+    with w.store.transaction() as cur:
+        cur.execute('UPDATE gateway_connection_profile SET applied=draft,applied_revision=revision WHERE code=%s',(p['code'],))
     op=w.store.enqueue(p['code'],'verify',1,uuid.uuid4().hex,'admin',{})
     w.store.stage(str(op['id']),'pending','evidence',{'gateway':'pending','reporting':'pending','call_id':'c',
-        'started_at':'2026-01-01T00:00:00+00:00','deadline':time.time()+60,'expected_profile':p})
+        'started_at':'2026-01-01T00:00:00+00:00','deadline':time.time()+60,'expected_profile':p['draft']})
     logged=[False]
     def evidence(profile,call_id,result):
         return {**result,'request_id':'r','reason':'Gateway log found'} if logged[0] else dict(result)
