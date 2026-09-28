@@ -63,3 +63,39 @@ Phần dưới cập nhật kết luận sau apply; mục “Chưa chứng minh�
 - Image pin không lưu bằng chứng đáng tin cậy về provider route/origin cho external traffic: external verifier trả inconclusive sau khi kiểm tag/identity; request do worker tạo bị từ chối làm bằng chứng external. Không nới tiêu chí verified.
 - Không có CAS cho quota API cũ; yêu cầu một operator, read-before/read-after kiểm xung đột có thể quan sát. Cache lag quota vẫn theo hook hiện có.
 - Suite có một deprecation warning từ Starlette/httpx, không có failure. Disposable fixture được shutdown sau kiểm chứng; không lưu plaintext key trong artifacts.
+
+## Chạy tay trên máy dev — 2026-09-28
+
+Đi hết một vòng qua UI trên máy dev (không phải fixture): tạo agent tập `dms-tap` (alias `tap-flash-lite` → `gemini/gemini-3.5-flash-lite`, trần $1) → lưu khoá → xem trước → xử lý drift → áp dụng → cấp key → nối DMS web → Kiểm tra Gateway. Kết quả cuối: Gateway `verified`, usage `verified`. Hai request thử, mỗi cái 6 token / $0.0000062, cả hai vào `fact_call` đúng `dms-tap`. Phần dưới là những gì bộ test cách ly **không** bắt được.
+
+### Lỗi đã sửa (chưa commit)
+
+1. **Regex nhận khoá từ chối khoá Google hợp lệ.** `import_secret` chỉ nhận `[A-Za-z0-9_-]`, còn khoá Google dạng mới bắt đầu bằng `AQ.` (có dấu chấm). Chứng minh khoá `AQ.` dùng được với AI Studio: SpendLogs có 305 lượt `success` tới `generativelanguage.googleapis.com` mang tag `dms-feedback`, lần cuối 20/09. Sửa: thêm `.` vào regex (`connection_worker.py:192`); đổi khoá giả ở `tests/connection_admin_cases.py:68` thành `AQ.dummy-google-provider-key` để test giữ hành vi này. Test chưa chạy lại vì cần fixture Postgres. Giữ regex thay vì bỏ hẳn: khoá đi vào `managed.env` rồi Compose đọc, mà Compose tự thay `$` trong giá trị — không kiểm ở cửa vào thì hỏng âm thầm thành 401 ở provider.
+
+### Phát hiện chưa sửa
+
+2. **Áp dụng xoá toàn bộ chú thích của `config.gateway.yaml`.** Worker ghi lại cả file bằng `yaml.safe_dump` (`connection_worker.py:452`). File có 296 dòng chú thích; sau lần áp dụng đầu tiên chúng mất hết. Không ảnh hưởng runtime, nhưng trên máy chủ thật đây là mất tài liệu vận hành, và file đổi trong git. Không commit bản do worker ghi.
+3. **Kiểm tra Gateway gần như luôn ra `inconclusive` giả** — **đã sửa, chưa commit.** Không phải "thỉnh thoảng": 6 lần thử, chỉ 1 lần `verified`; 4 lần `inconclusive` với lý do "Gateway log found; matching ledger usage awaits refresh", 1 lần bị ngắt (`7cb7b29f`). Cả 5 request đều gọi Google thành công và **đều vào `fact_call` đúng `dms-tap`**, chỉ là muộn hơn hạn 60 giây.
+   - *Giả thuyết đầu — bị loại:* lượt nạp riêng của worker luôn hỏng (lỗi bị `capture_output` nuốt), chỉ đạt khi `ledger-refresh` 300 giây tình cờ chạy trong 60 giây chờ (≈20%, khớp 1/5). Chạy lại đúng lệnh của worker (cùng Python venv, cùng DSN từ `worker-env.json`): mã thoát 0, 2,1 giây, stderr rỗng, `fact_call gateway 504 → 505 (+1, +6 token)`. Lượt nạp chạy tốt.
+   - *Nguyên nhân:* thứ tự. Worker nạp ledger **một lần, ngay vòng lặp đầu** (~2 giây sau request), trong khi LiteLLM ghi SpendLogs **theo lô, vài giây sau** khi trả lời (mục "Hợp đồng image đã đo" đã ghi: log xuất hiện sau flush). Lượt nạp duy nhất chạy khi log chưa có → nạp 0 dòng; `refresh_attempted` chặn nạp lại → hết hạn. Lần `1f49e0d3` đạt vì phải xếp hàng sau `e60a50f5` (worker xử lý từng test một, cũ trước): tới lượt thì log đã ghi từ lâu. Phần "nạp trước khi log được ghi" là suy luận — SpendLogs không lưu giờ ghi dòng — nhưng giải thích đúng cả 6 lần.
+   - *Sửa:* trong `drain()` gọi `evidence()` trước; chỉ chạy `refresh_gateway.py` khi đã thấy log (`request_id` có) mà ledger còn `pending`, vẫn đúng một lần. Log chưa có thì chờ vòng sau; không đổi hạn 60 giây, không tăng số lần nạp. Test mới `test_ledger_refresh_waits_for_gateway_log`: chưa có log → không nạp; có log → nạp đúng một lần; vòng sau không nạp lại. `py_compile` đạt; test chưa chạy vì cần fixture Postgres.
+4. **`reason` cũ còn lại sau khi đã `verified`** — **đã sửa, chưa commit.** Nhánh `verified` dựng từ `{**result, ...}` mà không ghi đè `reason`, nên câu "Correlated log not uniquely available; waiting for evidence" từ lúc `pending` nằm mãi trong kết quả và trên UI. Thao tác đã kết thúc nên không bao giờ được cập nhật lại. Sửa: nhánh `verified` ghi đè `reason` = "Gateway log and ledger usage match"; `test_live_verified_usage_after_refresh` (đi qua `pending` rồi mới `verified`) thêm phép kiểm `reason` không còn chữ `waiting`/`awaits`. Test chưa chạy lại vì cần fixture Postgres. Thao tác `1f49e0d3` đã lưu trong DB vẫn giữ câu cũ — bản sửa chỉ áp cho lần kiểm sau.
+5. **UI im lặng khi Xem thay đổi bị 409.** Bấm "4. Xem thay đổi" khi có drift: API trả 409, UI không hiện gì rõ ràng; người dùng tưởng nút không hoạt động.
+6. **Chấp nhận baseline dễ bị bỏ sót / hết hạn.** `review_hash` tính trên cả bản nháp (dòng 342–344): lưu nháp giữa "Xem thay đổi ngoài UI" và "Chấp nhận baseline" làm review hết hạn. Trong lần chạy này hai lần review đều không được chấp nhận (không có dòng `reconcile` trong audit) cho tới khi làm liền hai bước.
+7. **Key do UI cấp chỉ được gọi alias của agent** (`models: ['tap-flash-lite']`). Khác quy ước vận hành hiện tại là cấp `models: ["*"]` và dựa vào tag để tách tiền. Form không có lựa chọn; cần chốt quy ước nào đúng.
+
+### Thêm theo yêu cầu người dùng (chưa commit)
+
+- **Biểu tượng từng dòng và dòng tổng kết** trong khung kết quả (`web/js/gateway-connections.js`, hàm `mark`/`summary`). ✅ verified/applied/issued/refresh-complete, ❌ failed/mismatch/recovery-required, ⚠️ inconclusive, ➖ `awaiting-agent-request` (kèm lời nhắc "không tự đổi — cần Request ID từ app"; bản đầu gắn ⏳ khiến người dùng tưởng đang xử lý và ngồi chờ), ⏳ còn lại. Tổng kết chỉ cho thao tác `verify` và chỉ tính Gateway + Usage dashboard — dòng "Ứng dụng agent" bị loại vì image pin không bao giờ cho nó đạt. Chữ cũ giữ nguyên (chỉ thêm tiền tố) nên `browser_check.py` vẫn khớp `Trạng thái: …`. Kiểm: `node --check` đạt; 12/12 trường hợp `mark`/`summary` đạt bằng script tạm; bộ JS sẵn có 117/117 đạt (bộ này không phủ tab kết nối). `browser_check.py` chưa chạy lại.
+
+### Drift khi bắt đầu
+
+Baseline ghi lúc 01:56 (audit `reconcile-env-fingerprint`), trước commit tính năng 02:00. Đối chiếu sha256:
+
+| File | Baseline | Khớp | Hiện tại | Khớp |
+|---|---|---|---|---|
+| `config.gateway.yaml` | `cd246a` | `539d106` (LF) | `d11e88` | `e66df24` (LF) |
+| `entrypoint.sh` | `7a69f1` | `539d106` (LF) | `b77bd9` | `e66df24` (LF) |
+| `docker-compose.yml` | `419c66` | không commit nào (LF lẫn CRLF) | `a2baa1` | `e66df24` (CRLF) |
+
+Hai file đầu: chứng minh được — drift do merge `e66df24`. Compose: suy luận — baseline ghi từ bản đang sửa dở chưa commit; bản đó không còn để so. `.env` đổi do thêm `KEY_RALLI`/`KEY_TLA_HD` giả trên máy dev (đã biết, không so được hash vì `deployment_env_digest` bỏ qua một số khoá).

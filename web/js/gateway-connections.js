@@ -10,6 +10,24 @@
   if (!root) return;
   function el(id) { return document.getElementById('connection-' + id); }
   function message(text) { el('message').textContent = text; }
+  // Inconclusive is not a failure: missing evidence does not prove the route wrong.
+  function mark(value) {
+    if (['verified', 'applied', 'issued', 'refresh-complete'].indexOf(value) >= 0) return '✅ ';
+    if (['failed', 'mismatch', 'recovery-required'].indexOf(value) >= 0) return '❌ ';
+    if (value === 'inconclusive') return '⚠️ ';
+    // Needs a request ID from the deployed app; nothing will change it on its own.
+    if (value === 'awaiting-agent-request') return '➖ ';
+    return '⏳ ';
+  }
+  // External-agent evidence is excluded: the pinned image can never verify it.
+  function summary(result) {
+    var checks = [result.gateway, result.reporting].filter(Boolean);
+    var passed = checks.filter(function (v) { return v === 'verified'; }).length;
+    if (checks.some(function (v) { return mark(v) === '❌ '; })) return '❌ Tổng kết: kết nối lỗi, xem lý do ở trên';
+    if (checks.indexOf('inconclusive') >= 0) return '⚠️ Tổng kết: chưa đủ bằng chứng, hãy kiểm tra lại';
+    if (passed === checks.length) return '✅ Tổng kết: kết nối Gateway đạt (' + passed + '/' + checks.length + ')';
+    return '⏳ Tổng kết: đang chờ bằng chứng (' + passed + '/' + checks.length + ' mục đã đạt)';
+  }
   function status(record) {
     var lines = [];
     if (record.draft) {
@@ -24,13 +42,15 @@
       else lines.push('Chưa có thao tác áp dụng hoặc bằng chứng kết nối.');
     }
     if (record.status) {
-      lines.push('Thao tác: ' + record.kind + ' · Trạng thái: ' + record.status + ' · Bước: ' + record.stage);
+      lines.push(mark(record.status) + 'Thao tác: ' + record.kind + ' · Trạng thái: ' + record.status + ' · Bước: ' + record.stage);
       var result = record.result || {};
-      if (result.reporting) lines.push('Usage dashboard: ' + result.reporting);
-      if (result.gateway) lines.push('Kiểm chứng Gateway: ' + result.gateway);
-      if (result.external_agent) lines.push('Ứng dụng agent: ' + result.external_agent);
+      if (result.reporting) lines.push(mark(result.reporting) + 'Usage dashboard: ' + result.reporting);
+      if (result.gateway) lines.push(mark(result.gateway) + 'Kiểm chứng Gateway: ' + result.gateway);
+      if (result.external_agent) lines.push(mark(result.external_agent) + 'Ứng dụng agent: ' + result.external_agent +
+        (result.external_agent === 'awaiting-agent-request' ? ' (không tự đổi — cần Request ID từ app)' : ''));
       if (result.reason) lines.push(result.reason);
       lines.push('Mã thao tác: ' + record.id);
+      if (record.kind === 'verify' && (result.gateway || result.reporting)) lines.push('─────────────', summary(result));
     }
     el('status').textContent = lines.join('\n');
   }
