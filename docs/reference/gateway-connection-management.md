@@ -1,6 +1,10 @@
 # Quản trị kết nối Gateway
 
-Feature mặc định tắt. UI nằm trong tab Kết nối agent; tab Setting giữ phần hạn mức. Đây là hệ thống có worker vận hành Docker trên host; API web không cần Docker socket. Quota là trần spend tích luỹ từng Virtual Key, không cộng gộp theo project. Chỉ vận hành một operator khi có màn hình quota cũ cùng sửa metadata.
+Feature mặc định tắt. UI nằm trong tab Kết nối agent. Đây là hệ thống có worker vận hành Docker trên host; API web không cần Docker socket. Quota là trần spend tích luỹ từng Virtual Key, không cộng gộp theo project.
+
+Hạn mức của key do tab này cấp (tên `connection-…`) **chỉ sửa được ở tab Kết nối agent**, bằng khoá quản trị và có audit. Tab Setting vẫn hiện các key này để xem số đã tiêu, nhưng nút Đặt thành / Nạp thêm trả lỗi 409 "Key này do tab Kết nối agent quản lý".
+
+**Chặn khẩn cấp một key `connection-…`:** nút "Chặn" ở tab Setting không dùng được cho key này. Mở tab Kết nối agent bằng khoá quản trị, rồi đặt hạn mức của key về 0 hoặc thu hồi key.
 
 Để setup và chạy trên Windows/Linux, dùng [hướng dẫn setup chung](dashboard-setup.md): `python scripts/dashboard.py setup` một lần, sau đó `python scripts/dashboard.py start`. Git Bash và Linux Bash dùng được `bash start-dashboard.sh`.
 

@@ -51,7 +51,7 @@ Git Bash gọi cùng script Python trên Windows, không biến Windows thành L
 
 ## Sử dụng
 
-Mở http://127.0.0.1:8080 → tab Kết nối agent. Copy `.local/connections/admin-key.txt` vào Khoá quản trị kết nối, bấm Mở quản trị. Đây không phải Virtual Key của ứng dụng agent. Key xem dashboard là `DASHBOARD_KEY` trong `.env`. Tab Setting dùng để xem và nạp hạn mức.
+Mở http://127.0.0.1:8080 → tab Kết nối agent. Copy `.local/connections/admin-key.txt` vào Khoá quản trị kết nối, bấm Mở quản trị. Đây không phải Virtual Key của ứng dụng agent. Key xem dashboard là `DASHBOARD_KEY` trong `.env`. Tab Setting dùng để xem và nạp hạn mức cho key **không** do tab Kết nối agent cấp. Key tên `connection-…` vẫn hiện ở tab Setting để xem, nhưng chỉ sửa hạn mức (kể cả chặn khẩn cấp) được ở tab Kết nối agent, xem [quản trị kết nối](gateway-connection-management.md).
 
 Agent mới → lưu provider key để lấy tham chiếu → model/ngân sách → Lưu bản nháp → Xem thay đổi → Áp dụng → Cấp key. Copy Virtual Key ngay; dùng Hướng dẫn host/Docker để cấu hình ứng dụng. Request thử có thể phát sinh phí provider. Agent legacy không tự chuyển ownership cho UI; xem [quản trị kết nối](gateway-connection-management.md).
 

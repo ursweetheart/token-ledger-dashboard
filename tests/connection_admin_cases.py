@@ -18,6 +18,7 @@ from backend.connection_config import Conflict
 from backend.connection_store import ConnectionStore
 from backend.connection_worker import Worker
 from backend.connection_api import router
+from backend.gateway import MANAGED_KEY_PREFIX
 from tests.connection_config_cases import profile
 
 DSN = os.environ.get('CONNECTION_TEST_DSN','')
@@ -153,6 +154,9 @@ def test_live_issue_unlimited_and_revocation(worker):
     alias=issued['key_alias']
     try:
         assert issued['key'].startswith('sk-')
+        # Tab Setting nhận ra key do tab Kết nối quản lý CHỈ bằng tiền tố này
+        # (backend/gateway.py). Worker đổi mẫu tên thì lỗ vượt quyền mở lại.
+        assert alias.startswith(MANAGED_KEY_PREFIX)
         assert issued['key'] not in json.dumps(w.store.detail(p['code']),default=str)
         with pytest.raises(Conflict): w.issue(str(op['id']))
         with psycopg2.connect(w.gateway_dsn) as cn:

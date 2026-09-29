@@ -97,6 +97,46 @@ class SetQuotaTests(unittest.TestCase):
                 gateway.set_quota("khong-ton-tai", 50.0, "dashboard")
 
 
+class ManagedKeyTests(unittest.TestCase):
+    """Khoá do tab Kết nối agent cấp: dashboard không được sửa hạn mức của nó.
+
+    Khoá đó chỉ sửa bằng khoá quản trị, có audit. Sửa thêm từ tab Setting bằng
+    DASHBOARD_KEY là vượt quyền, và làm số hiển thị ở tab Kết nối sai.
+    """
+
+    def setUp(self):
+        gateway.configure("http://gateway.invalid", "sk-master")
+
+    def test_setting_a_managed_key_is_refused_before_any_gateway_call(self):
+        with mock.patch.object(gateway, "_call") as call:
+            with self.assertRaises(gateway.ManagedKeyError) as caught:
+                gateway.set_quota("connection-x", 50.0, "dashboard")
+        call.assert_not_called()
+        # Câu lỗi hiện thẳng ở tab Setting, nên phải chỉ đường tới tab Kết nối.
+        self.assertIn("Kết nối agent", str(caught.exception))  # vi-ok: tab name shown to the user
+
+    def test_the_refusal_is_not_reported_as_a_broken_gateway(self):
+        # GatewayError được đổi thành 502 "Gateway hỏng" - sai nghĩa ở đây.
+        self.assertFalse(issubclass(gateway.ManagedKeyError, gateway.GatewayError))
+
+    def test_an_ordinary_key_is_still_writable(self):
+        gateway.ensure_dashboard_writable("dms-feedback-tagged")  # không ném lỗi
+        sent = {}
+
+        def fake_call(path, method, payload=None, query=None):
+            if path == gateway._PATH_LIST:
+                return {"keys": [TAGGED_KEY], "total_pages": 1}
+            sent["payload"] = payload
+            return {}
+
+        with mock.patch.object(gateway, "_call", side_effect=fake_call):
+            gateway.set_quota("dms-feedback-tagged", 50.0, "dashboard")
+        self.assertEqual(sent["payload"]["metadata"][gateway.QUOTA_FIELD], 50.0)
+
+    def test_only_the_prefix_counts_not_the_word_anywhere(self):
+        gateway.ensure_dashboard_writable("my-connection-key")  # không ném lỗi
+
+
 class ReadingTests(unittest.TestCase):
     """Đọc hạn mức: giá trị lạ phải thành 'chưa đặt', không thành lỗi."""
 
@@ -260,6 +300,34 @@ class RouteTests(unittest.TestCase):
         # Thiếu "POST" ở đây thì trình duyệt chặn ngay bước preflight, và lỗi hiện
         # ra là "CORS" chứ không phải "401" - mất công tìm nhầm chỗ.
         self.assertRegex(self.src, r'allow_methods=\["GET",\s*"POST"(?:,\s*"PUT")?\]')
+
+    def route_body(self, method, path):
+        """Thân hàm của `@app.<method>("<path>")`, tới decorator kế tiếp."""
+        m = re.search(r'@app\.' + method + r'\(\s*"' + re.escape(path) + r'"[\s\S]*?(?=\n@app\.|\Z)',
+                      self.src)
+        self.assertIsNotNone(m, f"khong tim thay {method} {path}")
+        return m.group(0)
+
+    def test_both_write_routes_turn_a_managed_key_into_409(self):
+        for path in ("/api/quota", "/api/quota/top-up"):
+            self.assertRegex(self.route_body("post", path),
+                             r"except gateway\.ManagedKeyError[\s\S]*?HTTPException\(409",
+                             f"{path} khong doi ManagedKeyError thanh 409")
+
+    def test_top_up_refuses_before_it_reads_the_gateway(self):
+        # Không thì find_key đã gọi Gateway rồi mới bị từ chối.
+        body = self.route_body("post", "/api/quota/top-up")
+        # Tìm LỜI GỌI, không tìm chữ: comment cạnh đó cũng nhắc tên find_key.
+        self.assertIn("gateway.ensure_dashboard_writable(", body)
+        self.assertLess(body.index("gateway.ensure_dashboard_writable("),
+                        body.index("gateway.find_key("))
+
+    def test_the_quota_list_still_shows_managed_keys(self):
+        # Key `connection-…` vẫn phải hiện để XEM số đã tiêu; chỉ việc SỬA bị chặn.
+        body = self.route_body("get", "/api/quota")
+        self.assertNotIn("MANAGED_KEY_PREFIX", body)
+        self.assertNotIn("connection-", body)
+        self.assertNotIn("ensure_dashboard_writable", body)
 
     def test_the_quota_endpoints_go_through_the_gateway_layer(self):
         # Không được gọi thẳng `urllib` từ `main.py`: phạm vi những gì sửa được
