@@ -218,6 +218,9 @@ def start():
     config = json.loads(path.read_text(encoding='utf-8'))
     if Path(config['CONNECTION_REPO_ROOT']).resolve() != ROOT:
         raise ValueError('Project moved; update worker-env.json and runtime.yaml paths before starting')
+    # Worker mở ledger ngay khi bật. Sau khi máy khởi động lại, postgres có thể đang tắt: đo 30/09/2026,
+    # mọi vòng worker báo OperationalError và lệnh start hết giờ chờ. Cùng lệnh với setup().
+    run(compose_args() + ['up', '-d', '--wait', 'postgres'])
     if not worker_ready(config):
         with socket.socket() as sock:
             if sock.connect_ex(('127.0.0.1',8766)) == 0:

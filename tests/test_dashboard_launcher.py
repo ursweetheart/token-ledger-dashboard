@@ -1,6 +1,10 @@
 """Platform networking and startup credential checks without deployment changes."""
+import contextlib
 import importlib.util
+import io
+import json
 from pathlib import Path
+import tempfile
 import unittest
 from unittest.mock import patch
 import urllib.error
@@ -30,6 +34,23 @@ class LauncherTests(unittest.TestCase):
         error = urllib.error.HTTPError('http://localhost', 404, 'Missing profile', {}, None)
         with patch.object(launcher.urllib.request, 'urlopen', side_effect=error):
             self.assertTrue(launcher.worker_ready({'CONNECTION_WORKER_KEY':'probe'}))
+
+    def test_start_brings_postgres_up_before_the_worker(self):
+        # After a reboot postgres may be stopped; a worker started first fails every cycle.
+        steps = []
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)
+            (state/'worker-env.json').write_text(json.dumps({'CONNECTION_REPO_ROOT': str(launcher.ROOT)}), encoding='utf-8')
+            with patch.object(launcher, 'STATE', state), \
+                 patch.object(launcher, 'run', side_effect=lambda args, **kw: steps.append(' '.join(map(str, args)))), \
+                 patch.object(launcher, 'worker_ready', side_effect=lambda config: steps.append('worker_ready') or True), \
+                 patch.object(launcher, 'read_env', return_value={'DASHBOARD_KEY': 'd', 'CONNECTION_ADMIN_KEY': 'a'}), \
+                 patch.object(launcher.urllib.request, 'urlopen') as opened:
+                opened.return_value.__enter__.return_value.status = 200
+                with contextlib.redirect_stdout(io.StringIO()):
+                    launcher.start()
+        postgres = next(i for i, step in enumerate(steps) if step.endswith('up -d --wait postgres'))
+        self.assertLess(postgres, steps.index('worker_ready'))
 
 
 if __name__ == '__main__':

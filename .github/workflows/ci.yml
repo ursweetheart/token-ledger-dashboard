@@ -307,7 +307,10 @@ jobs:
       # keep-connection-keys-out-of-setting-quota (4 o ManagedKeyTests: tab Setting
       # khong sua duoc key `connection-...`; 3 o RouteTests: hai endpoint ghi tra
       # 409, top-up tu choi truoc khi goi Gateway, danh sach van hien key do).
-      EXPECTED_PY: "208"
+      # Moc do 30/09/2026: 208 -> 209, them phep kiem `scripts/dashboard.py start`
+      # bat postgres TRUOC worker (sau khi may khoi dong lai, worker bat truoc thi
+      # moi vong bao OperationalError va lenh start het gio cho).
+      EXPECTED_PY: "209"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8
