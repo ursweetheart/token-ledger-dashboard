@@ -65,6 +65,13 @@ from .connection_api import router as connection_router
 # sửa được hạn mức của mọi project.** Đó là lựa chọn đã chốt, không phải chỗ bị
 # bỏ quên.
 #
+# TRỪ MỘT LOẠI KHOÁ (29/09/2026, change `keep-connection-keys-out-of-setting-quota`):
+# khoá tên `connection-…` do tab Kết nối agent cấp. Khoá đó chỉ sửa được ở tab
+# Kết nối - bằng khoá quản trị, có audit, và tab đó lưu hạn mức để hiển thị.
+# Hai endpoint ghi ở đây trả 409 cho nó (`gateway.ensure_dashboard_writable`).
+# Hệ quả: nút "Chặn" ở tab Setting không chặn khẩn cấp được khoá `connection-…`;
+# muốn chặn thì đặt hạn mức 0 hoặc thu hồi khoá ở tab Kết nối.
+#
 # Backend còn giữ master key của Gateway để sửa hạn mức. Phạm vi của nó bị khoá
 # trong `backend/gateway.py`: đường dẫn viết cứng, hai khoá metadata, và không
 # endpoint nào chuyển tiếp lệnh tuỳ ý sang Gateway.
@@ -519,6 +526,8 @@ def quota_set(key_alias: str = Query(..., min_length=1), body: dict | None = Non
     amount = _quota_amount(gateway.sanitize_incoming(body))
     try:
         metadata = gateway.set_quota(key_alias, amount, who.name)
+    except gateway.ManagedKeyError as exc:
+        raise HTTPException(409, str(exc))
     except gateway.GatewayError as exc:
         raise HTTPException(502, str(exc))
     return {"key_alias": key_alias, "quota_usd": metadata.get(gateway.QUOTA_FIELD),
@@ -535,11 +544,15 @@ def quota_top_up(key_alias: str = Query(..., min_length=1), body: dict | None = 
     _quota_ready()
     added = _quota_amount(gateway.sanitize_incoming(body))
     try:
+        # Kiểm TRƯỚC find_key: không thì đã gọi Gateway rồi mới bị từ chối.
+        gateway.ensure_dashboard_writable(key_alias)
         key = gateway.find_key(key_alias)
         if key is None:
             raise HTTPException(404, f"No key named {key_alias!r} at the Gateway")
         metadata = gateway.set_quota(key_alias, (gateway.quota_of(key) or 0.0) + added,
                                      who.name)
+    except gateway.ManagedKeyError as exc:
+        raise HTTPException(409, str(exc))
     except gateway.GatewayError as exc:
         raise HTTPException(502, str(exc))
     return {"key_alias": key_alias, "quota_usd": metadata.get(gateway.QUOTA_FIELD),

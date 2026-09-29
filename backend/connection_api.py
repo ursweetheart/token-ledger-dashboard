@@ -89,6 +89,11 @@ def router(settings):
     def operation(operation_id: str, actor=Depends(authorize)):
         return execute(lambda: store.operation(operation_id))
 
+    # Must stay above `/{code}`; `catalog` is a reserved agent code for the same reason.
+    @api.get('/catalog')
+    def catalog(actor=Depends(authorize)):
+        return execute(lambda: rpc('catalog', {}))
+
     @api.get('/{code}')
     def detail(code: str, actor=Depends(authorize)):
         return execute(lambda: store.detail(code))
@@ -125,9 +130,15 @@ def router(settings):
     def verify(code: str, body: dict, actor=Depends(authorize)):
         if body.get('accept_cost') is not True or not isinstance(body.get('virtual_key'), str):
             raise HTTPException(422, 'Provide an agent Virtual Key and accept possible provider cost')
+        test_model = body.get('test_model')
+        if test_model is not None and not isinstance(test_model, str):
+            raise HTTPException(422, 'test_model must be a model name')
         op = execute(lambda: store.enqueue(code, 'verify', body.get('expected_revision'),
                      body.get('idempotency_key'), actor, {}))
-        return execute(lambda: rpc('verify', {'operation_id': str(op['id']), 'virtual_key': body['virtual_key']}))
+        call = {'operation_id': str(op['id']), 'virtual_key': body['virtual_key']}
+        if test_model:
+            call['test_model'] = test_model
+        return execute(lambda: rpc('verify', call))
 
     @api.post('/{code}/external-verify')
     def external_verify(code: str, body: dict, actor=Depends(authorize)):

@@ -1,6 +1,10 @@
 # Quản trị kết nối Gateway
 
-Feature mặc định tắt. UI nằm trong tab Kết nối agent; tab Setting giữ phần hạn mức. Đây là hệ thống có worker vận hành Docker trên host; API web không cần Docker socket. Quota là trần spend tích luỹ từng Virtual Key, không cộng gộp theo project. Chỉ vận hành một operator khi có màn hình quota cũ cùng sửa metadata.
+Feature mặc định tắt. UI nằm trong tab Kết nối agent. Đây là hệ thống có worker vận hành Docker trên host; API web không cần Docker socket. Quota là trần spend tích luỹ từng Virtual Key, không cộng gộp theo project.
+
+Hạn mức của key do tab này cấp (tên `connection-…`) **chỉ sửa được ở tab Kết nối agent**, bằng khoá quản trị và có audit. Tab Setting vẫn hiện các key này để xem số đã tiêu, nhưng nút Đặt thành / Nạp thêm trả lỗi 409 "Key này do tab Kết nối agent quản lý".
+
+**Chặn khẩn cấp một key `connection-…`:** nút "Chặn" ở tab Setting không dùng được cho key này. Mở tab Kết nối agent bằng khoá quản trị, rồi đặt hạn mức của key về 0 hoặc thu hồi key.
 
 Để setup và chạy trên Windows/Linux, dùng [hướng dẫn setup chung](dashboard-setup.md): `python scripts/dashboard.py setup` một lần, sau đó `python scripts/dashboard.py start`. Git Bash và Linux Bash dùng được `bash start-dashboard.sh`.
 
@@ -30,7 +34,10 @@ Worker đọc Compose trong root cố định, sinh override ngoài repo cho `li
 
 ## Luồng quản trị
 
-- Nhập mã/tên/user mode/ngày báo cáo; import Google key để nhận opaque reference hoặc tái dùng reference đã có. Chọn upstream trong catalog/model đã deploy. Lưu draft rồi preview. Preview không cấp key, không gọi provider, không ghi cấu hình.
+- Nhập mã/tên/user mode/ngày báo cáo; import khoá API của provider (không chỉ Google) để nhận opaque reference hoặc tái dùng reference đã có. Lưu draft rồi preview. Preview không cấp key, không gọi provider, không ghi cấu hình.
+- Model lấy từ danh mục của chính Gateway đang pin (`/public/litellm_model_cost_map` + `/public/providers`, chỉ model chat, tiền tố định tuyến được), không từ danh mục OpenRouter. Upstream là `<provider>/<model>` hoặc tuyến wildcard `<provider>/*` (alias phải trùng upstream; cấm `*` trần). Upstream đã có trong config đang chạy vẫn hợp lệ dù danh mục mới không còn liệt kê. Gateway không trả được danh mục thì preview/apply dừng, không đoán. Mã agent `catalog` bị cấm.
+- Key cấp từ tab mang `models: ["*"]`; cô lập agent bằng tag. Hệ quả: key chạm được mọi tuyến **không mang tag** (hiện là `gemini-flash`, `gemini-flash-preview` dùng `KEY_GOOGLE_AI_STU`) — preview liệt kê chúng. Với tuyến wildcard + key `*`, agent tự chọn được model đắt; hạn mức từng key là phanh duy nhất. Key cấp trước thay đổi này giữ nguyên danh sách model cũ.
+- Hồ sơ chỉ có tuyến wildcard thì Kiểm tra Gateway cần ô "Model thử": một model trong danh mục, thuộc provider của tuyến wildcard.
 - Review preview rồi apply. Theo dõi riêng draft/applied revision, deployment và reporting. Worker cập nhật hai instance, kiểm config/env/health, đăng ký DB bằng registry lock, export YAML và chạy refresh ngoài lock subprocess. Applied chưa có nghĩa agent đã nhận key.
 - Cấp Virtual Key riêng sau apply, chọn ngân sách key rõ ràng và copy response ngay. Rotate là cấp replacement rồi thu hồi key cũ khi agent đã đổi cấu hình; overlap có hai budget độc lập. Zero chặn key; unlimited gỡ riêng quota_usd và giữ tags.
 - Hướng dẫn host/Docker chỉ là mẫu. Áp dụng endpoint/key/model/X-User vào agent server, giữ network default cùng gateway và recreate container.

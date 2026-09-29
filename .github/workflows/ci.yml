@@ -303,7 +303,11 @@ jobs:
       # (5 cua sync_model_catalog worker, 6 cua model_pricing logic, va 2 cua
       # migration schema ref_model_price). Cac phep kiem tich hop (API, DB) doi
       # hoi Postgres/FastAPI duoc tach khoi bo chay may sach.
-      EXPECTED_PY: "201"
+      # Moc do 29/09/2026: 201 -> 208, them 7 phep kiem cua change
+      # keep-connection-keys-out-of-setting-quota (4 o ManagedKeyTests: tab Setting
+      # khong sua duoc key `connection-...`; 3 o RouteTests: hai endpoint ghi tra
+      # 409, top-up tu choi truoc khi goi Gateway, danh sach van hien key do).
+      EXPECTED_PY: "208"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

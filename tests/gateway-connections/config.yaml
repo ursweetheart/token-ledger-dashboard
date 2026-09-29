@@ -37,6 +37,24 @@ model_list:
       id: connection-d21a8465aec09e0a8be326c2
       input_cost_per_token: 0.000001
       output_cost_per_token: 0.000002
+  # Provider wildcard routes, written by hand: form-rendered wildcard routes carry no
+  # api_base and cannot reach anything inside this isolated network.
+  - model_name: "openai/*"
+    litellm_params:
+      model: "openai/*"
+      api_base: http://provider:8080/v1
+      api_key: dummy-provider-key
+      tags: [test-wild]
+    model_info:
+      id: wild-route-test
+  - model_name: "openai/*"
+    litellm_params:
+      model: "openai/*"
+      api_base: http://provider:8080/v1
+      api_key: dummy-wrong-key
+      tags: [wrong-wild]
+    model_info:
+      id: wild-route-wrong
 general_settings:
   store_model_in_db: false
 litellm_settings:

@@ -70,6 +70,38 @@ class GatewayError(RuntimeError):
     """
 
 
+# Tiền tố tên mọi khoá do worker của tab Kết nối agent cấp
+# (`connection_worker.py`, `connection-<mã thao tác>`). Không ai nhập tay.
+MANAGED_KEY_PREFIX = "connection-"
+
+
+class ManagedKeyError(RuntimeError):
+    """Khoá do tab Kết nối agent quản lý: dashboard không được sửa hạn mức của nó.
+
+    KHÔNG kế thừa `GatewayError`: lỗi đó được đổi thành 502 "Gateway hỏng", còn
+    ở đây Gateway không hỏng gì - khoá thuộc nơi khác quản lý (409).
+
+    Vì sao chặn: khoá do tab Kết nối cấp chỉ được sửa bằng khoá quản trị, có
+    audit, và tab đó lưu hạn mức vào `gateway_connection_key` để hiển thị. Sửa
+    thêm từ đây bằng DASHBOARD_KEY vừa vượt quyền, vừa làm số của tab Kết nối và
+    bước phục hồi của worker sai.
+
+    Nhận diện bằng tiền tố tên vì tên do worker sinh; đọc bảng thì phải cấp thêm
+    GRANT cho `api_readonly`. Ai tự đặt tay một khoá tên `connection-x` thì khoá
+    đó bị khoá ở đây - sai về phía an toàn.
+    """
+
+
+def ensure_dashboard_writable(key_alias: str) -> None:
+    """Ném `ManagedKeyError` nếu khoá do tab Kết nối agent quản lý.
+
+    Phải gọi TRƯỚC mọi lệnh gọi Gateway, để lần từ chối không để lại gì dở dang.
+    """
+    if key_alias.startswith(MANAGED_KEY_PREFIX):
+        raise ManagedKeyError(
+            "Key này do tab Kết nối agent quản lý. Sửa hạn mức ở tab đó (cần khoá quản trị).")  # vi-ok: message shown in the Setting tab
+
+
 def configure(base_url: str, master_key: str) -> None:
     """Nhận cấu hình từ `main.py`. File này KHÔNG tự đọc biến môi trường.
 
@@ -229,6 +261,7 @@ def set_quota(key_alias: str, new_quota: float, actor: str) -> dict[str, Any]:
     của người trước. Với một người quản trị thì chưa thành vấn đề; có nhiều người
     thì phải kiểm lại giá trị cũ trước khi ghi.
     """
+    ensure_dashboard_writable(key_alias)
     key = find_key(key_alias)
     if key is None:
         raise GatewayError(f"Gateway không có khoá nào tên {key_alias!r}")  # vi-ok
