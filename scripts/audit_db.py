@@ -1048,6 +1048,37 @@ def group_g_account_dimension(a: Audit) -> None:
                  "Gateway rows in fact_perf_daily carry method and response_code",
                  f"{int(gw_perf_bad)} rows are missing method or response_code")
 
+    # NGƯỜI CÓ TRONG DANH BẠ KHÔNG ĐƯỢC RƠI VỀ TÀI KHOẢN NEO (change
+    # keep-a-person-visible-in-every-agent-they-use, việc 4.1).
+    #
+    # Lỗi này KHÔNG phép kiểm bằng tổng nào bắt được: dòng rơi về neo vẫn vào sổ
+    # đủ token, đủ tiền - chỉ mất CHIỀU NGƯỜI DÙNG. Đo 21/09 trên build_rows(): một
+    # người Ralli-thắng gọi qua tag TLA Hợp Đồng -> identity_unresolvable = 1, 50%
+    # token của lô rơi khỏi chiều người dùng, mọi phép nghiệm thu bằng tổng vẫn ĐẠT.
+    #
+    # Mẫu số = dòng Gateway mà X-User (chuẩn hoá LOWER/TRIM, như bộ nạp) khớp một
+    # dòng DANH BẠ của CHÍNH agent đó. Dòng nhật ký không tính là "có mặt" (D7), và
+    # dòng kỹ thuật (svc.<code>) bị loại: với agent một-người-dùng, neo CHÍNH LÀ tài
+    # khoản dịch vụ nên "quy đúng" và "rơi về neo" trùng nhau (D6). EXISTS chứ không
+    # JOIN: Ralli có 13 người mang hai dạng khoá, JOIN sẽ đếm đôi dòng của họ.
+    in_directory = """
+        FROM fact_call f
+        WHERE f.source = 'gateway'
+          AND EXISTS (SELECT 1 FROM dim_user d
+                       WHERE d.agent_id = f.agent_id AND d.found_in = 'directory'
+                         AND NOT d.is_technical
+                         AND lower(trim(d.username)) = lower(trim(f.user_id)))"""
+    dir_rows = a.num("SELECT COUNT(*) " + in_directory)
+    dir_bad = a.num("SELECT COUNT(*) " + in_directory + """
+          AND f.account_id IN (SELECT account_id FROM account
+                                WHERE unit_agent_id = f.agent_id
+                                  AND kind IN ('service_account', 'whole_agent'))""")
+    a.check_observed(dir_rows, dir_bad == 0,
+                 "Gateway calls by people in an agent's directory keep their own account",
+                 f"{int(dir_bad)} calls fell back to the agent anchor account although the"
+                 " X-User is in that agent's directory - person dimension lost, totals"
+                 " unchanged (db/load_gateway.py directory lookup)")
+
 
 # Ngưỡng chấp nhận sai lệch khi đối chiếu token cache Gateway <-> hoá đơn Google.
 #

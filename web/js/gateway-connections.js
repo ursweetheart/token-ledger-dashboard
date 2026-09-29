@@ -6,6 +6,9 @@
     return (value || (global.location.protocol === 'file:' ? 'http://127.0.0.1:8000' : global.location.origin)).replace(/\/+$/, '');
   }
   var credential = '', credentialOrigin = '', selected = null, preview = null, poll = null, drift = null;
+  // Form has edits not yet saved as a draft revision. Code that writes a form field
+  // (import-secret, add/remove model) must set it too: programmatic writes fire no `input`.
+  var dirty = false;
   var root = document.getElementById('gateway-connections');
   if (!root) return;
   function el(id) { return document.getElementById('connection-' + id); }
@@ -59,7 +62,8 @@
     credential = ''; credentialOrigin = ''; selected = null; preview = null; drift = null;
     clearTimeout(poll); clearKey(); el('workspace').hidden = true;
     el('provider-key').value = ''; el('test').elements.virtual_key.value = '';
-    el('status').textContent = ''; el('preview-result').textContent = '';
+    el('status').textContent = ''; el('preview-summary').textContent = ''; el('preview-result').textContent = '';
+    dirty = false;
   }
   async function request(path, body) {
     var origin = new URL(base()).origin;
@@ -78,16 +82,27 @@
     }
     return result;
   }
+  // Re-enable by state, not blindly: Apply needs a current preview, accepting drift needs a review.
+  function enabled(id) {
+    if (id === 'apply') return !!preview;
+    if (id === 'accept-drift') return !!drift;
+    return true;
+  }
   function bind(id, event, action) {
     el(id).addEventListener(event, async function (e) {
       e.preventDefault();
       var control = e.currentTarget;
       if (control.tagName === 'BUTTON') control.disabled = true;
       try { await action(e); } catch (error) { message(error.message); }
-      finally { if (control.tagName === 'BUTTON') control.disabled = id === 'apply' && !preview; }
+      finally { if (control.tagName === 'BUTTON') control.disabled = !enabled(id); }
     });
   }
   function field(name) { return el('form').elements[name]; }
+  // The form no longer matches the last preview: forget it, including what is on screen.
+  function invalidate() {
+    dirty = true; preview = null; el('apply').disabled = true;
+    el('preview-summary').textContent = ''; el('preview-result').textContent = '';
+  }
   // Routable chat models from the pinned Gateway; suggestions only, the worker re-checks on preview.
   var catalog = { providers: [], models: {} };
   function renderModels() {
@@ -133,7 +148,7 @@
       control.value = model ? model[name] : ''; label.appendChild(control); group.appendChild(label);
     });
     var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn btn-secondary'; remove.textContent = 'Bỏ model';
-    remove.addEventListener('click',function () { group.remove(); preview = null; el('apply').disabled = true; });
+    remove.addEventListener('click',function () { group.remove(); invalidate(); });
     group.appendChild(remove); el('extra-models').appendChild(group);
   }
   function keyChoices(profile) {
@@ -144,7 +159,7 @@
   }
   function fill(profile) {
     selected = profile; preview = null; el('apply').disabled = true; clearKey();
-    el('preview-result').textContent = ''; el('template').textContent = '';
+    el('preview-summary').textContent = ''; el('preview-result').textContent = ''; el('template').textContent = '';
     el('form').reset(); renderModels();
     el('extra-models').replaceChildren();
     keyChoices(profile || {});
@@ -159,6 +174,7 @@
     field('code').disabled = !!profile;
     ['user_mode','reporting_start_date'].forEach(function (key) { field(key).disabled = !!(profile && profile.applied_revision); });
     if (profile) status(profile); else el('status').textContent = 'Agent mới: chưa lưu, chưa áp dụng, chưa có traffic.';
+    dirty = false;  // last: addModel() above rebuilt the extra models from the saved draft
   }
   async function reload() {
     var list = await request('');
@@ -167,7 +183,7 @@
     el('legacy').textContent = 'Agent legacy chỉ xem: ' + list.legacy.map(function (p) { return p.name; }).join(', ');
     if (selected) { select.value = selected.code; fill(await request('/' + encodeURIComponent(selected.code))); }
   }
-  function requireProfile() { if (!selected) throw new Error('Lưu bản nháp trước.'); return '/' + encodeURIComponent(selected.code); }
+  function requireProfile() { if (!selected) throw new Error('Bấm "4. Xem thay đổi" để lưu hồ sơ trước.'); return '/' + encodeURIComponent(selected.code); }
   function operationBody(extra) {
     requireProfile();
     return Object.assign({ expected_revision: selected.revision, idempotency_key: global.crypto.randomUUID() }, extra || {});
@@ -189,27 +205,71 @@
   bind('logout', 'click', async function () { logout(); message('Đã đóng quản trị.'); });
   bind('reload', 'click', reload);
   bind('select', 'change', async function () { clearTimeout(poll); fill(el('select').value ? await request('/' + encodeURIComponent(el('select').value)) : null); });
-  el('form').addEventListener('input', function () { preview = null; el('apply').disabled = true; });
-  bind('form','submit',async function () {
+  // The provider filter and the new-key box sit inside the form but are not part of the draft.
+  var NOT_DRAFT = ['connection-provider', 'connection-provider-key'];
+  el('form').addEventListener('input', function (e) {
+    if (NOT_DRAFT.indexOf(e.target.id) >= 0) return;
+    invalidate();
+  });
+  async function save() {
     var p = input();
     el('extra-models').querySelectorAll('.connection-extra-model').forEach(function (group) {
       p.models.push({ alias: group.querySelector('[data-model-field=alias]').value, upstream: group.querySelector('[data-model-field=upstream]').value });
     });
     selected = await request('', { profile: p, expected_revision: selected ? selected.revision : 0 });
-    await reload(); message('Đã lưu bản nháp; chưa áp dụng Gateway.');
+    dirty = false;
+    await reload();
+  }
+  // Fields an admin can change, compared against the applied profile. `code` never changes
+  // once saved. A draft key missing from both lists fails browser_check.py (case 4.8).
+  var SUMMARY_FIELDS = [['name', 'Tên'], ['active', 'Đang hoạt động'], ['user_mode', 'Người dùng'],
+    ['reporting_start_date', 'Ngày bắt đầu báo cáo'], ['secret_ref', 'Tham chiếu khoá'], ['models', 'Model'],
+    ['rpm', 'RPM'], ['tpm', 'TPM'], ['quota_response_mode', 'Khi hết hạn mức'], ['budget', 'Ngân sách']];
+  var SUMMARY_IGNORED = ['code'];
+  root.dataset.summaryFields = SUMMARY_FIELDS.map(function (f) { return f[0]; }).concat(SUMMARY_IGNORED).join(',');
+  function shown(key, value) {
+    if (value === undefined || value === null) return '(trống)';
+    if (key === 'models') return value.map(function (m) { return m.alias + ' → ' + m.upstream; }).join(', ');
+    if (key === 'budget') return value.mode === 'unlimited' ? 'Không giới hạn' : value.usd + ' USD';
+    if (key === 'active') return value ? 'có' : 'không';
+    return String(value);
+  }
+  function changeSummary(draft, applied) {
+    var outside = 'Thay đổi ngoài UI (sửa tay file cấu hình, agent khác) không nằm ở đây: xem bằng nút "Xem thay đổi ngoài UI".';
+    if (!applied) return ['Chưa áp dụng lần nào — toàn bộ cấu hình bên dưới là mới.', outside];
+    var lines = SUMMARY_FIELDS.filter(function (f) {
+      return JSON.stringify(draft[f[0]]) !== JSON.stringify(applied[f[0]]);
+    }).map(function (f) { return f[1] + ': ' + shown(f[0], applied[f[0]]) + ' → ' + shown(f[0], draft[f[0]]); });
+    if (!lines.length) return ['Không có thay đổi so với bản đang chạy.', outside];
+    return ['Thay đổi so với bản đang chạy:'].concat(lines, [outside]);
+  }
+  // One flow for the button and for Enter in the form: save only unsaved edits, then preview
+  // exactly that draft. A failed save stops here and leaves Apply disabled.
+  async function saveThenPreview() {
+    preview = null; el('apply').disabled = true;
+    el('preview-summary').textContent = ''; el('preview-result').textContent = '';
+    if (!el('form').reportValidity()) throw new Error('Kiểm lại các ô còn thiếu hoặc sai trong form.');
+    var saved = '';
+    if (dirty || !selected) { await save(); saved = 'Đã lưu bản nháp (revision ' + selected.revision + '). '; }
+    preview = await request(requireProfile() + '/preview', { expected_revision: selected.revision });
+    el('preview-summary').textContent = changeSummary(preview.profile || {}, selected.applied).join('\n');
+    el('preview-result').textContent = JSON.stringify(preview, null, 2); el('apply').disabled = false;
+    var open = (preview.changes && preview.changes.untagged_routes) || [];
+    message(saved + (open.length ? '⚠️ Key của agent (models "*") cũng gọi được tuyến không tag: ' + open.join(', ') + ' — tiền sẽ tính vào khoá của tuyến đó.'
+                                 : 'Xem trước xong; không có tuyến không tag.'));
+  }
+  // "4. Xem thay đổi" is the form's submit button: a form without one ignores Enter, so the
+  // button and Enter both arrive here. bind() can only disable the form, so guard the button.
+  bind('form', 'submit', async function () {
+    el('preview').disabled = true;
+    try { await saveThenPreview(); } finally { el('preview').disabled = false; }
   });
-  bind('add-model','click',async function () { addModel(); preview = null; el('apply').disabled = true; });
+  bind('add-model','click',async function () { addModel(); invalidate(); });
   bind('import-secret','click',async function () {
     var value = el('provider-key').value; el('provider-key').value = '';
     var result = await request('/secrets', { value: value }); field('secret_ref').value = result.secret_ref;
-    preview = null; el('apply').disabled = true; message('Đã lưu secret; lưu lại bản nháp để sử dụng tham chiếu.');
-  });
-  bind('preview','click',async function () {
-    preview = await request(requireProfile() + '/preview', { expected_revision: selected.revision });
-    el('preview-result').textContent = JSON.stringify(preview, null, 2); el('apply').disabled = false;
-    var open = (preview.changes && preview.changes.untagged_routes) || [];
-    message(open.length ? '⚠️ Key của agent (models "*") cũng gọi được tuyến không tag: ' + open.join(', ') + ' — tiền sẽ tính vào khoá của tuyến đó.'
-                        : 'Xem trước xong; không có tuyến không tag.');
+    invalidate();
+    message('Đã lưu secret vào tham chiếu; bấm "4. Xem thay đổi" để lưu và xem trước.');
   });
   bind('apply','click',async function () {
     if (!preview) throw new Error('Xem thay đổi trước khi áp dụng.');
@@ -232,6 +292,7 @@
   bind('revoke-one','click',async function () {
     var alias = el('key-select').value; if (!alias) throw new Error('Chọn key managed trước.');
     await request(requireProfile() + '/revoke',operationBody({ key_aliases:[alias] })); clearKey(); await reload();
+    message('Đã thu hồi key ' + alias + '; giữ lịch sử.');
   });
   bind('budget','click',async function () {
     var alias = el('key-select').value; if (!alias) throw new Error('Chọn key managed trước.');
@@ -239,7 +300,7 @@
   });
   bind('reconcile','click',async function () {
     drift = await request(requireProfile() + '/reconcile',{ expected_revision:selected.revision });
-    el('preview-result').textContent = JSON.stringify(drift,null,2); el('accept-drift').disabled = false;
+    el('preview-summary').textContent = ''; el('preview-result').textContent = JSON.stringify(drift,null,2); el('accept-drift').disabled = false;
   });
   bind('accept-drift','click',async function () {
     if (!drift) throw new Error('Xem thay đổi ngoài UI trước.');

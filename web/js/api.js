@@ -600,8 +600,12 @@
           });
           /* Giữ unit_id nguồn: cây của mỗi agent được hiển thị độc lập. */
           state.accounts = ((r.accounts && r.accounts.rows) || []).map(function (a) {
-            return a.agent === tenAgent(a.agent) ? a
-                 : Object.assign({}, a, { agent: tenAgent(a.agent) });
+            /* `agents` = mọi agent nơi người này có mặt (backend store.accounts, D4).
+               Dịch tên cùng một kiểu với `agent`, không thì lọc theo tên sẽ lệch. */
+            return Object.assign({}, a, {
+              agent: tenAgent(a.agent),
+              agents: (Array.isArray(a.agents) ? a.agents : [a.agent]).map(tenAgent)
+            });
           });
           state.byAccount = ((r.byAccount && r.byAccount.rows) || []).map(function (x) {
             return x && x.agent ? Object.assign({}, x, { agent: tenAgent(x.agent) }) : x;

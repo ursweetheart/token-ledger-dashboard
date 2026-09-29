@@ -345,6 +345,9 @@ function buildAccountCatalogueFromDb(){
       n:a.full_name || displayUser || a.username || a.agent || "",
       unitId:a.unit_id||"", d:a.unit_name||"—",
       a:a.agent||"", m:"", ug:displayUser || a.username || a.agent || "",
+      /* MỌI agent nơi người này có mặt (backend store.accounts). `a` chỉ là agent
+         thắng phép chọn phòng ban; lọc theo agent phải hỏi `agents`. */
+      agents:(a.agents&&a.agents.length)?a.agents:[a.agent||""],
       weight:0,
       role:a.role||"", accountType:a.is_shared?"service":"person",
       sourceStatus:a.is_enabled===false?"Đã khoá":"Hoạt động",
@@ -426,7 +429,7 @@ function applyRealAccountUsage(rows){
     if(!u && x.account_id==null){
       u=byKey[String(x.username||"").trim().toLowerCase()]
         ||byKey[String(x.full_name||"").trim().toLowerCase()];
-      if(u && u.a!==x.agent) u=null;
+      if(u && (u.agents||[u.a]).indexOf(x.agent)<0) u=null;  // có mặt ở agent đó, không phải "thuộc về"
       if(u) accountFallbackByName++;
     }
     if(!u){ bo++; boLuot+=x.calls||0; return; }
@@ -3628,7 +3631,10 @@ function filterAccounts(){
     if(isExcludedDepartment(u.d)) return false;
     if(wantIds && !wantIds[u.unitId]) return false;
     if(f.user && String(u.id)!==f.user) return false;
-    if(f.agent && u.a!==f.agent) return false;
+    /* "CÓ MẶT Ở" agent đó, không phải "THUỘC VỀ". Một người dùng hai app có hai dòng
+       danh bạ nhưng một `a` (agent thắng phép chọn phòng ban): so `u.a` thì danh bạ TLA
+       Hợp Đồng thiếu 4/44 người. Đo 30/09/2026 trên database thật. */
+    if(f.agent && (u.agents||[u.a]).indexOf(f.agent)<0) return false;
     /* HỎI SỔ ĐO THEO MODEL, KHÔNG HỎI `u.m`.
 
         buildAccountCatalogueFromDb() đặt `m:""` cho MỌI tài khoản, và đúng như

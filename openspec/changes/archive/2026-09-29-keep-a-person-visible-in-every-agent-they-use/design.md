@@ -218,6 +218,93 @@ Loại phương án tách.
 | 6 agent một-người-dùng đổi kết quả | `svc.<code>` đang chạy đúng, không được động | đối chứng trước/sau, phải **y hệt** |
 | Nghiệm thu bằng tổng token | tổng luôn đúng kể cả khi hỏng — đã đo | nghiệm thu bằng **số tài khoản phân giải được**, không bằng tổng |
 
+### D6 — Với agent một-người-dùng, NEO CHÍNH LÀ tài khoản dịch vụ
+
+Phát hiện 21/09 khi chạy việc 0.5. Bộ nạp báo `identity_unresolvable 15`, nhưng truy vấn tìm dòng
+"rơi về neo" trả về **0**. Không mâu thuẫn — là **không nhìn thấy được**:
+
+```
+  agent 6 (dms-feedback)   neo = account 949 'svc.dms-feedback'  kind='service_account'
+
+     quy đúng     -> account 949
+     rơi về neo   -> account 949      ← CÙNG MỘT DÒNG
+```
+
+`anchor_account_lookup()` chọn `kind IN ('service_account','whole_agent')`. Với 6 agent
+một-người-dùng thì neo **là** tài khoản dịch vụ, nên hai kết cục khác hẳn nhau đáp xuống cùng một
+`account_id`.
+
+**Hệ quả bắt buộc cho việc 4.1 và 5.3:** phép canh và phép nghiệm thu MUST NOT dựa vào
+`account.kind` để biết một dòng có phân giải được hay không. Chỉ hai đường còn lại:
+
+1. bộ đếm `identity_unresolvable` của chính bộ nạp;
+2. so `user_id` của dòng với bảng tra `(agent_id, username)`.
+
+Viết phép canh bằng `kind` thì nó **luôn ĐẠT**, kể cả khi mọi định danh đều bị từ chối.
+
+15 dòng ấy, đo được:
+
+| `X-User` | agent | lượt | loại |
+|---|---|---|---|
+| `tuan.tran` | dms-feedback | 13 | **tên một con người** gửi vào agent một-người-dùng |
+| `svc.nghiem-thu-doi-ten-17-09` | dms-feedback | 1 | định danh nghiệm thu 17/09 |
+| `svc.nghiem-thu-doi-ten-17-09` | crm-feedback | 1 | như trên |
+
+Cả ba PHẢI tiếp tục bị từ chối sau khi sửa. `tuan.tran` là ca kiểm chiều âm lấy từ dữ liệu thật,
+tốt hơn ca `admin` dựng tay ở việc 2.4 — dùng cả hai.
+
+### D7 — Chỉ nhận dòng DANH BẠ, không nhận dòng nhật ký
+
+Chốt 21/09/2026, trả lời Open Question 4. Phép tra lọc `found_in = 'directory'`.
+
+Bản đầu viết `WHERE NOT is_technical`, tức **có** nhận dòng nhật ký — nhưng đó là hệ quả tình cờ
+của một câu `WHERE`, không phải một quyết định. Lập luận ban đầu nghiêng về việc nhận: *"nhật ký
+là bằng chứng người đó đã gọi agent ấy"*. Đo xong thì lập luận ấy **sai trên dữ liệu thật**.
+
+**Toàn bộ định danh chỉ-có-trong-nhật-ký, đo trên database đã dựng lại:**
+
+| agent | định danh | `is_shared` |
+|---|---|---|
+| 5 — TLA Hợp Đồng | `nghiệp vụ bh1`, `test1`, `test2`, `test3`, `test4` | 1 |
+| 8 — Ralli | `admin`, `guest`, `system` | 1 |
+
+**8/8 mang `is_shared = 1`** — cờ sinh ra để đánh dấu "dòng này không đại diện cho một con người".
+Hai tín hiệu khác nguồn, cùng một kết luận: nhật ký đúng là bằng chứng *có gì đó đã gọi*, nhưng
+"gì đó" ở đây không phải người. Bốn tài khoản thử, một tên phòng ban dùng làm tên đăng nhập, ba
+định danh dùng chung.
+
+**Nhận dòng nhật ký sẽ mở lại đúng lỗi mà phép so cũ dựng ra để chặn:**
+
+```
+  admin ở TLA Hợp Đồng   found_in = directory     ← admin THẬT của app này
+  admin ở Ralli          found_in = log           ← admin của app KHÁC, trùng chữ
+                              ↓
+              account gộp thành MỘT dòng, unit_agent_id = 5
+```
+
+Ralli gửi `X-User: admin` sẽ quy vào **lịch sử admin của TLA Hợp Đồng** — đúng câu cảnh báo ở
+`load_gateway.py`: *"lưu lượng đó bị trộn vào lịch sử của một người dùng TLA Hợp Đồng"*. Mỗi app
+có admin riêng; chúng chỉ trùng chuỗi ký tự.
+
+**Bốn ca, kết quả đều đúng, không cần ngoại lệ nào:**
+
+| Ai gửi gì | Kết quả |
+|---|---|
+| TLA Hợp Đồng gửi `admin` | nhận — đúng là admin của nó |
+| Ralli gửi `admin` | từ chối, về neo — không trộn vào TLA Hợp Đồng |
+| Ralli gửi `longnt` | nhận — chính là mục đích của change |
+| `dms-feedback` gửi `tuan.tran` | từ chối, về neo |
+
+**Không mất người mục tiêu nào:** cả 5 người va chạm đều có dòng **danh bạ** ở **cả hai** agent.
+
+**Tiền lệ trong repo:** `store.py:279` (`adoption()`) đã lọc `found_in = 'directory'` cho mẫu số.
+Danh bạ mang nghĩa *"người này được cấp quyền dùng agent này"* — đúng nghĩa cần cho câu hỏi "có
+thuộc về đây không". Nhật ký mang nghĩa khác.
+
+**Cái giá, nói rõ:** người dùng thật chưa kịp vào danh bạ sẽ bị từ chối. Hôm nay **0 ca**. Nếu mai
+có, `adoption()` đã có chỗ báo — cột `outside_directory`, mà docstring gọi là *"dấu hiệu danh bạ
+và số liệu sử dụng đang trôi ra xa nhau"*. Giữ tín hiệu ấy tốt hơn là lấp nó bằng cách nhận bừa.
+
 ## Open Questions
 
 1. **Ai nên thắng ở phòng ban khi hai app không đồng ý?** Change này không trả lời — nó giữ nguyên
@@ -228,6 +315,9 @@ Loại phương án tách.
    như vậy chưa lộ ra vì tên **không** trùng?
 3. Khi agent thứ 9 là agent nhiều người dùng, nó lấy danh bạ từ đâu? Nằm ngoài change này, nhưng
    cùng một gốc — xem `docs/reference/onboard-a-new-agent.md` mục 8.
+4. ~~Dòng `dim_user` đến từ nhật ký có tính là "có mặt ở agent đó" không?~~ **ĐÃ CHỐT 21/09 —
+   xem D7.** Chỉ nhận dòng danh bạ. Lý do: 8/8 định danh chỉ-có-trong-nhật-ký đều mang
+   `is_shared = 1`, và nhận chúng sẽ trộn `admin` của Ralli vào lịch sử `admin` của TLA Hợp Đồng.
 
 ## Mức chắc chắn của các số trong tài liệu này
 

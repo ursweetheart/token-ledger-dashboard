@@ -1365,7 +1365,7 @@
     <h2 class="section-title">Kết nối agent với Gateway</h2>
     <p>Cấu hình, áp dụng và kiểm tra kết nối. Ngân sách tính riêng cho từng Virtual Key.</p>
     <form id="connection-login" class="connection-login">
-      <label>Khoá quản trị kết nối <input class="text-input" name="credential" type="password" autocomplete="off" required></label>
+      <label>Khoá quản trị kết nối <input class="text-input" name="credential" type="password" autocomplete="new-password" required></label>
       <button class="btn btn-primary" type="submit">Mở quản trị</button>
       <button class="btn btn-secondary" type="button" id="connection-logout">Đóng quản trị</button>
     </form>
@@ -1384,7 +1384,7 @@
         </fieldset>
         <fieldset><legend>2. Provider và model</legend>
           <label>Tham chiếu khoá provider <input class="text-input" name="secret_ref" required placeholder="KEY_MANAGED_…"></label>
-          <label>Khoá API provider mới <input class="text-input" id="connection-provider-key" type="password" autocomplete="off"></label>
+          <label>Khoá API provider mới <input class="text-input" id="connection-provider-key" type="password" autocomplete="new-password"></label>
           <button class="btn btn-secondary" type="button" id="connection-import-secret">Lưu key và lấy tham chiếu</button>
           <label>Provider (lọc gợi ý model) <select class="filter-select" id="connection-provider"><option value="">Tất cả provider</option></select></label>
           <datalist id="connection-model-options"></datalist>
@@ -1403,11 +1403,11 @@
           <p>Key thay thế có spend và hạn mức riêng. Khi hai key cùng hoạt động, có hai ngân sách độc lập.</p>
         </fieldset>
         <div class="connection-actions">
-          <button class="btn btn-primary" type="submit">Lưu bản nháp</button>
-          <button class="btn btn-secondary" type="button" id="connection-preview">4. Xem thay đổi</button>
+          <button class="btn btn-secondary" type="submit" id="connection-preview">4. Xem thay đổi</button>
           <button class="btn btn-primary" type="button" id="connection-apply" disabled>5. Áp dụng</button>
         </div>
       </form>
+      <pre id="connection-preview-summary" role="status" aria-live="polite"></pre>
       <pre id="connection-preview-result" tabindex="0" aria-label="Thay đổi dự kiến"></pre>
       <div class="connection-actions"><button class="btn btn-primary" type="button" id="connection-issue">Cấp key / key thay thế</button>
         <label>Virtual Key <select class="filter-select" id="connection-key-select"><option value="">Chọn key managed</option></select></label>
@@ -1424,7 +1424,7 @@
       <div class="connection-actions"><button class="btn btn-secondary" type="button" id="connection-reconcile">Xem thay đổi ngoài UI</button>
         <button class="btn btn-secondary" type="button" id="connection-accept-drift" disabled>Chấp nhận baseline đã xem</button>
         <button class="btn btn-secondary" type="button" id="connection-recover">Phục hồi operation bị lỗi</button></div>
-      <form id="connection-test"><label>Virtual Key của agent cho lần test <input class="text-input" name="virtual_key" type="password" autocomplete="off" required></label>
+      <form id="connection-test"><label>Virtual Key của agent cho lần test <input class="text-input" name="virtual_key" type="password" autocomplete="new-password" required></label>
         <label>Model thử (khi mọi model đều là provider/*) <input class="text-input" name="test_model" list="connection-model-options" autocomplete="off"></label>
         <label><input name="accept_cost" type="checkbox" required> Chấp nhận request thử có thể phát sinh phí provider</label>
         <button class="btn btn-primary" type="submit">Kiểm tra Gateway</button></form>
