@@ -88,6 +88,28 @@
     });
   }
   function field(name) { return el('form').elements[name]; }
+  // Routable chat models from the pinned Gateway; suggestions only, the worker re-checks on preview.
+  var catalog = { providers: [], models: {} };
+  function renderModels() {
+    var provider = el('provider').value;
+    var providers = provider ? [provider] : catalog.providers;
+    var options = [];
+    providers.forEach(function (p) {
+      [p + '/*'].concat(catalog.models[p] || []).forEach(function (name) {
+        var option = document.createElement('option'); option.value = name; options.push(option);
+      });
+    });
+    el('model-options').replaceChildren.apply(el('model-options'), options);
+  }
+  async function loadCatalog() {
+    var result = null;
+    try { result = await request('/catalog'); }
+    catch (error) { message('Chưa tải được danh mục model: ' + error.message); }
+    catalog = result && Array.isArray(result.providers) && result.models ? result : { providers: [], models: {} };
+    el('provider').replaceChildren(new Option('Tất cả provider', ''));
+    catalog.providers.forEach(function (p) { el('provider').add(new Option(p, p)); });
+    renderModels();
+  }
   function budget() {
     if (field('budget_mode').value === 'unlimited') return { mode: 'unlimited' };
     var raw = field('budget_usd').value, amount = Number(raw);
@@ -105,8 +127,9 @@
   function addModel(model) {
     var group = document.createElement('div'); group.className = 'connection-extra-model';
     ['alias','upstream'].forEach(function (name) {
-      var label = document.createElement('label'); label.textContent = name === 'alias' ? 'Model alias bổ sung' : 'Model Google bổ sung';
+      var label = document.createElement('label'); label.textContent = name === 'alias' ? 'Model alias bổ sung' : 'Model provider bổ sung';
       var control = document.createElement('input'); control.setAttribute('data-model-field',name); control.required = true; control.className = 'text-input';
+      if (name === 'upstream') control.setAttribute('list', 'connection-model-options');
       control.value = model ? model[name] : ''; label.appendChild(control); group.appendChild(label);
     });
     var remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn btn-secondary'; remove.textContent = 'Bỏ model';
@@ -122,7 +145,7 @@
   function fill(profile) {
     selected = profile; preview = null; el('apply').disabled = true; clearKey();
     el('preview-result').textContent = ''; el('template').textContent = '';
-    el('form').reset();
+    el('form').reset(); renderModels();
     el('extra-models').replaceChildren();
     keyChoices(profile || {});
     if (profile) {
@@ -160,7 +183,9 @@
     logout(); credential = el('login').elements.credential.value;
     el('login').elements.credential.value = ''; credentialOrigin = new URL(base()).origin;
     await reload(); el('workspace').hidden = false; message('Đã mở quản trị: ' + credentialOrigin);
+    await loadCatalog();
   });
+  el('provider').addEventListener('change', renderModels);
   bind('logout', 'click', async function () { logout(); message('Đã đóng quản trị.'); });
   bind('reload', 'click', reload);
   bind('select', 'change', async function () { clearTimeout(poll); fill(el('select').value ? await request('/' + encodeURIComponent(el('select').value)) : null); });
@@ -182,6 +207,9 @@
   bind('preview','click',async function () {
     preview = await request(requireProfile() + '/preview', { expected_revision: selected.revision });
     el('preview-result').textContent = JSON.stringify(preview, null, 2); el('apply').disabled = false;
+    var open = (preview.changes && preview.changes.untagged_routes) || [];
+    message(open.length ? '⚠️ Key của agent (models "*") cũng gọi được tuyến không tag: ' + open.join(', ') + ' — tiền sẽ tính vào khoá của tuyến đó.'
+                        : 'Xem trước xong; không có tuyến không tag.');
   });
   bind('apply','click',async function () {
     if (!preview) throw new Error('Xem thay đổi trước khi áp dụng.');
@@ -230,7 +258,10 @@
   bind('clear-key','click',async function () { clearKey(); });
   bind('test','submit',async function () {
     var value = el('test').elements.virtual_key.value; el('test').elements.virtual_key.value = '';
-    var result = await request(requireProfile() + '/verify',operationBody({ virtual_key: value, accept_cost: el('test').elements.accept_cost.checked }));
+    var body = { virtual_key: value, accept_cost: el('test').elements.accept_cost.checked };
+    var testModel = el('test').elements.test_model.value.trim();
+    if (testModel) body.test_model = testModel;
+    var result = await request(requireProfile() + '/verify',operationBody(body));
     status(result); if (result.id) await monitor(result.id);
   });
   bind('external-test','submit',async function () {

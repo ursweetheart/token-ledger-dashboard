@@ -2,7 +2,8 @@
 import copy
 import unittest
 from backend.connection_config import (validate_profile, render_routes, render_registry,
-    quota_metadata, integration_template, Conflict, load_yaml, deployment_env_digest)
+    quota_metadata, integration_template, Conflict, load_yaml, deployment_env_digest,
+    routable_catalog, verification_model, route_id)
 
 
 def profile(code='support-helper'):
@@ -79,3 +80,67 @@ class ConfigTests(unittest.TestCase):
 
     def test_duplicate_yaml_rejected(self):
         with self.assertRaises(ValueError): load_yaml('version: 1\nversion: 2')
+
+
+def with_models(*pairs):
+    p=profile(); p['models']=[{'alias':a,'upstream':u} for a,u in pairs]
+    return p
+
+
+# Shapes measured from the pinned image's /public/litellm_model_cost_map on 2026-09-28.
+COST_MAP={'claude-haiku-4-5':{'litellm_provider':'anthropic','mode':'chat'},
+          'gemini/gemini-2.5-flash':{'litellm_provider':'gemini','mode':'chat'},
+          'gemini-2.5-flash':{'litellm_provider':'vertex_ai-language-models','mode':'chat'},
+          'amazon-nova/nova-micro-v1':{'litellm_provider':'bedrock_converse','mode':'chat'},
+          'vertex_ai/claude-3-5-haiku@20241022':{'litellm_provider':'vertex_ai-anthropic_models','mode':'chat'},
+          'text-embedding-3-small':{'litellm_provider':'openai','mode':'embedding'},
+          'sample_spec':{'mode':'one of: chat, embedding, completion'}}
+PROVIDERS=['anthropic','gemini','openai','vertex_ai']
+
+
+class ProviderTests(unittest.TestCase):
+    def test_catalog_uses_routing_prefix_not_provider_label(self):
+        c=routable_catalog(COST_MAP,PROVIDERS)
+        self.assertEqual(c['providers'],['anthropic','gemini'])
+        self.assertEqual(c['models'],{'anthropic':['anthropic/claude-haiku-4-5'],'gemini':['gemini/gemini-2.5-flash']})
+
+    def test_catalog_rejects_unexpected_shape(self):
+        for cost_map,providers in [([],PROVIDERS),(COST_MAP,{}),('x',[])]:
+            with self.subTest(cost_map=type(cost_map).__name__):
+                with self.assertRaises(ValueError): routable_catalog(cost_map,providers)
+
+    def test_any_provider_and_provider_wildcard_saved(self):
+        for pairs in [[('anthropic/*','anthropic/*')],[('fast','anthropic/claude-haiku-4-5')],
+                      [('gemini/*','gemini/*'),('pro','gemini/gemini-2.5-flash')]]:
+            with self.subTest(pairs=pairs):
+                validate_profile(with_models(*pairs))
+
+    def test_bad_wildcards_rejected(self):
+        for pairs in [[('*','*')],[('x','*')],[('x','gemini/*-flash')],[('foo/*','anthropic/*')],
+                      [('any','anthropic/*')],[('*','gemini/test')],[('x','gemini')],[('x','/model')]]:
+            with self.subTest(pairs=pairs):
+                with self.assertRaises(ValueError): validate_profile(with_models(*pairs))
+
+    def test_catalog_code_reserved(self):
+        with self.assertRaises(ValueError): validate_profile(profile('catalog'))
+
+    def test_wildcard_route_rendered_with_one_tag(self):
+        p=with_models(('anthropic/*','anthropic/*'))
+        result,ids=render_routes({'model_list':[],'router_settings':{'enable_tag_filtering':True}},[p],[])
+        route=result['model_list'][0]
+        self.assertEqual((route['model_name'],route['litellm_params']['model']),('anthropic/*','anthropic/*'))
+        self.assertEqual(route['litellm_params']['tags'],[p['code']])
+        self.assertEqual(route['model_info']['id'],route_id(p['code'],'anthropic/*'))
+
+    def test_verification_model_choice(self):
+        catalog=routable_catalog(COST_MAP,PROVIDERS)
+        self.assertEqual(verification_model(with_models(('anthropic/*','anthropic/*'),('fast','gemini/gemini-2.5-flash')),None,None),('fast','fast'))
+        wild=with_models(('anthropic/*','anthropic/*'))
+        self.assertEqual(verification_model(wild,'anthropic/claude-haiku-4-5',catalog),('anthropic/claude-haiku-4-5','anthropic/*'))
+        for requested in [None,'','gemini/gemini-2.5-flash','anthropic/not-in-catalog']:
+            with self.subTest(requested=requested):
+                with self.assertRaises(ValueError): verification_model(wild,requested,catalog)
+
+    def test_template_never_shows_wildcard(self):
+        text=integration_template(with_models(('anthropic/*','anthropic/*')),'http://gateway-lb:4000','n','host')
+        self.assertIn('GATEWAY_MODEL=<provider>/<model>',text); self.assertNotIn('*',text)

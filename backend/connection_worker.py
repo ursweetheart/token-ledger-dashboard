@@ -31,7 +31,8 @@ from db import gateway_registry, connect
 from .connection_store import ConnectionStore
 from .connection_config import (Conflict, REF, digest, render_routes, render_registry,
     registry_row, quota_metadata, validate_budget, integration_template, route_id, load_yaml,
-    deployment_env_digest)
+    deployment_env_digest, routable_catalog, is_wildcard, verification_model, concrete_alias,
+    CatalogUnavailable)
 
 LOCK = 74120926
 
@@ -78,7 +79,8 @@ class Gateway:
 
     def call(self, path, data=None, key=None, query=None):
         if path not in {'/key/generate','/key/delete','/key/list','/key/update',
-                        '/health/liveliness','/v1/chat/completions','/model/info'}:
+                        '/health/liveliness','/v1/chat/completions','/model/info',
+                        '/public/providers','/public/litellm_model_cost_map'}:
             raise ValueError('Unsupported Gateway action')
         url = self.url + path
         if path == '/key/list':
@@ -209,6 +211,15 @@ class Worker:
                     cur.execute('UPDATE gateway_connection_deployment SET baseline=%s', (Json(baseline),))
         return {'secret_ref': reference}
 
+    def catalog(self):
+        """Fail closed: no catalog means no model is treated as valid."""
+        try:
+            _, cost_map = self.gateways[0].call('/public/litellm_model_cost_map')
+            _, providers = self.gateways[0].call('/public/providers')
+            return routable_catalog(cost_map, providers)
+        except (RuntimeError, ValueError):
+            raise CatalogUnavailable('Gateway model catalog unavailable; retry when litellm-1 is healthy') from None
+
     def preview(self, code, revision, cn=None):
         profile = self.store.profile(code)
         if profile['revision'] != revision:
@@ -228,17 +239,19 @@ class Worker:
         with self.store.transaction() as cur:
             cur.execute('SELECT applied FROM gateway_connection_profile WHERE code<>%s AND applied IS NOT NULL ORDER BY code', (code,))
             profiles = [r['applied'] for r in cur.fetchall()] + [p]
-            cur.execute('SELECT catalog_key,openrouter_id FROM ref_model_catalog WHERE available=true')
-            catalog = cur.fetchall()
-        # New Gemini revisions may precede pricing catalog. Existing deployed upstream models are valid too.
         original = load_yaml(self.paths['routes'].read_text(encoding='utf-8-sig'))
-        allowed = {r.get('litellm_params', {}).get('model') for r in original.get('model_list', [])}
-        for row in catalog:
-            for name in (row['catalog_key'], row['openrouter_id']):
-                if name and name.startswith('google/'):
-                    allowed.add('gemini/' + name.split('/',1)[1])
-        if any(m['upstream'] not in allowed for m in p['models']):
-            raise ValueError('Upstream model must be in the catalog or deployed model configuration')
+        deployed = original.get('model_list', [])
+        # A catalog refresh must not invalidate an applied profile: deployed upstreams stay valid.
+        allowed = {(r.get('litellm_params') or {}).get('model') for r in deployed}
+        catalog = self.catalog()
+        for m in p['models']:
+            provider = m['upstream'].split('/', 1)[0]
+            if m['upstream'] in allowed:
+                continue
+            if provider not in catalog['providers']:
+                raise ValueError(f'Provider "{provider}" is not routable by the pinned Gateway')
+            if not is_wildcard(m) and m['upstream'] not in catalog['models'][provider]:
+                raise ValueError(f'Model "{m["upstream"]}" is not a chat model in the Gateway catalog')
         if p['secret_ref'] not in self.secrets():
             raise ValueError('Import provider secret before using its reference')
         routes, ownership = render_routes(original, profiles, baseline['ownership'])
@@ -251,7 +264,10 @@ class Worker:
                 'routes': routes, 'registry': registry, 'ownership': ownership,
                 'changes': {'agent': code, 'instances': ['litellm-1','litellm-2'],
                             'keys': 'issue separately after apply', 'shared_upstream':
-                            sum(x['secret_ref'] == p['secret_ref'] for x in profiles) > 1}}
+                            sum(x['secret_ref'] == p['secret_ref'] for x in profiles) > 1,
+                            # Keys carry models ["*"], so any route without a tag is reachable.
+                            'untagged_routes': sorted({r.get('model_name') for r in deployed
+                                                       if not (r.get('litellm_params') or {}).get('tags')})}}
 
     def compose(self, *args):
         command = ['docker','compose','--project-directory',str(self.root),'-f',str(self.root/'docker-compose.yml')]
@@ -484,7 +500,7 @@ class Worker:
                 except Exception as exc:
                     cn.rollback()
                     if op['status'] == 'queued' and not (self.state/'snapshots'/operation_id/'manifest.json').exists():
-                        self.store.stage(operation_id, 'failed', 'validation', {'reason': str(exc) if isinstance(exc,(ValueError,Conflict)) else 'Validation failed'})
+                        self.store.stage(operation_id, 'failed', 'validation', {'reason': str(exc) if isinstance(exc,(ValueError,Conflict,CatalogUnavailable)) else 'Validation failed'})
                     else:
                         try:
                             self.restore(operation_id)
@@ -537,8 +553,9 @@ class Worker:
             try:
                 if gateway.key(alias):
                     raise Conflict('Operation alias already exists')
+                # Operating convention: agents may call any model; the identity tag routes them.
                 _, response = gateway.call('/key/generate',{'key_alias':alias,
-                    'models':[m['alias'] for m in p['models']], 'metadata':metadata})
+                    'models':['*'], 'metadata':metadata})
                 key = response['key']
                 current = gateway.key(alias)
                 if not current or (current.get('metadata') or {}).get('tags') != [p['code']]:
@@ -632,11 +649,11 @@ class Worker:
             self.store.stage(operation_id,'updated','updated',{'key_alias':alias,'budget':op['payload']['budget']})
             return self.store.operation(operation_id)
 
-    def verify(self, operation_id, virtual_key):
+    def verify(self, operation_id, virtual_key, test_model=None):
         with self.lock():
-            return self._verify(operation_id,virtual_key)
+            return self._verify(operation_id,virtual_key,test_model)
 
-    def _verify(self, operation_id, virtual_key):
+    def _verify(self, operation_id, virtual_key, test_model=None):
         op = self.store.operation(operation_id)
         if op['kind'] != 'verify':
             raise ValueError('Expected verification operation')
@@ -647,10 +664,18 @@ class Worker:
         p = self.store.profile(op['code'])['applied']
         if not p:
             raise Conflict('Apply before verification')
+        # Checked before any billable request; the catalog is fetched only for wildcard-only profiles.
+        try:
+            model, route_alias = verification_model(p, test_model,
+                None if concrete_alias(p) else self.catalog())
+        except ValueError as exc:
+            self.store.stage(operation_id,'failed','request',{'gateway':'failed','reason':str(exc),
+                             'external_agent':'awaiting-agent-request'})
+            raise
         self.store.stage(operation_id,'running','request')
         try:
             headers, response = self.gateways[0].call('/v1/chat/completions',{
-                'model':p['models'][0]['alias'], 'messages':[{'role':'user','content':'Reply OK.'}],
+                'model':model, 'messages':[{'role':'user','content':'Reply OK.'}],
                 'max_tokens':8,'user':'svc.'+p['code'] if p['user_mode']=='single' else 'connection-check',
                 'metadata':{'connection_check_id':operation_id}}, key=virtual_key)
             correlation = headers.get('x-litellm-call-id')
@@ -667,7 +692,7 @@ class Worker:
                 return self.store.operation(operation_id)
             result = {'gateway':'pending','external_agent':'awaiting-agent-request','call_id':correlation,
                       'route_id':rid,'reporting':'pending','started_at':op['created_at'].isoformat()}
-            expected = route_id(p['code'],p['models'][0]['alias'])
+            expected = route_id(p['code'],route_alias)
             if rid is not None and rid != expected:
                 result.update(gateway='failed',reason='Unexpected provider route')
             elif not correlation or not rid:
@@ -826,8 +851,10 @@ def build_app(worker, credential):
                 return getattr(worker,action)(str(uuid.UUID(body['operation_id'])))
             if action=='reconcile' and set(body)=={'code','revision','accept_hash'}:
                 return worker.reconcile(body['code'],body['revision'],body['accept_hash'])
-            if action=='verify' and set(body)=={'operation_id','virtual_key'}:
-                return worker.verify(str(uuid.UUID(body['operation_id'])),body['virtual_key'])
+            if action=='verify' and {'operation_id','virtual_key'} <= set(body) <= {'operation_id','virtual_key','test_model'}:
+                return worker.verify(str(uuid.UUID(body['operation_id'])),body['virtual_key'],body.get('test_model'))
+            if action=='catalog' and not body:
+                return worker.catalog()
             if action=='secret' and set(body)=={'value'}:
                 return worker.import_secret(body['value'])
             raise ValueError('Unsupported action or fields')
@@ -837,6 +864,8 @@ def build_app(worker, credential):
             raise HTTPException(422,str(exc)) from None
         except KeyError:
             raise HTTPException(404,'Profile or operation not found') from None
+        except CatalogUnavailable as exc:
+            raise HTTPException(503,str(exc)) from None
         except Exception:
             raise HTTPException(503,'Worker operation failed; inspect sanitized operation status') from None
     return app

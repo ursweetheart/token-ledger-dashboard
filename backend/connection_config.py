@@ -13,10 +13,63 @@ FIELDS = {'code', 'name', 'user_mode', 'reporting_start_date', 'active', 'secret
           'models', 'rpm', 'tpm', 'budget', 'quota_response_mode'}
 CODE = re.compile(r'[a-z0-9]+(?:-[a-z0-9]+)*\Z')
 REF = re.compile(r'[A-Z][A-Z0-9_]{1,95}\Z')
+MODEL_NAME = re.compile(r'[A-Za-z0-9_./:-]+\Z')
+# `GET /api/gateway-connections/catalog` shares the shape of `GET /{code}`.
+RESERVED_CODES = {'catalog'}
 
 
 class Conflict(ValueError):
     pass
+
+
+class CatalogUnavailable(RuntimeError):
+    pass
+
+
+def is_wildcard(model):
+    return model['upstream'].endswith('/*')
+
+
+def routable_catalog(cost_map, providers):
+    """Chat models LiteLLM can route, keyed by routing prefix.
+
+    `litellm_provider` is not a routing prefix (e.g. `vertex_ai-language-models`),
+    so the provider comes from the name and must appear in `/public/providers`.
+    """
+    if not isinstance(cost_map, dict) or not isinstance(providers, list):
+        raise ValueError('Gateway catalog has an unexpected shape')
+    allowed = {p for p in providers if isinstance(p, str)}
+    models = {}
+    for key, entry in cost_map.items():
+        if not isinstance(entry, dict) or entry.get('mode') != 'chat':
+            continue
+        name = key if '/' in key else f"{entry.get('litellm_provider')}/{key}"
+        provider = name.split('/', 1)[0]
+        # Names the form cannot save (e.g. `@` in Vertex versions) are not suggested.
+        if provider in allowed and MODEL_NAME.fullmatch(name):
+            models.setdefault(provider, set()).add(name)
+    return {'providers': sorted(models), 'models': {p: sorted(n) for p, n in sorted(models.items())}}
+
+
+def concrete_alias(p):
+    return next((m['alias'] for m in p['models'] if not is_wildcard(m)), None)
+
+
+def verification_model(p, requested, catalog):
+    """(model to call, alias of the route expected to serve it).
+
+    Verification must name a real model; a wildcard pattern is not callable.
+    """
+    alias = concrete_alias(p)
+    if alias:
+        return alias, alias
+    routes = {m['upstream'].split('/', 1)[0]: m['alias'] for m in p['models']}
+    if not isinstance(requested, str) or not requested:
+        raise ValueError('test_model: choose a concrete model for a wildcard-only profile')
+    provider = requested.split('/', 1)[0]
+    if provider not in routes or requested not in catalog['models'].get(provider, []):
+        raise ValueError('test_model: must be a catalog model under one of the profile wildcard providers')
+    return requested, routes[provider]
 
 
 def digest(value):
@@ -75,6 +128,8 @@ def validate_profile(value):
     p = deepcopy(value)
     row = registry_row(p)
     parse_config(yaml.safe_dump({'version': 1, 'agents': [row]}))
+    if p['code'] in RESERVED_CODES:
+        raise ValueError(f'code: "{p["code"]}" is reserved')
     p['name'] = p['name'].strip()
     p['reporting_start_date'] = date.fromisoformat(str(p['reporting_start_date'])).isoformat()
     if not isinstance(p['secret_ref'], str) or not REF.fullmatch(p['secret_ref']):
@@ -94,10 +149,14 @@ def validate_profile(value):
         for field in ('alias', 'upstream'):
             text = model[field]
             if (not isinstance(text, str) or not text or len(text) > 200 or
-                    '*' in text or not re.fullmatch(r'[A-Za-z0-9_./:-]+', text)):
-                raise ValueError(f'models.{field}: explicit model name required')
-        if not model['upstream'].startswith('gemini/'):
-            raise ValueError('models.upstream: Google Gemini routes only')
+                    not MODEL_NAME.fullmatch(text.replace('*', ''))):
+                raise ValueError(f'models.{field}: model name required')
+        provider, _, rest = model['upstream'].partition('/')
+        if not provider or not rest or '*' in provider or ('*' in rest and rest != '*'):
+            raise ValueError('models.upstream: use <provider>/<model> or <provider>/*')
+        # How LiteLLM maps `*` between two different patterns is unmeasured on the pinned image.
+        if ('*' in model['alias'] or rest == '*') and model['alias'] != model['upstream']:
+            raise ValueError('models.alias: a provider wildcard alias must equal its upstream')
         if model['alias'] in aliases:
             raise ValueError('models.alias: duplicate')
         aliases.add(model['alias'])
@@ -175,7 +234,7 @@ def integration_template(p, endpoint, network, context):
     identity = 'svc.' + p['code'] if p['user_mode'] == 'single' else '<stable-login-from-agent-server>'
     endpoint = endpoint.rstrip('/').removesuffix('/v1') + '/v1'
     lines = [f'GATEWAY_BASE_URL={endpoint}', 'GATEWAY_API_KEY=<virtual-key>',
-             f'GATEWAY_MODEL={p["models"][0]["alias"]}', f'X-User: {identity}', '',
+             f'GATEWAY_MODEL={concrete_alias(p) or "<provider>/<model>"}', f'X-User: {identity}', '',
              'Apply these values in the agent server; keep the existing fallback.',
              'Avoid retries at both layers. Recreate the agent container after env changes.',
              'Generated instructions do not change the deployed application.']

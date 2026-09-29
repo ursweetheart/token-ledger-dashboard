@@ -1,14 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Connection profile and wizard
-The system SHALL provide an admin connection wizard with agent code, name, user mode, reporting start date, provider secret reference, explicit model aliases, positive RPM/TPM, quota response mode (chat/batch), and finite per-key budget or explicit unlimited choice. Registered immutable fields MUST follow registry v1. Legacy agents outside the registry MUST remain read-only.
+The system SHALL provide an admin connection wizard with agent code, name, user mode, reporting start date, provider secret reference, model aliases (concrete or provider wildcard, as defined by `gateway-connection-providers`), positive RPM/TPM, quota response mode (chat/batch), and finite per-key budget or explicit unlimited choice. Registered immutable fields MUST follow registry v1. Legacy agents outside the registry MUST remain read-only.
 
 #### Scenario: Create a Gateway-only profile
 - **WHEN** an admin submits a valid new profile
 - **THEN** a draft revision is saved without deploying routes, issuing keys or sending AI requests
 
 #### Scenario: Invalid or immutable input
-- **WHEN** input has a duplicate code, wildcard alias, invalid rate or changed registered user mode
+- **WHEN** input has a duplicate code, a bare or misplaced wildcard alias, invalid rate or changed registered user mode
 - **THEN** validation rejects the request with field-specific errors and preserves applied configuration
 
 ### Requirement: Separate administration authority
@@ -30,7 +30,7 @@ The system SHALL display draft/applied revisions, deployment stage, key status a
 - **THEN** UI shows deployment applied and verification awaiting evidence rather than connected
 
 ### Requirement: Virtual key lifecycle and quota
-The system SHALL issue model-restricted, agent-tagged Virtual Keys, set budgets through existing quota semantics, and support explicit rotation/revocation. Plaintext Virtual Keys MUST only be returned in their issuance response and MUST NOT appear in list, audit or config templates. Unlimited quota MUST require explicit selection.
+The system SHALL issue agent-tagged Virtual Keys whose model access follows `gateway-connection-providers`, set budgets through existing quota semantics, and support explicit rotation/revocation. Plaintext Virtual Keys MUST only be returned in their issuance response and MUST NOT appear in list, audit or config templates. Unlimited quota MUST require explicit selection.
 
 #### Scenario: Lost issuance response
 - **WHEN** an issued key response was lost

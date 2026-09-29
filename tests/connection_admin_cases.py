@@ -157,6 +157,8 @@ def test_live_issue_unlimited_and_revocation(worker):
         # Tab Setting nhận ra key do tab Kết nối quản lý CHỈ bằng tiền tố này
         # (backend/gateway.py). Worker đổi mẫu tên thì lỗ vượt quyền mở lại.
         assert alias.startswith(MANAGED_KEY_PREFIX)
+        key=w.gateways[0].key(alias)
+        assert key['models']==['*'] and key['metadata']['tags']==[p['code']]
         assert issued['key'] not in json.dumps(w.store.detail(p['code']),default=str)
         with pytest.raises(Conflict): w.issue(str(op['id']))
         with psycopg2.connect(w.gateway_dsn) as cn:
@@ -274,6 +276,103 @@ def test_ledger_refresh_waits_for_gateway_log(worker):
         w.drain()
         run.assert_called_once()
     assert w.store.operation(str(op['id']))['result']['refresh_attempted'] is True
+
+
+def fixture_gateway():
+    if not DSN:
+        pytest.skip('Set CONNECTION_TEST_DSN for the isolated fixture')
+    from backend.connection_worker import Gateway
+    return Gateway('http://127.0.0.1:4401','sk-isolated-connections-test-master')
+
+
+def test_live_star_key_routes_provider_wildcard_by_tag():
+    # Measures the pinned image, not our code: `*` key access plus tag-filtered wildcard routes.
+    g=fixture_gateway(); keys={}; aliases=[]
+    try:
+        for tag in ('test-wild','wrong-wild'):
+            alias='wild-'+uuid.uuid4().hex; aliases.append(alias)
+            keys[tag]=g.call('/key/generate',{'key_alias':alias,'models':['*'],'metadata':{'tags':[tag]}})[1]['key']
+        for tag,route in (('test-wild','wild-route-test'),('wrong-wild','wild-route-wrong')):
+            for _ in range(3):
+                headers,response=g.call('/v1/chat/completions',{'model':'openai/any-new-model',
+                    'messages':[{'role':'user','content':'OK'}],'max_tokens':8},key=keys[tag])
+                assert response['choices'][0]['message']['content']=='OK'
+                assert headers.get('x-litellm-model-id')==route,(tag,headers.get('x-litellm-model-id'))
+        with pytest.raises(RuntimeError):
+            g.call('/v1/chat/completions',{'model':'anthropic/not-routed',
+                'messages':[{'role':'user','content':'OK'}],'max_tokens':8},key=keys['test-wild'])
+    finally:
+        if aliases: g.call('/key/delete',{'key_aliases':aliases})
+
+
+def test_live_catalog_endpoints_are_public_json():
+    from backend.connection_config import routable_catalog
+    g=fixture_gateway()
+    providers=g.call('/public/providers')[1]; cost_map=g.call('/public/litellm_model_cost_map')[1]
+    assert {'openai','gemini','anthropic'} <= set(providers)
+    catalog=routable_catalog(cost_map,providers)
+    assert 'gemini/gemini-2.5-flash' in catalog['models']['gemini']
+    assert 'anthropic/claude-sonnet-4-5' in catalog['models']['anthropic']
+
+
+def save_models(w,existing,*pairs):
+    p=profile('prov-'+uuid.uuid4().hex[:10]); p['secret_ref']=existing['draft']['secret_ref']
+    p['models']=[{'alias':a,'upstream':u} for a,u in pairs]
+    w.store.save(p,0,'admin')
+    return p
+
+
+def test_preview_checks_provider_and_model_against_catalog(worker):
+    w,existing=worker
+    bad=save_models(w,existing,('antropic/*','antropic/*'))
+    with pytest.raises(ValueError,match='antropic'): w.preview(bad['code'],1)
+    unknown=save_models(w,existing,('x','anthropic/not-a-real-model'))
+    with pytest.raises(ValueError,match='not a chat model'): w.preview(unknown['code'],1)
+    good=save_models(w,existing,('anthropic/*','anthropic/*'),('sonnet','anthropic/claude-sonnet-4-5'))
+    candidate=w.preview(good['code'],1)
+    wild=[r for r in candidate['routes']['model_list'] if r['model_name']=='anthropic/*']
+    assert len(wild)==1 and wild[0]['litellm_params']['tags']==[good['code']]
+    # `gemini/test` is only in the deployed configuration, never in the catalog.
+    assert w.preview(existing['code'],1)['profile']['models'][0]['upstream']=='gemini/test'
+
+
+def test_preview_fails_closed_without_catalog(worker):
+    from backend.connection_config import CatalogUnavailable
+    w,p=worker
+    files=w.files()
+    real=w.gateways[0].call
+    def broken(path,*args,**kwargs):
+        if path.startswith('/public/'): raise RuntimeError('Gateway unavailable or invalid response')
+        return real(path,*args,**kwargs)
+    with patch.object(w.gateways[0],'call',side_effect=broken):
+        with pytest.raises(CatalogUnavailable): w.preview(p['code'],1)
+    assert w.files()==files
+
+
+def test_preview_lists_untagged_routes(worker):
+    w,p=worker
+    routes=yaml.safe_load(w.paths['routes'].read_text(encoding='utf-8'))
+    routes['model_list'].append({'model_name':'open-legacy','litellm_params':{'model':'gemini/test'}})
+    w.paths['routes'].write_text(yaml.safe_dump(routes),encoding='utf-8')
+    with w.store.transaction() as cur:
+        cur.execute('SELECT baseline FROM gateway_connection_deployment FOR UPDATE')
+        baseline=cur.fetchone()['baseline']; baseline['files']=w.files()
+        cur.execute('UPDATE gateway_connection_deployment SET baseline=%s',(Json(baseline),))
+    assert w.preview(p['code'],1)['changes']['untagged_routes']==['open-legacy']
+
+
+def test_wildcard_only_verification_needs_catalog_test_model(worker):
+    w,existing=worker
+    p=save_models(w,existing,('anthropic/*','anthropic/*'))
+    with w.store.transaction() as cur:
+        cur.execute('UPDATE gateway_connection_profile SET applied=draft,applied_revision=revision WHERE code=%s',(p['code'],))
+    for requested in (None,'openai/gpt-4o'):
+        op=w.store.enqueue(p['code'],'verify',1,uuid.uuid4().hex,'admin',{})
+        with patch.object(w.gateways[0],'call',wraps=w.gateways[0].call) as call:
+            with pytest.raises(ValueError,match='test_model'):
+                w.verify(str(op['id']),'sk-some-agent-key',requested)
+            assert all(c.args[0]!='/v1/chat/completions' for c in call.call_args_list)
+        assert w.store.operation(str(op['id']))['status']=='failed'
 
 
 def test_draft_profiles_block_legacy_rebuild(worker):

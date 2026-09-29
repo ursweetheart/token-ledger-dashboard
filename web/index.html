@@ -1383,16 +1383,18 @@
           <label><input name="active" type="checkbox" checked> Đang hoạt động (không tự thu hồi key khi bỏ chọn)</label>
         </fieldset>
         <fieldset><legend>2. Provider và model</legend>
-          <label>Tham chiếu Google key <input class="text-input" name="secret_ref" required placeholder="KEY_MANAGED_…"></label>
-          <label>Google API key mới <input class="text-input" id="connection-provider-key" type="password" autocomplete="off"></label>
+          <label>Tham chiếu khoá provider <input class="text-input" name="secret_ref" required placeholder="KEY_MANAGED_…"></label>
+          <label>Khoá API provider mới <input class="text-input" id="connection-provider-key" type="password" autocomplete="off"></label>
           <button class="btn btn-secondary" type="button" id="connection-import-secret">Lưu key và lấy tham chiếu</button>
-          <label>Model alias <input class="text-input" name="alias" required placeholder="gemini-flash-lite"></label>
-          <label>Model Google <input class="text-input" name="upstream" required placeholder="gemini/model-name"></label>
+          <label>Provider (lọc gợi ý model) <select class="filter-select" id="connection-provider"><option value="">Tất cả provider</option></select></label>
+          <datalist id="connection-model-options"></datalist>
+          <label>Model alias <input class="text-input" name="alias" required placeholder="tap-flash-lite hoặc anthropic/*"></label>
+          <label>Model provider <input class="text-input" name="upstream" required list="connection-model-options" placeholder="anthropic/claude-… hoặc anthropic/*"></label>
           <div id="connection-extra-models"></div>
           <button class="btn btn-secondary" type="button" id="connection-add-model">Thêm model</button>
           <label>RPM <input class="text-input" name="rpm" type="number" min="1" step="1" value="15" required></label>
           <label>TPM <input class="text-input" name="tpm" type="number" min="1" step="1" value="1000000" required></label>
-          <p>Key chung dùng chung quota Google project. Mã agent vẫn tách usage trên dashboard.</p>
+          <p>Tham chiếu khoá dùng chung nghĩa là dùng chung quota tài khoản provider. Mã agent vẫn tách usage trên dashboard. Model dạng <code>provider/*</code> thì alias phải trùng model.</p>
         </fieldset>
         <fieldset><legend>3. Hạn mức Virtual Key</legend>
           <label>Khi hết hạn mức <select class="filter-select" name="quota_response_mode"><option value="batch">Lỗi 429 cho ứng dụng tự động</option><option value="chat">Thông báo cho ứng dụng chat</option></select></label>
@@ -1423,6 +1425,7 @@
         <button class="btn btn-secondary" type="button" id="connection-accept-drift" disabled>Chấp nhận baseline đã xem</button>
         <button class="btn btn-secondary" type="button" id="connection-recover">Phục hồi operation bị lỗi</button></div>
       <form id="connection-test"><label>Virtual Key của agent cho lần test <input class="text-input" name="virtual_key" type="password" autocomplete="off" required></label>
+        <label>Model thử (khi mọi model đều là provider/*) <input class="text-input" name="test_model" list="connection-model-options" autocomplete="off"></label>
         <label><input name="accept_cost" type="checkbox" required> Chấp nhận request thử có thể phát sinh phí provider</label>
         <button class="btn btn-primary" type="submit">Kiểm tra Gateway</button></form>
       <p>Test này chạy từ worker. Để xác minh ứng dụng agent, cần request có correlation từ chính ứng dụng đã triển khai.</p>

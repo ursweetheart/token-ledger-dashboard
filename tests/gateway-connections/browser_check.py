@@ -31,6 +31,9 @@ def main():
                     route.fulfill(json=profile); return
                 if path=='gateway-connections':
                     route.fulfill(json={'profiles':[profile] if profile else [],'legacy':[]}); return
+                if path=='gateway-connections/catalog':
+                    route.fulfill(json={'providers':['anthropic','gemini'],
+                                        'models':{'anthropic':['anthropic/claude-haiku-4-5'],'gemini':['gemini/test']}}); return
                 if path.endswith('/preview'):
                     route.fulfill(json={'preview_hash':'reviewed','changes':{'agent':profile['code'],'instances':['litellm-1','litellm-2']}}); return
                 if path.endswith('/template'):
@@ -54,14 +57,22 @@ def main():
                 route.fulfill(json={'ranges':{},'warnings':[]}); return
             route.fulfill(json={'rows':[]})
         page.route('**/api/**',respond)
-        page.goto(ROOT.joinpath('web/index.html').as_uri()+'?api=http://127.0.0.1:8000&tab=setting')
-        page.get_by_role('button',name='⚙ Setting',exact=True).click()
+        page.goto(ROOT.joinpath('web/index.html').as_uri()+'?api=http://127.0.0.1:8000&tab=connections')
+        page.get_by_role('button',name='🔗 Kết nối agent',exact=True).click()
         panel=page.locator('#gateway-connections')
         panel.locator('#connection-login input').fill('browser-admin-only')
         panel.locator('#connection-login input').press('Enter')
         page.locator('#connection-workspace').wait_for(state='visible')
         form=page.locator('#connection-form')
         assert not form.evaluate('(form) => form.checkValidity()')
+        # Provider-neutral form fed by the Gateway catalog.
+        assert 'Google' not in form.inner_text()
+        options=lambda: page.eval_on_selector_all('#connection-model-options option','(os) => os.map(o => o.value)')
+        page.wait_for_function("document.querySelectorAll('#connection-model-options option').length > 0")
+        assert {'anthropic/*','anthropic/claude-haiku-4-5','gemini/*','gemini/test'} <= set(options())
+        page.locator('#connection-provider').select_option('gemini')
+        assert set(options())=={'gemini/*','gemini/test'}
+        page.locator('#connection-provider').select_option('')
         for name,value in {'code':'browser-agent','name':'Trợ lý kiểm thử','reporting_start_date':'2026-09-26',
                            'secret_ref':'KEY_MANAGED_TEST','alias':'test','upstream':'gemini/test'}.items():
             form.locator(f'[name={name}]').fill(value)
@@ -94,9 +105,12 @@ def main():
         panel.get_by_role('button',name='Thu hồi tất cả key đã quản lý',exact=True).click()
         page.get_by_text('Đã thu hồi key managed; giữ lịch sử. Key ngoài quản lý cần kiểm riêng.',exact=True).wait_for()
         test=panel.locator('#connection-test'); test.locator('[name=virtual_key]').fill('sk-transient-test-key')
+        test.locator('[name=test_model]').fill('gemini/test')
         test.locator('[name=accept_cost]').check(); test.get_by_role('button',name='Kiểm tra Gateway',exact=True).click()
         page.get_by_text('Trạng thái: inconclusive',exact=True).wait_for()
         assert test.locator('[name=virtual_key]').input_value()==''
+        sent=[c['payload'] for c in captured if c['url'].endswith('/verify')][-1]
+        assert sent['test_model']=='gemini/test' and sent['virtual_key']=='sk-transient-test-key'
         operation.update(status='verified',result={'gateway':'verified','reporting':'verified'})
         panel.get_by_role('button',name='Tải lại',exact=True).click()
         page.locator('#connection-status').get_by_text('Trạng thái: verified',exact=False).wait_for()
@@ -104,19 +118,19 @@ def main():
         storage=page.evaluate('JSON.stringify(localStorage)')
         assert 'browser-admin-only' not in storage
         # Origin changes invalidate the in-memory credential before sending.
-        page.evaluate("history.replaceState({},'', '?api=http://127.0.0.1:8001&tab=setting')")
+        page.evaluate("history.replaceState({},'', '?api=http://127.0.0.1:8001&tab=connections')")
         before=len(captured)
         panel.get_by_role('button',name='Tải lại',exact=True).click()
         page.get_by_text('Hãy nhập khoá quản trị cho địa chỉ backend này.',exact=True).wait_for()
         assert len(captured)==before and page.locator('#connection-workspace').is_hidden()
         # Reopen for screenshot at normal origin, no credential shown.
-        page.evaluate("history.replaceState({},'', '?api=http://127.0.0.1:8000&tab=setting')")
+        page.evaluate("history.replaceState({},'', '?api=http://127.0.0.1:8000&tab=connections')")
         panel.locator('#connection-login input').fill('browser-admin-only')
         panel.get_by_role('button',name='Mở quản trị',exact=True).click()
         page.locator('#connection-workspace').wait_for(state='visible')
         page.locator('#connection-select').select_option('browser-agent')
         page.screenshot(path=str(ROOT/'.worktrees/gateway-connections-ui.png'),full_page=True)
-        print('PASS: real Chromium login, multi-model draft, preview/apply, key issuance/revocation, inconclusive test, template, credential memory/origin isolation')
+        print('PASS: real Chromium login, provider catalog suggestions, multi-model draft, preview/apply, key issuance/revocation, inconclusive test with test model, template, credential memory/origin isolation')
         browser.close()
 
 
