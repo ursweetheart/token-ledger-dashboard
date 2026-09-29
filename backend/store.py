@@ -193,6 +193,19 @@ def accounts(cn) -> list[dict]:
                a.unit_id, u.name AS unit_name, u.path AS unit_path,
                a.unit_conflict, a.is_shared, a.role, a.is_enabled, a.created_at,
                g.name AS agent,
+               -- MỌI agent nơi người này CÓ MẶT, không chỉ agent thắng (change
+               -- keep-a-person-visible-in-every-agent-they-use, D4). Một người dùng hai
+               -- app có hai dòng dim_user - đo 21/09: 5 người ở cả Ralli lẫn TLA Hợp Đồng,
+               -- và danh bạ TLA Hợp Đồng hiện thiếu 4/44 vì chỉ đọc agent thắng.
+               -- "Có mặt" = dòng danh bạ, không tính dòng nhật ký (D7). LUÔN gồm agent
+               -- thắng: người chỉ-có-trong-nhật-ký vẫn phải hiện ở chỗ hôm nay họ hiện -
+               -- cột này chỉ được THÊM người vào bộ lọc, không được làm mất ai.
+               ARRAY(SELECT n FROM (
+                         SELECT g2.name AS n FROM dim_user d2
+                         JOIN dim_agent g2 ON g2.agent_id = d2.agent_id
+                         WHERE d2.account_id = a.account_id AND d2.found_in = 'directory'
+                           AND NOT d2.is_technical
+                         UNION SELECT g.name) x ORDER BY n) AS agents,
                CASE WHEN EXISTS (SELECT 1 FROM dim_user d
                                   WHERE d.account_id = a.account_id
                                     AND d.found_in = 'directory')

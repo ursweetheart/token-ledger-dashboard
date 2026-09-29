@@ -480,8 +480,8 @@ liệu riêng. Đó là code thật, không phải một dòng cấu hình.
 một dòng, dù họ dùng mấy app. Rồi `unit_priority` (dòng 492) chọn **một** agent chủ cho dòng
 đó, và tiêu chí thứ ba là **`agent_id` nhỏ nhất**.
 
-Trong khi đó `load_gateway.py:378` chỉ nhận định danh khi tài khoản thuộc **chính agent đang
-gửi request**:
+Trong khi đó, **trước 21/09/2026**, `load_gateway.py` chỉ nhận định danh khi tài khoản thuộc
+**chính agent đang gửi request** (đã sửa, xem cuối mục này):
 
 ```
        account.unit_agent_id      request mang tag của       kết quả
@@ -499,18 +499,36 @@ danh, cộng vào `identity_unresolvable`, và dồn về tài khoản neo.
 Hỏng **im lặng**: tổng token đúng, tổng tiền đúng, HTTP 200 hết. Chỉ chiều người dùng của
 agent 9 là rỗng.
 
-Hôm nay chuyện này chưa xảy ra, vì hai agent nhiều người dùng duy nhất (5 và 8) **chưa cái
-nào đi qua Gateway**. Quy tắc `found[1] == agent_id` được viết để phục vụ đúng trường hợp
-này, và nó chưa từng gặp trường hợp này.
+**Đã sửa, trước khi nó kịp xảy ra** (change `keep-a-person-visible-in-every-agent-they-use`,
+21/09/2026). Quy tắc `found[1] == agent_id` đã bỏ. `load_gateway.py` nay tra khoá đôi
+`(agent_id, tên đăng nhập đã LOWER/TRIM)` trong danh bạ của **chính agent gửi request**
+(`db/connect.py`: dòng danh bạ `dim_user` cho người thật, cộng tài khoản dịch vụ `svc.<code>`).
+Người có mặt ở hai agent nay được nhận ở cả hai. Câu hỏi đổi từ *"người này thuộc về ai"*
+sang *"người này có mặt ở đâu"*.
+
+Số đo:
+
+- 21/09, `build_rows()` với dữ liệu giả: `X-User: pbh1_ntlong` qua tag agent 9 trước khi sửa
+  cho `identity_unresolvable = 1`; sau khi sửa thì quy đúng tài khoản. Định danh **không** có
+  trong danh bạ (ca `admin` gọi qua agent 6) vẫn bị từ chối — phép kiểm âm giữ điều đó.
+- 21/09, `--dry-run --full` trên sổ thật: 500 dòng, 234.420 token, `identity_unresolvable`
+  15 → 15. Cả 15 đều là định danh phải từ chối; 6 agent một-người-dùng không đổi một dòng.
+- 30/09, `scripts/audit_db.py` có phép canh *"Gateway calls by people in an agent's directory
+  keep their own account"*. Hôm nay nó báo **chưa kiểm được** (chưa agent nhiều người dùng nào
+  qua Gateway, 0 dòng để quan sát). Thử bằng 3 dòng giả trên danh bạ thật: bắt đúng dòng rơi
+  về neo, bỏ qua định danh lạ.
+- 30/09, danh bạ trên dashboard trả thêm cột `agents` (mọi agent nơi người đó có mặt): lọc
+  theo TLA Hợp Đồng nay gồm đủ 44/44 người danh bạ, thay vì 40.
 
 ### Phải chốt gì trước khi nối agent nhiều người dùng đầu tiên
 
 1. **Nguồn danh bạ** — lấy người của agent mới từ đâu, ai kéo, kéo bao lâu một lần.
-2. **Một người ở nhiều agent** — giữ nguyên "một dòng một người" rồi sửa phép tra định danh
-   thành *"tài khoản này có mặt ở agent đó không"*, hay tách dòng theo từng agent. Hai hướng
-   này khác nhau ở chiều phòng ban và ở chỉ tiêu tỷ lệ áp dụng, không chỉ ở một câu `WHERE`.
-3. **Phép kiểm âm** — `identity_unresolvable` phải bằng 0 sau lượt nạp đầu. Con số này đang
-   được đếm sẵn; đừng nghiệm thu bằng tổng token, vì tổng token vẫn đúng khi chuyện này hỏng.
+2. ~~**Một người ở nhiều agent**~~ — **đã chốt 21/09**: giữ "một dòng một người", phép tra
+   định danh hỏi *"có mặt ở agent đó không"* (đã sửa, xem trên). Phòng ban hiển thị vẫn theo
+   agent thắng; hai app xếp khác nhau thì `account.unit_conflict = 1` ghi nhãn.
+3. **Phép kiểm âm** — người trong danh bạ phải có `identity_unresolvable` bằng 0 sau lượt nạp
+   đầu, và phép canh trong `scripts/audit_db.py` phải chuyển từ *chưa kiểm được* sang *đạt*.
+   Đừng nghiệm thu bằng tổng token, vì tổng token vẫn đúng khi chuyện này hỏng.
 
 Chưa chốt xong ba điều trên thì **chưa nối được** agent nhiều người dùng, dù phía Gateway
 (mục 2) có làm đủ cả chín việc.

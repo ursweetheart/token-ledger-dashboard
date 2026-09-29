@@ -8,24 +8,41 @@ Bảng `account` gộp mỗi con người thành **một dòng** (`username` là
 câu *"người này dùng agent nào"*, trong khi nó sinh ra để trả lời câu *"lấy phòng ban theo cây của
 app nào"*. Một cột, hai nghĩa, và nghĩa thứ hai là nghĩa mượn.
 
-**Đo được, không phải lo xa.** Quét danh bạ đợt kéo 20/09/2026:
+**Đo trên database đã dựng lại, 21/09/2026** (việc 0.2–0.4). Con số dưới đây là số ĐO, không phải
+số suy:
 
 | | |
 |---|---|
 | Danh bạ Ralli (agent 8) | 892 tên |
 | Danh bạ TLA Hợp Đồng (agent 5) | 44 tên |
-| **Có mặt ở cả hai** | **5 người** |
+| **Có mặt ở cả hai, theo `dim_user`** | **6 người** |
 
-`longnt` · `pbh3_tthien` · `quy.tv@rangdong.com.vn` · `tg.namnh` · `tt3.binhtv`
+```
+  longnt · pbh3_tthien · tg.namnh · tt3.binhtv   →  thuộc Ralli (8)
+  quy.tv@rangdong.com.vn                         →  thuộc TLA Hợp Đồng (5)
+  admin                                          →  thuộc TLA Hợp Đồng (5)
+```
 
-Con số 5 trùng khít với chú thích có sẵn ở `db/migrations/sql/001_baseline.sql:239-240` — *"5 dòng
-do cùng một tên đăng nhập tồn tại ở cả hai app"* — viết bởi người khác, lúc khác, bằng đường khác.
-Hai nguồn độc lập cùng ra 5.
+**Năm người đầu** là trùng trong **danh bạ** của cả hai app. Số 5 khớp chú thích có sẵn ở
+`db/migrations/sql/001_baseline.sql:239-240` — *"5 dòng do cùng một tên đăng nhập tồn tại ở cả hai
+app"* — viết bởi người khác, lúc khác, bằng đường khác.
 
-Phép chọn cho kết quả: **Ralli giữ 4/5, TLA Hợp Đồng giữ 1/5.** Không phải vì `agent_id` nhỏ hơn —
-tiêu chí ấy nằm ở tầng ba và không quyết định ca nào. Quyết định là **độ sâu cây đơn vị**: Ralli
-khai `PBH1` sâu 3 trong khi TLA HĐ khai `Phòng BH1` sâu 2. Bên nào mô tả cơ cấu chi tiết hơn thì
-bên ấy thắng — nên bên thua là agent **cũ hơn, nhỏ hơn**, không phải agent mới.
+**`admin` là người thứ sáu, và nó khác loại.** Nó vào Ralli qua `found_in = 'log'`, không qua danh
+bạ. Phép đo đầu tiên đọc tệp danh bạ nên không thấy nó; chỉ khi dựng lại database mới lộ ra.
+Chuyện này mở một câu hỏi thiết kế — xem `design.md` Open Question 4.
+
+Phép chọn: trong năm người danh bạ, **Ralli giữ 4, TLA Hợp Đồng giữ 1**. Hai lý do khác nhau, cả
+hai đều đo được:
+
+- Bốn người về Ralli vì **cây đơn vị của nó sâu hơn** (`PBH1` sâu 3 so với `Phòng BH1` sâu 2) —
+  tầng 2 của phép chọn. `agent_id` nằm ở tầng ba và **không quyết định ca nào**.
+- `quy.tv@rangdong.com.vn` về TLA Hợp Đồng vì Ralli xếp anh ấy vào *"Chưa quy được"* — tầng 1
+  quyết định trước khi tới độ sâu.
+
+Nên bên thua là agent **cũ hơn, nhỏ hơn**, không phải agent mới.
+
+`unit_conflict` bật ở **4/6**, không phải 6: `admin` và `quy.tv` đều có một bên im lặng, mà theo
+lược đồ thì im lặng *"không tính là cãi nhau"*.
 
 ## Ba hậu quả, một nguyên nhân
 
