@@ -227,8 +227,11 @@ class Worker:
         baseline = self.baseline()
         if not baseline:
             raise Conflict('Operator must bootstrap configuration ownership before preview')
-        if self.files() != baseline['files']:
-            raise Conflict('Configuration file drift; explicit reconciliation required')
+        current = self.files()
+        if current != baseline['files']:
+            # File names only (never contents or hashes), so the operator knows what to review.
+            changed = sorted(self.paths[n].name for n in current if current[n] != baseline['files'].get(n))
+            raise Conflict('Configuration file drift (' + ', '.join(changed) + '); explicit reconciliation required')
         if cn is None:
             with psycopg2.connect(self.ledger_dsn) as read_cn:
                 read_cn.set_session(readonly=True)

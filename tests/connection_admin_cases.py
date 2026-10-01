@@ -202,7 +202,7 @@ def test_reconcile_file_drift(worker):
         cur.execute('SELECT name FROM dim_agent WHERE code=%s',(p['code'],))
     # File drift is reviewed explicitly, not silently overwritten.
     w.paths['registry'].write_text('version: 1\nagents: []\n# CLI edit\n')
-    with pytest.raises(Conflict): w.preview(p['code'],1)
+    with pytest.raises(Conflict,match=r'drift \(gateway-agents\.yaml\)'): w.preview(p['code'],1)
     reviewed=w.reconcile(p['code'],1)
     assert not reviewed['accepted']
     assert w.reconcile(p['code'],1,reviewed['review_hash'])['accepted']
