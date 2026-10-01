@@ -1374,6 +1374,11 @@
       <div class="connection-toolbar"><label>Hồ sơ <select class="filter-select" id="connection-select"><option value="">Agent mới</option></select></label>
         <button class="btn btn-secondary" type="button" id="connection-reload">Tải lại</button></div>
       <p id="connection-legacy"></p>
+      <section class="connection-card" aria-labelledby="connection-card-config">
+        <header class="connection-card-head">
+          <h3 id="connection-card-config">Cấu hình Gateway</h3>
+          <p>Khai báo agent, provider, model và hạn mức. Lưu bản nháp, xem lại thay đổi, rồi áp dụng lên Gateway.</p>
+        </header>
       <form id="connection-form" class="connection-grid">
         <fieldset><legend>1. Thông tin agent</legend>
           <label>Mã agent <input class="text-input" name="code" required pattern="[a-z0-9]+(-[a-z0-9]+)*" maxlength="96"></label>
@@ -1403,27 +1408,66 @@
           <p>Key thay thế có spend và hạn mức riêng. Khi hai key cùng hoạt động, có hai ngân sách độc lập.</p>
         </fieldset>
         <div class="connection-actions">
-          <button class="btn btn-secondary" type="submit" id="connection-preview">4. Xem thay đổi</button>
+          <button class="btn btn-secondary" type="submit" id="connection-preview">4. Lưu thành bản nháp &amp; Review</button>
           <button class="btn btn-primary" type="button" id="connection-apply" disabled>5. Áp dụng</button>
         </div>
       </form>
       <pre id="connection-preview-summary" role="status" aria-live="polite"></pre>
-      <pre id="connection-preview-result" tabindex="0" aria-label="Thay đổi dự kiến"></pre>
-      <div class="connection-actions"><button class="btn btn-primary" type="button" id="connection-issue">Cấp key / key thay thế</button>
-        <label>Virtual Key <select class="filter-select" id="connection-key-select"><option value="">Chọn key managed</option></select></label>
-        <button class="btn btn-secondary" type="button" id="connection-budget">Đặt hạn mức cho key đã chọn</button>
-        <button class="btn btn-secondary" type="button" id="connection-revoke-one">Thu hồi key đã chọn</button>
-        <button class="btn btn-secondary" type="button" id="connection-revoke">Thu hồi tất cả key đã quản lý</button>
-        <button class="btn btn-secondary" type="button" id="connection-template-host">Hướng dẫn host</button>
-        <button class="btn btn-secondary" type="button" id="connection-template-docker">Hướng dẫn Docker</button></div>
+      <div class="connection-output">
+        <pre id="connection-preview-result" tabindex="0" aria-label="Thay đổi dự kiến"></pre>
+        <button class="connection-copy" type="button" id="connection-copy-result" title="Sao chép" aria-label="Sao chép nội dung khung này">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>
+        </button>
+      </div>
+        <div class="connection-sub">
+          <h4>Thay đổi ngoài giao diện &amp; khôi phục sự cố</h4>
+          <p>Dùng khi worker báo "drift" (file cấu hình bị sửa tay ngoài UI) hoặc một lần Áp dụng bị lỗi giữa chừng.</p>
+      <div class="connection-actions"><button class="btn btn-secondary" type="button" id="connection-reconcile">So sánh với bản trước đó</button>
+        <button class="btn btn-secondary" type="button" id="connection-accept-drift" disabled>Chấp nhận baseline đã xem</button>
+        <button class="btn btn-secondary" type="button" id="connection-recover">Phục hồi operation bị lỗi</button></div>
+        </div>
+      </section>
+      <section class="connection-card" aria-labelledby="connection-card-keys">
+        <header class="connection-card-head">
+          <h3 id="connection-card-keys">Quản lý Virtual Key</h3>
+          <p>Key mà agent cầm để gọi Gateway. Ngân sách tính riêng cho từng key.</p>
+        </header>
+        <div class="connection-sub">
+          <h4>Sinh key mới</h4>
+          <p>Hạn mức của key mới lấy ở mục 3 của form cấu hình. Chuỗi key chỉ hiện một lần, hãy chép ngay.</p>
+          <div class="connection-actions"><button class="btn btn-primary" type="button" id="connection-issue">Sinh Virtual key</button></div>
       <div id="connection-key-once" hidden><p>Copy key ngay; hệ thống không trả lại key này lần nữa.</p>
         <input class="text-input" id="connection-issued-key" type="password" readonly aria-label="Virtual Key vừa cấp">
         <button class="btn btn-secondary" type="button" id="connection-show-key">Hiện / ẩn key</button>
         <button class="btn btn-secondary" type="button" id="connection-clear-key">Đã lưu key</button></div>
-      <pre id="connection-template" tabindex="0" aria-label="Hướng dẫn kết nối"></pre>
-      <div class="connection-actions"><button class="btn btn-secondary" type="button" id="connection-reconcile">Xem thay đổi ngoài UI</button>
-        <button class="btn btn-secondary" type="button" id="connection-accept-drift" disabled>Chấp nhận baseline đã xem</button>
-        <button class="btn btn-secondary" type="button" id="connection-recover">Phục hồi operation bị lỗi</button></div>
+        </div>
+        <div class="connection-sub">
+          <h4>Key đang hoạt động của hồ sơ</h4>
+          <p>Chọn một key rồi đặt hạn mức hoặc thu hồi riêng key đó. Thay key (rotate): Sinh Virtual key mới, cập nhật agent, sau đó chọn key cũ và Thu hồi.</p>
+          <div class="connection-actions">
+            <label>Virtual Key <select class="filter-select" id="connection-key-select"><option value="">Chọn key managed</option></select></label>
+            <button class="btn btn-secondary" type="button" id="connection-budget">Đặt hạn mức cho key đã chọn</button>
+            <button class="btn btn-secondary" type="button" id="connection-revoke-one">Thu hồi key đã chọn</button>
+            <button class="btn btn-secondary" type="button" id="connection-revoke">Thu hồi tất cả key đã quản lý</button>
+          </div>
+        </div>
+      </section>
+      <section class="connection-card" aria-labelledby="connection-card-guide">
+        <header class="connection-card-head">
+          <h3 id="connection-card-guide">Hướng dẫn nối ứng dụng agent</h3>
+          <p>Mẫu cấu hình để đặt vào ứng dụng agent (địa chỉ Gateway, key, model, X-User).</p>
+        </header>
+        <div class="connection-actions">
+          <button class="btn btn-secondary" type="button" id="connection-template-host">Hướng dẫn host</button>
+          <button class="btn btn-secondary" type="button" id="connection-template-docker">Hướng dẫn Docker</button>
+        </div>
+        <pre id="connection-template" tabindex="0" aria-label="Hướng dẫn kết nối"></pre>
+      </section>
+      <section class="connection-card" aria-labelledby="connection-card-test">
+        <header class="connection-card-head">
+          <h3 id="connection-card-test">Kiểm thử kết nối</h3>
+          <p>Kiểm tra từ worker, hoặc đối chiếu một request thật của ứng dụng agent.</p>
+        </header>
       <form id="connection-test"><label>Virtual Key của agent cho lần test <input class="text-input" name="virtual_key" type="password" autocomplete="new-password" required></label>
         <label>Model thử (khi mọi model đều là provider/*) <input class="text-input" name="test_model" list="connection-model-options" autocomplete="off"></label>
         <label><input name="accept_cost" type="checkbox" required> Chấp nhận request thử có thể phát sinh phí provider</label>
@@ -1431,7 +1475,14 @@
       <p>Test này chạy từ worker. Để xác minh ứng dụng agent, cần request có correlation từ chính ứng dụng đã triển khai.</p>
       <form id="connection-external-test"><label>Request ID từ ứng dụng agent đã triển khai <input class="text-input" name="request_id" maxlength="200" required></label>
         <button class="btn btn-primary" type="submit">Đối chiếu request của agent</button></form>
-      <pre id="connection-status" tabindex="0" aria-label="Trạng thái kết nối"></pre>
+      </section>
+      <section class="connection-card" aria-labelledby="connection-card-status">
+        <header class="connection-card-head">
+          <h3 id="connection-card-status">Trạng thái thao tác</h3>
+          <p>Kết quả của lần Áp dụng, Sinh key, Thu hồi hoặc Kiểm thử gần nhất.</p>
+        </header>
+        <pre id="connection-status" tabindex="0" aria-label="Trạng thái kết nối"></pre>
+      </section>
     </div>
   </section>
 </div>

@@ -12,7 +12,12 @@
   var root = document.getElementById('gateway-connections');
   if (!root) return;
   function el(id) { return document.getElementById('connection-' + id); }
-  function message(text) { el('message').textContent = text; }
+  // The box is sticky (see CSS) so it stays visible while the page scrolls: never scroll for it.
+  function message(text, isError) {
+    var box = el('message');
+    box.textContent = /drift/.test(text) ? text + ' — Bấm "So sánh với bản trước đó" để xem và chấp nhận.' : text;
+    box.classList.toggle('is-error', !!isError);
+  }
   // Inconclusive is not a failure: missing evidence does not prove the route wrong.
   function mark(value) {
     if (['verified', 'applied', 'issued', 'refresh-complete'].indexOf(value) >= 0) return '✅ ';
@@ -93,7 +98,7 @@
       e.preventDefault();
       var control = e.currentTarget;
       if (control.tagName === 'BUTTON') control.disabled = true;
-      try { await action(e); } catch (error) { message(error.message); }
+      try { await action(e); } catch (error) { message(error.message, true); }
       finally { if (control.tagName === 'BUTTON') control.disabled = !enabled(id); }
     });
   }
@@ -119,7 +124,7 @@
   async function loadCatalog() {
     var result = null;
     try { result = await request('/catalog'); }
-    catch (error) { message('Chưa tải được danh mục model: ' + error.message); }
+    catch (error) { message('Chưa tải được danh mục model: ' + error.message, true); }
     catalog = result && Array.isArray(result.providers) && result.models ? result : { providers: [], models: {} };
     el('provider').replaceChildren(new Option('Tất cả provider', ''));
     catalog.providers.forEach(function (p) { el('provider').add(new Option(p, p)); });
@@ -153,9 +158,15 @@
   }
   function keyChoices(profile) {
     el('key-select').replaceChildren(new Option('Chọn key managed',''));
-    (profile.keys || []).filter(function (key) { return key.status === 'active'; }).forEach(function (key) {
-      el('key-select').add(new Option(key.key_alias,key.key_alias));
+    var active = (profile.keys || []).filter(function (key) { return key.status === 'active'; });
+    active.forEach(function (key) {
+      // Label by agent, budget and creation time (VN) so a person can tell keys apart; the value stays the alias.
+      var made = new Date(key.created_at).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false });
+      var cap = key.budget && key.budget.mode === 'finite' ? key.budget.usd + ' USD' : 'không giới hạn';
+      el('key-select').add(new Option(key.code + ' · ' + cap + ' · tạo ' + made + ' · …' + key.key_alias.slice(-6), key.key_alias));
     });
+    // One active key leaves nothing to choose; with two or more the person must pick (no wrong-key mistakes).
+    if (active.length === 1) el('key-select').selectedIndex = 1;
   }
   function fill(profile) {
     selected = profile; preview = null; el('apply').disabled = true; clearKey();
@@ -183,7 +194,7 @@
     el('legacy').textContent = 'Agent legacy chỉ xem: ' + list.legacy.map(function (p) { return p.name; }).join(', ');
     if (selected) { select.value = selected.code; fill(await request('/' + encodeURIComponent(selected.code))); }
   }
-  function requireProfile() { if (!selected) throw new Error('Bấm "4. Xem thay đổi" để lưu hồ sơ trước.'); return '/' + encodeURIComponent(selected.code); }
+  function requireProfile() { if (!selected) throw new Error('Bấm "4. Lưu thành bản nháp & Review" để lưu hồ sơ trước.'); return '/' + encodeURIComponent(selected.code); }
   function operationBody(extra) {
     requireProfile();
     return Object.assign({ expected_revision: selected.revision, idempotency_key: global.crypto.randomUUID() }, extra || {});
@@ -192,7 +203,7 @@
     var operation = await request('/operations/' + encodeURIComponent(id));
     status(operation);
     if (operation.status === 'queued' || operation.status === 'running' || operation.status === 'pending') {
-      poll = global.setTimeout(function () { monitor(id).catch(function (e) { message(e.message); }); }, 2000);
+      poll = global.setTimeout(function () { monitor(id).catch(function (e) { message(e.message, true); }); }, 2000);
     } else { message('Trạng thái: ' + operation.status); await reload(); }
   }
   bind('login', 'submit', async function () {
@@ -235,7 +246,7 @@
     return String(value);
   }
   function changeSummary(draft, applied) {
-    var outside = 'Thay đổi ngoài UI (sửa tay file cấu hình, agent khác) không nằm ở đây: xem bằng nút "Xem thay đổi ngoài UI".';
+    var outside = 'Thay đổi ngoài UI (sửa tay file cấu hình, agent khác) không nằm ở đây: xem bằng nút "So sánh với bản trước đó".';
     if (!applied) return ['Chưa áp dụng lần nào — toàn bộ cấu hình bên dưới là mới.', outside];
     var lines = SUMMARY_FIELDS.filter(function (f) {
       return JSON.stringify(draft[f[0]]) !== JSON.stringify(applied[f[0]]);
@@ -258,7 +269,7 @@
     message(saved + (open.length ? '⚠️ Key của agent (models "*") cũng gọi được tuyến không tag: ' + open.join(', ') + ' — tiền sẽ tính vào khoá của tuyến đó.'
                                  : 'Xem trước xong; không có tuyến không tag.'));
   }
-  // "4. Xem thay đổi" is the form's submit button: a form without one ignores Enter, so the
+  // "4. Lưu thành bản nháp & Review" is the form's submit button: a form without one ignores Enter, so the
   // button and Enter both arrive here. bind() can only disable the form, so guard the button.
   bind('form', 'submit', async function () {
     el('preview').disabled = true;
@@ -269,10 +280,10 @@
     var value = el('provider-key').value; el('provider-key').value = '';
     var result = await request('/secrets', { value: value }); field('secret_ref').value = result.secret_ref;
     invalidate();
-    message('Đã lưu secret vào tham chiếu; bấm "4. Xem thay đổi" để lưu và xem trước.');
+    message('Đã lưu secret vào tham chiếu; bấm "4. Lưu thành bản nháp & Review" để lưu và xem trước.');
   });
   bind('apply','click',async function () {
-    if (!preview) throw new Error('Xem thay đổi trước khi áp dụng.');
+    if (!preview) throw new Error('Bấm "4. Lưu thành bản nháp & Review" trước khi áp dụng.');
     var result = await request(requireProfile() + '/apply', operationBody({ preview_hash: preview.preview_hash }));
     preview = null; await monitor(result.operation.id);
   });
@@ -303,10 +314,27 @@
     el('preview-summary').textContent = ''; el('preview-result').textContent = JSON.stringify(drift,null,2); el('accept-drift').disabled = false;
   });
   bind('accept-drift','click',async function () {
-    if (!drift) throw new Error('Xem thay đổi ngoài UI trước.');
+    if (!drift) throw new Error('Bấm "So sánh với bản trước đó" trước.');
     await request(requireProfile() + '/reconcile',{ expected_revision:selected.revision,accept_hash:drift.review_hash });
     drift = null; el('accept-drift').disabled = true; preview = null; el('apply').disabled = true;
-    message('Đã chấp nhận baseline. Xem preview mới trước khi áp dụng cấu hình mong muốn.');
+    message('Đã chấp nhận baseline. Bấm "4. Lưu thành bản nháp & Review" để xem bản mới trước khi áp dụng.');
+  });
+  // Copy the result box. navigator.clipboard needs https or localhost; the server may be plain http.
+  el('copy-result').addEventListener('click', async function (e) {
+    var button = e.currentTarget, text = el('preview-result').textContent;
+    try {
+      if (global.navigator.clipboard && global.isSecureContext) await global.navigator.clipboard.writeText(text);
+      else {
+        var area = document.createElement('textarea');
+        area.value = text; area.style.position = 'fixed'; area.style.opacity = '0';
+        document.body.appendChild(area); area.select();
+        var copied = document.execCommand('copy');
+        document.body.removeChild(area);
+        if (!copied) throw new Error('copy failed');
+      }
+      button.classList.add('copied'); button.title = 'Đã sao chép';
+    } catch (error) { button.title = 'Không sao chép được, hãy bôi đen và Ctrl+C'; }
+    global.setTimeout(function () { button.classList.remove('copied'); button.title = 'Sao chép'; }, 1500);
   });
   bind('recover','click',async function () {
     var operation = await request(requireProfile() + '/recover',operationBody());
