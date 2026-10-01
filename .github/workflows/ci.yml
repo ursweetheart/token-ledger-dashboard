@@ -310,7 +310,9 @@ jobs:
       # Moc do 30/09/2026: 208 -> 209, them phep kiem `scripts/dashboard.py start`
       # bat postgres TRUOC worker (sau khi may khoi dong lai, worker bat truoc thi
       # moi vong bao OperationalError va lenh start het gio cho).
-      EXPECTED_PY: "209"
+      # Moc do 01/10/2026: 209 -> 210, them phep kiem `scripts/dashboard.py worker` chi bat
+      # worker (khong build lai, khong recreate container nao khac, khong sinh worker thu hai).
+      EXPECTED_PY: "210"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8
