@@ -52,6 +52,22 @@ class LauncherTests(unittest.TestCase):
         postgres = next(i for i, step in enumerate(steps) if step.endswith('up -d --wait postgres'))
         self.assertLess(postgres, steps.index('worker_ready'))
 
+    def test_worker_command_starts_only_the_worker(self):
+        # `worker` must not rebuild or recreate containers, and must not spawn a second worker.
+        steps = []
+        with tempfile.TemporaryDirectory() as tmp:
+            state = Path(tmp)
+            (state/'worker-env.json').write_text(json.dumps({'CONNECTION_REPO_ROOT': str(launcher.ROOT)}), encoding='utf-8')
+            with patch.object(launcher, 'STATE', state), \
+                 patch.object(launcher, 'run', side_effect=lambda args, **kw: steps.append(' '.join(map(str, args)))), \
+                 patch.object(launcher, 'worker_ready', return_value=True), \
+                 patch.object(launcher.subprocess, 'Popen') as spawned:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    launcher.ensure_worker()
+        spawned.assert_not_called()
+        self.assertEqual(len(steps), 1)
+        self.assertTrue(steps[0].endswith('up -d --wait postgres'))
+
 
 if __name__ == '__main__':
     unittest.main()

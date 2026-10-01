@@ -4082,8 +4082,31 @@ body.light-theme .connections-panel input[type=date] { color-scheme: light; }
 .connection-extra-model { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--connection-border); }
 #connection-extra-models { display: grid; gap: 16px; }
 #connection-extra-models:empty, #connection-message:empty { display: none; }
+/* Sticky: the message stays on screen next to whatever button was pressed, with no page jump. */
+#connection-message { position: sticky; top: 8px; z-index: 20; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--connection-border); border-radius: 6px; background: var(--connection-surface); color: inherit; }
+#connection-message.is-error { background: #450a0a; border-color: #ef4444; color: #fecaca; }
+body.light-theme #connection-message.is-error { background: #fef2f2; border-color: #dc2626; color: #991b1b; }
 .connections-panel pre { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; margin-bottom: 20px; border: 1px solid var(--connection-border); border-radius: 6px; background: var(--connection-surface); color: inherit; font-size: 12px; line-height: 1.6; }
 .connections-panel pre:empty { display: none; }
+.connection-output { position: relative; }
+.connection-output:has(pre:empty) { display: none; }
+.connection-copy { position: absolute; top: 8px; right: 24px; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--connection-border); border-radius: 6px; background: var(--connection-surface); color: var(--connection-muted); cursor: pointer; }
+.connection-copy:hover, .connection-copy:focus-visible { color: inherit; border-color: var(--connection-muted); }
+.connection-copy.copied { color: #22c55e; border-color: #22c55e; }
+/* Panels: one card per job (configure, keys, guide, test, status). */
+.connection-card { margin: 0 0 24px; padding: 20px 24px; border: 1px solid var(--connection-border); border-radius: 10px; }
+.connection-card > :last-child, .connection-sub > :last-child { margin-bottom: 0; }
+.connection-card-head { margin: 0 0 16px; }
+.connection-card-head h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+.connection-card-head p { margin: 0; }
+.connection-sub { margin: 20px 0 0; padding-top: 16px; border-top: 1px solid var(--connection-border); }
+.connection-sub h4 { margin: 0 0 4px; font-size: 14px; font-weight: 600; }
+.connection-sub > p { margin: 0 0 12px; }
+.connection-card > p { margin: 0 0 16px; }
+/* The status box hides itself when empty; say so in words instead of leaving a bare card. */
+#connection-status:empty { display: block; color: var(--connection-muted); }
+#connection-status:empty::before { content: "Chưa có thao tác nào."; }
+@media (max-width: 700px) { .connection-card { padding: 16px; } }
 #connection-key-once:not([hidden]), #connection-test, #connection-external-test { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 20px 0; border-top: 1px solid var(--connection-border); margin-bottom: 16px; }
 #connection-key-once > p { flex-basis: 100%; }
 #connection-key-once > input { flex: 1 1 280px; width: auto; }

@@ -96,7 +96,7 @@ def main():
         previews=lambda: [c['payload'] for c in captured if c['url'].endswith('/preview')]
         summary=page.locator('#connection-preview-summary')
         apply_button=panel.locator('#connection-apply')
-        preview_button=panel.get_by_role('button',name='4. Xem thay đổi',exact=True)  # vi-ok: UI text the check matches
+        preview_button=panel.get_by_role('button',name='4. Lưu thành bản nháp & Review',exact=True)  # vi-ok: UI text the check matches
         def preview_now(expect_text):
             before=len(previews())
             preview_button.click()
@@ -134,7 +134,7 @@ def main():
         assert not apply_button.is_disabled()
         form.locator('#connection-provider-key').fill('provider-secret-fixture')
         panel.get_by_role('button',name='Lưu key và lấy tham chiếu',exact=True).click()  # vi-ok: UI text the check matches
-        page.get_by_text('bấm "4. Xem thay đổi" để lưu và xem trước',exact=False).wait_for()  # vi-ok: UI text the check matches
+        page.get_by_text('bấm "4. Lưu thành bản nháp & Review" để lưu và xem trước',exact=False).wait_for()  # vi-ok: UI text the check matches
         assert apply_button.is_disabled()
         preview_now('Tham chiếu khoá: KEY_MANAGED_TEST → KEY_MANAGED_ROTATED')  # vi-ok: UI text the check matches
         assert saves()==4 and profile['draft']['secret_ref']=='KEY_MANAGED_ROTATED'
@@ -151,7 +151,7 @@ def main():
         # 4.7: after accepting a reviewed baseline the accept button stays disabled.
         accept=panel.locator('#connection-accept-drift')
         assert accept.is_disabled()
-        panel.get_by_role('button',name='Xem thay đổi ngoài UI',exact=True).click()  # vi-ok: UI text the check matches
+        panel.get_by_role('button',name='So sánh với bản trước đó',exact=True).click()  # vi-ok: UI text the check matches
         page.wait_for_function("!document.querySelector('#connection-accept-drift').disabled")
         accept.click()
         page.get_by_text('Đã chấp nhận baseline.',exact=False).wait_for()  # vi-ok: UI text the check matches
@@ -159,7 +159,7 @@ def main():
         # 4.9: the three credential fields ask the browser not to fill saved passwords.
         for selector in ('#connection-login [name=credential]','#connection-provider-key','#connection-test [name=virtual_key]'):
             assert page.locator(selector).get_attribute('autocomplete')=='new-password', selector
-        panel.get_by_role('button',name='Cấp key / key thay thế',exact=True).click()
+        panel.get_by_role('button',name='Sinh Virtual key',exact=True).click()
         page.locator('#connection-key-once').wait_for(state='visible')
         assert page.locator('#connection-issued-key').input_value()=='sk-browser-fixture-only-key'
         panel.get_by_role('button',name='Đã lưu key',exact=True).click()
@@ -169,7 +169,7 @@ def main():
         page.locator('#connection-key-select').select_option('fixture-key')
         panel.get_by_role('button',name='Thu hồi key đã chọn',exact=True).click()  # vi-ok: UI text the check matches
         page.get_by_text('Đã thu hồi key fixture-key; giữ lịch sử.',exact=True).wait_for()  # vi-ok: UI text the check matches
-        panel.get_by_role('button',name='Cấp key / key thay thế',exact=True).click()  # one active key for revoke-all  # vi-ok: UI text the check matches
+        panel.get_by_role('button',name='Sinh Virtual key',exact=True).click()  # one active key for revoke-all  # vi-ok: UI text the check matches
         page.locator('#connection-key-once').wait_for(state='visible')
         panel.get_by_role('button',name='Đã lưu key',exact=True).click()  # vi-ok: UI text the check matches
         panel.get_by_role('button',name='Thu hồi tất cả key đã quản lý',exact=True).click()

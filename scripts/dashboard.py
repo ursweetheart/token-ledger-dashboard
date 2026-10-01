@@ -211,7 +211,8 @@ def worker_ready(config):
         return False
 
 
-def start():
+def ensure_worker():
+    """Bật worker nếu chưa chạy, không đụng container nào khác. Dùng cho `worker` và `start`."""
     path = STATE / 'worker-env.json'
     if not path.exists():
         raise ValueError('Run setup first: python scripts/dashboard.py setup')
@@ -240,6 +241,13 @@ def start():
             time.sleep(0.5)
         else:
             raise ValueError('Worker startup timed out; inspect .local/connections/worker.log')
+        print('Worker started on 127.0.0.1:8766')
+    else:
+        print('Worker already running on 127.0.0.1:8766')
+
+
+def start():
+    ensure_worker()
     run(compose_args() + ['--profile','gateway','--profile','refresh','up','-d','--build',
         'api','web','litellm-1','litellm-2','gateway-lb','connection-worker-proxy'])
     run(compose_args() + ['--profile','gateway','run','--rm','gateway-readonly-init'])
@@ -264,7 +272,7 @@ def start():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['setup','start'])
+    parser.add_argument('command', choices=['setup','start','worker'])
     parser.add_argument('--in-venv', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     os.chdir(ROOT)
@@ -282,10 +290,7 @@ def main():
             run([executable,'-m','pip','install','-r',ROOT/'backend/requirements.txt','cryptography'])
         run([executable,Path(__file__).resolve(),args.command,'--in-venv'])
         return
-    if args.command == 'setup':
-        setup()
-    else:
-        start()
+    {'setup': setup, 'start': start, 'worker': ensure_worker}[args.command]()
 
 
 if __name__ == '__main__':
