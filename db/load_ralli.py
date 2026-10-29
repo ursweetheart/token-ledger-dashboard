@@ -72,6 +72,12 @@ def main() -> None:
                                 formatter_class=argparse.RawDescriptionHelpFormatter,
                                 allow_abbrev=False)
     p.add_argument("--db", default=connect.DEFAULT_DSN)
+    # Danh ba to chuc chi cap nhat qua load_org.py, ma load_org bi chan khi da co
+    # Gateway connection (gateway_registry.guard_legacy). Danh ba cu thi so luot
+    # khong gan duoc don vi lech voi app. Co nay chi ha DUNG phep doi chieu do
+    # xuong canh bao; so dong, token, cached va dinh dang van phai khop.
+    p.add_argument("--allow-unit-mismatch", action="store_true",
+                   help="Load even if the unresolvable-unit count differs from the app's own count")
     args = p.parse_args()
 
     cn, dc = connect.open_db(args.db)
@@ -179,7 +185,11 @@ def main() -> None:
         errors.append(f"could not find the 'Khong xac dinh' entry in {YEAR_STATS.name}"  # vi-ok: the app's own label
                    f" - the independent cross-check is gone, refusing to load blind")
     elif unattributed_calls != unattributed_app:
-        errors.append(f"unresolvable {unattributed_calls} != {unattributed_app} (the app's own independent count)")
+        msg = f"unresolvable {unattributed_calls} != {unattributed_app} (the app's own independent count)"
+        if args.allow_unit_mismatch:
+            log.warning("  %s - loading anyway (--allow-unit-mismatch)", msg)
+        else:
+            errors.append(msg)
     if errors:
         cn.rollback()
         raise SystemExit("ACCEPTANCE FAILED - rolled back:\n  "
