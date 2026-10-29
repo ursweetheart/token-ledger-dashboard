@@ -1397,8 +1397,8 @@
           <label>Model provider <input class="text-input" name="upstream" required list="connection-model-options" placeholder="anthropic/claude-… hoặc anthropic/*"></label>
           <div id="connection-extra-models"></div>
           <button class="btn btn-secondary" type="button" id="connection-add-model">Thêm model</button>
-          <label>RPM <input class="text-input" name="rpm" type="number" min="1" step="1" value="15" required></label>
-          <label>TPM <input class="text-input" name="tpm" type="number" min="1" step="1" value="1000000" required></label>
+          <label>RPM <input class="text-input" name="rpm" type="number" min="1" step="1" value="2000" placeholder="Trống = không giới hạn"></label>
+          <label>TPM <input class="text-input" name="tpm" type="number" min="1" step="1" value="1000000" placeholder="Trống = không giới hạn"></label>
           <p>Tham chiếu khoá dùng chung nghĩa là dùng chung quota tài khoản provider. Mã agent vẫn tách usage trên dashboard. Model dạng <code>provider/*</code> thì alias phải trùng model.</p>
         </fieldset>
         <fieldset><legend>3. Hạn mức Virtual Key</legend>

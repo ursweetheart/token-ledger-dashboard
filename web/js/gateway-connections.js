@@ -136,12 +136,17 @@
     if (!raw.trim() || !Number.isFinite(amount) || amount < 0) throw new Error('Nhập hạn mức USD không âm hoặc chọn không giới hạn.');
     return { mode: 'finite', usd: amount };
   }
+  // Empty = no Gateway-side limit (null); the provider's own API quota still applies.
+  function limit(name) {
+    var raw = field(name).value.trim();
+    return raw ? Number(raw) : null;
+  }
   function input() {
     return { code: field('code').value, name: field('name').value,
       user_mode: field('user_mode').value, reporting_start_date: field('reporting_start_date').value,
       active: field('active').checked, secret_ref: field('secret_ref').value,
       models: [{ alias: field('alias').value, upstream: field('upstream').value }],
-      rpm: Number(field('rpm').value), tpm: Number(field('tpm').value), budget: budget(),
+      rpm: limit('rpm'), tpm: limit('tpm'), budget: budget(),
       quota_response_mode: field('quota_response_mode').value };
   }
   function addModel(model) {
@@ -176,7 +181,7 @@
     keyChoices(profile || {});
     if (profile) {
       var p = profile.draft;
-      ['code','name','user_mode','reporting_start_date','secret_ref','rpm','tpm','quota_response_mode'].forEach(function (key) { field(key).value = p[key]; });
+      ['code','name','user_mode','reporting_start_date','secret_ref','rpm','tpm','quota_response_mode'].forEach(function (key) { field(key).value = p[key] === null ? '' : p[key]; });
       field('active').checked = p.active;
       field('alias').value = p.models[0].alias; field('upstream').value = p.models[0].upstream;
       p.models.slice(1).forEach(addModel);
@@ -239,6 +244,7 @@
   var SUMMARY_IGNORED = ['code'];
   root.dataset.summaryFields = SUMMARY_FIELDS.map(function (f) { return f[0]; }).concat(SUMMARY_IGNORED).join(',');
   function shown(key, value) {
+    if ((key === 'rpm' || key === 'tpm') && value === null) return 'Không giới hạn';
     if (value === undefined || value === null) return '(trống)';
     if (key === 'models') return value.map(function (m) { return m.alias + ' → ' + m.upstream; }).join(', ');
     if (key === 'budget') return value.mode === 'unlimited' ? 'Không giới hạn' : value.usd + ' USD';

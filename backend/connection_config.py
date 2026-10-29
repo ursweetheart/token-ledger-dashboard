@@ -134,9 +134,10 @@ def validate_profile(value):
     p['reporting_start_date'] = date.fromisoformat(str(p['reporting_start_date'])).isoformat()
     if not isinstance(p['secret_ref'], str) or not REF.fullmatch(p['secret_ref']):
         raise ValueError('secret_ref: invalid opaque reference')
+    # None = no Gateway-side limit; the provider's own API quota still applies upstream.
     for field in ('rpm', 'tpm'):
-        if type(p[field]) is not int or p[field] <= 0:
-            raise ValueError(f'{field}: must be a positive integer')
+        if p[field] is not None and (type(p[field]) is not int or p[field] <= 0):
+            raise ValueError(f'{field}: must be a positive integer or empty')
     if p['quota_response_mode'] not in ('chat', 'batch'):
         raise ValueError('quota_response_mode: choose chat or batch')
     models = p['models']
@@ -196,9 +197,11 @@ def render_routes(original, profiles, ownership):
             rid = route_id(p['code'], model['alias'])
             if rid in actual_ids and rid not in owned_ids:
                 raise Conflict('Managed route ID collides with unmanaged configuration')
-            unmanaged.append({'model_name': model['alias'], 'litellm_params': {
-                'model': model['upstream'], 'api_key': 'os.environ/' + p['secret_ref'],
-                'rpm': p['rpm'], 'tpm': p['tpm'], 'tags': [p['code']]}, 'model_info': {'id': rid}})
+            params = {'model': model['upstream'], 'api_key': 'os.environ/' + p['secret_ref']}
+            params.update({f: p[f] for f in ('rpm', 'tpm') if p[f] is not None})
+            params['tags'] = [p['code']]
+            unmanaged.append({'model_name': model['alias'], 'litellm_params': params,
+                              'model_info': {'id': rid}})
             new_ids.append(rid)
     candidate['model_list'] = unmanaged
     return candidate, new_ids
