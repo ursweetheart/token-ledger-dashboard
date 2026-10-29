@@ -249,7 +249,7 @@ def ensure_worker():
 def start():
     ensure_worker()
     run(compose_args() + ['--profile','gateway','--profile','refresh','up','-d','--build',
-        'api','web','litellm-1','litellm-2','gateway-lb','connection-worker-proxy'])
+        'api','web','litellm-1','litellm-2','gateway-lb','connection-worker-proxy','agent-health-watch'])
     run(compose_args() + ['--profile','gateway','run','--rm','gateway-readonly-init'])
     run(compose_args() + ['--profile','gateway','--profile','refresh','up','-d','--build','ledger-refresh'])
     run(compose_args() + ['restart','web'])

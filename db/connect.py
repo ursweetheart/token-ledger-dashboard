@@ -252,7 +252,8 @@ KEEP_ON_REBUILD = ("alembic_version", "ref_source", "ref_model_catalog",
                    "ref_model_price_version", "ref_price_sync_state",
                    "gateway_connection_profile", "gateway_connection_operation",
                    "gateway_connection_key", "gateway_connection_audit",
-                   "gateway_connection_deployment")
+                   "gateway_connection_deployment",
+                   "agent_health_setting", "agent_health_run")
 
 
 def rebuild(dsn: str):

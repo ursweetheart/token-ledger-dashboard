@@ -1,0 +1,60 @@
+# Phép kiểm sức khỏe agent. Đọc bởi scripts/watch_agents.py.
+# Thêm agent = thêm một khối dưới `agents:`, không sửa Python. Xem docs/reference/agent-health.md.
+#
+# Mỗi agent:
+#   kind           webapp (có giao diện chat, cần app_url) hoặc gateway-only. Module chụp màn hình
+#                  chọn cách chụp theo trường này.
+#   app_url        địa chỉ giao diện chat, bắt buộc khi kind = webapp
+#   test_identity  tài khoản mà lần kiểm dùng (để lọc ra khỏi số liệu người dùng thật), có thể bỏ
+#
+# Mỗi phép kiểm:
+#   method   GET hoặc POST. POST phải có path trong `allow_post` của chính agent đó, nếu không
+#            service từ chối khởi động: mỗi POST là một ngoại lệ của luật chỉ-đọc, phải được duyệt.
+#   question       có trường này thì phép kiểm là một CÂU HỎI (case): câu hỏi được gửi trong trường
+#                  `question_field` của body, và thân response được giữ trong kết quả làm bằng chứng
+#   answer         đường dẫn tới câu trả lời trong response, để chép ra trường `answer`, có thể bỏ
+#   expect   status       mã HTTP phải trả
+#            equals       {đường dẫn trường: giá trị} phải bằng
+#            not_equals   {đường dẫn trường: giá trị} phải khác
+#            days_until   {đường dẫn trường ngày giờ: N}, còn dưới N ngày thì `warn`
+#   Đường dẫn trường: `a.b.c`, và `list[key=value]` để chọn phần tử đầu tiên khớp trong một mảng.
+#
+# KHÔNG BAO GIỜ ghi key vào đây. `auth.env` chỉ là TÊN biến môi trường chứa key.
+version: 1
+agents:
+  ralli:
+    name: Trợ lý ảo Ralli
+    # Rạng Đông Partner API. Tài liệu: https://ralliai.rangdong.com.vn:9001/api/partner/v1/docs
+    # 50 path, không có /health (đếm từ openapi.json ngày 29/10/2026), nên dùng /capabilities.
+    base_url: https://ralliai.rangdong.com.vn:9001/api/partner/v1
+    auth: {header: X-API-Key, env: RALLI_PARTNER_KEY}
+    kind: webapp
+    app_url: https://ralliai.rangdong.com.vn:9001
+    # Tài khoản gắn với key, theo GET /capabilities ngày 29/10/2026. Nên đổi sang tài khoản kiểm riêng.
+    test_identity: admin
+    # Người dùng duyệt 29/10/2026: một lần theo lịch mỗi ngày + một lần cho mỗi lần bấm "Chạy ngay".
+    allow_post: [/ctda/v2/analyze]
+    # Bỏ dấu # khi Ralli đã đi qua Gateway. Ngày 29/10/2026 nó CHƯA đi qua.
+    # gateway_tag: ralli
+    checks:
+      - name: capabilities
+        method: GET
+        path: /capabilities
+        expect:
+          status: 200
+          equals: {"features[id=ctda].enabled": true}
+          days_until: {expires_at: 30}
+      - name: llm
+        method: POST
+        path: /ctda/v2/analyze
+        # Câu chào ("hello") bị trả lời bằng câu soạn sẵn sau 0,19 s, `data.feature = clarification`,
+        # không đi tới LLM (thử 29/10/2026). Câu này đi tới LLM: 15-16 s, hai lần thử ngày 29/10/2026.
+        question: "Phân tích ngắn tình hình chăm sóc công trình dự án tháng này"
+        question_field: query
+        # `answer:` chưa điền: tài liệu Ralli không mô tả response 200 (schema rỗng). Điền sau khi
+        # đọc `body` của lần chạy đầu tiên có lưu thân response.
+        timeout: 180
+        expect:
+          status: 200
+          equals: {status: success}
+          not_equals: {data.feature: clarification}

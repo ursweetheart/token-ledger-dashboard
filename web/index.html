@@ -582,6 +582,7 @@
   <button class="tab" data-tab="performance">⚡ Hiệu năng</button>
   <button class="tab" data-tab="setting">⚙ Setting</button>
   <button class="tab" data-tab="connections">🔗 Kết nối agent</button>
+  <button class="tab" data-tab="agent-health">🩺 Sức khỏe Agent</button>
 </div>
 
 <div class="delta-legend">Cách đọc so sánh: <b>▲/▼ % KT</b> = tăng/giảm so với <b>kỳ trước</b>, <b>▲/▼ % CK</b> = so với <b>cùng kỳ năm trước</b>. Di chuột vào dòng để xem kỳ gốc và giá trị kỳ gốc → giá trị hiện tại.</div>
@@ -1487,6 +1488,43 @@
   </section>
 </div>
 
+<div class="tab-content" id="agent-health">
+  <!-- Dùng chung khung và style với tab Kết nối agent (connections-panel, connection-card). -->
+  <section id="agent-health-panel" class="section connections-panel agent-health" aria-label="Sức khỏe Agent">
+    <h2 class="section-title">🩺 Sức khỏe Agent</h2>
+    <p>Mỗi ngày, vào giờ đặt bên dưới (giờ Việt Nam), hệ thống gọi API của từng agent để kiểm tra agent còn
+       trả lời được và luồng gọi model còn chạy. "Chạy ngay" kiểm tra ngay lập tức và không ảnh hưởng tới lịch.
+       Mỗi lần chạy có gọi LLM thật, nên tốn một ít chi phí.</p>
+    <p id="agent-health-message" role="status" aria-live="polite"></p>
+    <section class="connection-card" aria-labelledby="agent-health-card-run">
+      <header class="connection-card-head">
+        <h3 id="agent-health-card-run">Lịch và chạy tay</h3>
+        <p>Đổi giờ và chạy ngay cần khoá quản trị kết nối. Khoá dashboard chỉ xem được kết quả.</p>
+      </header>
+      <form id="agent-health-admin" class="connection-actions">
+        <label>Khoá quản trị kết nối <input class="text-input" name="credential" type="password" autocomplete="new-password"></label>
+        <label class="agent-health-time">Giờ chạy (giờ VN) <input class="text-input" name="run_at" type="time" step="60" required></label>
+        <button class="btn btn-secondary" type="submit" id="agent-health-apply">Apply</button>
+        <button class="btn btn-primary" type="button" id="agent-health-run">▶ Chạy ngay</button>
+      </form>
+      <div id="agent-health-progress" class="agent-health-progress" hidden>
+        <progress id="agent-health-bar" value="0" max="1"></progress>
+        <p id="agent-health-progress-text" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+    <section class="connection-card" aria-labelledby="agent-health-card-result">
+      <header class="connection-card-head">
+        <h3 id="agent-health-card-result">Kết quả lần chạy gần nhất</h3>
+        <p id="agent-health-status" role="status" aria-live="polite">Đang tải…</p>
+      </header>
+      <div class="table-wrap"><table class="agent-health-table">
+        <thead><tr><th>Agent</th><th>Phép kiểm</th><th>Kết quả</th><th>HTTP</th><th>Thời gian (ms)</th><th>Lý do</th></tr></thead>
+        <tbody id="agent-health-rows"></tbody>
+      </table></div>
+    </section>
+  </section>
+</div>
+
 <div class="tab-content" id="setting">
 
   <div class="insight-banner">
@@ -1529,6 +1567,7 @@
 <script src="js/api.js"></script>
 <script src="js/gateway-identities.js"></script>
 <script src="js/gateway-connections.js"></script>
+<script src="js/agent-health.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

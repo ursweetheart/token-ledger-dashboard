@@ -796,6 +796,48 @@ services:
     tmpfs:
       - /tmp
 
+  # Canh SUC KHOE AGENT. Tach khoi `gateway-watch` vi hai viec khac han: cai kia do
+  # Gateway mien phi moi 60 giay, cai nay goi chinh agent (co POST ton AI budget)
+  # theo lich hang ngay va khi co nguoi bam "Chay ngay" tren tab Suc khoe Agent.
+  # Phep kiem khai o config/agent-health.yaml. Xem docs/reference/agent-health.md.
+  agent-health-watch:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: docker/tools.Dockerfile
+    image: token-ledger-tools:local
+    # Ten co dinh = KHONG BAO GIO co hai ban. Luc khoi dong, script chuyen moi lan
+    # chay `running` sang `interrupted`; hai ban thi ban sau ngat nham ban truoc.
+    container_name: token-ledger-agent-health-watch
+    profiles: ["gateway"]
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: ["python3", "scripts/watch_agents.py"]
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # BAT BUOC. Ten agent va ly do loi co tieng Viet.
+      PYTHONIOENCODING: utf-8
+      # Vai admin nhu `ledger-refresh`: service ghi lan chay va ket qua.
+      TOKEN_LEDGER_DSN: "postgresql://${PGUSER:-token}:${PGPASSWORD:-token_local}@postgres:5432/${PGDATABASE:-token_ledger_v2}"
+      # Vai CHI-DOC so Gateway, chi dung khi agent khai `gateway_tag`.
+      GATEWAY_DSN: "postgresql://${GATEWAY_READONLY_USER:-gateway_readonly}:${GATEWAY_READONLY_PASSWORD:-gateway_readonly_local}@postgres:5432/${GATEWAY_PGDATABASE:-litellm}"
+      # Moi agent mot bien key, ten bien do `auth.env` trong YAML chi ra.
+      # Them agent moi thi them bien cua no o day.
+      RALLI_PARTNER_KEY: ${RALLI_PARTNER_KEY:-}
+    volumes:
+      - ./config:/app/config:ro
+      # Ghi var/agent-checks/<run_id>/result.json cho module chup man hinh doc.
+      # Thu muc nay nam trong .gitignore: no chua cau tra loi that cua agent.
+      - ./var/agent-checks:/app/var/agent-checks
+    tmpfs:
+      - /tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # Canh HAN MUC. Tach khoi `gateway-watch` o tren vi hai viec khac han: cai kia
   # hoi "Gateway con song khong", cai nay hoi "project nao sap het tien".
   #
