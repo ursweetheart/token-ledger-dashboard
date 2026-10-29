@@ -317,7 +317,13 @@ jobs:
       # Lan day 43a6bd5 do: test_connection_rollout.py import connection_worker, can
       # psycopg2, nen chet o may sach. Doi ten thanh connection_rollout_cases.py va chay
       # o job connection-contracts (co cai goi), cung quy uoc voi cac *_cases.py khac.
-      EXPECTED_PY: "214"
+      # Moc do 29/10/2026: 214 -> 244, them 30 phep kiem cua test_watch_agents (change
+      # add-agent-health-tab: danh gia ket qua, lich gio VN, thu tu chay tay truoc lich).
+      # Phep kiem doc tep YAML that can PyYAML, nen nam o connection_auth_cases.py.
+      # Cung ngay: 244 -> 253, them 9 phep kiem khi ket qua thanh tai lieu JSON o ca DB
+      # va tep result.json (case giu cau hoi/response, tep giong ban DB, khong ghi duoc
+      # tep van xong, kind/app_url/question_field bat buoc).
+      EXPECTED_PY: "253"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

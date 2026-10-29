@@ -69,3 +69,7 @@ __pycache__/
 
 # Local connection runtime: credentials, snapshots and Python environment.
 .local/
+
+# Kết quả kiểm sức khỏe agent (result.json, sau này cả ảnh chụp production). Chứa câu trả lời thật
+# của agent, có thể là dữ liệu nghiệp vụ: không bao giờ lên git. var/ còn lại thì vẫn được theo dõi.
+var/agent-checks/

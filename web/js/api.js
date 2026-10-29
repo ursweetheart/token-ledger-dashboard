@@ -435,8 +435,9 @@
      Thông báo lỗi lấy nguyên văn `detail` của FastAPI khi có, vì nó là thứ nói
      được VÌ SAO bị từ chối ("must not be negative", "no key named ..."). Một câu
      "lưu không được" chung chung thì người dùng không sửa được gì. */
-  function quotaCall(path, method, payload) {
-    var k = khoa(), headers = {}, goi;
+  function quotaCall(path, method, payload, credential) {
+    // `credential`: khoá quản trị kết nối cho đường ghi sức khỏe agent; bỏ trống thì dùng khoá đọc.
+    var k = credential || khoa(), headers = {}, goi;
     if (k) headers["Authorization"] = "Bearer " + k;
     if (payload) headers["Content-Type"] = "application/json";
     try {
@@ -457,7 +458,8 @@
     }).then(function (x) {
       if (x.r.ok) return { ok: true, data: x.j };
       var d = x.j && x.j.detail;
-      return { ok: false,
+      // `status` và `detail` thô cho phía gọi cần phân nhánh (409 của "Chạy ngay" mang `id`).
+      return { ok: false, status: x.r.status, detail: d,
                message: (typeof d === "string" ? d : JSON.stringify(d || {}))
                         || ("HTTP " + x.r.status) };
     }, function () {
@@ -468,6 +470,18 @@
   global.TokenLedgerAPI = {
     gatewayIdentities: function (query) {
       return quotaCall('/api/gateway-identities?' + new URLSearchParams(query).toString(), 'GET');
+    },
+    /* Sức khỏe agent. Hai hàm đọc dùng khoá đọc; hai hàm ghi đòi khoá quản trị kết nối,
+       do agent-health.js giữ trong bộ nhớ - không bao giờ vào localStorage. */
+    agentHealth: function () { return quotaCall('/api/agent-health', 'GET'); },
+    agentHealthRun: function (id) {
+      return quotaCall('/api/agent-health/runs/' + encodeURIComponent(id), 'GET');
+    },
+    setAgentHealthSchedule: function (runAt, credential) {
+      return quotaCall('/api/agent-health/schedule', 'PUT', { run_at: runAt }, credential);
+    },
+    startAgentHealthRun: function (credential) {
+      return quotaCall('/api/agent-health/run', 'POST', undefined, credential);
     },
     pricingProviders: async function () {
       // ponytail: page the existing catalog; use a distinct-provider endpoint if catalog size grows.

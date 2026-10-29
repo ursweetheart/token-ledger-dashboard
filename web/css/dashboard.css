@@ -4081,11 +4081,11 @@ body.light-theme .connections-panel input[type=date] { color-scheme: light; }
 .connection-grid .connection-actions { grid-column: 1 / -1; margin: 0; }
 .connection-extra-model { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--connection-border); }
 #connection-extra-models { display: grid; gap: 16px; }
-#connection-extra-models:empty, #connection-message:empty { display: none; }
+#connection-extra-models:empty, #connection-message:empty, #agent-health-message:empty { display: none; }
 /* Sticky: the message stays on screen next to whatever button was pressed, with no page jump. */
-#connection-message { position: sticky; top: 8px; z-index: 20; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--connection-border); border-radius: 6px; background: var(--connection-surface); color: inherit; }
-#connection-message.is-error { background: #450a0a; border-color: #ef4444; color: #fecaca; }
-body.light-theme #connection-message.is-error { background: #fef2f2; border-color: #dc2626; color: #991b1b; }
+#connection-message, #agent-health-message { position: sticky; top: 8px; z-index: 20; margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--connection-border); border-radius: 6px; background: var(--connection-surface); color: inherit; }
+#connection-message.is-error, #agent-health-message.is-error { background: #450a0a; border-color: #ef4444; color: #fecaca; }
+body.light-theme #connection-message.is-error, body.light-theme #agent-health-message.is-error { background: #fef2f2; border-color: #dc2626; color: #991b1b; }
 .connections-panel pre { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 16px; margin-bottom: 20px; border: 1px solid var(--connection-border); border-radius: 6px; background: var(--connection-surface); color: inherit; font-size: 12px; line-height: 1.6; }
 .connections-panel pre:empty { display: none; }
 .connection-output { position: relative; }
@@ -4111,6 +4111,30 @@ body.light-theme #connection-message.is-error { background: #fef2f2; border-colo
 #connection-key-once > p { flex-basis: 100%; }
 #connection-key-once > input { flex: 1 1 280px; width: auto; }
 #connection-test > label:first-child, #connection-external-test > label { flex: 1 1 300px; }
+/* Agent health tab: reuses the connection panel and cards above; only the bits it alone has. */
+.agent-health .connection-actions { margin: 0; }
+.agent-health .agent-health-time { flex: 0 1 180px; }
+.agent-health input[type=time] { color-scheme: dark; }
+body.light-theme .agent-health input[type=time] { color-scheme: light; }
+.agent-health #agent-health-status { white-space: pre-line; }
+.agent-health-progress { margin-top: 20px; }
+.agent-health-progress p { margin: 8px 0 0; }
+.agent-health progress { display: block; width: 100%; height: 10px; border: 0; border-radius: 999px; overflow: hidden; appearance: none; background: var(--connection-border); }
+.agent-health progress::-webkit-progress-bar { background: var(--connection-border); border-radius: 999px; }
+.agent-health progress::-webkit-progress-value { background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 999px; transition: width .3s ease; }
+.agent-health progress::-moz-progress-bar { background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 999px; }
+.agent-health-table th:nth-child(4), .agent-health-table td:nth-child(4),
+.agent-health-table th:nth-child(5), .agent-health-table td:nth-child(5) { text-align: right; font-variant-numeric: tabular-nums; }
+.agent-health-table td:last-child { color: var(--connection-muted); overflow-wrap: anywhere; }
+.agent-health-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.agent-health-pill.is-ok { background: rgba(34, 197, 94, .15); color: #4ade80; }
+.agent-health-pill.is-warn { background: rgba(245, 158, 11, .15); color: #fbbf24; }
+.agent-health-pill.is-fail { background: rgba(239, 68, 68, .15); color: #f87171; }
+.agent-health-pill.is-running { background: rgba(102, 126, 234, .15); color: #a5b4fc; }
+body.light-theme .agent-health-pill.is-ok { background: #dcfce7; color: #166534; }
+body.light-theme .agent-health-pill.is-warn { background: #fef3c7; color: #92400e; }
+body.light-theme .agent-health-pill.is-fail { background: #fee2e2; color: #991b1b; }
+body.light-theme .agent-health-pill.is-running { background: #e0e7ff; color: #3730a3; }
 @media (max-width: 1100px) { .connection-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 700px) {
     .connection-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }

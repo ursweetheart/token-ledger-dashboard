@@ -1,13 +1,18 @@
 """Connection administration is disabled unless explicitly configured."""
 import json
+import re
 import secrets
 import urllib.request
 import urllib.error
+import uuid
 from urllib.parse import urlsplit
+import psycopg2.errors
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .connection_config import Conflict, validate_budget
 from .connection_store import ConnectionStore
+
+RUN_AT = re.compile(r'([01]\d|2[0-3]):[0-5]\d')
 
 
 def router(settings):
@@ -175,4 +180,40 @@ def router(settings):
                     body.get('idempotency_key'),actor,{}))
         return execute(lambda: rpc('recover',{'operation_id':str(op['id'])}))
 
-    return api
+    # Agent health shares this credential: both writes cost money or change what runs, and the
+    # dashboard key grants no write authority (openspec/changes/add-agent-health-tab, D7).
+    health = APIRouter(prefix='/api/agent-health', tags=['Agent health'])
+
+    @health.put('/schedule')
+    def schedule(body: dict, actor=Depends(authorize)):
+        run_at = body.get('run_at')
+        if set(body) != {'run_at'} or not isinstance(run_at, str) or not RUN_AT.fullmatch(run_at):
+            raise HTTPException(422, 'run_at must be HH:MM between 00:00 and 23:59')
+        with store.transaction() as cur:
+            cur.execute('UPDATE agent_health_setting SET run_at = %s, updated_at = now(), updated_by = %s '
+                        'WHERE id = 1 RETURNING run_at, last_run_date', (run_at, actor))
+            row = cur.fetchone()
+        return {'run_at': row['run_at'].strftime('%H:%M'),
+                'last_run_date': row['last_run_date'].isoformat() if row['last_run_date'] else None}
+
+    @health.post('/run', status_code=202)
+    def run_now(actor=Depends(authorize)):
+        run_id = str(uuid.uuid4())
+        try:
+            with store.transaction() as cur:
+                cur.execute("INSERT INTO agent_health_run (id, trigger, requested_by) VALUES (%s, 'manual', %s)",
+                            (run_id, actor))
+        except psycopg2.errors.UniqueViolation:
+            # The partial unique index allows one queued/running run; hand back that run so the
+            # browser follows it instead of showing a bare error.
+            with store.transaction() as cur:
+                cur.execute("SELECT id FROM agent_health_run WHERE status IN ('queued', 'running') LIMIT 1")
+                row = cur.fetchone()
+            raise HTTPException(409, {'message': 'Another run is queued or running',
+                                      'id': str(row['id']) if row else None}) from None
+        return {'id': run_id}
+
+    outer = APIRouter()
+    outer.include_router(api)
+    outer.include_router(health)
+    return outer

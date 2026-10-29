@@ -37,6 +37,7 @@ import os
 import re
 import secrets
 import sys
+import uuid
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -331,6 +332,26 @@ def healthz():
 def health(who: Principal = Depends(caller)):
     with store.open_db() as (cn, _):
         return store.health(cn)
+
+
+@app.get("/api/agent-health", summary="Agent health: schedule, run in progress, latest results")
+def agent_health(who: Principal = Depends(caller)):
+    with store.open_db() as (cn, _):
+        return store.agent_health(cn)
+
+
+@app.get("/api/agent-health/runs/{run_id}", summary="Progress and results of one agent health run")
+def agent_health_run(run_id: str, who: Principal = Depends(caller)):
+    # Kiểm UUID trước khi chạm database: chuỗi rác làm PostgreSQL ném lỗi kiểu dữ liệu -> 500.
+    try:
+        uuid.UUID(run_id)
+    except ValueError:
+        raise HTTPException(404, "Run not found") from None
+    with store.open_db() as (cn, _):
+        run = store.agent_health_run(cn, run_id)
+    if run is None:
+        raise HTTPException(404, "Run not found")
+    return run
 
 
 @app.get("/api/catalog", summary="Agents, models, units, FX rate - rarely change")

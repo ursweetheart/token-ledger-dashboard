@@ -771,3 +771,65 @@ def health(cn) -> dict:
             "tokens_not_attributable": opaque,
             "tokens_attributed": attributed,
             "warnings": warnings}
+
+
+# =====================================================================
+# Sức khỏe AGENT - kết quả của service agent-health-watch (migration 016)
+# =====================================================================
+
+_RUN_COLUMNS = ("id, trigger, status, total, done, current_label, requested_by, "
+                "requested_at, started_at, finished_at, result")
+
+
+def _stamp(x):
+    return None if x is None else x.isoformat()
+
+
+def _run(row: dict) -> dict:
+    """Một lần chạy, kèm `results` dàn phẳng từ tài liệu JSON để tab vẽ bảng.
+
+    Không trả nguyên tài liệu: trình duyệt hỏi mỗi giây lúc đang chạy, mà tài liệu chứa cả thân
+    response của agent. Tài liệu đầy đủ nằm ở var/agent-checks/<id>/result.json.
+    """
+    doc = row.pop("result") or {}
+    results = [{"agent_code": a["agent_code"], "agent_name": a["agent_name"], "check_name": x["name"],
+                "status": x["status"], "http_status": x["http_status"], "latency_ms": x["latency_ms"],
+                "reason": x["reason"], "request_id": x["request_id"], "checked_at": x["sent_at"]}
+               for a in doc.get("agents", []) for x in a["health"] + a["cases"]]
+    return {**row, "id": str(row["id"]), "requested_at": _stamp(row["requested_at"]),
+            "started_at": _stamp(row["started_at"]), "finished_at": _stamp(row["finished_at"]),
+            "results": results}
+
+
+def agent_health(cn) -> dict:
+    """Giờ chạy, lần chạy đang dở (nếu có), và lần chạy đã kết thúc gần nhất kèm kết quả.
+
+    `schedule_missed_today`: giờ chạy hôm nay đã qua mà lịch chưa nhận lần chạy nào. Tính
+    bằng đồng hồ của DATABASE theo giờ VN, cùng lý do như nhịp tim Gateway ở `health()`.
+    Một tab chỉ hiện "lần chạy gần nhất" mà không nói nó từ hôm qua thì trông y hệt hôm nay.
+    """
+    setting = _rows(cn, """
+        SELECT run_at, last_run_date, updated_at,
+               (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date AS today_vn,
+               (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::time >= run_at AS hour_passed
+          FROM agent_health_setting WHERE id = 1""")[0]
+    active = _rows(cn, f"SELECT {_RUN_COLUMNS} FROM agent_health_run "
+                       "WHERE status IN ('queued', 'running') LIMIT 1")
+    last = _rows(cn, f"SELECT {_RUN_COLUMNS} FROM agent_health_run "
+                     "WHERE status IN ('done', 'interrupted') "
+                     "ORDER BY coalesce(finished_at, requested_at) DESC LIMIT 1")
+    return {
+        "run_at": setting["run_at"].strftime("%H:%M"),
+        "last_run_date": _stamp(setting["last_run_date"]),
+        "updated_at": _stamp(setting["updated_at"]),
+        "schedule_missed_today": bool(setting["hour_passed"])
+                                 and setting["last_run_date"] != setting["today_vn"],
+        "active": _run(active[0]) if active else None,
+        "last": _run(last[0]) if last else None,
+    }
+
+
+def agent_health_run(cn, run_id: str) -> dict | None:
+    """Tiến độ một lần chạy, cùng các kết quả đã có. Trình duyệt hỏi mỗi giây lúc đang chạy."""
+    rows = _rows(cn, f"SELECT {_RUN_COLUMNS} FROM agent_health_run WHERE id = %s", (run_id,))
+    return _run(rows[0]) if rows else None
