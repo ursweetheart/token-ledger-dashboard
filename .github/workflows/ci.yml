@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r backend/requirements.txt pytest httpx
-      - run: python -m pytest tests/connection_config_cases.py tests/connection_auth_cases.py -q
+      - run: python -m pytest tests/connection_config_cases.py tests/connection_auth_cases.py tests/connection_rollout_cases.py -q
 
   # ---------------------------------------------------------------------------
   # Canh cấu hình. Nhóm rẻ nhất, và là nhóm bắt đúng lỗi đã thật sự xảy ra:
@@ -312,10 +312,12 @@ jobs:
       # moi vong bao OperationalError va lenh start het gio cho).
       # Moc do 01/10/2026: 209 -> 210, them phep kiem `scripts/dashboard.py worker` chi bat
       # worker (khong build lai, khong recreate container nao khac, khong sinh worker thu hai).
-      # Moc do 29/10/2026: 210 -> 216, them 2 phep kiem cua connection (route bo rpm/tpm
-      # khi de trong, rollout cho Gateway khoi dong lau) va 4 cua test_agent_merge
+      # Moc do 29/10/2026: 210 -> 214, them 4 phep kiem cua test_agent_merge
       # (ai-chatbot-contract hien duoi ten va agent_id cua tla-hd, cong don so).
-      EXPECTED_PY: "216"
+      # Lan day 43a6bd5 do: test_connection_rollout.py import connection_worker, can
+      # psycopg2, nen chet o may sach. Doi ten thanh connection_rollout_cases.py va chay
+      # o job connection-contracts (co cai goi), cung quy uoc voi cac *_cases.py khac.
+      EXPECTED_PY: "214"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8
