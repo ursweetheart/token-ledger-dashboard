@@ -65,6 +65,32 @@ def _rows(cn, sql: str, params=()) -> list[dict]:
     return [dict(zip(names, r)) for r in cur.fetchall()]
 
 
+# Agent hiển thị GỘP vào agent khác: mã nguồn -> mã đích. Database giữ nguyên
+# hai agent; chỉ tầng đọc này đổi agent_id/tên khi trả ra.
+#
+# ai-chatbot-contract (agent đăng ký qua Gateway 12/10/2026) là CÙNG ứng dụng với
+# tla-hd. Chốt 28/10/2026: hiện một tên, CỘNG DỒN số của cả hai. Đã biết hệ quả:
+# từ 12/10 lượt gọi qua Gateway có mặt ở cả nguồn app lẫn gateway, nên tổng
+# TLA-HĐ tính hai lần phần đó (đo 28/10: app 7.006.179 / gateway 7.051.944 token).
+MERGED_AGENTS = {"ai-chatbot-contract": "tla-hd"}
+
+
+def _agent_merge(cn) -> dict[int, tuple[int, str]]:
+    """agent_id nguồn -> (agent_id đích, tên đích). Rỗng nếu thiếu một trong hai mã."""
+    by_code = {x.get("code"): x for x in _rows(cn, "SELECT agent_id, code, name FROM dim_agent")}
+    return {by_code[s]["agent_id"]: (by_code[d]["agent_id"], by_code[d]["name"])
+            for s, d in MERGED_AGENTS.items() if s in by_code and d in by_code}
+
+
+def _remap_agents(rows: list[dict], merge: dict, name_key: str | None = None) -> list[dict]:
+    for x in rows:
+        if x["agent_id"] in merge:
+            x["agent_id"], name = merge[x["agent_id"]]
+            if name_key:
+                x[name_key] = name
+    return rows
+
+
 def _f(x):
     """Decimal/None -> float/None. json không biết mã hoá Decimal của psycopg2."""
     return None if x is None else float(x)
@@ -106,6 +132,8 @@ def agents(cn) -> list[dict]:
          AND b.month = (SELECT MAX(b2.month) FROM ref_budget b2
                         WHERE b2.agent_id = a.agent_id)
         ORDER BY a.agent_id""")
+    merge = _agent_merge(cn)
+    r = [x for x in r if x["agent_id"] not in merge]
     for x in r:
         x["budget_usd"] = _money(x["budget_usd"])
         x["is_running"] = bool(x["is_running"])
@@ -346,7 +374,9 @@ def adoption(cn) -> list[dict]:
             x["active"] = 1 if x["any_usage"] else 0
         x.pop("any_usage")
         x["rate_pct"] = round(100.0 * x["active"] / x["provisioned"], 1)
-    return r
+    # Agent gộp không có dòng riêng: mẫu số danh bạ là của agent đích.
+    merge = _agent_merge(cn)
+    return [x for x in r if x["agent_id"] not in merge]
 
 
 # =====================================================================
@@ -375,7 +405,8 @@ def usage(cn, ph, start: str, end: str) -> list[dict]:
         x["cost_usd"] = _money(x["cost_usd"])
         x["token_estimated"] = bool(x["token_estimated"])
     from .pricing import attach_estimates
-    return attach_estimates(cn, r, start, end)
+    # Ước tính giá tra bằng agent_id GỐC, nên gộp agent SAU khi ước tính.
+    return _remap_agents(attach_estimates(cn, r, start, end), _agent_merge(cn), "agent")
 
 
 def usage_hourly(cn, ph, start: str, end: str) -> list[dict]:
@@ -407,7 +438,7 @@ def usage_hourly(cn, ph, start: str, end: str) -> list[dict]:
         # trình duyệt quy đổi thêm một lần nữa.
         x["hour"] = str(x["hour"])[:19]
         x["cost_usd"] = _money(x["cost_usd"])
-    return r
+    return _remap_agents(r, _agent_merge(cn), "agent")
 
 
 def usage_by_account(cn, ph, start: str, end: str) -> list[dict]:
@@ -448,7 +479,7 @@ def usage_by_account(cn, ph, start: str, end: str) -> list[dict]:
     for x in r:
         x["day"] = _day(x["day"])
     from .pricing import attach_estimates
-    return attach_estimates(cn, r, start, end)
+    return _remap_agents(attach_estimates(cn, r, start, end), _agent_merge(cn), "agent")
 
 
 def performance(cn, ph, start: str, end: str) -> dict:
@@ -488,6 +519,16 @@ def performance(cn, ph, start: str, end: str) -> dict:
     for x in latency:
         x["day"] = _day(x["day"])
         x["enough_samples"] = bool(x["enough_samples"])
+    merge = _agent_merge(cn)
+    _remap_agents(codes, merge)
+    # Phân vị không cộng được: hai agent gộp cùng ngày thì giữ dòng NHIỀU MẪU hơn,
+    # để mỗi (day, agent_id) vẫn chỉ một dòng như api.js đòi hỏi.
+    kept: dict[tuple, dict] = {}
+    for x in _remap_agents(latency, merge):
+        k = (x["day"], x["agent_id"])
+        if k not in kept or (x["samples"] or 0) > (kept[k]["samples"] or 0):
+            kept[k] = x
+    latency = sorted(kept.values(), key=lambda x: (x["day"], x["agent_id"]))
     return {"response_codes": codes, "latency": latency}
 
 
