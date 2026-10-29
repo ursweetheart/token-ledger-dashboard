@@ -312,7 +312,10 @@ jobs:
       # moi vong bao OperationalError va lenh start het gio cho).
       # Moc do 01/10/2026: 209 -> 210, them phep kiem `scripts/dashboard.py worker` chi bat
       # worker (khong build lai, khong recreate container nao khac, khong sinh worker thu hai).
-      EXPECTED_PY: "210"
+      # Moc do 29/10/2026: 210 -> 216, them 2 phep kiem cua connection (route bo rpm/tpm
+      # khi de trong, rollout cho Gateway khoi dong lau) va 4 cua test_agent_merge
+      # (ai-chatbot-contract hien duoi ten va agent_id cua tla-hd, cong don so).
+      EXPECTED_PY: "216"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

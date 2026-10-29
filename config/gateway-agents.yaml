@@ -1,4 +1,7 @@
-# Dashboard registration only. Keys/routes remain configured in the Gateway.
-# See docs/reference/gateway-agent-registration.md for single/multiple examples.
 version: 1
-agents: []
+agents:
+- code: ai-chatbot-contract
+  name: TLA-HD
+  user_mode: multiple
+  reporting_start_date: '2026-10-12'
+  active: true

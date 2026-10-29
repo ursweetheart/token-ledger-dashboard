@@ -22,6 +22,14 @@ class ConfigTests(unittest.TestCase):
         p=profile(); p['models'][0]['alias']='*'
         with self.assertRaises(ValueError): validate_profile(p)
 
+    def test_empty_rate_limit_omitted_from_route(self):
+        p=profile(); p['rpm']=None
+        p=validate_profile(p)
+        result,_=render_routes({'model_list':[],'router_settings':{'enable_tag_filtering':True}},[p],[])
+        params=result['model_list'][0]['litellm_params']
+        self.assertNotIn('rpm',params)
+        self.assertEqual(params['tpm'],1000)
+
     def test_zero_and_unlimited_are_distinct(self):
         p=profile(); p['budget']['usd']=0
         self.assertEqual(validate_profile(p)['budget']['usd'],0)

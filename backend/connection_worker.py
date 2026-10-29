@@ -286,7 +286,8 @@ class Worker:
         for index, service in enumerate(('litellm-1','litellm-2')):
             self.compose('up','-d','--no-deps','--force-recreate',service)
             ready = False
-            for _ in range(30):
+            # Prisma startup can exceed a minute on Docker Desktop, including during restore.
+            for _ in range(180):
                 try:
                     self.gateways[index].call('/health/liveliness')
                     ready = True

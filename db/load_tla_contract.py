@@ -121,8 +121,13 @@ def main() -> None:
     # nen khong duoc phu thuoc thu tu doc file.
     rows = sorted(rows, key=lambda r: (r["day"], (r.get("username") or "").lower(),
                                        r.get("model") or ""))
+    # Nhieu nguoi khong map duoc cung roi vao tai khoan 'unattributed', nen hai
+    # dong khac nguoi trong file co the trung (ngay, tai khoan, model) sau khi map.
+    # Do 28/10/2026: 5 tai khoan law-*rollout-* cung goi gemini-2.5-pro ngay 14/10.
+    # Cong gop cac dong do thay vi nap trung; tong luot va token van khop file.
+    merged_into: dict[tuple, int] = {}
     out_rows, unmappable, skipped = [], {}, {}
-    for i, r in enumerate(rows, start=1):
+    for r in rows:
         name = (r.get("username") or "").strip()
         acc = by_uid.get(r.get("user_id")) or by_name.get(name.lower())
         if acc is None:
@@ -137,9 +142,24 @@ def main() -> None:
         else:
             mid = model_of.get(raw)          # None khi app khong noi model
 
-        out_rows.append((i, r["day"], TLA_CONTRACT, acc, mid, raw, r["calls"],
-                   r["total_tokens"], r.get("prompt_tokens"),
+        key = (r["day"], acc, raw)
+        if key in merged_into:
+            j = merged_into[key]
+            old = out_rows[j]
+            # QUY TAC 5: NULL + NULL van la NULL, khong thanh 0.
+            add = lambda a, b: None if a is None and b is None else (a or 0) + (b or 0)
+            out_rows[j] = old[:6] + (add(old[6], r["calls"]), add(old[7], r["total_tokens"]),
+                                     add(old[8], r.get("prompt_tokens")),
+                                     add(old[9], r.get("completion_tokens")))
+            continue
+        merged_into[key] = len(out_rows)
+        out_rows.append((len(out_rows) + 1, r["day"], TLA_CONTRACT, acc, mid, raw,
+                   r["calls"], r["total_tokens"], r.get("prompt_tokens"),
                    r.get("completion_tokens")))
+    merged = len(rows) - len(out_rows)
+    if merged:
+        log.info("  merged %d file rows that share (day, account, model) after mapping"
+                 " unresolvable people to the unattributed account", merged)
 
     n = connect.insert_many(cn, ph, "fact_app_daily", COLUMNS, out_rows)
 
@@ -150,8 +170,9 @@ def main() -> None:
     want_tokens = sum(r["total_tokens"] or 0 for r in rows)
     actual = connect.query_one(cn, "SELECT COUNT(*), SUM(calls), SUM(total_tokens)"
                                " FROM fact_app_daily")
-    if actual[0] != len(rows):
-        errors.append(f"loaded {actual[0]} rows != {len(rows)} rows in the file")
+    if actual[0] != len(out_rows):
+        errors.append(f"loaded {actual[0]} rows != {len(rows)} rows in the file"
+                      f" minus {merged} merged")
     if int(actual[1] or 0) != want_calls:
         errors.append(f"calls {actual[1]} != {want_calls} in the file")
     if int(actual[2] or 0) != want_tokens:
