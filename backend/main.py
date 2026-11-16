@@ -46,7 +46,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from . import gateway, store
-from .connection_api import router as connection_router
+from .connection_api import router as connection_router, worker_rpc
 
 # ═══════════════════════════════════════════════════════════════════════════
 # XÁC THỰC
@@ -69,13 +69,13 @@ from .connection_api import router as connection_router
 # TRỪ MỘT LOẠI KHOÁ (29/09/2026, change `keep-connection-keys-out-of-setting-quota`):
 # khoá tên `connection-…` do tab Kết nối agent cấp. Khoá đó chỉ sửa được ở tab
 # Kết nối - bằng khoá quản trị, có audit, và tab đó lưu hạn mức để hiển thị.
-# Hai endpoint ghi ở đây trả 409 cho nó (`gateway.ensure_dashboard_writable`).
-# Hệ quả: nút "Chặn" ở tab Setting không chặn khẩn cấp được khoá `connection-…`;
-# muốn chặn thì đặt hạn mức 0 hoặc thu hồi khoá ở tab Kết nối.
+# Đường ghi hạn mức trả 409 cho nó; phép từ chối do worker thi hành (đường ghi đã
+# chuyển qua worker). Hệ quả: nút "Chặn" ở tab Setting không chặn khẩn cấp được
+# khoá `connection-…`; muốn chặn thì đặt hạn mức 0 hoặc thu hồi khoá ở tab Kết nối.
 #
-# Backend còn giữ master key của Gateway để sửa hạn mức. Phạm vi của nó bị khoá
-# trong `backend/gateway.py`: đường dẫn viết cứng, hai khoá metadata, và không
-# endpoint nào chuyển tiếp lệnh tuỳ ý sang Gateway.
+# Container `api` KHÔNG còn giữ master key của Gateway. Đọc/sửa hạn mức đi qua
+# worker trên host; `api` chỉ nói chuyện với worker, không gọi thẳng API quản trị
+# của Gateway (xem `backend/gateway.py` - nay chỉ còn các hàm thuần).
 #
 # Nói thẳng phần này KHÔNG cho: không biết AI đã xem gì, không thu hồi được
 # quyền của MỘT người, không phân biệt Admin/User. Nó chỉ làm đúng một việc -
@@ -139,17 +139,12 @@ def _read_env(name: str) -> str:
 DASHBOARD_KEY = _read_env("DASHBOARD_KEY")
 DASHBOARD_OPEN = _read_env("DASHBOARD_OPEN") == "1"
 
-# Master key của Gateway, dùng để sửa hạn mức. Cùng kỷ luật với DASHBOARD_KEY:
-# thiếu thì máy chủ KHÔNG khởi động. Chế độ hỏng phải là "không chạy", không được
-# là "chạy nhưng bấm Lưu mới biết là hỏng".
+# Container `api` KHÔNG còn giữ master key của Gateway. Đọc và sửa hạn mức đi qua
+# worker trên host (xem `worker_rpc` bên dưới). Lý do: master key trong `api` cho
+# phép tạo đường chuyển tiếp rò khoá Google - đã chứng minh trên máy dev 03/11/2026.
 #
-# `QUOTA_DISABLED=1` là đường thoát tường minh cho máy chưa dựng Gateway: hai
+# `QUOTA_DISABLED=1` vẫn là đường thoát tường minh cho máy chưa dựng Gateway: các
 # endpoint hạn mức trả 503, phần còn lại của dashboard chạy như cũ.
-GATEWAY_MASTER_KEY = _read_env("LITELLM_MASTER_KEY")
-# THANG vao litellm, KHONG qua gateway-lb: nginx o edge chi mo
-# /v1/chat/completions va /health/*, moi duong khac tra 404 - ke ca /key/list
-# va /key/update. Do bang mot luot goi that ngay 20/09/2026.
-GATEWAY_BASE_URL = _read_env("GATEWAY_BASE_URL") or "http://litellm-1:4000"
 QUOTA_DISABLED = _read_env("QUOTA_DISABLED") == "1"
 
 # Thiếu cấu hình thì KHÔNG khởi động. `raise SystemExit` ở mức module nên uvicorn
@@ -175,17 +170,10 @@ if not DASHBOARD_KEY and not DASHBOARD_OPEN:
         "  ONLY in DEVELOPMENT, and only if running unauthenticated is acceptable:\n"
         "    DASHBOARD_OPEN=1\n")
 
-if not GATEWAY_MASTER_KEY and not QUOTA_DISABLED:
-    raise SystemExit(
-        "\nMISSING ENVIRONMENT VARIABLE: LITELLM_MASTER_KEY\n"
-        "  The server refuses to start. No port is opened.\n\n"
-        "  The quota endpoints edit the budget stored on each virtual key, so\n"
-        "  this server needs the Gateway master key. It is the same value the\n"
-        "  Gateway itself uses - copy it from the .env line LITELLM_MASTER_KEY.\n\n"
-        "  On a machine with no Gateway, turn the quota endpoints off instead:\n"
-        "    QUOTA_DISABLED=1\n")
-
-gateway.configure(GATEWAY_BASE_URL, GATEWAY_MASTER_KEY)
+# Đọc/sửa hạn mức đi qua worker. `None` khi worker chưa cấu hình -> endpoint hạn
+# mức trả 503 (tab Setting cần worker đang chạy; đây là cái giá có chủ ý của việc
+# bỏ master key khỏi `api`). Không còn cửa chặn khởi động đòi master key.
+QUOTA_RPC = worker_rpc(_read_env)
 
 if DASHBOARD_OPEN:
     # In ra stderr MỖI LẦN khởi động. Chế độ mở phải luôn nhìn thấy được - một
@@ -466,9 +454,12 @@ def performance(start: str | None = None, end: str | None = None,
 # ═══════════════════════════════════════════════════════════════════════════
 
 def _quota_ready() -> None:
-    """503 khi máy này cố ý chạy không có Gateway. Đây không phải lỗi."""
-    if QUOTA_DISABLED or not gateway.configured():
-        raise HTTPException(503, "Quota endpoints are off (QUOTA_DISABLED=1)")
+    """503 khi hạn mức bị tắt, hoặc không có worker để nhờ. Đây không phải lỗi."""
+    if QUOTA_DISABLED:
+        raise HTTPException(503, "Quota is switched off on this server (QUOTA_DISABLED=1)")
+    if QUOTA_RPC is None:
+        raise HTTPException(503, "Quota needs the connection worker: set CONNECTIONS_ENABLED=1, "
+                                 "CONNECTION_WORKER_URL and CONNECTION_WORKER_KEY, then start the worker")
 
 
 def _quota_amount(body: dict | None) -> float:
@@ -515,11 +506,9 @@ def quota_list(who: Principal = Depends(caller)):
     thì người nhập sẽ thấy "38/50" trong khi agent đã bị chặn.
     """
     _quota_ready()
-    try:
-        keys = gateway.list_keys()
-    except gateway.GatewayError as exc:
-        raise HTTPException(502, str(exc))
-    rows = [_agent_view(k) for k in keys if k.get("key_alias")]
+    data = QUOTA_RPC("quota-list", {})
+    keys = (data or {}).get("keys") or []
+    rows = [_agent_view(k) for k in keys if isinstance(k, dict) and k.get("key_alias")]
     # Một agent có nhiều khoá thì hạn mức không còn nghĩa "cả agent" - nói ra chứ
     # không cộng gộp một con số trông như đang được thi hành.
     #
@@ -545,12 +534,8 @@ def quota_set(key_alias: str = Query(..., min_length=1), body: dict | None = Non
               who: Principal = Depends(caller)):
     _quota_ready()
     amount = _quota_amount(gateway.sanitize_incoming(body))
-    try:
-        metadata = gateway.set_quota(key_alias, amount, who.name)
-    except gateway.ManagedKeyError as exc:
-        raise HTTPException(409, str(exc))
-    except gateway.GatewayError as exc:
-        raise HTTPException(502, str(exc))
+    data = QUOTA_RPC("quota-set", {"key_alias": key_alias, "amount": amount, "actor": who.name})
+    metadata = (data or {}).get("metadata") or {}
     return {"key_alias": key_alias, "quota_usd": metadata.get(gateway.QUOTA_FIELD),
             "topups": metadata.get(gateway.LOG_FIELD, [])}
 
@@ -564,18 +549,8 @@ def quota_top_up(key_alias: str = Query(..., min_length=1), body: dict | None = 
     """
     _quota_ready()
     added = _quota_amount(gateway.sanitize_incoming(body))
-    try:
-        # Kiểm TRƯỚC find_key: không thì đã gọi Gateway rồi mới bị từ chối.
-        gateway.ensure_dashboard_writable(key_alias)
-        key = gateway.find_key(key_alias)
-        if key is None:
-            raise HTTPException(404, f"No key named {key_alias!r} at the Gateway")
-        metadata = gateway.set_quota(key_alias, (gateway.quota_of(key) or 0.0) + added,
-                                     who.name)
-    except gateway.ManagedKeyError as exc:
-        raise HTTPException(409, str(exc))
-    except gateway.GatewayError as exc:
-        raise HTTPException(502, str(exc))
+    data = QUOTA_RPC("quota-top-up", {"key_alias": key_alias, "amount": added, "actor": who.name})
+    metadata = (data or {}).get("metadata") or {}
     return {"key_alias": key_alias, "quota_usd": metadata.get(gateway.QUOTA_FIELD),
             "topups": metadata.get(gateway.LOG_FIELD, [])}
 

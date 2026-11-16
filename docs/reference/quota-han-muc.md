@@ -129,16 +129,19 @@ docker compose --profile refresh build ledger-refresh   # image `tools`
 Ba image này chép mã **lúc build**. Không dựng lại thì server chạy bản cũ: tab
 Setting trả 404, và dịch vụ canh hạn mức không tìm thấy `scripts/watch_quota.py`.
 
-### Bước 2 — thêm hai dòng vào `.env`
+### Bước 2 — thêm một dòng vào `.env`, và bật Connection worker
 
 ```
-LITELLM_MASTER_KEY=<chinh gia tri Gateway dang dung>
 QUOTA_DRY_RUN=1
 ```
 
-`LITELLM_MASTER_KEY` server đã có sẵn cho Gateway — backend dùng **cùng giá trị
-đó** để sửa hạn mức. Thiếu nó thì backend **không khởi động**; máy nào không
-muốn bật hạn mức thì đặt `QUOTA_DISABLED=1`.
+Từ 16/11/2026 backend **không còn giữ `LITELLM_MASTER_KEY`**: nó nhờ Connection
+worker đọc và sửa hạn mức. Vì thế tab Setting và dịch vụ `quota-watch` cần
+`CONNECTIONS_ENABLED=1`, `CONNECTION_WORKER_URL`, `CONNECTION_WORKER_KEY` và
+worker đang chạy (`python scripts/dashboard.py setup` rồi `… start`). Worker tắt
+thì tab Setting báo 503 — hạn mức đã đặt **vẫn chặn**, chỉ không xem/sửa được.
+Máy nào không muốn bật hạn mức thì đặt `QUOTA_DISABLED=1`. Chi tiết và cách lùi
+lại: [`quota-internals.md`](quota-internals.md) mục 8.
 
 ### Bước 3 — dựng lại, giữ nguyên chế độ chỉ-ghi-nhận
 
@@ -162,7 +165,8 @@ chặn gì. Không kết luận từ trạng thái container — phải thấy d
 ### Bước 5 — xem server đang có bao nhiêu khoá
 
 ```bash
-curl -s -H "Authorization: Bearer $LITELLM_MASTER_KEY"   "http://litellm-1:4000/key/list?page=1&size=100&return_full_object=true"   | python3 -c "import json,sys;[print(k.get('key_alias'), (k.get('metadata') or {}).get('tags')) for k in json.load(sys.stdin)['keys']]"
+curl -s -H "Authorization: Bearer $DASHBOARD_KEY" http://127.0.0.1:8000/api/quota \
+  | python3 -c "import json,sys;[print(r['key_alias'], r['agent'], r['sibling_keys']) for r in json.load(sys.stdin)['rows']]"
 ```
 
 Nhìn hai thứ: khoá nào **thiếu tag**, và khoá nào **trùng tag** với nhau. Nhiều

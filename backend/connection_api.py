@@ -15,6 +15,53 @@ from .connection_store import ConnectionStore
 RUN_AT = re.compile(r'([01]\d|2[0-3]):[0-5]\d')
 
 
+def _make_rpc(worker_url, worker_key):
+    """Một người gọi RPC tới worker. Dùng chung cho tab Kết nối và đường hạn mức.
+
+    Thân lỗi của worker đã được làm sạch sẵn; không bao giờ chuyển tiếp nguyên văn
+    phản hồi của upstream.
+    """
+    def rpc(action, data):
+        request = urllib.request.Request(worker_url.rstrip('/') + '/rpc/' + action,
+            data=json.dumps(data).encode(), headers={'Authorization': 'Bearer ' + worker_key,
+                                                    'Content-Type': 'application/json'})
+        try:
+            class NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    return None
+            with urllib.request.build_opener(NoRedirect).open(request, timeout=35) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            # Worker error bodies are already sanitized; never forward raw upstream responses.
+            try:
+                detail = json.load(exc)['detail']
+            except (ValueError, TypeError, KeyError):
+                # Not the worker's own JSON: the TLS proxy answered for a worker that is down
+                # (nginx 502/504 HTML). Report it as what it is, not as a refusal.
+                raise HTTPException(503, 'Worker unavailable; inspect operation status before retrying') from None
+            raise HTTPException(exc.code, detail) from None
+        except (OSError, ValueError):
+            raise HTTPException(503, 'Worker unavailable; inspect operation status before retrying') from None
+    return rpc
+
+
+def worker_rpc(settings):
+    """Người gọi RPC cho đường hạn mức, hoặc None khi chưa cấu hình worker.
+
+    None nghĩa là tab Setting không có worker để nhờ -> endpoint hạn mức trả 503.
+    """
+    if settings('CONNECTIONS_ENABLED') != '1':
+        return None
+    worker_url = settings('CONNECTION_WORKER_URL')
+    worker_key = settings('CONNECTION_WORKER_KEY')
+    if not worker_url or not worker_key:
+        return None
+    parsed = urlsplit(worker_url)
+    if parsed.scheme != 'https' and parsed.hostname not in {'127.0.0.1', 'localhost', '::1'}:
+        raise SystemExit('Connection worker requires HTTPS outside loopback')
+    return _make_rpc(worker_url, worker_key)
+
+
 def router(settings):
     enabled = settings('CONNECTIONS_ENABLED') == '1'
     admin = settings('CONNECTION_ADMIN_KEY')
@@ -53,25 +100,7 @@ def router(settings):
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from None
 
-    def rpc(action, data):
-        request = urllib.request.Request(worker_url.rstrip('/') + '/rpc/' + action,
-            data=json.dumps(data).encode(), headers={'Authorization': 'Bearer ' + worker_key,
-                                                    'Content-Type': 'application/json'})
-        try:
-            class NoRedirect(urllib.request.HTTPRedirectHandler):
-                def redirect_request(self, req, fp, code, msg, headers, newurl):
-                    return None
-            with urllib.request.build_opener(NoRedirect).open(request, timeout=35) as response:
-                return json.load(response)
-        except urllib.error.HTTPError as exc:
-            # Worker error bodies are already sanitized; never forward raw upstream responses.
-            try:
-                detail = json.load(exc).get('detail', 'Worker rejected operation')
-            except (ValueError, TypeError):
-                detail = 'Worker rejected operation'
-            raise HTTPException(exc.code, detail) from None
-        except (OSError, ValueError):
-            raise HTTPException(503, 'Worker unavailable; inspect operation status before retrying') from None
+    rpc = _make_rpc(worker_url, worker_key)
 
     @api.get('')
     def listing(actor=Depends(authorize)):

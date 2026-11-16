@@ -1,4 +1,10 @@
-"""Phép kiểm cho lớp hạn mức. KHÔNG cần Gateway thật chạy.
+"""Phép kiểm cho các hàm THUẦN của lớp hạn mức. KHÔNG cần Gateway, KHÔNG cần gói nào.
+
+TỪ 16/11/2026 (change `move-the-master-key-out-of-the-portal-backend`): phần GỌI
+Gateway đã chuyển sang worker, nên các phép kiểm soi thân yêu cầu gửi đi, luật
+409 của key `connection-…` và việc lỗi không mang master key nằm ở
+`tests/connection_quota_cases.py` (cần FastAPI + psycopg2, chạy ở job
+connection-contracts). File này giữ phần chạy được trên máy sạch.
 
 CA QUAN TRỌNG NHẤT là `test_writing_a_quota_keeps_the_identity_tag`.
 
@@ -11,7 +17,8 @@ khác, tiền ghi sai project - mà mọi lượt gọi vẫn trả 200. Đo ng�
 trên khoá không mang tag: 7/8 lượt thành công, 1/8 lạc tuyến. Tức 12,5%, và
 "gọi thử thấy chạy" không phát hiện ra.
 
-Vì vậy phép kiểm này soi ĐÚNG THÂN YÊU CẦU gửi đi, không soi giá trị trả về.
+`merge_quota` là chỗ DUY NHẤT dựng metadata mới, nên phép kiểm ở đây soi nó;
+phép kiểm soi ĐÚNG THÂN YÊU CẦU worker gửi đi nằm ở connection_quota_cases.py.
 """
 import re
 import sys
@@ -39,102 +46,48 @@ class MergeTests(unittest.TestCase):
     """Phần dựng metadata mới - chỗ duy nhất quyết định cái gì bị mất."""
 
     def test_writing_a_quota_keeps_the_identity_tag(self):
-        merged = gateway._merge(TAGGED_KEY["metadata"], 50.0, "dashboard")
+        merged = gateway.merge_quota(TAGGED_KEY["metadata"], 50.0, "dashboard")
         self.assertEqual(merged["tags"], ["dms-feedback"])
         self.assertEqual(merged[gateway.QUOTA_FIELD], 50.0)
 
     def test_writing_a_quota_keeps_unrelated_fields(self):
-        merged = gateway._merge(TAGGED_KEY["metadata"], 50.0, "dashboard")
+        merged = gateway.merge_quota(TAGGED_KEY["metadata"], 50.0, "dashboard")
         self.assertEqual(merged["note"], "giu nguyen")
 
     def test_the_source_metadata_is_not_mutated(self):
         before = dict(TAGGED_KEY["metadata"])
-        gateway._merge(TAGGED_KEY["metadata"], 50.0, "dashboard")
+        gateway.merge_quota(TAGGED_KEY["metadata"], 50.0, "dashboard")
         self.assertEqual(TAGGED_KEY["metadata"], before)
 
     def test_each_write_appends_one_log_entry(self):
-        first = gateway._merge({}, 50.0, "dashboard")
-        second = gateway._merge(first, 80.0, "dashboard")
+        first = gateway.merge_quota({}, 50.0, "dashboard")
+        second = gateway.merge_quota(first, 80.0, "dashboard")
         self.assertEqual(len(second[gateway.LOG_FIELD]), 2)
         self.assertEqual(second[gateway.LOG_FIELD][-1]["from"], 50.0)
         self.assertEqual(second[gateway.LOG_FIELD][-1]["to"], 80.0)
 
     def test_history_survives_a_later_write(self):
-        first = gateway._merge({}, 50.0, "dashboard")
+        first = gateway.merge_quota({}, 50.0, "dashboard")
         stamp = first[gateway.LOG_FIELD][0]["at"]
-        second = gateway._merge(first, 80.0, "dashboard")
+        second = gateway.merge_quota(first, 80.0, "dashboard")
         self.assertEqual(second[gateway.LOG_FIELD][0]["at"], stamp)
 
 
-class SetQuotaTests(unittest.TestCase):
-    """Soi thân yêu cầu thật sự gửi sang Gateway."""
-
-    def setUp(self):
-        gateway.configure("http://gateway.invalid", "sk-master")
-
-    def test_the_request_body_carries_the_whole_metadata(self):
-        sent = {}
-
-        def fake_call(path, method, payload=None, query=None):
-            if path == gateway._PATH_LIST:
-                return {"keys": [TAGGED_KEY], "total_pages": 1}
-            sent["payload"] = payload
-            return {}
-
-        with mock.patch.object(gateway, "_call", side_effect=fake_call):
-            gateway.set_quota("dms-feedback-tagged", 50.0, "dashboard")
-
-        metadata = sent["payload"]["metadata"]
-        # Đây là phép kiểm chống đúng cái bẫy ở đầu file.
-        self.assertEqual(metadata["tags"], ["dms-feedback"])
-        self.assertEqual(metadata[gateway.QUOTA_FIELD], 50.0)
-        self.assertEqual(sent["payload"]["key_alias"], "dms-feedback-tagged")
-
-    def test_an_unknown_alias_is_an_error_not_a_silent_create(self):
-        with mock.patch.object(gateway, "_call",
-                               return_value={"keys": [], "total_pages": 1}):
-            with self.assertRaises(gateway.GatewayError):
-                gateway.set_quota("khong-ton-tai", 50.0, "dashboard")
-
-
 class ManagedKeyTests(unittest.TestCase):
-    """Khoá do tab Kết nối agent cấp: dashboard không được sửa hạn mức của nó.
+    """Khoá do tab Kết nối agent cấp được nhận diện bằng TIỀN TỐ tên.
 
-    Khoá đó chỉ sửa bằng khoá quản trị, có audit. Sửa thêm từ tab Setting bằng
-    DASHBOARD_KEY là vượt quyền, và làm số hiển thị ở tab Kết nối sai.
+    Worker dùng đúng hàm này để từ chối (409) trước mọi lệnh gọi Gateway - phép
+    kiểm hành vi đó nằm ở connection_quota_cases.py.
     """
 
-    def setUp(self):
-        gateway.configure("http://gateway.invalid", "sk-master")
+    def test_a_connection_key_is_managed(self):
+        self.assertTrue(gateway.is_managed_alias("connection-x"))
 
-    def test_setting_a_managed_key_is_refused_before_any_gateway_call(self):
-        with mock.patch.object(gateway, "_call") as call:
-            with self.assertRaises(gateway.ManagedKeyError) as caught:
-                gateway.set_quota("connection-x", 50.0, "dashboard")
-        call.assert_not_called()
-        # Câu lỗi hiện thẳng ở tab Setting, nên phải chỉ đường tới tab Kết nối.
-        self.assertIn("Kết nối agent", str(caught.exception))  # vi-ok: tab name shown to the user
-
-    def test_the_refusal_is_not_reported_as_a_broken_gateway(self):
-        # GatewayError được đổi thành 502 "Gateway hỏng" - sai nghĩa ở đây.
-        self.assertFalse(issubclass(gateway.ManagedKeyError, gateway.GatewayError))
-
-    def test_an_ordinary_key_is_still_writable(self):
-        gateway.ensure_dashboard_writable("dms-feedback-tagged")  # không ném lỗi
-        sent = {}
-
-        def fake_call(path, method, payload=None, query=None):
-            if path == gateway._PATH_LIST:
-                return {"keys": [TAGGED_KEY], "total_pages": 1}
-            sent["payload"] = payload
-            return {}
-
-        with mock.patch.object(gateway, "_call", side_effect=fake_call):
-            gateway.set_quota("dms-feedback-tagged", 50.0, "dashboard")
-        self.assertEqual(sent["payload"]["metadata"][gateway.QUOTA_FIELD], 50.0)
+    def test_an_ordinary_key_is_not_managed(self):
+        self.assertFalse(gateway.is_managed_alias("dms-feedback-tagged"))
 
     def test_only_the_prefix_counts_not_the_word_anywhere(self):
-        gateway.ensure_dashboard_writable("my-connection-key")  # không ném lỗi
+        self.assertFalse(gateway.is_managed_alias("my-connection-key"))
 
 
 class ReadingTests(unittest.TestCase):
@@ -210,27 +163,52 @@ class SanitizeTests(unittest.TestCase):
         self.assertEqual(gateway.sanitize_incoming(None), {})
 
 
-class MasterKeyTests(unittest.TestCase):
-    def test_an_http_error_never_carries_the_master_key(self):
-        import urllib.error
+class NoMasterKeyTests(unittest.TestCase):
+    """Container `api` không giữ master key và không có đường tới API quản trị Gateway.
 
-        gateway.configure("http://gateway.invalid", "sk-master-secret")
-        err = urllib.error.HTTPError("http://gateway.invalid/key/list", 403,
-                                     "Forbidden", {}, None)
-        with mock.patch.object(gateway.urllib.request, "urlopen", side_effect=err):
-            with self.assertRaises(gateway.GatewayError) as caught:
-                gateway.list_keys()
-        self.assertNotIn("sk-master-secret", str(caught.exception))
+    Soi MÃ NGUỒN của mọi module mà `backend/main.py` nạp (lần theo import nội bộ),
+    bỏ qua comment và docstring vì chúng kể lại lịch sử. Bắt đúng hồi quy đáng sợ
+    nhất: ai đó "tạm" đọc lại `LITELLM_MASTER_KEY` ở `api` cho tiện.
+    """
 
-    def test_an_unreachable_gateway_never_carries_the_master_key(self):
-        import urllib.error
+    FORBIDDEN = ("LITELLM_MASTER_KEY", "/key/", "/config/")
 
-        gateway.configure("http://gateway.invalid", "sk-master-secret")
-        with mock.patch.object(gateway.urllib.request, "urlopen",
-                               side_effect=urllib.error.URLError("timed out")):
-            with self.assertRaises(gateway.GatewayError) as caught:
-                gateway.list_keys()
-        self.assertNotIn("sk-master-secret", str(caught.exception))
+    def loaded_by_api(self):
+        import ast
+        backend = ROOT / "backend"
+        seen, todo = {}, ["main"]
+        while todo:
+            name = todo.pop()
+            if name in seen or not (backend / f"{name}.py").exists():
+                continue
+            tree = ast.parse((backend / f"{name}.py").read_text(encoding="utf-8"))
+            seen[name] = tree
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom) and node.level == 1:
+                    # `from .x import y` -> x ; `from . import a, b` -> a, b
+                    todo += [node.module] if node.module else [a.name for a in node.names]
+        return seen
+
+    def test_the_api_never_loads_the_worker(self):
+        # Worker là nơi DUY NHẤT giữ master key; nạp nó vào `api` là kéo cả lớp gọi Gateway theo.
+        self.assertNotIn("connection_worker", self.loaded_by_api())
+
+    def test_no_module_the_api_loads_reads_the_master_key_or_calls_the_admin_api(self):
+        import ast
+        modules = self.loaded_by_api()
+        self.assertIn("gateway", modules)
+        self.assertIn("connection_api", modules)
+        for name, tree in modules.items():
+            docstrings = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)}
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                        and id(node) not in docstrings):
+                    for word in self.FORBIDDEN:
+                        self.assertNotIn(word, node.value, f"backend/{name}.py")
+
+    def test_the_gateway_module_opens_no_connection(self):
+        src = (ROOT / "backend" / "gateway.py").read_text(encoding="utf-8")
+        self.assertNotRegex(src, r"(?m)^\s*(import|from)\s+(urllib|http|socket|requests)")
 
 
 class AmountTests(unittest.TestCase):
@@ -308,31 +286,31 @@ class RouteTests(unittest.TestCase):
         self.assertIsNotNone(m, f"khong tim thay {method} {path}")
         return m.group(0)
 
-    def test_both_write_routes_turn_a_managed_key_into_409(self):
-        for path in ("/api/quota", "/api/quota/top-up"):
-            self.assertRegex(self.route_body("post", path),
-                             r"except gateway\.ManagedKeyError[\s\S]*?HTTPException\(409",
-                             f"{path} khong doi ManagedKeyError thanh 409")
+    def test_both_write_routes_hand_the_decision_to_the_worker(self):
+        # Luật 409 của key `connection-…` nay do WORKER quyết định. `api` chỉ được
+        # chuyển lời: gọi đúng RPC, và không nuốt lỗi worker trả về (409, 404, 503).
+        for path, action in (("/api/quota", "quota-set"), ("/api/quota/top-up", "quota-top-up")):
+            body = self.route_body("post", path)
+            self.assertIn(f'QUOTA_RPC("{action}"', body, path)
+            self.assertNotRegex(body, r"\n\s+except\b", f"{path} nuot loi cua worker")
+            self.assertIn("who.name", body, f"{path} khong truyen nguoi goi cho nhat ky")
 
-    def test_top_up_refuses_before_it_reads_the_gateway(self):
-        # Không thì find_key đã gọi Gateway rồi mới bị từ chối.
-        body = self.route_body("post", "/api/quota/top-up")
-        # Tìm LỜI GỌI, không tìm chữ: comment cạnh đó cũng nhắc tên find_key.
-        self.assertIn("gateway.ensure_dashboard_writable(", body)
-        self.assertLess(body.index("gateway.ensure_dashboard_writable("),
-                        body.index("gateway.find_key("))
+    def test_every_quota_route_checks_the_worker_is_there_first(self):
+        for method, path in (("get", "/api/quota"), ("post", "/api/quota"),
+                             ("post", "/api/quota/top-up")):
+            body = self.route_body(method, path)
+            self.assertLess(body.index("_quota_ready()"), body.index("QUOTA_RPC("), path)
 
     def test_the_quota_list_still_shows_managed_keys(self):
         # Key `connection-…` vẫn phải hiện để XEM số đã tiêu; chỉ việc SỬA bị chặn.
         body = self.route_body("get", "/api/quota")
         self.assertNotIn("MANAGED_KEY_PREFIX", body)
         self.assertNotIn("connection-", body)
-        self.assertNotIn("ensure_dashboard_writable", body)
+        self.assertNotIn("is_managed_alias", body)
 
-    def test_the_quota_endpoints_go_through_the_gateway_layer(self):
-        # Không được gọi thẳng `urllib` từ `main.py`: phạm vi những gì sửa được
-        # nằm trong `backend/gateway.py`, và nó chỉ giữ được nếu mọi lượt gọi đi
-        # qua đó.
+    def test_the_quota_endpoints_never_open_a_connection_themselves(self):
+        # Không được gọi thẳng `urllib` từ `main.py`: mọi lượt đọc/ghi hạn mức đi
+        # qua `QUOTA_RPC` (worker), nơi duy nhất giữ master key.
         self.assertNotIn("urllib", self.src)
 
 

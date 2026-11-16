@@ -33,6 +33,8 @@ from .connection_config import (Conflict, REF, digest, render_routes, render_reg
     registry_row, quota_metadata, validate_budget, integration_template, route_id, load_yaml,
     deployment_env_digest, routable_catalog, is_wildcard, verification_model, concrete_alias,
     CatalogUnavailable)
+from .gateway import (QUOTA_FIELD, LOG_FIELD, is_managed_alias, merge_quota, parse_amount,
+    quota_of)
 
 LOCK = 74120926
 
@@ -84,9 +86,14 @@ class Gateway:
             raise ValueError('Unsupported Gateway action')
         url = self.url + path
         if path == '/key/list':
-            if query is None or set(query) != {'key_alias'}:
-                raise ValueError('Key listing requires an exact alias filter')
-            url += '?' + urllib.parse.urlencode({'return_full_object':'true','size':100,**query})
+            # Hai dạng truy vấn được phép: lọc đúng một alias (dùng cho thao tác
+            # kết nối), hoặc phân trang toàn bộ (dùng cho tab Setting đọc hạn mức).
+            if query and set(query) == {'key_alias'}:
+                url += '?' + urllib.parse.urlencode({'return_full_object':'true','size':100,**query})
+            elif query and set(query) <= {'page','size','return_full_object'}:
+                url += '?' + urllib.parse.urlencode(query)
+            else:
+                raise ValueError('Key listing requires an exact alias filter or a pagination query')
         request = urllib.request.Request(url, data=None if data is None else json.dumps(data).encode(),
             headers={'Authorization': 'Bearer ' + (key if key is not None else self.master),
                      'Content-Type': 'application/json'})
@@ -653,6 +660,54 @@ class Worker:
             self.store.stage(operation_id,'updated','updated',{'key_alias':alias,'budget':op['payload']['budget']})
             return self.store.operation(operation_id)
 
+    # Hạn mức cho tab Setting. Đây là nơi DUY NHẤT giữ master key, nên cả đọc lẫn
+    # sửa hạn mức của dashboard đi qua đây thay vì để container `api` giữ khoá.
+    def quota_list(self):
+        """Mọi virtual key kèm metadata và spend (phân trang)."""
+        gateway = self.gateways[0]
+        out, page = [], 1
+        while True:
+            _, data = gateway.call('/key/list',
+                query={'page':page,'size':100,'return_full_object':'true'})
+            keys = (data or {}).get('keys') or []
+            out.extend(k for k in keys if isinstance(k, dict))
+            total = (data or {}).get('total_pages') or 1
+            # Chặn vòng lặp vô hạn nếu Gateway trả total_pages sai kiểu/quá lớn.
+            if not isinstance(total, int) or page >= total or page >= 50:
+                return {'keys': out}
+            page += 1
+
+    def _write_quota(self, key_alias, new_quota, actor):
+        """ĐỌC - GỘP - GHI LẠI CẢ CỤC cho một khoá KHÔNG do tab Kết nối quản lý."""
+        if not isinstance(key_alias, str) or not key_alias:
+            raise ValueError('key_alias required')
+        if not isinstance(actor, str) or not actor:
+            raise ValueError('actor required')
+        # Từ chối trước mọi lệnh gọi Gateway: khoá do tab Kết nối cấp chỉ sửa ở tab đó.
+        if is_managed_alias(key_alias):
+            raise Conflict('Key này do tab Kết nối agent quản lý. Sửa hạn mức ở tab đó (cần khoá quản trị).')
+        gateway = self.gateways[0]
+        key = gateway.key(key_alias)
+        if key is None:
+            raise KeyError(key_alias)
+        metadata = merge_quota(key.get('metadata') or {}, new_quota, actor)
+        gateway.call('/key/update', {'key_alias':key_alias, 'metadata':metadata})
+        return {'key_alias':key_alias, 'metadata':metadata}
+
+    def quota_set(self, key_alias, amount, actor):
+        """Đặt hạn mức thành một con số."""
+        return self._write_quota(key_alias, parse_amount(amount), actor)
+
+    def quota_top_up(self, key_alias, amount, actor):
+        """Cộng thêm vào hạn mức hiện có (chưa có thì coi như 0)."""
+        added = parse_amount(amount)
+        if is_managed_alias(key_alias):
+            raise Conflict('Key này do tab Kết nối agent quản lý. Sửa hạn mức ở tab đó (cần khoá quản trị).')
+        key = self.gateways[0].key(key_alias)
+        if key is None:
+            raise KeyError(key_alias)
+        return self._write_quota(key_alias, (quota_of(key) or 0.0) + added, actor)
+
     def verify(self, operation_id, virtual_key, test_model=None):
         with self.lock():
             return self._verify(operation_id,virtual_key,test_model)
@@ -861,12 +916,21 @@ def build_app(worker, credential):
                 return worker.catalog()
             if action=='secret' and set(body)=={'value'}:
                 return worker.import_secret(body['value'])
+            if action=='quota-list' and not body:
+                return worker.quota_list()
+            if action=='quota-set' and set(body)=={'key_alias','amount','actor'}:
+                return worker.quota_set(body['key_alias'],body['amount'],body['actor'])
+            if action=='quota-top-up' and set(body)=={'key_alias','amount','actor'}:
+                return worker.quota_top_up(body['key_alias'],body['amount'],body['actor'])
             raise ValueError('Unsupported action or fields')
         except Conflict as exc:
             raise HTTPException(409,str(exc)) from None
         except ValueError as exc:
             raise HTTPException(422,str(exc)) from None
         except KeyError:
+            if action.startswith('quota-'):
+                # Shown verbatim in the Setting tab; "profile" would point at the wrong tab.
+                raise HTTPException(404,'No key with that name at the Gateway') from None
             raise HTTPException(404,'Profile or operation not found') from None
         except CatalogUnavailable as exc:
             raise HTTPException(503,str(exc)) from None

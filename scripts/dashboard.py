@@ -75,16 +75,22 @@ def runtime_config(state, windows):
     proxy = {'image': 'nginx:1.28-alpine', 'restart': 'unless-stopped',
              'volumes': [mount('proxy.conf', '/etc/nginx/conf.d/default.conf'),
                          mount('worker.crt', '/certs/worker.crt'), mount('worker.key', '/certs/worker.key')]}
-    api = {'environment': {'SSL_CERT_FILE': '/connection-ca/worker.crt'},
-           'volumes': [mount('worker.crt', '/connection-ca/worker.crt')]}
+    def worker_client():
+        # Everything a container needs to call the host worker over TLS.
+        client = {'environment': {'SSL_CERT_FILE': '/connection-ca/worker.crt'},
+                  'volumes': [mount('worker.crt', '/connection-ca/worker.crt')]}
+        if not windows:
+            client['extra_hosts'] = ['host.docker.internal:host-gateway']
+        return client
     if windows:
         proxy['extra_hosts'] = ['host.docker.internal:host-gateway']
     else:
         # Native Linux containers cannot reach a host loopback listener through
         # the bridge gateway. The TLS proxy shares the host network instead.
         proxy['network_mode'] = 'host'
-        api['extra_hosts'] = ['host.docker.internal:host-gateway']
-    return {'services': {'api': api, 'connection-worker-proxy': proxy,
+    # quota-watch reads budgets through the worker too (it no longer holds the master key).
+    return {'services': {'api': worker_client(), 'quota-watch': worker_client(),
+                        'connection-worker-proxy': proxy,
                         'litellm-1': {'ports': ['127.0.0.1:4401:4000']},
                         'litellm-2': {'ports': ['127.0.0.1:4402:4000']}}}
 

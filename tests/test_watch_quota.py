@@ -1,6 +1,6 @@
 """Phép kiểm cho luật đổi bậc của bộ canh hạn mức.
 
-Chỉ kiểm phần quyết định, không kiểm phép đọc Gateway hay phép gửi thư: hai thứ
+Chỉ kiểm phần quyết định, không kiểm phép đọc qua worker hay phép gửi thư: hai thứ
 đó cần mạng, còn chỗ sai nguy hiểm thì nằm ở luật "khi nào gửi thư".
 
 HAI CA ĐÁNG GIÁ NHẤT:
@@ -68,21 +68,21 @@ class LadderTests(unittest.TestCase):
         self.assertFalse(wq.rose("bac-la", "bac-la-khac"))
 
 
-class TickTests(unittest.TestCase):
-    """Một nhịp kiểm: ai được gửi thư, ai không."""
+class TickHarness:
+    """Thay phép đọc và phép gửi thư bằng bản giả. Không mang phép kiểm nào."""
 
     def setUp(self):
         self.sent = []
         self.rows = []
         self._mail = wq.send_mail
-        self._rows = wq.rows_from_gateway
+        self._rows = wq.rows_from_worker
         wq.send_mail = lambda subject, body, dry: self.sent.append(subject)
-        wq.rows_from_gateway = lambda: self.rows
+        wq.rows_from_worker = lambda: self.rows
         self.addCleanup(self.restore)
 
     def restore(self):
         wq.send_mail = self._mail
-        wq.rows_from_gateway = self._rows
+        wq.rows_from_worker = self._rows
 
     def row(self, ratio, alias="ralli-tagged"):
         return {"alias": alias, "quota": 50.0, "spent": 50.0 * (ratio or 0),
@@ -91,6 +91,10 @@ class TickTests(unittest.TestCase):
     def tick(self, state):
         args = type("A", (), {"dry_run": True})()
         return wq.tick(state, args)
+
+
+class TickTests(TickHarness, unittest.TestCase):
+    """Một nhịp kiểm: ai được gửi thư, ai không."""
 
     def test_crossing_ninety_sends_one_mail(self):
         self.rows = [self.row(0.91)]
@@ -139,6 +143,88 @@ class TickTests(unittest.TestCase):
         self.rows = [self.row(1.0, "a"), self.row(0.1, "b")]
         self.tick({})
         self.assertEqual(len(self.sent), 1)
+
+
+class UnreadableTests(TickHarness, unittest.TestCase):
+    """Worker tắt thì bộ canh mù: không đoán bậc, nhưng phải nói ra là đang mù.
+
+    Từ 16/11/2026 bộ canh đọc hạn mức qua worker (không còn giữ master key). Im
+    lặng lúc không đọc được trông y hệt "mọi khoá đều ổn" - đúng lúc cần biết nhất.
+    """
+
+    def fail(self):
+        raise RuntimeError("worker down")
+
+    def test_one_failed_read_sends_nothing(self):
+        # Worker vừa khởi động lại là chuyện thường; một nhịp hỏng không đáng một thư.
+        wq.rows_from_worker = self.fail
+        self.tick({})
+        self.assertEqual(self.sent, [])
+
+    def test_repeated_failed_reads_send_exactly_one_mail(self):
+        wq.rows_from_worker = self.fail
+        state = {}
+        for _ in range(wq.UNREADABLE_BEFORE_MAIL + 3):
+            state = self.tick(state)
+        self.assertEqual(len(self.sent), 1)
+        self.assertIn("KHONG DOC DUOC", self.sent[0])
+
+    def test_a_failed_read_keeps_the_bands_and_guesses_nothing(self):
+        self.rows = [self.row(1.0)]
+        state = self.tick({})
+        before = dict(state["levels"])
+        self.sent.clear()
+        wq.rows_from_worker = self.fail
+        state = self.tick(state)
+        self.assertEqual(state["levels"], before)
+
+    def test_a_second_outage_is_reported_again(self):
+        wq.rows_from_worker = self.fail
+        state = {}
+        for _ in range(wq.UNREADABLE_BEFORE_MAIL):
+            state = self.tick(state)
+        wq.rows_from_worker = lambda: []      # đọc lại được
+        state = self.tick(state)
+        wq.rows_from_worker = self.fail
+        for _ in range(wq.UNREADABLE_BEFORE_MAIL):
+            state = self.tick(state)
+        self.assertEqual(len(self.sent), 2)
+
+
+class WorkerReadTests(unittest.TestCase):
+    """Dữ liệu worker trả về -> dòng đem so bậc. Không có master key ở đâu cả."""
+
+    def setUp(self):
+        self._rpc = wq.RPC
+        self.addCleanup(lambda: setattr(wq, "RPC", self._rpc))
+
+    def test_rows_come_from_the_quota_list_rpc(self):
+        calls = []
+
+        def rpc(action, data):
+            calls.append((action, data))
+            return {"keys": [
+                {"key_alias": "ralli-tagged", "spend": 45.0, "metadata": {"quota_usd": 50}},
+                {"key_alias": "no-quota", "spend": 3.0, "metadata": {}},
+                {"key_alias": None, "spend": 1.0},            # khoá không tên: bỏ
+                "hong",                                       # dòng sai kiểu: bỏ
+            ]}
+
+        wq.RPC = rpc
+        rows = wq.rows_from_worker()
+        self.assertEqual(calls, [("quota-list", {})])
+        self.assertEqual([r["alias"] for r in rows], ["ralli-tagged", "no-quota"])
+        self.assertAlmostEqual(rows[0]["ratio"], 0.9)
+        self.assertIsNone(rows[1]["ratio"])
+
+    def test_the_script_no_longer_reads_the_master_key(self):
+        # Soi chuỗi trong MÃ, không soi docstring: docstring kể lại lịch sử nên có nhắc tên.
+        import ast
+        tree = ast.parse((ROOT / "scripts" / "watch_quota.py").read_text(encoding="utf-8"))
+        docstrings = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Expr)}
+        strings = [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant)
+                   and isinstance(n.value, str) and id(n) not in docstrings]
+        self.assertFalse([x for x in strings if "LITELLM_MASTER_KEY" in x or "/key/" in x])
 
 
 class BodyTests(unittest.TestCase):

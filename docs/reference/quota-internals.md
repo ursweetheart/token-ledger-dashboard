@@ -18,9 +18,12 @@ tiêu hết.
    dashboard (tab Setting)
         │  POST /api/quota
         ▼
-   backend  ──/key/update──▶  virtual key
-   (KHONG ghi database)        metadata: {tags, quota_usd, quota_log}
-                                          spend  <- LiteLLM tu cong
+   api ──RPC quota-set──▶ Connection worker      api: KHONG co master key, KHONG ghi database
+                               │ /key/update     worker: noi DUY NHAT giu master key (muc 8)
+                               ▼
+                          virtual key
+                            metadata: {tags, quota_usd, quota_log}
+                            spend  <- LiteLLM tu cong
                                             │
    agent ──request──▶ litellm ──▶ [hook] ───┘
                                     │
@@ -37,12 +40,14 @@ tiêu hết.
 
 | Việc | File |
 |---|---|
-| Cách đọc/ghi hạn mức, gọi Gateway | `backend/gateway.py` |
+| Luật thuần: đọc hạn mức, kiểm số tiền, nhật ký nạp | `backend/gateway.py` |
+| Gọi Gateway (`/key/list`, `/key/update`), gộp metadata, từ chối khoá `connection-…` | `backend/connection_worker.py` (`quota_list`, `quota_set`, `quota_top_up`) |
+| Client RPC từ `api`/`quota-watch` sang worker | `backend/connection_api.py` (`worker_rpc`) |
 | Ba endpoint `/api/quota*` | `backend/main.py` |
 | Quyết định chặn, hai kiểu trả lời | `docker/gateway/quota_hook.py` |
 | Nạp hook vào Gateway | `docker/gateway/config.gateway.yaml` → `litellm_settings.callbacks` |
 | Gắn file hook vào container, biến `QUOTA_*` | `docker-compose.yml` → khối `x-litellm` |
-| Backend lấy master key ở đâu | `docker-compose.yml` → dịch vụ `api` |
+| Ai giữ master key | chỉ worker (`.local/connections/worker-env.json`) và hai LiteLLM. `api`, `quota-watch` **không** có — mục 8 |
 | Cảnh báo email ba bậc | `scripts/watch_quota.py`, dịch vụ `quota-watch` |
 | Bảng, ba nút, lịch sử nạp | `web/js/app.js` (`renderQuota`, `quotaEditor`) |
 | Lớp gọi API của frontend | `web/js/api.js` (`quotaCall`, `quotaSet`, `quotaTopUp`) |
@@ -51,9 +56,9 @@ tiêu hết.
 | Canh bản vá fork | `.github/workflows/ci.yml` → `FORK_PATCHES` |
 | Bản vá trong fork | `litellm/proxy/proxy_server.py` → `_REJECTED_STREAM_LOGGING_FALLBACK` |
 
-Phép kiểm: `tests/test_quota_gateway.py`, `tests/test_quota_hook.py`,
-`tests/test_watch_quota.py`, `tests/quota-api-calls.test.js`,
-`tests/key-gate-overlay.test.js`.
+Phép kiểm: `tests/test_quota_gateway.py`, `tests/connection_quota_cases.py`,
+`tests/test_quota_hook.py`, `tests/test_watch_quota.py`,
+`tests/quota-api-calls.test.js`, `tests/key-gate-overlay.test.js`.
 
 ---
 
@@ -121,8 +126,9 @@ tìm thấy script.
 
 **`/key/list` và `/key/update` KHÔNG đi qua `gateway-lb`.** nginx ở edge chỉ mở
 `/v1/chat/completions` và `/health/*`; mọi đường khác trả 404. Mọi lượt gọi quản
-lý khoá phải trỏ thẳng `http://litellm-1:4000`, và địa chỉ đó chỉ phân giải được
-**bên trong mạng Docker**.
+lý khoá phải trỏ thẳng vào LiteLLM: `http://litellm-1:4000` từ **bên trong mạng
+Docker**, hoặc `http://127.0.0.1:4401` từ máy chủ — đường worker dùng, do
+`.local/connections/runtime.yaml` mở ra.
 
 **Gom khoá theo tên là sai.** Trên dữ liệu thật ngày 20/09: gom `dms-feedback`
 với `dms-feedback-tagged` (khoá trước không mang tag nào), và bỏ sót ba khoá
@@ -179,7 +185,78 @@ Hai điều **không được làm**:
 - gửi `metadata` thiếu trường khi gọi `/key/update` → mục 4, bẫy thứ nhất
 - kết luận hook đang chạy từ việc container `healthy` → mục 5, lệnh đầu tiên
 
+- đưa `LITELLM_MASTER_KEY` trở lại `api` hay `quota-watch` cho "tiện" → mục 8
+
 Và một điều phải nhớ khi chạm vào fork: mỗi bản vá cần một dòng trong
 `FORK_PATCHES` của CI. Bản vá `_REJECTED_STREAM_LOGGING_FALLBACK` hỏng **im
 lặng** — mất nó thì container vẫn xanh, chỉ những request `stream=True` bị hạn
 mức chặn mới trả HTTP 500, và chỉ người dùng thật mới gặp.
+
+---
+
+## 8. Master key chỉ còn ở worker (16/11/2026)
+
+**Vì sao.** Ngày 03/11/2026 đã chứng minh trên máy dev: mã chạy trong container
+`api` dùng `LITELLM_MASTER_KEY` gọi `POST /config/pass_through_endpoint` và lấy
+được khoá Google thật. `api` là thứ nhận request từ trình duyệt, nên nó không
+được cầm khoá quản trị. Change
+`openspec/changes/move-the-master-key-out-of-the-portal-backend` chuyển mọi lượt
+đọc/ghi hạn mức sang Connection worker; `quota-watch` cũng đọc qua worker (PA2).
+
+Đo lại 16/11 trên stack cô lập: `GET /api/quota` bản cũ và bản mới trả JSON giống
+hệt; từ trong `api` và `quota-watch` tạo pass-through nhận **401** (bản cũ: 200).
+
+**Cái giá: tab Setting và `quota-watch` cần worker.**
+
+| Tình huống | `/api/quota*` trả | `quota-watch` |
+|---|---|---|
+| `QUOTA_DISABLED=1` | 503 "Quota is switched off…" | không bị ảnh hưởng (biến này chỉ tắt endpoint) |
+| thiếu `CONNECTIONS_ENABLED=1` / `CONNECTION_WORKER_URL` / `CONNECTION_WORKER_KEY` | 503 "Quota needs the connection worker…" | thoát ngay lúc khởi động, container khởi động lại liên tục |
+| có cấu hình nhưng worker tắt | 503 "Worker unavailable…" | sau **2 nhịp** liên tiếp không đọc được: một thư `[quota] KHONG DOC DUOC HAN MUC` |
+
+Việc **chặn** không phụ thuộc worker: hook nằm trong LiteLLM, worker tắt thì agent
+hết tiền vẫn bị chặn. Chỉ mất khả năng xem/sửa hạn mức và thư cảnh báo ba bậc.
+
+Bật worker: `python scripts/dashboard.py start` (hoặc `… worker` nếu chỉ cần worker).
+
+**Máy đã `setup` trước 16/11/2026 — một việc tay, làm một lần.**
+`scripts/dashboard.py setup` không ghi lại `.local/connections/runtime.yaml` trên
+máy đã cấu hình, nên tệp cũ chỉ đưa chứng chỉ của worker cho `api`. Thiếu khối
+dưới thì `quota-watch` không tin được chứng chỉ và gửi thư "không đọc được hạn
+mức". Mở tệp đó, **chép nguyên khối `api:` thành một khối `quota-watch:`** cùng
+cấp (cùng `environment`, `volumes`, và `extra_hosts` nếu `api` có):
+
+```yaml
+services:
+  api:
+    environment:
+      SSL_CERT_FILE: /connection-ca/worker.crt
+    volumes:
+    - <đường dẫn sẵn có>/worker.crt:/connection-ca/worker.crt:ro
+  quota-watch:                      # <- thêm: giống hệt khối api
+    environment:
+      SSL_CERT_FILE: /connection-ca/worker.crt
+    volumes:
+    - <đường dẫn sẵn có>/worker.crt:/connection-ca/worker.crt:ro
+```
+
+Rồi dựng lại image `tools` và hai dịch vụ:
+
+```bash
+docker compose --profile gateway build api quota-watch      # quota-watch dựng image `tools`
+python scripts/dashboard.py start
+docker exec token-ledger-api env | grep -c LITELLM_MASTER_KEY          # phải ra 0
+docker exec token-ledger-quota-watch env | grep -c LITELLM_MASTER_KEY  # phải ra 0
+```
+
+**Lùi lại.** Không có dữ liệu nào phải chuyển ngược: hạn mức vẫn nằm trong
+`metadata` của khoá, cùng trường `quota_usd`/`quota_log` như trước.
+
+1. `git revert <commit của change này>` — compose bản cũ tự bơm lại
+   `LITELLM_MASTER_KEY` và `GATEWAY_BASE_URL` vào `api` và `quota-watch` từ `.env`
+   (giá trị vẫn nằm đó vì Gateway cần).
+2. Dựng lại hai image như trên, rồi `python scripts/dashboard.py start`.
+3. Khối `quota-watch` thêm tay trong `runtime.yaml` để nguyên cũng không sao.
+
+Lùi lại là mở lại đúng lỗ đã chứng minh ở trên. Chỉ dùng khi worker hỏng mà
+không sửa kịp, và ghi ngày lùi vào đây.

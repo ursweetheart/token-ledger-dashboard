@@ -22,6 +22,18 @@ Trạng thái lưu ra file JSON nên khởi động lại không gửi lại th�
 Nhảy nhiều bậc giữa hai nhịp thì gửi MỘT thư của bậc cao nhất. Nạp thêm làm tỉ
 lệ tụt xuống thì đặt lại bậc trong im lặng - lần vượt sau lại báo.
 
+ĐỌC HẠN MỨC QUA WORKER, KHÔNG GIỮ MASTER KEY
+--------------------------------------------
+Trước 16/11/2026 tiến trình này giữ `LITELLM_MASTER_KEY` và gọi thẳng `/key/list`.
+Master key tạo được đường chuyển tiếp rò khoá Google (đã chứng minh 03/11/2026 -
+xem change `move-the-master-key-out-of-the-portal-backend`), mà việc ở đây chỉ là
+ĐỌC ba con số. Nên nay nó hỏi worker trên host bằng RPC `quota-list`, cùng đường
+và cùng khoá worker với tab Setting.
+
+Cái giá: worker tắt thì bộ canh MÙ. Nó không đoán và không gửi thư bậc nào, nhưng
+sau `UNREADABLE_BEFORE_MAIL` nhịp hỏng liên tiếp nó gửi ĐÚNG MỘT thư "không đọc
+được hạn mức" - im lặng lúc mù trông y hệt "mọi thứ ổn".
+
 GỬI THƯ HỎNG KHÔNG ĐƯỢC ẢNH HƯỞNG TỚI VIỆC CHẶN
 -----------------------------------------------
 Không có gì để ảnh hưởng: việc chặn nằm ở hook trong Gateway, tiến trình này chỉ
@@ -58,6 +70,13 @@ OVER = "over"
 # gửi thư.
 LADDER = (OK, B90, B100, OVER)
 
+# Một nhịp hỏng lẻ là chuyện thường (worker vừa khởi động lại). Hai nhịp liên tiếp
+# = khoảng 10 phút mù ở nhịp mặc định 300 giây - lúc đó mới đáng gọi người.
+UNREADABLE_BEFORE_MAIL = 2
+
+# Người gọi RPC tới worker. `main()` đặt; phép kiểm thay `rows_from_worker`.
+RPC = None
+
 SUBJECT = {
     B90: "sap het han muc (>=90%)",      # vi-ok: email subject
     B100: "DA HET han muc - Gateway dang chan",
@@ -84,11 +103,11 @@ def rose(old: str, new: str) -> bool:
     return known.get(new, 0) > known.get(old, 0)
 
 
-def rows_from_gateway() -> list[dict]:
+def rows_from_worker() -> list[dict]:
     """Một dòng cho mỗi virtual key: bí danh, hạn mức, đã tiêu, tỉ lệ."""
     out = []
-    for key in gateway.list_keys():
-        alias = key.get("key_alias")
+    for key in (RPC("quota-list", {}) or {}).get("keys") or []:
+        alias = key.get("key_alias") if isinstance(key, dict) else None
         if not alias:
             continue
         quota = gateway.quota_of(key)
@@ -126,14 +145,37 @@ def body_for(row: dict, level: str, enforceable: bool) -> str:
     return "\n".join(lines)
 
 
+UNREADABLE_BODY = "\n".join([
+    "Bo canh han muc khong doc duoc han muc qua worker.",       # vi-ok: email text
+    "",
+    "Viec CHAN van hoat dong: no nam o hook trong Gateway, khong phu thuoc worker.",
+    "Cai mat la CANH BAO: cho toi khi doc lai duoc, se khong co thu 90% / 100% / 110%.",
+    "",
+    "Kiem theo thu tu:",
+    "  1. worker co dang chay khong:  python scripts/dashboard.py worker",
+    "  2. container connection-worker-proxy co dang chay khong",
+    "  3. Gateway (litellm-1) co song khong",
+])
+
+
 def tick(state: dict, args) -> dict:
     levels = state.setdefault("levels", {})
     try:
-        rows = rows_from_gateway()
-    except gateway.GatewayError as exc:
-        # Không đọc được thì KHÔNG đoán và KHÔNG gửi thư. Giữ nguyên bậc cũ.
-        LOG.error("Khong doc duoc Gateway (%s); giu nguyen bac cu", type(exc).__name__)
+        rows = rows_from_worker()
+    except Exception as exc:  # noqa: BLE001
+        # Bắt rộng có chủ ý: lỗi thường gặp là HTTPException của FastAPI (worker
+        # tắt, Gateway tắt), mà file này phải nạp được trên máy không cài FastAPI.
+        # Không đọc được thì KHÔNG đoán và KHÔNG gửi thư bậc nào. Giữ nguyên bậc cũ.
+        fails = state.get("unreadable", 0) + 1
+        state["unreadable"] = fails
+        LOG.error("Khong doc duoc han muc qua worker (%s), lan %d; giu nguyen bac cu",
+                  type(exc).__name__, fails)
+        if fails == UNREADABLE_BEFORE_MAIL:
+            send_mail("[quota] KHONG DOC DUOC HAN MUC - canh bao dang mu",
+                      UNREADABLE_BODY, args.dry_run)
         return state
+    if state.pop("unreadable", 0):
+        LOG.info("Da doc lai duoc han muc qua worker")
 
     for row in rows:
         alias = row["alias"]
@@ -164,11 +206,14 @@ def main() -> None:
 
     logging.basicConfig(level=env("LOG_LEVEL", "INFO"),
                         format="%(asctime)s %(levelname)s %(message)s")
-    # THANG vao litellm: nginx o gateway-lb chan moi duong /key/*.
-    gateway.configure(env("GATEWAY_BASE_URL", "http://litellm-1:4000"),
-                      env("LITELLM_MASTER_KEY"))
-    if not gateway.configured():
-        raise SystemExit("Thieu LITELLM_MASTER_KEY - khong doc duoc han muc.")
+    # Nạp ở đây chứ không ở đầu file: `connection_api` kéo theo FastAPI, mà phần
+    # luật đổi bậc phải kiểm được trên máy sạch. Container `tools` có sẵn FastAPI.
+    from backend.connection_api import worker_rpc
+    global RPC
+    RPC = worker_rpc(env)
+    if RPC is None:
+        raise SystemExit("Thieu cau hinh worker (CONNECTIONS_ENABLED=1, CONNECTION_WORKER_URL, "
+                         "CONNECTION_WORKER_KEY) - khong doc duoc han muc.")
 
     path = Path(args.state)
     while True:

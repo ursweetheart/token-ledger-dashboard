@@ -25,6 +25,15 @@ class LauncherTests(unittest.TestCase):
         self.assertNotIn('network_mode', config['connection-worker-proxy'])
         self.assertIn('host.docker.internal:host-gateway', config['connection-worker-proxy']['extra_hosts'])
 
+    def test_quota_watch_reaches_the_worker_the_same_way_as_api(self):
+        # quota-watch holds no master key; without the worker certificate it is blind.
+        for windows in (False, True):
+            config = launcher.runtime_config(Path('runtime'), windows)['services']
+            self.assertEqual(config['quota-watch'], config['api'])
+            self.assertEqual(config['quota-watch']['environment']['SSL_CERT_FILE'], '/connection-ca/worker.crt')
+            # Separate objects: a shared one would be written as a YAML alias.
+            self.assertIsNot(config['quota-watch'], config['api'])
+
     def test_unauthorized_listener_is_not_accepted(self):
         error = urllib.error.HTTPError('http://localhost', 401, 'Unauthorized', {}, None)
         with patch.object(launcher.urllib.request, 'urlopen', side_effect=error):

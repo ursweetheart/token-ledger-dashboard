@@ -322,17 +322,11 @@ services:
       # with a message that says what to do.
       DASHBOARD_KEY: ${DASHBOARD_KEY:-}
       # --- HAN MUC ---------------------------------------------------------
-      # Hai endpoint han muc goi THANG vao litellm-1, KHONG qua gateway-lb:
-      # nginx o edge chi mo /v1/chat/completions va /health/*, moi duong khac tra
-      # 404 -- ke ca /key/list va /key/update. Do bang mot luot goi that 20/09.
-      #
-      # Dia chi nay chi phan giai duoc BEN TRONG mang Docker. Chay uvicorn tren
-      # host thi khong toi duoc litellm (no khong publish cong nao), luc do dat
-      # QUOTA_DISABLED=1.
-      GATEWAY_BASE_URL: ${GATEWAY_BASE_URL:-http://litellm-1:4000}
-      # Can master key de sua `metadata` cua virtual key. Thieu no thi backend
-      # TU CHOI KHOI DONG, tru khi QUOTA_DISABLED=1.
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      # Doc/sua han muc di qua worker tren host (CONNECTION_WORKER_*), KHONG con
+      # giu master key o day. Ly do: master key trong container `api` cho phep tao
+      # duong chuyen tiep ro khoa Google -- da chung minh tren may dev 03/11/2026.
+      # Thieu worker thi cac endpoint han muc tra 503; may chua dung Gateway thi
+      # dat QUOTA_DISABLED=1.
       QUOTA_DISABLED: ${QUOTA_DISABLED:-}
       # Connection administration stays off until a separate admin DSN and worker are configured.
       CONNECTIONS_ENABLED: ${CONNECTIONS_ENABLED:-0}
@@ -863,9 +857,19 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # BAT BUOC. Thieu no thi mot dong log tieng Viet lam script chet giua chung.
       PYTHONIOENCODING: utf-8
-      # Doc han muc va so da tieu tu chinh khoa ao, qua API quan ly cua Gateway.
-      GATEWAY_BASE_URL: ${QUOTA_GATEWAY_URL:-http://litellm-1:4000}
-      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-}
+      # Doc han muc va so da tieu QUA WORKER tren host (RPC `quota-list`), cung
+      # duong va cung khoa worker voi container `api`. KHONG con giu master key:
+      # viec o day chi la doc ba con so, con master key thi tao duoc duong chuyen
+      # tiep ro khoa Google (change move-the-master-key-out-of-the-portal-backend).
+      # Worker tat thi bo canh gui MOT thu "khong doc duoc han muc" roi cho.
+      #
+      # Chung chi TLS cua worker va `extra_hosts` (Linux) nam o
+      # .local/connections/runtime.yaml do `scripts/dashboard.py setup` sinh ra,
+      # giong het `api`. May da setup tu truoc 16/11/2026 phai them khoi
+      # `quota-watch` vao tep do bang tay -- xem docs/reference/quota-internals.md.
+      CONNECTIONS_ENABLED: ${CONNECTIONS_ENABLED:-0}
+      CONNECTION_WORKER_URL: ${CONNECTION_WORKER_URL:-}
+      CONNECTION_WORKER_KEY: ${CONNECTION_WORKER_KEY:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USE_TLS: ${SMTP_USE_TLS:-1}
@@ -879,12 +883,9 @@ services:
       - watchstate:/var/watch
     tmpfs:
       - /tmp
-    depends_on:
-      # Doi litellm, KHONG doi gateway-lb: bo canh nay doc /key/list, ma nginx o
-      # gateway-lb chan moi duong /key/*. Buoc no doi mot dich vu no khong dung
-      # toi la tu rang buoc minh vao mot thu co the hong vi ly do khac han.
-      litellm-1:
-        condition: service_started
+    # KHONG co depends_on: bo canh chi noi chuyen voi worker tren host, ma worker
+    # khong phai mot service cua compose. Worker (hay Gateway sau no) chua len thi
+    # nhip do hong, nhip sau doc lai -- khong can thu tu khoi dong.
 
 # Khai ro dai mang de gan duoc IP TINH cho hai Redis.
 #

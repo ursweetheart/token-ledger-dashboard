@@ -34,7 +34,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install -r backend/requirements.txt pytest httpx
-      - run: python -m pytest tests/connection_config_cases.py tests/connection_auth_cases.py tests/connection_rollout_cases.py -q
+      - run: python -m pytest tests/connection_config_cases.py tests/connection_auth_cases.py tests/connection_rollout_cases.py tests/connection_quota_cases.py -q
 
   # ---------------------------------------------------------------------------
   # Canh cấu hình. Nhóm rẻ nhất, và là nhóm bắt đúng lỗi đã thật sự xảy ra:
@@ -323,7 +323,14 @@ jobs:
       # Cung ngay: 244 -> 253, them 9 phep kiem khi ket qua thanh tai lieu JSON o ca DB
       # va tep result.json (case giu cau hoi/response, tep giong ban DB, khong ghi duoc
       # tep van xong, kind/app_url/question_field bat buoc).
-      EXPECTED_PY: "253"
+      # Moc do 16/11/2026: 253 -> 258, change move-the-master-key-out-of-the-portal-backend.
+      # test_quota_gateway 41 -> 39 (phan GOI Gateway chuyen sang worker, phep kiem cua no
+      # sang tests/connection_quota_cases.py o job connection-contracts; them 3 phep soi
+      # "api khong giu master key"), test_watch_quota 22 -> 28 (doc qua worker, thu khi
+      # mu), test_dashboard_launcher 6 -> 7 (quota-watch co chung chi cua worker).
+      # CHUA TINH tests/test_merge_billing_discount.py (3 phep, chua commit luc do):
+      # commit tep do thi cong them 3 TRONG CUNG commit.
+      EXPECTED_PY: "258"
       # Kết xuất phép kiểm có tiếng Việt có dấu. Thiếu biến này thì ở một số
       # môi trường tiến trình chết giữa chừng khi in ra bảng mã không đỡ nổi.
       PYTHONIOENCODING: utf-8

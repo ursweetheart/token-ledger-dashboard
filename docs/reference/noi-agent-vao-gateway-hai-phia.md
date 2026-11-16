@@ -379,8 +379,7 @@ Toàn bộ biến hạn mức, tất cả đều trong `.env` của repo này:
 | `QUOTA_BLOCK_MESSAGE` | câu mặc định trong `quota_hook.py` | câu người dùng cuối đọc khi bị chặn |
 | `QUOTA_WATCH_EVERY_SECONDS` | `300` | nhịp kiểm của dịch vụ `quota-watch` |
 | `QUOTA_DISABLED` | rỗng | `1` = tắt hẳn hai endpoint hạn mức của backend |
-| `GATEWAY_BASE_URL` | `http://litellm-1:4000` | địa chỉ backend gọi để sửa hạn mức. **Thẳng vào litellm**, không qua `gateway-lb` |
-| `LITELLM_MASTER_KEY` | — | backend cần để ghi `metadata` của khoá. Thiếu thì **backend không khởi động**, trừ khi `QUOTA_DISABLED=1` |
+| `CONNECTIONS_ENABLED`, `CONNECTION_WORKER_URL`, `CONNECTION_WORKER_KEY` | tắt | từ 16/11/2026 backend và `quota-watch` **không còn giữ `LITELLM_MASTER_KEY`**; chúng nhờ Connection worker đọc/sửa hạn mức. Thiếu ba biến này hoặc worker tắt thì tab Setting trả 503 — xem `quota-internals.md` mục 8 |
 
 **Khai agent vào `QUOTA_CHAT_TAGS` hay không quyết định nó nhận gì khi hết tiền:**
 
